@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import FacultyEntry from './components/FacultyEntry';
@@ -7,7 +7,7 @@ import ClassResults from './components/ClassResults';
 import StudentScorecard from './components/StudentScorecard';
 import Management from './components/Management';
 import PublicPortal from './components/PublicPortal';
-import { StudentRecord, SubjectConfig, ViewType } from './types';
+import { StudentRecord, SubjectConfig, ViewType, SubjectMarks } from './types';
 import { INITIAL_STUDENTS, SUBJECTS } from './constants';
 
 const App: React.FC = () => {
@@ -28,16 +28,54 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : SUBJECTS;
   });
 
+  // Derived state (Ranks and Levels) memoized for precision
+  const processedStudents = useMemo(() => {
+    // 1. Calculate scores based on the subjects relevant to each student's class
+    const withTotals = students.map(student => {
+      const classSpecificSubjects = subjects.filter(sub => 
+        sub.targetClasses?.includes(student.className)
+      );
+      
+      const relevantSubjectIds = new Set(classSpecificSubjects.map(s => s.id));
+      
+      // Filter marks to only those that should belong to this student's curriculum
+      const relevantMarks = Object.entries(student.marks)
+        .filter(([id]) => relevantSubjectIds.has(id))
+        .map(([, m]) => m as SubjectMarks);
+
+      const grandTotal = relevantMarks.reduce((acc, curr) => acc + curr.total, 0);
+      
+      // Average is calculated based on the number of subjects assigned to their class
+      const subjectCount = classSpecificSubjects.length || 1;
+      const average = grandTotal / subjectCount;
+      
+      const hasFailed = relevantMarks.some(m => m.status === 'Failed');
+      const performanceLevel = hasFailed 
+        ? 'Failed' 
+        : (average > 80 ? 'Excellent' : average > 60 ? 'Good' : average > 40 ? 'Average' : 'Needs Improvement');
+
+      return { ...student, grandTotal, average, performanceLevel };
+    });
+
+    // 2. Determine ranks - Ranks are calculated globally or by class? 
+    // Usually, students want to know their rank within their own class.
+    const classes = [...new Set(withTotals.map(s => s.className))];
+    const rankedStudents: StudentRecord[] = [];
+
+    classes.forEach(cls => {
+      const classStudents = withTotals.filter(s => s.className === cls)
+        .sort((a, b) => b.grandTotal - a.grandTotal);
+      
+      classStudents.forEach((s, idx) => {
+        rankedStudents.push({ ...s, rank: idx + 1 });
+      });
+    });
+
+    return rankedStudents;
+  }, [students, subjects]);
+
   useEffect(() => {
-    // Recalculate ranks whenever student data changes
-    const updatedWithRanks = [...students].sort((a, b) => b.grandTotal - a.grandTotal)
-      .map((s, idx) => ({ ...s, rank: idx + 1 }));
-    
-    if (JSON.stringify(updatedWithRanks) !== JSON.stringify(students)) {
-      setStudents(updatedWithRanks);
-    }
-    
-    localStorage.setItem('edumark_students', JSON.stringify(updatedWithRanks));
+    localStorage.setItem('edumark_students', JSON.stringify(students));
   }, [students]);
 
   useEffect(() => {
@@ -46,7 +84,6 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simplified faculty credentials
     if (username === 'admin' && password === '1234') {
       setIsLoggedIn(true);
       setMode('admin');
@@ -65,28 +102,28 @@ const App: React.FC = () => {
   const renderAdminContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard students={students} onNavigateToManagement={() => setActiveView('management')} />;
+        return <Dashboard students={processedStudents} onNavigateToManagement={() => setActiveView('management')} />;
       case 'entry':
-        return <FacultyEntry students={students} onUpdateMarks={setStudents} />;
+        return <FacultyEntry students={processedStudents} subjects={subjects} onUpdateMarks={setStudents} />;
       case 'class-report':
-        return <ClassResults students={students} />;
+        return <ClassResults students={processedStudents} subjects={subjects} />;
       case 'student-card':
-        return <StudentScorecard students={students} />;
+        return <StudentScorecard students={processedStudents} subjects={subjects} />;
       case 'management':
         return <Management 
-          students={students} 
+          students={processedStudents} 
           subjects={subjects} 
           onUpdateStudents={setStudents} 
           onUpdateSubjects={setSubjects} 
         />;
       default:
-        return <Dashboard students={students} onNavigateToManagement={() => setActiveView('management')} />;
+        return <Dashboard students={processedStudents} onNavigateToManagement={() => setActiveView('management')} />;
     }
   };
 
   if (mode === 'public') {
     return <PublicPortal 
-      students={students} 
+      students={processedStudents} 
       subjects={subjects} 
       onLoginClick={() => setMode('admin')} 
     />;
@@ -111,7 +148,7 @@ const App: React.FC = () => {
                 autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold"
                 placeholder="e.g. admin"
               />
             </div>
@@ -121,7 +158,7 @@ const App: React.FC = () => {
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold"
                 placeholder="••••••••"
               />
             </div>

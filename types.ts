@@ -29,6 +29,7 @@ export interface SubjectConfig {
   maxCE: number;
   passingTotal: number;
   facultyName?: string;
+  targetClasses: string[];
 }
 
 export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management';
