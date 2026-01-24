@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
-import FacultyEntry from './components/FacultyEntry';
-import ClassResults from './components/ClassResults';
-import StudentScorecard from './components/StudentScorecard';
-import Management from './components/Management';
-import PublicPortal from './components/PublicPortal';
-import { StudentRecord, SubjectConfig, ViewType, SubjectMarks } from './types';
-import { INITIAL_STUDENTS, SUBJECTS } from './constants';
+import Layout from './components/Layout.tsx';
+import Dashboard from './components/Dashboard.tsx';
+import FacultyEntry from './components/FacultyEntry.tsx';
+import ClassResults from './components/ClassResults.tsx';
+import StudentScorecard from './components/StudentScorecard.tsx';
+import Management from './components/Management.tsx';
+import PublicPortal from './components/PublicPortal.tsx';
+import { StudentRecord, SubjectConfig, ViewType, SubjectMarks } from './types.ts';
+import { INITIAL_STUDENTS, SUBJECTS } from './constants.ts';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<'public' | 'admin'>('public');
@@ -57,8 +57,7 @@ const App: React.FC = () => {
       return { ...student, grandTotal, average, performanceLevel };
     });
 
-    // 2. Determine ranks - Ranks are calculated globally or by class? 
-    // Usually, students want to know their rank within their own class.
+    // 2. Determine ranks - Ranks are calculated by class
     const classes = [...new Set(withTotals.map(s => s.className))];
     const rankedStudents: StudentRecord[] = [];
 

@@ -1,7 +1,10 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import App from './App.tsx';
+
+// Shim for process.env to prevent crashes in native browser ESM environments
+(window as any).process = (window as any).process || { env: {} };
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

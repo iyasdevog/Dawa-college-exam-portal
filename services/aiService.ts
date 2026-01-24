@@ -1,9 +1,11 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { StudentRecord } from "../types";
+import { StudentRecord } from "../types.ts";
 
 export const analyzePerformance = async (student: StudentRecord): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Use pre-configured API_KEY from environment
+  const apiKey = (typeof process !== 'undefined' && process.env?.API_KEY) || "";
+  const ai = new GoogleGenAI({ apiKey });
   
   const prompt = `
     Analyze the following student result from Islamic Da'wa Academy and provide a short, 
@@ -16,7 +18,7 @@ export const analyzePerformance = async (student: StudentRecord): Promise<string
     Rank: ${student.rank}
     Status: ${student.performanceLevel}
     
-    Subjects and scores: ${Object.entries(student.marks).map(([s, m]) => `${s}: ${m.total}`).join(', ')}
+    Subjects and scores: ${Object.entries(student.marks).map(([s, m]) => `${s}: ${(m as any).total}`).join(', ')}
   `;
 
   try {
