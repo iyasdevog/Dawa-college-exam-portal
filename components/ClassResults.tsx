@@ -13,6 +13,17 @@ const ClassResults: React.FC<ClassResultsProps> = ({ students, subjects }) => {
   const filteredStudents = students.filter(s => s.className === selectedClass);
   const classSubjects = subjects.filter(s => s.targetClasses?.includes(selectedClass));
 
+  // Helper to calculate class averages for a specific subject
+  const calculateAverage = (subjectId: string, field: 'ta' | 'ce' | 'total') => {
+    if (filteredStudents.length === 0) return 0;
+    const sum = filteredStudents.reduce((acc, s) => acc + (s.marks[subjectId]?.[field] || 0), 0);
+    return (sum / filteredStudents.length).toFixed(1);
+  };
+
+  const classGrandTotalAvg = filteredStudents.length > 0 
+    ? (filteredStudents.reduce((acc, s) => acc + s.grandTotal, 0) / filteredStudents.length).toFixed(1)
+    : 0;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -34,8 +45,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ students, subjects }) => {
           <table className="w-full text-xs text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-slate-50 text-slate-400 font-black uppercase tracking-widest text-[10px]">
-                <th className="px-4 py-3 border-r border-slate-100 sticky left-0 bg-slate-50 z-10" rowSpan={2}>AdNo</th>
-                <th className="px-4 py-3 border-r border-slate-100 sticky left-[4.5rem] bg-slate-50 z-10 w-56" rowSpan={2}>Name</th>
+                <th className="px-4 py-3 border-r border-slate-100 sticky left-0 bg-slate-50 z-20 w-12" rowSpan={2}>Sl.No</th>
+                <th className="px-4 py-3 border-r border-slate-100 sticky left-12 bg-slate-50 z-20 w-24" rowSpan={2}>AdNo</th>
+                <th className="px-4 py-3 border-r border-slate-100 sticky left-[9rem] bg-slate-50 z-20 w-56" rowSpan={2}>Name</th>
                 {classSubjects.map(s => (
                   <th key={s.id} className="px-3 py-2 text-center border-r border-slate-100 border-b" colSpan={3}>
                     <div className="arabic-text text-lg text-emerald-600 mb-0.5">{s.arabicName}</div>
@@ -56,12 +68,15 @@ const ClassResults: React.FC<ClassResultsProps> = ({ students, subjects }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredStudents.map(student => (
+              {filteredStudents.map((student, idx) => (
                 <tr key={student.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-4 py-3 border-r border-slate-100 font-mono text-slate-400 sticky left-0 bg-white group-hover:bg-slate-50 z-10">
+                  <td className="px-4 py-3 border-r border-slate-100 font-mono text-slate-400 sticky left-0 bg-white group-hover:bg-slate-50 z-10 w-12">
+                    {idx + 1}
+                  </td>
+                  <td className="px-4 py-3 border-r border-slate-100 font-mono text-slate-400 sticky left-12 bg-white group-hover:bg-slate-50 z-10 w-24">
                     {student.adNo}
                   </td>
-                  <td className="px-4 py-3 border-r border-slate-100 font-bold text-slate-800 sticky left-[4.5rem] bg-white group-hover:bg-slate-50 z-10 w-56">
+                  <td className="px-4 py-3 border-r border-slate-100 font-bold text-slate-800 sticky left-[9rem] bg-white group-hover:bg-slate-50 z-10 w-56">
                     {student.name}
                   </td>
                   {classSubjects.map(s => {
@@ -82,10 +97,28 @@ const ClassResults: React.FC<ClassResultsProps> = ({ students, subjects }) => {
               ))}
               {filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan={2 + (classSubjects.length * 3) + 2} className="p-12 text-center text-slate-400 font-medium">No students registered in {selectedClass}</td>
+                  <td colSpan={3 + (classSubjects.length * 3) + 2} className="p-12 text-center text-slate-400 font-medium">No students registered in {selectedClass}</td>
                 </tr>
               )}
             </tbody>
+            {filteredStudents.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-100 font-black border-t-2 border-slate-200">
+                  <td colSpan={3} className="px-4 py-4 text-slate-900 sticky left-0 bg-slate-100 z-20 text-[10px] tracking-widest uppercase">
+                    Class Average Analytics ({filteredStudents.length} Students)
+                  </td>
+                  {classSubjects.map(s => (
+                    <React.Fragment key={`${s.id}-averages`}>
+                      <td className="px-1 py-4 text-center border-r border-slate-200 text-slate-600 font-mono">{calculateAverage(s.id, 'ta')}</td>
+                      <td className="px-1 py-4 text-center border-r border-slate-200 text-slate-600 font-mono">{calculateAverage(s.id, 'ce')}</td>
+                      <td className="px-1 py-4 text-center border-r border-slate-300 bg-emerald-50 text-emerald-700 font-mono">{calculateAverage(s.id, 'total')}</td>
+                    </React.Fragment>
+                  ))}
+                  <td className="px-4 py-4 text-center border-l border-slate-200 bg-emerald-100 text-emerald-800 font-mono text-sm">{classGrandTotalAvg}</td>
+                  <td className="px-4 py-4 bg-slate-100"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         ) : (
           <div className="p-20 text-center">

@@ -28,6 +28,12 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ students, subjects 
     }
   }, [selectedStudentId]);
 
+  const handlePrint = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.print();
+  };
+
   if (!student) return <div className="p-12 text-center text-slate-400 font-bold">No students found. Add students in Management.</div>;
 
   return (
@@ -142,8 +148,9 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ students, subjects 
               </div>
 
               <button 
-                onClick={() => window.print()}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3 shadow-sm border border-slate-200"
+                type="button"
+                onClick={handlePrint}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-3 shadow-sm border border-slate-200 active:scale-95"
               >
                 <i className="fa-solid fa-print"></i>
                 Print Academic Card
