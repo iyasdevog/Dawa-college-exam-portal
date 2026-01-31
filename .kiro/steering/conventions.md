@@ -1,0 +1,1 @@
+All development must follow Clean Architecture. Business logic must reside in /src/domain, data access in /src/infrastructure, and UI in /src/presentation. Ensure Dependency Inversion is used for all external services.

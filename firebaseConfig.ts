@@ -3,7 +3,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 
 /**
- * Verified Firebase Project Configuration for 'my-edumark-portal'
+ * Verified Firebase Project Configuration for 'aic-dawa-college-portal'
  */
 const firebaseConfig = {
   apiKey: "AIzaSyAdLPv3dTm2xbVuWnfSYD0-3szsAQPZm3w",

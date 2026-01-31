@@ -1,134 +1,303 @@
-
-import React from 'react';
-import { StudentRecord } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { StudentRecord, SubjectConfig } from '../types';
+import { CLASSES } from '../constants';
+import { dataService } from '../services/dataService';
 
 interface DashboardProps {
-  students: StudentRecord[];
-  onNavigateToManagement?: () => void;
+    onNavigateToManagement: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ students, onNavigateToManagement }) => {
-  const totalStudents = students.length;
-  const averageTotal = (students.reduce((acc, s) => acc + s.grandTotal, 0) / (totalStudents || 1)).toFixed(0);
-  const passCount = students.filter(s => s.performanceLevel !== 'Failed').length;
-  const passRate = ((passCount / (totalStudents || 1)) * 100).toFixed(1);
+const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
+    const [students, setStudents] = useState<StudentRecord[]>([]);
+    const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [selectedClass, setSelectedClass] = useState('All');
 
-  const chartData = students.slice(0, 10).map(s => ({
-    name: s.name.split(' ')[0],
-    total: s.grandTotal
-  })).sort((a, b) => b.total - a.total);
+    useEffect(() => {
+        loadData();
+    }, []);
 
-  const statusData = [
-    { name: 'Passed', value: passCount, color: '#10b981' },
-    { name: 'Failed', value: totalStudents - passCount, color: '#ef4444' }
-  ];
+    const loadData = async () => {
+        try {
+            setIsLoading(true);
+            // Just initialize connection, no seeding
+            await dataService.initializeDatabase();
 
-  const stats = [
-    { label: 'Total Students', value: totalStudents, icon: 'fa-users', color: 'bg-blue-500' },
-    { label: 'Avg Grand Total', value: averageTotal, icon: 'fa-star', color: 'bg-amber-500' },
-    { label: 'Overall Pass Rate', value: `${passRate}%`, icon: 'fa-check-circle', color: 'bg-emerald-500' },
-    { label: 'Academic Session', value: '2025-26', icon: 'fa-calendar-alt', color: 'bg-indigo-500' },
-  ];
+            const [studentsData, subjectsData] = await Promise.all([
+                dataService.getAllStudents(),
+                dataService.getAllSubjects()
+            ]);
 
-  return (
-    <div className="space-y-8">
-      {/* Management Quick Actions */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-6">
-        <div>
-          <h3 className="text-lg font-bold text-slate-800">Administrative Control</h3>
-          <p className="text-sm text-slate-500">Configure academic subjects, faculty assignments, and student registries.</p>
-        </div>
-        <div className="flex gap-4">
-          <button 
-            onClick={onNavigateToManagement}
-            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
-          >
-            <i className="fa-solid fa-sliders text-sm opacity-60"></i>
-            Management Center
-          </button>
-        </div>
-      </div>
+            setStudents(studentsData);
+            setSubjects(subjectsData);
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-            <div className={`${stat.color} w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl shadow-lg`}>
-              <i className={`fa-solid ${stat.icon}`}></i>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{stat.label}</p>
-              <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+    // Filter students by selected class
+    const filteredStudents = selectedClass === 'All'
+        ? students
+        : students.filter(s => s.className === selectedClass);
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Chart */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Top Performers Overview</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 500 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' }}
-                />
-                <Bar dataKey="total" radius={[6, 6, 0, 0]} barSize={40}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#cbd5e1'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+    // Calculate statistics
+    const totalStudents = students.length;
+    const totalSubjects = subjects.length;
+    const averageScore = students.length > 0
+        ? Math.round(students.reduce((sum, s) => sum + s.average, 0) / students.length)
+        : 0;
 
-        {/* Status Distribution */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center">
-          <h3 className="text-lg font-bold text-slate-800 mb-2">Success Rate</h3>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={85}
-                  paddingAngle={8}
-                  dataKey="value"
-                  animationBegin={0}
-                  animationDuration={1500}
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="w-full space-y-3 mt-4">
-            {statusData.map((s, i) => (
-              <div key={i} className="flex items-center justify-between text-sm p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: s.color }}></div>
-                  <span className="text-slate-600 font-medium">{s.name}</span>
+    // Performance distribution
+    const performanceStats = {
+        Excellent: students.filter(s => s.performanceLevel === 'Excellent').length,
+        Good: students.filter(s => s.performanceLevel === 'Good').length,
+        Average: students.filter(s => s.performanceLevel === 'Average').length,
+        'Needs Improvement': students.filter(s => s.performanceLevel === 'Needs Improvement').length,
+        Failed: students.filter(s => s.performanceLevel === 'Failed').length,
+    };
+
+    // Class-wise statistics
+    const classStats = CLASSES.map(className => {
+        const classStudents = students.filter(s => s.className === className);
+        const classAverage = classStudents.length > 0
+            ? Math.round(classStudents.reduce((sum, s) => sum + s.average, 0) / classStudents.length)
+            : 0;
+
+        return {
+            className,
+            studentCount: classStudents.length,
+            average: classAverage,
+            topStudent: classStudents.find(s => s.rank === 1)
+        };
+    });
+
+    // Top performers
+    const topPerformers = [...students]
+        .sort((a, b) => b.grandTotal - a.grandTotal)
+        .slice(0, 5);
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                    <div className="loader-ring mb-4"></div>
+                    <p className="text-slate-600">Loading dashboard...</p>
                 </div>
-                <span className="font-bold text-slate-800">{s.value} Students</span>
-              </div>
-            ))}
-          </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Academic Dashboard</h1>
+                    <p className="text-slate-600 mt-2">Overview of academic performance and statistics</p>
+                </div>
+                <button
+                    onClick={loadData}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 print:hidden"
+                >
+                    <i className="fa-solid fa-refresh"></i>
+                    Refresh Data
+                </button>
+            </div>
+
+            {/* Key Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-slate-600 text-sm font-medium">Total Students</p>
+                            <p className="text-3xl font-black text-slate-900 mt-1">{totalStudents}</p>
+                        </div>
+                        <div className="bg-blue-100 p-3 rounded-xl">
+                            <i className="fa-solid fa-users text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-slate-600 text-sm font-medium">Total Subjects</p>
+                            <p className="text-3xl font-black text-slate-900 mt-1">{totalSubjects}</p>
+                        </div>
+                        <div className="bg-emerald-100 p-3 rounded-xl">
+                            <i className="fa-solid fa-book text-emerald-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-slate-600 text-sm font-medium">Average Score</p>
+                            <p className="text-3xl font-black text-slate-900 mt-1">{averageScore}%</p>
+                        </div>
+                        <div className="bg-amber-100 p-3 rounded-xl">
+                            <i className="fa-solid fa-chart-line text-amber-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-slate-600 text-sm font-medium">Active Classes</p>
+                            <p className="text-3xl font-black text-slate-900 mt-1">{CLASSES.length}</p>
+                        </div>
+                        <div className="bg-purple-100 p-3 rounded-xl">
+                            <i className="fa-solid fa-chalkboard text-purple-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Performance Distribution */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                <h2 className="text-xl font-black text-slate-900 mb-6">Performance Distribution</h2>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {Object.entries(performanceStats).map(([level, count]) => (
+                        <div key={level} className="text-center">
+                            <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center text-white font-black text-lg mb-2 ${level === 'Excellent' ? 'bg-emerald-500' :
+                                level === 'Good' ? 'bg-blue-500' :
+                                    level === 'Average' ? 'bg-amber-500' :
+                                        level === 'Needs Improvement' ? 'bg-orange-500' :
+                                            'bg-red-500'
+                                }`}>
+                                {count}
+                            </div>
+                            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">{level}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Class Overview */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-black text-slate-900">Class Overview</h2>
+                    <button
+                        onClick={onNavigateToManagement}
+                        className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm print:hidden"
+                    >
+                        Manage Classes
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {classStats.map(stat => (
+                        <div key={stat.className} className="bg-slate-50 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-black text-slate-900 text-lg">{stat.className}</h3>
+                                <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full font-bold">
+                                    {stat.studentCount} students
+                                </span>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-600">Class Average:</span>
+                                    <span className="font-bold text-slate-900">{stat.average}%</span>
+                                </div>
+                                {stat.topStudent && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600">Top Student:</span>
+                                        <span className="font-bold text-emerald-600">{stat.topStudent.name}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Top Performers */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                <h2 className="text-xl font-black text-slate-900 mb-6">Top Performers</h2>
+
+                {topPerformers.length > 0 ? (
+                    <div className="space-y-4">
+                        {topPerformers.map((student, index) => (
+                            <div key={student.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black ${index === 0 ? 'bg-yellow-500' :
+                                        index === 1 ? 'bg-slate-400' :
+                                            index === 2 ? 'bg-amber-600' :
+                                                'bg-slate-300'
+                                        }`}>
+                                        {index + 1}
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-slate-900">{student.name}</p>
+                                        <p className="text-sm text-slate-600">{student.className} • Adm: {student.adNo}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-black text-slate-900 text-lg">{student.grandTotal}</p>
+                                    <p className="text-sm text-slate-600">{student.average.toFixed(1)}% avg</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-8">
+                        <i className="fa-solid fa-users text-4xl text-slate-300 mb-4"></i>
+                        <p className="text-slate-600 font-bold mb-2">No Students Found</p>
+                        <p className="text-slate-500 text-sm mb-4">Get started by adding students to the system</p>
+                        <button
+                            onClick={onNavigateToManagement}
+                            className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 mx-auto print:hidden"
+                        >
+                            <i className="fa-solid fa-plus"></i>
+                            Add Students
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 print:hidden">
+                <h2 className="text-xl font-black text-slate-900 mb-6">Quick Actions</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button
+                        onClick={onNavigateToManagement}
+                        className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-all text-left"
+                    >
+                        <div className="flex items-center gap-3 mb-2">
+                            <i className="fa-solid fa-users-cog text-emerald-600"></i>
+                            <span className="font-bold text-emerald-900">Manage Students</span>
+                        </div>
+                        <p className="text-sm text-emerald-700">Add, edit, or remove student records</p>
+                    </button>
+
+                    <button
+                        onClick={onNavigateToManagement}
+                        className="p-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-all text-left"
+                    >
+                        <div className="flex items-center gap-3 mb-2">
+                            <i className="fa-solid fa-book-open text-blue-600"></i>
+                            <span className="font-bold text-blue-900">Manage Subjects</span>
+                        </div>
+                        <p className="text-sm text-blue-700">Configure subjects and class assignments</p>
+                    </button>
+
+                    <button
+                        onClick={loadData}
+                        className="p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-all text-left"
+                    >
+                        <div className="flex items-center gap-3 mb-2">
+                            <i className="fa-solid fa-sync-alt text-amber-600"></i>
+                            <span className="font-bold text-amber-900">Sync Database</span>
+                        </div>
+                        <p className="text-sm text-amber-700">Refresh all data from Firebase</p>
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default Dashboard;

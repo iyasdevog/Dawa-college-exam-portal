@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import FacultyEntry from './components/FacultyEntry.tsx';
@@ -7,9 +7,7 @@ import ClassResults from './components/ClassResults.tsx';
 import StudentScorecard from './components/StudentScorecard.tsx';
 import Management from './components/Management.tsx';
 import PublicPortal from './components/PublicPortal.tsx';
-import { StudentRecord, SubjectConfig, ViewType, SubjectMarks } from './types.ts';
-import { INITIAL_STUDENTS, SUBJECTS } from './constants.ts';
-import { dbService } from './services/dbService.ts';
+import { ViewType } from './types.ts';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<'public' | 'admin'>('public');
@@ -17,37 +15,16 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewType>('dashboard');
   const [isLoading, setIsLoading] = useState(true);
   const [isCloudActive, setIsCloudActive] = useState(true);
-  
+
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
 
-  const [students, setStudents] = useState<StudentRecord[]>([]);
-  const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
-
-  // Initial Data Fetch
+  // Initial setup
   useEffect(() => {
-    const initDb = async () => {
+    const initApp = async () => {
       try {
-        // Attempt cloud connection
-        const cloudOk = await dbService.checkCloudConnection();
-        setIsCloudActive(cloudOk);
-
-        const fetchedStudents = await dbService.getAllStudents();
-        const fetchedSubjects = await dbService.getAllSubjects();
-
-        // Seed if absolutely empty in both cloud and local
-        if (fetchedStudents.length === 0 && fetchedSubjects.length === 0) {
-          console.log("Initializing database with baseline data...");
-          await dbService.saveMultipleStudents(INITIAL_STUDENTS);
-          for (const s of SUBJECTS) {
-            await dbService.saveSubject(s);
-          }
-          setStudents(INITIAL_STUDENTS);
-          setSubjects(SUBJECTS);
-        } else {
-          setStudents(fetchedStudents);
-          setSubjects(fetchedSubjects);
-        }
+        // Simple connectivity check
+        setIsCloudActive(navigator.onLine);
       } catch (err) {
         console.error("Initialization error:", err);
         setIsCloudActive(false);
@@ -55,56 +32,8 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     };
-    initDb();
+    initApp();
   }, []);
-
-  const syncStudentsToCloud = async (update: React.SetStateAction<StudentRecord[]>) => {
-    const newStudents = typeof update === 'function' ? update(students) : update;
-    setStudents(newStudents);
-    await dbService.saveMultipleStudents(newStudents);
-  };
-
-  const syncSubjectsToCloud = async (update: React.SetStateAction<SubjectConfig[]>) => {
-    const newSubjects = typeof update === 'function' ? update(subjects) : update;
-    setSubjects(newSubjects);
-    for (const s of newSubjects) {
-      await dbService.saveSubject(s);
-    }
-  };
-
-  // Derived state
-  const processedStudents = useMemo(() => {
-    const withTotals = students.map(student => {
-      const classSpecificSubjects = subjects.filter(sub => 
-        sub.targetClasses?.includes(student.className)
-      );
-      const relevantSubjectIds = new Set(classSpecificSubjects.map(s => s.id));
-      const relevantMarks = Object.entries(student.marks)
-        .filter(([id]) => relevantSubjectIds.has(id))
-        .map(([, m]) => m as SubjectMarks);
-
-      const grandTotal = relevantMarks.reduce((acc, curr) => acc + curr.total, 0);
-      const subjectCount = classSpecificSubjects.length || 1;
-      const average = grandTotal / subjectCount;
-      const hasFailed = relevantMarks.some(m => m.status === 'Failed');
-      const performanceLevel = hasFailed 
-        ? 'Failed' 
-        : (average > 80 ? 'Excellent' : average > 60 ? 'Good' : average > 40 ? 'Average' : 'Needs Improvement');
-
-      return { ...student, grandTotal, average, performanceLevel };
-    });
-
-    const classes = [...new Set(withTotals.map(s => s.className))];
-    const rankedStudents: StudentRecord[] = [];
-    classes.forEach(cls => {
-      const classStudents = withTotals.filter(s => s.className === cls)
-        .sort((a, b) => b.grandTotal - a.grandTotal);
-      classStudents.forEach((s, idx) => {
-        rankedStudents.push({ ...s, rank: idx + 1 });
-      });
-    });
-    return rankedStudents;
-  }, [students, subjects]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,39 +57,30 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8">
         <div className="loader-ring mb-8"></div>
         <h2 className="text-white text-xl font-black tracking-tighter">Establishing Academic Terminal</h2>
-        <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mt-4 animate-pulse">Syncing with IDA Cloud Systems</p>
+        <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mt-4 animate-pulse">Syncing with AIC Cloud Systems</p>
       </div>
     );
-  }
+  };
 
   const renderAdminContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard students={processedStudents} onNavigateToManagement={() => setActiveView('management')} />;
+        return <Dashboard onNavigateToManagement={() => setActiveView('management')} />;
       case 'entry':
-        return <FacultyEntry students={processedStudents} subjects={subjects} onUpdateMarks={syncStudentsToCloud} />;
+        return <FacultyEntry />;
       case 'class-report':
-        return <ClassResults students={processedStudents} subjects={subjects} />;
+        return <ClassResults />;
       case 'student-card':
-        return <StudentScorecard students={processedStudents} subjects={subjects} />;
+        return <StudentScorecard />;
       case 'management':
-        return <Management 
-          students={processedStudents} 
-          subjects={subjects} 
-          onUpdateStudents={syncStudentsToCloud} 
-          onUpdateSubjects={syncSubjectsToCloud} 
-        />;
+        return <Management />;
       default:
-        return <Dashboard students={processedStudents} onNavigateToManagement={() => setActiveView('management')} />;
+        return <Dashboard onNavigateToManagement={() => setActiveView('management')} />;
     }
   };
 
   if (mode === 'public') {
-    return <PublicPortal 
-      students={processedStudents} 
-      subjects={subjects} 
-      onLoginClick={() => setMode('admin')} 
-    />;
+    return <PublicPortal onLoginClick={() => setMode('admin')} />;
   }
 
   if (mode === 'admin' && !isLoggedIn) {

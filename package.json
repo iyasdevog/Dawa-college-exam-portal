@@ -1,25 +1,41 @@
 {
-  "name": "edumark---islamic-da'wa-academy-result-portal",
+  "name": "aic-dawa-college-exam-portal",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "A comprehensive exam portal and student result management system for AIC Da'wa College",
+  "keywords": [
+    "education",
+    "islamic",
+    "student-management",
+    "react",
+    "typescript"
+  ],
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules/.vite"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",
-    "react-dom": "^19.2.3",
+    "firebase": "^12.8.0",
     "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "recharts": "^3.7.0",
-    "xlsx": "0.18.5",
-    "firebase": "^12.8.0"
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "author": "AIC Da'wa College",
+  "license": "MIT"
 }

@@ -1,0 +1,1930 @@
+/* Print Optimization Styles */
+@media print {
+
+    /* ========================================
+       COMPREHENSIVE @PAGE RULES
+       Advanced page setup for multiple paper sizes
+       ======================================== */
+
+    /* Default A4 page setup with optimal margins */
+    @page {
+        margin: 0.5in 0.75in;
+        size: A4 portrait;
+        orphans: 3;
+        widows: 3;
+        page-break-inside: avoid;
+    }
+
+    /* A4 Portrait (Default) - 210mm x 297mm */
+    @page :first {
+        margin-top: 0.75in;
+        margin-bottom: 0.5in;
+        margin-left: 0.75in;
+        margin-right: 0.75in;
+    }
+
+    /* A4 Landscape orientation */
+    @page landscape {
+        size: A4 landscape;
+        margin: 0.5in 0.75in;
+    }
+
+    /* Letter size support (US standard) - 8.5" x 11" */
+    @page letter {
+        size: letter portrait;
+        margin: 0.75in 1in;
+    }
+
+    @page letter-landscape {
+        size: letter landscape;
+        margin: 0.5in 1in;
+    }
+
+    /* Legal size support - 8.5" x 14" */
+    @page legal {
+        size: legal portrait;
+        margin: 1in;
+    }
+
+    /* A3 size support - 297mm x 420mm */
+    @page a3 {
+        size: A3 portrait;
+        margin: 0.75in 1in;
+    }
+
+    /* Custom page margins for different document types */
+    @page scorecard {
+        margin: 0.4in 0.6in;
+        size: A4 portrait;
+        orphans: 2;
+        widows: 2;
+    }
+
+    @page class-results {
+        margin: 0.3in 0.5in;
+        size: A4 landscape;
+        orphans: 2;
+        widows: 2;
+    }
+
+    @page report {
+        margin: 0.6in 0.8in;
+        size: A4 portrait;
+        orphans: 3;
+        widows: 3;
+    }
+
+    /* Page-specific headers and footers */
+    @page :left {
+        margin-left: 1in;
+        margin-right: 0.75in;
+    }
+
+    @page :right {
+        margin-left: 0.75in;
+        margin-right: 1in;
+    }
+
+    /* Blank page handling */
+    @page :blank {
+        margin: 0;
+    }
+
+    /* ========================================
+       CROSS-BROWSER COMPATIBILITY
+       Fallbacks and vendor prefixes
+       ======================================== */
+
+    /* WebKit/Blink browsers (Chrome, Safari, Edge) */
+    @page {
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Firefox specific */
+    @-moz-document url-prefix() {
+        @page {
+            margin: 0.5in !important;
+            size: A4 !important;
+        }
+    }
+
+    /* Internet Explorer / Edge Legacy */
+    @media screen and (-ms-high-contrast: active),
+    (-ms-high-contrast: none) {
+        @page {
+            margin: 0.5in;
+            size: A4;
+        }
+    }
+
+    /* ========================================
+       ENHANCED CROSS-BROWSER COMPATIBILITY
+       Browser-specific optimizations and fallbacks
+       ======================================== */
+
+    /* Global print optimizations for all browsers */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Chrome/Chromium specific optimizations */
+    @media print and (-webkit-min-device-pixel-ratio: 0) {
+        body {
+            -webkit-print-color-adjust: exact;
+        }
+
+        .print\\:chrome-optimize {
+            -webkit-transform: translateZ(0);
+            -webkit-backface-visibility: hidden;
+        }
+    }
+
+    /* Safari specific optimizations */
+    @supports (-webkit-appearance: none) {
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                -webkit-font-smoothing: antialiased;
+            }
+
+            .print\\:safari-text-rendering {
+                text-rendering: optimizeLegibility;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+        }
+    }
+
+    /* Firefox specific optimizations */
+    @-moz-document url-prefix() {
+        @media print {
+            body {
+                color-adjust: exact;
+            }
+
+            .print\\:firefox-optimize {
+                -moz-appearance: none;
+                -moz-user-select: none;
+            }
+
+            /* Firefox table optimization */
+            table {
+                border-collapse: collapse !important;
+                border-spacing: 0 !important;
+            }
+        }
+    }
+
+    /* Edge Legacy specific optimizations */
+    @supports (-ms-ime-align: auto) {
+        @media print {
+            body {
+                -ms-print-color-adjust: exact;
+            }
+
+            .print\\:edge-optimize {
+                -ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=100)";
+            }
+        }
+    }
+
+    /* Print-specific font rendering optimizations */
+    .print\\:optimize-text {
+        text-rendering: optimizeLegibility !important;
+        -webkit-font-smoothing: antialiased !important;
+        -moz-osx-font-smoothing: grayscale !important;
+        font-feature-settings: "kern" 1, "liga" 1 !important;
+    }
+
+    /* High DPI print optimizations */
+    @media print and (min-resolution: 150dpi) {
+        .print\\:high-dpi {
+            font-size: 1.1em !important;
+            line-height: 1.3 !important;
+        }
+
+        .print\\:high-dpi-border {
+            border-width: 0.5px !important;
+        }
+    }
+
+    /* Print color management */
+    .print\\:force-black-text {
+        color: black !important;
+        -webkit-text-fill-color: black !important;
+        text-shadow: none !important;
+    }
+
+    .print\\:force-white-bg {
+        background-color: white !important;
+        background-image: none !important;
+        background: white !important;
+    }
+
+    /* Print-safe image handling */
+    .print\\:img-optimize {
+        max-width: 100% !important;
+        height: auto !important;
+        page-break-inside: avoid !important;
+        image-rendering: -webkit-optimize-contrast !important;
+        image-rendering: crisp-edges !important;
+    }
+
+    /* Print table optimizations */
+    .print\\:table-optimize {
+        border-collapse: collapse !important;
+        border-spacing: 0 !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+    }
+
+    .print\\:table-cell-optimize {
+        padding: 0.25rem !important;
+        border: 1px solid black !important;
+        vertical-align: top !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+
+    /* A4-specific content sizing */
+    .print\\:a4-content {
+        max-width: 7.5in !important;
+        /* A4 width minus margins */
+        margin: 0 auto !important;
+    }
+
+    /* Ensure content fits within A4 boundaries */
+    .print\\:a4-fit {
+        max-height: 10in !important;
+        /* A4 height minus margins */
+        overflow: hidden !important;
+    }
+
+    /* Remove all shadows and transitions for print */
+    * {
+        box-shadow: none !important;
+        transition: none !important;
+        animation: none !important;
+        transform: none !important;
+    }
+
+    /* Hide all interactive visual effects */
+    .animate-pulse,
+    .animate-spin,
+    .animate-bounce,
+    .animate-in,
+    .fade-in,
+    .slide-in-from-bottom-8,
+    .slide-in-from-top-2 {
+        animation: none !important;
+    }
+
+    /* Remove gradient backgrounds to save ink */
+    .bg-gradient-to-r,
+    .bg-gradient-to-l,
+    .bg-gradient-to-t,
+    .bg-gradient-to-b,
+    .bg-gradient-to-br,
+    .bg-gradient-to-bl,
+    .bg-gradient-to-tr,
+    .bg-gradient-to-tl {
+        background: white !important;
+    }
+
+    /* Enhanced page break controls for A4 optimization */
+    .print\\:break-inside-avoid {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        /* Legacy support */
+    }
+
+    .print\\:break-before-page {
+        break-before: page !important;
+        page-break-before: always !important;
+        /* Legacy support */
+    }
+
+    .print\\:break-after-page {
+        break-after: page !important;
+        page-break-after: always !important;
+        /* Legacy support */
+    }
+
+    .print\\:break-before-avoid {
+        break-before: avoid !important;
+        page-break-before: avoid !important;
+    }
+
+    .print\\:break-after-avoid {
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+    }
+
+    /* Critical section grouping - keep related content together */
+    .print\\:keep-together {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        orphans: 3 !important;
+        widows: 3 !important;
+    }
+
+    /* Table-specific page break controls */
+    .print\\:table-keep-together {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .print\\:table-row-keep-together {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    /* Header sections that should stay with following content */
+    .print\\:keep-with-next {
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+    }
+
+    /* Footer sections that should stay with preceding content */
+    .print\\:keep-with-previous {
+        break-before: avoid !important;
+        page-break-before: avoid !important;
+    }
+
+    /* Hide all interactive elements */
+    button,
+    input,
+    select,
+    textarea,
+    .print\\:hidden,
+    /* Navigation elements */
+    nav,
+    .navigation,
+    .nav-button,
+    .nav-controls,
+    /* Form controls */
+    form,
+    .form-control,
+    .form-group,
+    /* Action buttons */
+    .action-button,
+    .btn,
+    .button,
+    /* Loading states */
+    .loading,
+    .loader,
+    .spinner,
+    .skeleton,
+    /* Interactive feedback */
+    .hover\\:*,
+    .focus\\:*,
+    .active\\:*,
+    /* Tooltips and overlays */
+    .tooltip,
+    .overlay,
+    .modal,
+    .dropdown,
+    /* Sticky elements */
+    .sticky,
+    .fixed,
+    /* Scroll indicators */
+    .scroll-indicator,
+    .progress-bar,
+    /* Search and filters */
+    .search,
+    .filter,
+    /* Pagination */
+    .pagination,
+    /* Interactive cards */
+    .card-interactive,
+    /* Mobile-specific interactive elements */
+    .mobile-nav,
+    .mobile-controls,
+    .swipe-indicator,
+    .touch-controls {
+        display: none !important;
+    }
+
+    /* Remove all hover, focus, and active states */
+    *:hover,
+    *:focus,
+    *:active {
+        background-color: inherit !important;
+        color: inherit !important;
+        border-color: inherit !important;
+        box-shadow: none !important;
+        transform: none !important;
+        opacity: inherit !important;
+    }
+
+    /* Remove all transitions and animations */
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0s !important;
+        animation-delay: 0s !important;
+        transition-duration: 0s !important;
+        transition-delay: 0s !important;
+    }
+
+    /* ========================================
+       PRINT-FRIENDLY COLOR SCHEME
+       High-contrast black/white optimization
+       ======================================== */
+
+    /* Force all text to high-contrast black */
+    .print\\:text-black,
+    * {
+        color: black !important;
+    }
+
+    /* Remove all colored text for ink efficiency */
+    .text-emerald-300,
+    .text-emerald-500,
+    .text-emerald-600,
+    .text-emerald-700,
+    .text-blue-500,
+    .text-blue-600,
+    .text-blue-700,
+    .text-amber-500,
+    .text-amber-600,
+    .text-amber-700,
+    .text-orange-600,
+    .text-orange-700,
+    .text-red-500,
+    .text-red-600,
+    .text-red-700,
+    .text-slate-400,
+    .text-slate-500,
+    .text-slate-600,
+    .text-slate-700,
+    .text-slate-900,
+    .text-white {
+        color: black !important;
+    }
+
+    /* Force all backgrounds to white or transparent */
+    .print\\:bg-white,
+    * {
+        background-color: white !important;
+    }
+
+    /* Remove all colored backgrounds to save ink */
+    .bg-emerald-50,
+    .bg-emerald-100,
+    .bg-emerald-600,
+    .bg-emerald-700,
+    .bg-emerald-800,
+    .bg-blue-50,
+    .bg-blue-100,
+    .bg-blue-600,
+    .bg-blue-700,
+    .bg-amber-50,
+    .bg-amber-100,
+    .bg-amber-600,
+    .bg-orange-50,
+    .bg-orange-100,
+    .bg-red-50,
+    .bg-red-100,
+    .bg-red-600,
+    .bg-slate-50,
+    .bg-slate-100,
+    .bg-slate-300,
+    .bg-slate-400,
+    .bg-slate-900,
+    .bg-yellow-500,
+    .bg-gradient-to-r,
+    .bg-gradient-to-l,
+    .bg-gradient-to-t,
+    .bg-gradient-to-b,
+    .bg-gradient-to-br,
+    .bg-gradient-to-bl,
+    .bg-gradient-to-tr,
+    .bg-gradient-to-tl {
+        background-color: white !important;
+        background-image: none !important;
+    }
+
+    /* Remove background colors that waste ink */
+    .print\\:bg-transparent {
+        background-color: transparent !important;
+    }
+
+    /* Force all borders to high-contrast black */
+    .print\\:border-black,
+    * {
+        border-color: black !important;
+    }
+
+    /* Convert all colored borders to black */
+    .border-emerald-500,
+    .border-blue-500,
+    .border-amber-500,
+    .border-orange-500,
+    .border-red-500,
+    .border-slate-100,
+    .border-slate-200,
+    .border-slate-300 {
+        border-color: black !important;
+    }
+
+    /* Ensure proper contrast for status indicators */
+    .print\\:status-passed {
+        color: black !important;
+        background-color: white !important;
+        border: 1px solid black !important;
+        font-weight: bold !important;
+    }
+
+    .print\\:status-failed {
+        color: black !important;
+        background-color: white !important;
+        border: 2px solid black !important;
+        font-weight: bold !important;
+    }
+
+    /* High-contrast rank indicators */
+    .print\\:rank-gold {
+        color: black !important;
+        background-color: white !important;
+        border: 3px solid black !important;
+        font-weight: 900 !important;
+    }
+
+    .print\\:rank-silver {
+        color: black !important;
+        background-color: white !important;
+        border: 2px solid black !important;
+        font-weight: bold !important;
+    }
+
+    .print\\:rank-bronze {
+        color: black !important;
+        background-color: white !important;
+        border: 1px solid black !important;
+        font-weight: bold !important;
+    }
+
+    .print\\:rank-default {
+        color: black !important;
+        background-color: white !important;
+        border: 1px solid black !important;
+    }
+
+    /* Performance level indicators with typography hierarchy */
+    .print\\:performance-excellent {
+        color: black !important;
+        font-weight: 900 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.1em !important;
+    }
+
+    .print\\:performance-good {
+        color: black !important;
+        font-weight: bold !important;
+        text-transform: uppercase !important;
+    }
+
+    .print\\:performance-average {
+        color: black !important;
+        font-weight: 600 !important;
+    }
+
+    .print\\:performance-needs-improvement {
+        color: black !important;
+        font-weight: 600 !important;
+        text-decoration: underline !important;
+    }
+
+    .print\\:performance-failed {
+        color: black !important;
+        font-weight: 900 !important;
+        text-transform: uppercase !important;
+        border: 2px solid black !important;
+        padding: 2px 4px !important;
+    }
+
+    /* Maintain visual hierarchy through typography weight */
+    .print\\:hierarchy-primary {
+        font-weight: 900 !important;
+        font-size: 1.2em !important;
+        color: black !important;
+    }
+
+    .print\\:hierarchy-secondary {
+        font-weight: bold !important;
+        color: black !important;
+    }
+
+    .print\\:hierarchy-tertiary {
+        font-weight: 600 !important;
+        color: black !important;
+    }
+
+    .print\\:hierarchy-body {
+        font-weight: normal !important;
+        color: black !important;
+    }
+
+    /* Enhanced contrast for important elements */
+    .print\\:contrast-high {
+        color: black !important;
+        background-color: white !important;
+        border: 2px solid black !important;
+        font-weight: bold !important;
+    }
+
+    .print\\:contrast-medium {
+        color: black !important;
+        background-color: white !important;
+        border: 1px solid black !important;
+    }
+
+    .print\\:contrast-subtle {
+        color: black !important;
+        background-color: white !important;
+        border-bottom: 1px solid black !important;
+    }
+
+    /* ========================================
+       ADVANCED PRINT TYPOGRAPHY SYSTEM
+       Comprehensive font sizing and spacing
+       ======================================== */
+
+    /* Print-optimized font sizes with proper line heights */
+    .print\\:text-2xs {
+        font-size: 0.625rem !important;
+        /* 10px */
+        line-height: 1.1 !important;
+    }
+
+    .print\\:text-xs {
+        font-size: 0.75rem !important;
+        /* 12px */
+        line-height: 1.2 !important;
+    }
+
+    .print\\:text-sm {
+        font-size: 0.875rem !important;
+        /* 14px */
+        line-height: 1.3 !important;
+    }
+
+    .print\\:text-base {
+        font-size: 1rem !important;
+        /* 16px */
+        line-height: 1.4 !important;
+    }
+
+    .print\\:text-lg {
+        font-size: 1.125rem !important;
+        /* 18px */
+        line-height: 1.4 !important;
+    }
+
+    .print\\:text-xl {
+        font-size: 1.25rem !important;
+        /* 20px */
+        line-height: 1.4 !important;
+    }
+
+    .print\\:text-2xl {
+        font-size: 1.5rem !important;
+        /* 24px */
+        line-height: 1.3 !important;
+    }
+
+    .print\\:text-3xl {
+        font-size: 1.875rem !important;
+        /* 30px */
+        line-height: 1.2 !important;
+    }
+
+    /* Print-specific line heights for optimal readability */
+    .print\\:leading-none {
+        line-height: 1 !important;
+    }
+
+    .print\\:leading-tight {
+        line-height: 1.1 !important;
+    }
+
+    .print\\:leading-snug {
+        line-height: 1.2 !important;
+    }
+
+    .print\\:leading-normal {
+        line-height: 1.4 !important;
+    }
+
+    .print\\:leading-relaxed {
+        line-height: 1.5 !important;
+    }
+
+    .print\\:leading-loose {
+        line-height: 1.6 !important;
+    }
+
+    /* Print-optimized letter spacing */
+    .print\\:tracking-tighter {
+        letter-spacing: -0.05em !important;
+    }
+
+    .print\\:tracking-tight {
+        letter-spacing: -0.025em !important;
+    }
+
+    .print\\:tracking-normal {
+        letter-spacing: 0 !important;
+    }
+
+    .print\\:tracking-wide {
+        letter-spacing: 0.025em !important;
+    }
+
+    .print\\:tracking-wider {
+        letter-spacing: 0.05em !important;
+    }
+
+    .print\\:tracking-widest {
+        letter-spacing: 0.1em !important;
+    }
+
+    /* Font weight utilities for print hierarchy */
+    .print\\:font-thin {
+        font-weight: 100 !important;
+    }
+
+    .print\\:font-extralight {
+        font-weight: 200 !important;
+    }
+
+    .print\\:font-light {
+        font-weight: 300 !important;
+    }
+
+    .print\\:font-normal {
+        font-weight: 400 !important;
+    }
+
+    .print\\:font-medium {
+        font-weight: 500 !important;
+    }
+
+    .print\\:font-semibold {
+        font-weight: 600 !important;
+    }
+
+    .print\\:font-bold {
+        font-weight: 700 !important;
+    }
+
+    .print\\:font-extrabold {
+        font-weight: 800 !important;
+    }
+
+    .print\\:font-black {
+        font-weight: 900 !important;
+    }
+
+    /* ========================================
+       ADVANCED PRINT SPACING SYSTEM
+       Comprehensive margin and padding utilities
+       ======================================== */
+
+    /* Precise margin utilities */
+    .print\\:m-px {
+        margin: 1px !important;
+    }
+
+    .print\\:m-0 {
+        margin: 0 !important;
+    }
+
+    .print\\:m-0\\.5 {
+        margin: 0.125rem !important;
+        /* 2px */
+    }
+
+    .print\\:m-1 {
+        margin: 0.25rem !important;
+        /* 4px */
+    }
+
+    .print\\:m-1\\.5 {
+        margin: 0.375rem !important;
+        /* 6px */
+    }
+
+    .print\\:m-2 {
+        margin: 0.5rem !important;
+        /* 8px */
+    }
+
+    .print\\:m-2\\.5 {
+        margin: 0.625rem !important;
+        /* 10px */
+    }
+
+    .print\\:m-3 {
+        margin: 0.75rem !important;
+        /* 12px */
+    }
+
+    .print\\:m-3\\.5 {
+        margin: 0.875rem !important;
+        /* 14px */
+    }
+
+    .print\\:m-4 {
+        margin: 1rem !important;
+        /* 16px */
+    }
+
+    .print\\:m-5 {
+        margin: 1.25rem !important;
+        /* 20px */
+    }
+
+    .print\\:m-6 {
+        margin: 1.5rem !important;
+        /* 24px */
+    }
+
+    .print\\:m-8 {
+        margin: 2rem !important;
+        /* 32px */
+    }
+
+    /* Directional margins */
+    .print\\:mt-0 {
+        margin-top: 0 !important;
+    }
+
+    .print\\:mt-1 {
+        margin-top: 0.25rem !important;
+    }
+
+    .print\\:mt-2 {
+        margin-top: 0.5rem !important;
+    }
+
+    .print\\:mt-3 {
+        margin-top: 0.75rem !important;
+    }
+
+    .print\\:mt-4 {
+        margin-top: 1rem !important;
+    }
+
+    .print\\:mt-5 {
+        margin-top: 1.25rem !important;
+    }
+
+    .print\\:mt-6 {
+        margin-top: 1.5rem !important;
+    }
+
+    .print\\:mt-8 {
+        margin-top: 2rem !important;
+    }
+
+    .print\\:mb-0 {
+        margin-bottom: 0 !important;
+    }
+
+    .print\\:mb-1 {
+        margin-bottom: 0.25rem !important;
+    }
+
+    .print\\:mb-2 {
+        margin-bottom: 0.5rem !important;
+    }
+
+    .print\\:mb-3 {
+        margin-bottom: 0.75rem !important;
+    }
+
+    .print\\:mb-4 {
+        margin-bottom: 1rem !important;
+    }
+
+    .print\\:mb-5 {
+        margin-bottom: 1.25rem !important;
+    }
+
+    .print\\:mb-6 {
+        margin-bottom: 1.5rem !important;
+    }
+
+    .print\\:mb-8 {
+        margin-bottom: 2rem !important;
+    }
+
+    .print\\:ml-0 {
+        margin-left: 0 !important;
+    }
+
+    .print\\:ml-1 {
+        margin-left: 0.25rem !important;
+    }
+
+    .print\\:ml-2 {
+        margin-left: 0.5rem !important;
+    }
+
+    .print\\:ml-3 {
+        margin-left: 0.75rem !important;
+    }
+
+    .print\\:ml-4 {
+        margin-left: 1rem !important;
+    }
+
+    .print\\:mr-0 {
+        margin-right: 0 !important;
+    }
+
+    .print\\:mr-1 {
+        margin-right: 0.25rem !important;
+    }
+
+    .print\\:mr-2 {
+        margin-right: 0.5rem !important;
+    }
+
+    .print\\:mr-3 {
+        margin-right: 0.75rem !important;
+    }
+
+    .print\\:mr-4 {
+        margin-right: 1rem !important;
+    }
+
+    /* Precise padding utilities */
+    .print\\:p-px {
+        padding: 1px !important;
+    }
+
+    .print\\:p-0 {
+        padding: 0 !important;
+    }
+
+    .print\\:p-0\\.5 {
+        padding: 0.125rem !important;
+    }
+
+    .print\\:p-1 {
+        padding: 0.25rem !important;
+    }
+
+    .print\\:p-1\\.5 {
+        padding: 0.375rem !important;
+    }
+
+    .print\\:p-2 {
+        padding: 0.5rem !important;
+    }
+
+    .print\\:p-2\\.5 {
+        padding: 0.625rem !important;
+    }
+
+    .print\\:p-3 {
+        padding: 0.75rem !important;
+    }
+
+    .print\\:p-3\\.5 {
+        padding: 0.875rem !important;
+    }
+
+    .print\\:p-4 {
+        padding: 1rem !important;
+    }
+
+    .print\\:p-5 {
+        padding: 1.25rem !important;
+    }
+
+    .print\\:p-6 {
+        padding: 1.5rem !important;
+    }
+
+    /* Directional padding */
+    .print\\:pt-0 {
+        padding-top: 0 !important;
+    }
+
+    .print\\:pt-1 {
+        padding-top: 0.25rem !important;
+    }
+
+    .print\\:pt-2 {
+        padding-top: 0.5rem !important;
+    }
+
+    .print\\:pt-3 {
+        padding-top: 0.75rem !important;
+    }
+
+    .print\\:pt-4 {
+        padding-top: 1rem !important;
+    }
+
+    .print\\:pb-0 {
+        padding-bottom: 0 !important;
+    }
+
+    .print\\:pb-1 {
+        padding-bottom: 0.25rem !important;
+    }
+
+    .print\\:pb-2 {
+        padding-bottom: 0.5rem !important;
+    }
+
+    .print\\:pb-3 {
+        padding-bottom: 0.75rem !important;
+    }
+
+    .print\\:pb-4 {
+        padding-bottom: 1rem !important;
+    }
+
+    .print\\:pl-0 {
+        padding-left: 0 !important;
+    }
+
+    .print\\:pl-1 {
+        padding-left: 0.25rem !important;
+    }
+
+    .print\\:pl-2 {
+        padding-left: 0.5rem !important;
+    }
+
+    .print\\:pl-3 {
+        padding-left: 0.75rem !important;
+    }
+
+    .print\\:pl-4 {
+        padding-left: 1rem !important;
+    }
+
+    .print\\:pr-0 {
+        padding-right: 0 !important;
+    }
+
+    .print\\:pr-1 {
+        padding-right: 0.25rem !important;
+    }
+
+    .print\\:pr-2 {
+        padding-right: 0.5rem !important;
+    }
+
+    .print\\:pr-3 {
+        padding-right: 0.75rem !important;
+    }
+
+    .print\\:pr-4 {
+        padding-right: 1rem !important;
+    }
+
+    /* ========================================
+       PRINT-ONLY UTILITY CLASSES
+       Advanced layout and display controls
+       ======================================== */
+
+    /* Display utilities */
+    .print\\:block {
+        display: block !important;
+    }
+
+    .print\\:inline {
+        display: inline !important;
+    }
+
+    .print\\:inline-block {
+        display: inline-block !important;
+    }
+
+    .print\\:flex {
+        display: flex !important;
+    }
+
+    .print\\:inline-flex {
+        display: inline-flex !important;
+    }
+
+    .print\\:grid {
+        display: grid !important;
+    }
+
+    .print\\:inline-grid {
+        display: inline-grid !important;
+    }
+
+    .print\\:table {
+        display: table !important;
+    }
+
+    .print\\:table-caption {
+        display: table-caption !important;
+    }
+
+    .print\\:table-cell {
+        display: table-cell !important;
+    }
+
+    .print\\:table-column {
+        display: table-column !important;
+    }
+
+    .print\\:table-column-group {
+        display: table-column-group !important;
+    }
+
+    .print\\:table-footer-group {
+        display: table-footer-group !important;
+    }
+
+    .print\\:table-header-group {
+        display: table-header-group !important;
+    }
+
+    .print\\:table-row {
+        display: table-row !important;
+    }
+
+    .print\\:table-row-group {
+        display: table-row-group !important;
+    }
+
+    /* Visibility utilities */
+    .print\\:visible {
+        visibility: visible !important;
+    }
+
+    .print\\:invisible {
+        visibility: hidden !important;
+    }
+
+    .print\\:collapse {
+        visibility: collapse !important;
+    }
+
+    /* Position utilities */
+    .print\\:static {
+        position: static !important;
+    }
+
+    .print\\:fixed {
+        position: fixed !important;
+    }
+
+    .print\\:absolute {
+        position: absolute !important;
+    }
+
+    .print\\:relative {
+        position: relative !important;
+    }
+
+    .print\\:sticky {
+        position: sticky !important;
+    }
+
+    /* Float utilities */
+    .print\\:float-right {
+        float: right !important;
+    }
+
+    .print\\:float-left {
+        float: left !important;
+    }
+
+    .print\\:float-none {
+        float: none !important;
+    }
+
+    .print\\:clear-left {
+        clear: left !important;
+    }
+
+    .print\\:clear-right {
+        clear: right !important;
+    }
+
+    .print\\:clear-both {
+        clear: both !important;
+    }
+
+    .print\\:clear-none {
+        clear: none !important;
+    }
+
+    /* Flexbox utilities */
+    .print\\:flex-row {
+        flex-direction: row !important;
+    }
+
+    .print\\:flex-row-reverse {
+        flex-direction: row-reverse !important;
+    }
+
+    .print\\:flex-col {
+        flex-direction: column !important;
+    }
+
+    .print\\:flex-col-reverse {
+        flex-direction: column-reverse !important;
+    }
+
+    .print\\:flex-wrap {
+        flex-wrap: wrap !important;
+    }
+
+    .print\\:flex-wrap-reverse {
+        flex-wrap: wrap-reverse !important;
+    }
+
+    .print\\:flex-nowrap {
+        flex-wrap: nowrap !important;
+    }
+
+    .print\\:items-start {
+        align-items: flex-start !important;
+    }
+
+    .print\\:items-end {
+        align-items: flex-end !important;
+    }
+
+    .print\\:items-center {
+        align-items: center !important;
+    }
+
+    .print\\:items-baseline {
+        align-items: baseline !important;
+    }
+
+    .print\\:items-stretch {
+        align-items: stretch !important;
+    }
+
+    .print\\:justify-start {
+        justify-content: flex-start !important;
+    }
+
+    .print\\:justify-end {
+        justify-content: flex-end !important;
+    }
+
+    .print\\:justify-center {
+        justify-content: center !important;
+    }
+
+    .print\\:justify-between {
+        justify-content: space-between !important;
+    }
+
+    .print\\:justify-around {
+        justify-content: space-around !important;
+    }
+
+    .print\\:justify-evenly {
+        justify-content: space-evenly !important;
+    }
+
+    /* Grid utilities */
+    .print\\:grid-cols-1 {
+        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    }
+
+    .print\\:grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .print\\:grid-cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    .print\\:grid-cols-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    .print\\:grid-cols-5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    }
+
+    .print\\:grid-cols-6 {
+        grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    }
+
+    .print\\:col-span-1 {
+        grid-column: span 1 / span 1 !important;
+    }
+
+    .print\\:col-span-2 {
+        grid-column: span 2 / span 2 !important;
+    }
+
+    .print\\:col-span-3 {
+        grid-column: span 3 / span 3 !important;
+    }
+
+    .print\\:col-span-4 {
+        grid-column: span 4 / span 4 !important;
+    }
+
+    .print\\:col-span-full {
+        grid-column: 1 / -1 !important;
+    }
+
+    .print\\:gap-0 {
+        gap: 0 !important;
+    }
+
+    .print\\:gap-1 {
+        gap: 0.25rem !important;
+    }
+
+    .print\\:gap-2 {
+        gap: 0.5rem !important;
+    }
+
+    .print\\:gap-3 {
+        gap: 0.75rem !important;
+    }
+
+    .print\\:gap-4 {
+        gap: 1rem !important;
+    }
+
+    /* Width and height utilities */
+    .print\\:w-auto {
+        width: auto !important;
+    }
+
+    .print\\:w-full {
+        width: 100% !important;
+    }
+
+    .print\\:w-1\\/2 {
+        width: 50% !important;
+    }
+
+    .print\\:w-1\\/3 {
+        width: 33.333333% !important;
+    }
+
+    .print\\:w-2\\/3 {
+        width: 66.666667% !important;
+    }
+
+    .print\\:w-1\\/4 {
+        width: 25% !important;
+    }
+
+    .print\\:w-3\\/4 {
+        width: 75% !important;
+    }
+
+    .print\\:h-auto {
+        height: auto !important;
+    }
+
+    .print\\:h-full {
+        height: 100% !important;
+    }
+
+    /* Text alignment */
+    .print\\:text-left {
+        text-align: left !important;
+    }
+
+    .print\\:text-center {
+        text-align: center !important;
+    }
+
+    .print\\:text-right {
+        text-align: right !important;
+    }
+
+    .print\\:text-justify {
+        text-align: justify !important;
+    }
+
+    /* Text decoration */
+    .print\\:underline {
+        text-decoration: underline !important;
+    }
+
+    .print\\:overline {
+        text-decoration: overline !important;
+    }
+
+    .print\\:line-through {
+        text-decoration: line-through !important;
+    }
+
+    .print\\:no-underline {
+        text-decoration: none !important;
+    }
+
+    /* Text transform */
+    .print\\:uppercase {
+        text-transform: uppercase !important;
+    }
+
+    .print\\:lowercase {
+        text-transform: lowercase !important;
+    }
+
+    .print\\:capitalize {
+        text-transform: capitalize !important;
+    }
+
+    .print\\:normal-case {
+        text-transform: none !important;
+    }
+
+    /* Border utilities */
+    .print\\:border {
+        border-width: 1px !important;
+        border-style: solid !important;
+        border-color: black !important;
+    }
+
+    .print\\:border-0 {
+        border-width: 0 !important;
+    }
+
+    .print\\:border-2 {
+        border-width: 2px !important;
+        border-style: solid !important;
+        border-color: black !important;
+    }
+
+    .print\\:border-4 {
+        border-width: 4px !important;
+        border-style: solid !important;
+        border-color: black !important;
+    }
+
+    .print\\:border-t {
+        border-top-width: 1px !important;
+        border-top-style: solid !important;
+        border-top-color: black !important;
+    }
+
+    .print\\:border-r {
+        border-right-width: 1px !important;
+        border-right-style: solid !important;
+        border-right-color: black !important;
+    }
+
+    .print\\:border-b {
+        border-bottom-width: 1px !important;
+        border-bottom-style: solid !important;
+        border-bottom-color: black !important;
+    }
+
+    .print\\:border-l {
+        border-left-width: 1px !important;
+        border-left-style: solid !important;
+        border-left-color: black !important;
+    }
+
+    .print\\:border-t-2 {
+        border-top-width: 2px !important;
+        border-top-style: solid !important;
+        border-top-color: black !important;
+    }
+
+    .print\\:border-r-2 {
+        border-right-width: 2px !important;
+        border-right-style: solid !important;
+        border-right-color: black !important;
+    }
+
+    .print\\:border-b-2 {
+        border-bottom-width: 2px !important;
+        border-bottom-style: solid !important;
+        border-bottom-color: black !important;
+    }
+
+    .print\\:border-l-2 {
+        border-left-width: 2px !important;
+        border-left-style: solid !important;
+        border-left-color: black !important;
+    }
+
+    /* Border radius utilities */
+    .print\\:rounded-none {
+        border-radius: 0 !important;
+    }
+
+    .print\\:rounded-sm {
+        border-radius: 0.125rem !important;
+    }
+
+    .print\\:rounded {
+        border-radius: 0.25rem !important;
+    }
+
+    .print\\:rounded-md {
+        border-radius: 0.375rem !important;
+    }
+
+    .print\\:rounded-lg {
+        border-radius: 0.5rem !important;
+    }
+
+    .print\\:rounded-full {
+        border-radius: 9999px !important;
+    }
+
+    /* Overflow utilities */
+    .print\\:overflow-visible {
+        overflow: visible !important;
+    }
+
+    .print\\:overflow-hidden {
+        overflow: hidden !important;
+    }
+
+    .print\\:overflow-auto {
+        overflow: auto !important;
+    }
+
+    .print\\:overflow-x-visible {
+        overflow-x: visible !important;
+    }
+
+    .print\\:overflow-x-hidden {
+        overflow-x: hidden !important;
+    }
+
+    .print\\:overflow-x-auto {
+        overflow-x: auto !important;
+    }
+
+    .print\\:overflow-y-visible {
+        overflow-y: visible !important;
+    }
+
+    .print\\:overflow-y-hidden {
+        overflow-y: hidden !important;
+    }
+
+    .print\\:overflow-y-auto {
+        overflow-y: auto !important;
+    }
+
+    /* Enhanced table optimizations for proper page breaks */
+    table {
+        border-collapse: collapse !important;
+        break-inside: auto !important;
+    }
+
+    /* Keep table headers with content */
+    thead {
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+    }
+
+    /* Prevent awkward table row breaks */
+    tbody tr {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    /* Keep table sections together when possible */
+    tbody {
+        break-inside: auto !important;
+    }
+
+    /* Ensure table footers stay with content */
+    tfoot {
+        break-before: avoid !important;
+        page-break-before: avoid !important;
+    }
+
+    /* Table cell content optimization */
+    td,
+    th {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .print\\:border-r {
+        border-right: 1px solid black !important;
+    }
+
+    .print\\:border-b-2 {
+        border-bottom: 2px solid black !important;
+    }
+
+    /* Table-specific spacing for A4 */
+    .print\\:table-compact {
+        font-size: 0.75rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .print\\:table-cell-padding {
+        padding: 0.25rem !important;
+    }
+
+    /* Remove rounded corners for print */
+    .print\\:rounded-none {
+        border-radius: 0 !important;
+    }
+
+    .print\\:rounded-lg {
+        border-radius: 0.5rem !important;
+    }
+
+    /* Ensure proper contrast */
+    .print\\:contrast-high {
+        filter: contrast(1.2) !important;
+    }
+
+    /* ========================================
+       SPECIALIZED PRINT UTILITIES
+       Document-specific and advanced utilities
+       ======================================== */
+
+    /* Document type specific classes */
+    .print\\:scorecard-layout {
+        page: scorecard;
+        max-width: 7.5in !important;
+        margin: 0 auto !important;
+        font-size: 0.875rem !important;
+        line-height: 1.3 !important;
+    }
+
+    .print\\:class-results-layout {
+        page: class-results;
+        max-width: 10in !important;
+        margin: 0 auto !important;
+        font-size: 0.75rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .print\\:report-layout {
+        page: report;
+        max-width: 7.5in !important;
+        margin: 0 auto !important;
+        font-size: 1rem !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Advanced page break utilities */
+    .print\\:page-break-before {
+        page-break-before: always !important;
+        break-before: page !important;
+    }
+
+    .print\\:page-break-after {
+        page-break-after: always !important;
+        break-after: page !important;
+    }
+
+    .print\\:page-break-inside-avoid {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .print\\:page-break-inside-auto {
+        page-break-inside: auto !important;
+        break-inside: auto !important;
+    }
+
+    /* Widow and orphan control */
+    .print\\:orphans-2 {
+        orphans: 2 !important;
+    }
+
+    .print\\:orphans-3 {
+        orphans: 3 !important;
+    }
+
+    .print\\:orphans-4 {
+        orphans: 4 !important;
+    }
+
+    .print\\:widows-2 {
+        widows: 2 !important;
+    }
+
+    .print\\:widows-3 {
+        widows: 3 !important;
+    }
+
+    .print\\:widows-4 {
+        widows: 4 !important;
+    }
+
+    /* Print-specific z-index management */
+    .print\\:z-0 {
+        z-index: 0 !important;
+    }
+
+    .print\\:z-10 {
+        z-index: 10 !important;
+    }
+
+    .print\\:z-20 {
+        z-index: 20 !important;
+    }
+
+    .print\\:z-30 {
+        z-index: 30 !important;
+    }
+
+    .print\\:z-40 {
+        z-index: 40 !important;
+    }
+
+    .print\\:z-50 {
+        z-index: 50 !important;
+    }
+
+    /* Print-specific opacity */
+    .print\\:opacity-0 {
+        opacity: 0 !important;
+    }
+
+    .print\\:opacity-25 {
+        opacity: 0.25 !important;
+    }
+
+    .print\\:opacity-50 {
+        opacity: 0.5 !important;
+    }
+
+    .print\\:opacity-75 {
+        opacity: 0.75 !important;
+    }
+
+    .print\\:opacity-100 {
+        opacity: 1 !important;
+    }
+
+    /* Print-specific box sizing */
+    .print\\:box-border {
+        box-sizing: border-box !important;
+    }
+
+    .print\\:box-content {
+        box-sizing: content-box !important;
+    }
+
+    /* Print-specific cursor (for debugging) */
+    .print\\:cursor-default {
+        cursor: default !important;
+    }
+
+    /* Print-specific user select */
+    .print\\:select-none {
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+    }
+
+    .print\\:select-text {
+        user-select: text !important;
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+    }
+
+    .print\\:select-all {
+        user-select: all !important;
+        -webkit-user-select: all !important;
+        -moz-user-select: all !important;
+        -ms-user-select: all !important;
+    }
+
+    /* Print-specific pointer events */
+    .print\\:pointer-events-none {
+        pointer-events: none !important;
+    }
+
+    .print\\:pointer-events-auto {
+        pointer-events: auto !important;
+    }
+
+    /* Print-specific resize */
+    .print\\:resize-none {
+        resize: none !important;
+    }
+
+    /* Print-specific outline */
+    .print\\:outline-none {
+        outline: 2px solid transparent !important;
+        outline-offset: 2px !important;
+    }
+
+    .print\\:outline-black {
+        outline: 2px solid black !important;
+        outline-offset: 2px !important;
+    }
+
+    /* Print debugging utilities (for development) */
+    .print\\:debug-border {
+        border: 1px dashed red !important;
+    }
+
+    .print\\:debug-bg {
+        background-color: rgba(255, 0, 0, 0.1) !important;
+    }
+
+    /* Print performance utilities */
+    .print\\:contain-layout {
+        contain: layout !important;
+    }
+
+    .print\\:contain-paint {
+        contain: paint !important;
+    }
+
+    .print\\:contain-size {
+        contain: size !important;
+    }
+
+    .print\\:contain-style {
+        contain: style !important;
+    }
+
+    .print\\:contain-strict {
+        contain: strict !important;
+    }
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+
+    /* Ensure touch targets are at least 44px */
+    .mobile-touch-target {
+        min-height: 44px !important;
+        min-width: 44px !important;
+    }
+
+    /* Optimize input fields for mobile */
+    .mobile-input {
+        font-size: 16px !important;
+        /* Prevents zoom on iOS */
+        padding: 12px !important;
+        border-radius: 8px !important;
+    }
+
+    /* Improve button accessibility */
+    .mobile-button {
+        min-height: 48px !important;
+        padding: 12px 16px !important;
+        font-size: 16px !important;
+    }
+
+    /* Optimize spacing for mobile */
+    .mobile-card {
+        padding: 16px !important;
+        margin-bottom: 16px !important;
+        border-radius: 12px !important;
+    }
+
+    /* Ensure proper focus states */
+    .mobile-focus:focus {
+        outline: 3px solid #10b981 !important;
+        outline-offset: 2px !important;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .contrast-border {
+        border-width: 2px !important;
+        border-color: black !important;
+    }
+
+    .contrast-text {
+        color: black !important;
+        font-weight: bold !important;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

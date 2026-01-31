@@ -20,26 +20,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   ];
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
-      <aside className="w-full md:w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 print:block print:bg-white">
+      <aside className="w-full md:w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col print:hidden">
         <div className="p-8">
-          <h1 className="text-2xl font-black tracking-tighter flex items-center gap-3">
+          <h1 className="text-xl font-black tracking-tighter flex items-center gap-3">
             <i className="fa-solid fa-graduation-cap text-emerald-400"></i>
-            EDUMARK
+            AIC Da'wa College
           </h1>
-          <p className="text-[10px] text-slate-400 mt-2 uppercase font-black tracking-[0.3em]">Institutional Node</p>
+          <p className="text-[10px] text-slate-400 mt-2 uppercase font-black tracking-[0.3em]">Exam Portal</p>
         </div>
-        
+
         <nav className="mt-4 px-4 space-y-2 flex-1">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setView(item.id as ViewType)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
-                activeView === item.id 
-                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeView === item.id
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
+                }`}
             >
               <i className={`fa-solid ${item.icon} w-5 text-sm`}></i>
               <span className="font-bold text-sm">{item.label}</span>
@@ -56,10 +55,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10">
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10 print:hidden">
           <div className="flex items-center gap-6">
             <h2 className="text-xl font-black text-slate-900 capitalize tracking-tight">{activeView.replace('-', ' ')}</h2>
-            
+
             {isCloudActive ? (
               <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 animate-in fade-in duration-500">
                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
@@ -72,7 +71,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
               </div>
             )}
           </div>
-          
+
           <div className="flex items-center gap-5">
             <div className="hidden lg:block text-right">
               <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Faculty Terminal</p>
