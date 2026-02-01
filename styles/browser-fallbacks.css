@@ -1,0 +1,455 @@
+/**
+ * Browser Fallbacks CSS
+ * Provides fallback styles for unsupported CSS features
+ * Progressive enhancement approach - basic styles first, enhanced styles with feature detection
+ */
+
+/* ===== CSS CUSTOM PROPERTIES FALLBACKS ===== */
+.no-css-custom-properties {
+    /* Color fallbacks */
+    --primary-color: #3b82f6;
+    --primary-dark: #2563eb;
+    --primary-light: #93c5fd;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --error-color: #ef4444;
+    --info-color: #06b6d4;
+
+    /* Text colors */
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --text-muted: #9ca3af;
+    --text-inverse: #ffffff;
+
+    /* Background colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f9fafb;
+    --bg-muted: #f3f4f6;
+    --bg-dark: #1f2937;
+
+    /* Border colors */
+    --border-color: #d1d5db;
+    --border-light: #e5e7eb;
+    --border-dark: #9ca3af;
+
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+
+    /* Typography */
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.25rem;
+    --font-size-2xl: 1.5rem;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+    /* Border radius */
+    --radius-sm: 0.125rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+}
+
+/* Apply hardcoded values when custom properties aren't supported */
+.no-css-custom-properties .btn-primary {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: #ffffff;
+}
+
+.no-css-custom-properties .btn-primary:hover {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
+
+.no-css-custom-properties .text-primary {
+    color: #3b82f6;
+}
+
+.no-css-custom-properties .text-secondary {
+    color: #6b7280;
+}
+
+.no-css-custom-properties .bg-primary {
+    background-color: #ffffff;
+}
+
+.no-css-custom-properties .bg-secondary {
+    background-color: #f9fafb;
+}
+
+.no-css-custom-properties .border-primary {
+    border-color: #d1d5db;
+}
+
+/* ===== CSS GRID FALLBACKS ===== */
+.no-css-grid .grid-fallback {
+    display: block;
+    font-size: 0;
+    /* Remove whitespace between inline-block elements */
+}
+
+.no-css-grid .grid-fallback>* {
+    display: inline-block;
+    vertical-align: top;
+    width: 100%;
+    font-size: 1rem;
+    /* Reset font size */
+    box-sizing: border-box;
+}
+
+/* Grid column fallbacks */
+.no-css-grid .grid-fallback.grid-cols-1>* {
+    width: 100%;
+}
+
+.no-css-grid .grid-fallback.grid-cols-2>* {
+    width: 50%;
+}
+
+.no-css-grid .grid-fallback.grid-cols-3>* {
+    width: 33.333%;
+}
+
+.no-css-grid .grid-fallback.grid-cols-4>* {
+    width: 25%;
+}
+
+.no-css-grid .grid-fallback.grid-cols-6>* {
+    width: 16.666%;
+}
+
+/* Responsive grid fallbacks */
+@media (max-width: 767px) {
+
+    .no-css-grid .grid-fallback.grid-cols-2>*,
+    .no-css-grid .grid-fallback.grid-cols-3>*,
+    .no-css-grid .grid-fallback.grid-cols-4>*,
+    .no-css-grid .grid-fallback.grid-cols-6>* {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .no-css-grid .grid-fallback.grid-cols-4>* {
+        width: 50%;
+    }
+
+    .no-css-grid .grid-fallback.grid-cols-6>* {
+        width: 33.333%;
+    }
+}
+
+/* Grid gap fallbacks */
+.no-css-grid .grid-fallback.gap-2>* {
+    padding: 0.5rem;
+}
+
+.no-css-grid .grid-fallback.gap-4>* {
+    padding: 1rem;
+}
+
+.no-css-grid .grid-fallback.gap-6>* {
+    padding: 1.5rem;
+}
+
+/* ===== CSS FLEXBOX FALLBACKS ===== */
+.no-css-flexbox .flex-fallback {
+    display: block;
+}
+
+.no-css-flexbox .flex-fallback>* {
+    display: inline-block;
+    vertical-align: top;
+}
+
+/* Flex direction fallbacks */
+.no-css-flexbox .flex-fallback.flex-col>* {
+    display: block;
+    width: 100%;
+}
+
+/* Justify content fallbacks */
+.no-css-flexbox .flex-fallback.justify-center {
+    text-align: center;
+}
+
+.no-css-flexbox .flex-fallback.justify-end {
+    text-align: right;
+}
+
+.no-css-flexbox .flex-fallback.justify-between::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.no-css-flexbox .flex-fallback.justify-between>*:first-child {
+    float: left;
+}
+
+.no-css-flexbox .flex-fallback.justify-between>*:last-child {
+    float: right;
+}
+
+/* Align items fallbacks */
+.no-css-flexbox .flex-fallback.items-center>* {
+    vertical-align: middle;
+}
+
+.no-css-flexbox .flex-fallback.items-end>* {
+    vertical-align: bottom;
+}
+
+/* Flex wrap fallbacks */
+.no-css-flexbox .flex-fallback.flex-wrap {
+    font-size: 0;
+}
+
+.no-css-flexbox .flex-fallback.flex-wrap>* {
+    font-size: 1rem;
+}
+
+/* ===== CSS CALC() FALLBACKS ===== */
+.no-css-calc .width-calc-fallback {
+    width: 100%;
+}
+
+.no-css-calc .width-calc-50 {
+    width: 50%;
+}
+
+.no-css-calc .width-calc-33 {
+    width: 33.333%;
+}
+
+.no-css-calc .width-calc-25 {
+    width: 25%;
+}
+
+/* ===== CSS TRANSFORMS FALLBACKS ===== */
+.no-css-transforms .transform-fallback {
+    position: relative;
+}
+
+.no-css-transforms .translate-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-top: -50px;
+    /* Approximate centering */
+    margin-left: -50px;
+}
+
+.no-css-transforms .rotate-90 {
+    /* Fallback: no rotation, just indicate with text or icon */
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+}
+
+/* ===== CSS TRANSITIONS FALLBACKS ===== */
+.no-css-transitions .transition-fallback {
+    /* No smooth transitions, but ensure hover states still work */
+}
+
+.no-css-transitions .transition-fallback:hover {
+    /* Immediate state changes without animation */
+}
+
+/* ===== MODERN CSS FEATURES FALLBACKS ===== */
+
+/* CSS backdrop-filter fallback */
+.no-css-backdrop-filter .backdrop-blur {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.no-css-backdrop-filter .backdrop-blur-dark {
+    background-color: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* CSS object-fit fallback */
+.no-css-object-fit .object-cover {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.no-css-object-fit .object-cover img {
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* CSS position: sticky fallback */
+.no-css-sticky .sticky-fallback {
+    position: relative;
+}
+
+/* For older browsers, we'll use JavaScript to simulate sticky behavior */
+.no-css-sticky .sticky-fallback.is-stuck {
+    position: fixed;
+    top: 0;
+    z-index: 1000;
+}
+
+/* ===== PROGRESSIVE ENHANCEMENT CLASSES ===== */
+
+/* Base styles - work everywhere */
+.progressive-base {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+}
+
+/* Enhanced styles - only when features are supported */
+.has-css-grid .progressive-base.use-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.has-css-flexbox .progressive-base.use-flex {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.has-css-custom-properties .progressive-base.use-custom-props {
+    background-color: var(--bg-primary, #ffffff);
+    border-color: var(--border-color, #d1d5db);
+    color: var(--text-primary, #1f2937);
+}
+
+/* ===== TOUCH DEVICE OPTIMIZATIONS ===== */
+.has-touch .touch-optimized {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px;
+}
+
+.has-touch .touch-optimized:hover {
+    /* Disable hover effects on touch devices */
+    background-color: inherit;
+    color: inherit;
+}
+
+.has-touch .touch-optimized:active {
+    /* Add active state for touch feedback */
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.no-touch .mouse-optimized:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    transition: background-color 0.2s ease;
+}
+
+/* ===== PRINT STYLES FALLBACKS ===== */
+@media print {
+
+    .no-css-grid .grid-fallback,
+    .no-css-flexbox .flex-fallback {
+        display: block !important;
+    }
+
+    .no-css-grid .grid-fallback>*,
+    .no-css-flexbox .flex-fallback>* {
+        display: block !important;
+        width: 100% !important;
+        float: none !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    .progressive-base {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+}
+
+/* ===== HIGH CONTRAST MODE SUPPORT ===== */
+@media (prefers-contrast: high) {
+    .progressive-base {
+        border-width: 2px;
+        border-color: currentColor;
+    }
+
+    .btn-primary {
+        border-width: 2px;
+        font-weight: bold;
+    }
+}
+
+/* ===== REDUCED MOTION SUPPORT ===== */
+@media (prefers-reduced-motion: reduce) {
+
+    .no-css-transitions .transition-fallback,
+    .transition-fallback {
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .transform-fallback {
+        transform: none !important;
+    }
+}
+
+/* ===== UTILITY CLASSES FOR PROGRESSIVE ENHANCEMENT ===== */
+.js-only {
+    display: none;
+}
+
+.js .js-only {
+    display: block;
+}
+
+.no-js .no-js-only {
+    display: block;
+}
+
+.no-js .js-only {
+    display: none !important;
+}
+
+/* Feature-specific utility classes */
+.has-css-grid .grid-enhanced {
+    display: grid;
+}
+
+.no-css-grid .grid-enhanced {
+    display: block;
+}
+
+.has-css-flexbox .flex-enhanced {
+    display: flex;
+}
+
+.no-css-flexbox .flex-enhanced {
+    display: block;
+}
+
+.has-css-custom-properties .custom-props-enhanced {
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+}
+
+.no-css-custom-properties .custom-props-enhanced {
+    color: #1f2937;
+    background-color: #ffffff;
+}

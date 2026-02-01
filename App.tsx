@@ -1,16 +1,43 @@
 
-import React, { useState, useEffect } from 'react';
-import Layout from './components/Layout.tsx';
-import Dashboard from './components/Dashboard.tsx';
-import FacultyEntry from './components/FacultyEntry.tsx';
-import ClassResults from './components/ClassResults.tsx';
-import StudentScorecard from './components/StudentScorecard.tsx';
-import Management from './components/Management.tsx';
-import PublicPortal from './components/PublicPortal.tsx';
-import PWAInstallPrompt from './components/PWAInstallPrompt.tsx';
-import { MobileProvider } from './contexts/MobileContext.tsx';
-import { ViewType } from './types.ts';
-import { serviceWorkerService } from './services/serviceWorkerService';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { ApplicationErrorBoundary, FeatureErrorBoundary } from './src/presentation/components/ErrorBoundary.tsx';
+import { MobileProvider } from './src/presentation/viewmodels/MobileContext.tsx';
+import { ViewType } from './src/domain/entities/types.ts';
+import { serviceWorkerService } from './src/infrastructure/services/serviceWorkerService';
+import { ErrorReportingService } from './src/infrastructure/services/ErrorReportingService';
+import { browserCompatibility } from './src/infrastructure/services/BrowserCompatibilityService';
+import { progressiveEnhancement } from './src/infrastructure/services/ProgressiveEnhancementService';
+
+// Lazy load components for code splitting
+const Layout = lazy(() => import('./src/presentation/components/Layout.tsx'));
+const Dashboard = lazy(() => import('./src/presentation/components/Dashboard.tsx'));
+const FacultyEntry = lazy(() => import('./src/presentation/components/FacultyEntry.tsx'));
+const ClassResults = lazy(() => import('./src/presentation/components/ClassResults.tsx'));
+const StudentScorecard = lazy(() => import('./src/presentation/components/StudentScorecard.tsx'));
+const Management = lazy(() => import('./src/presentation/components/Management.tsx'));
+
+const PublicPortal = lazy(() => import('./src/presentation/components/PublicPortal.tsx'));
+const PWAInstallPrompt = lazy(() => import('./src/presentation/components/PWAInstallPrompt.tsx'));
+
+// Loading fallback components
+const ComponentLoadingFallback: React.FC<{ componentName: string }> = ({ componentName }) => (
+  <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8">
+    <div className="loader-ring mb-8"></div>
+    <h2 className="text-white text-xl font-black tracking-tighter">Loading {componentName}</h2>
+    <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mt-4 animate-pulse">
+      Optimizing Performance
+    </p>
+  </div>
+);
+
+const AdminLoadingFallback: React.FC = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="text-center">
+      <div className="loader-ring mb-4"></div>
+      <p className="text-slate-600">Loading interface...</p>
+    </div>
+  </div>
+);
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<'public' | 'admin'>('public');
@@ -24,10 +51,25 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
 
+  // Initialize error reporting service
+  const [errorReporter] = useState(() => {
+    const service = new ErrorReportingService();
+    service.loadPersistedData();
+    return service;
+  });
+
   // Enhanced initialization with PWA features
   useEffect(() => {
     const initApp = async () => {
       try {
+        // Initialize browser compatibility first
+        console.log('App: Initializing browser compatibility...');
+        const features = browserCompatibility.getFeatures();
+        console.log('App: Browser features detected:', features);
+
+        // Initialize progressive enhancement
+        console.log('App: Setting up progressive enhancement...');
+
         // Simple connectivity check
         setIsCloudActive(navigator.onLine);
 
@@ -164,31 +206,156 @@ const App: React.FC = () => {
   const renderAdminContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard onNavigateToManagement={() => setActiveView('management')} />;
+        return (
+          <FeatureErrorBoundary featureName="Dashboard" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <Dashboard onNavigateToManagement={() => setActiveView('management')} />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
       case 'entry':
-        return <FacultyEntry />;
+        return (
+          <FeatureErrorBoundary featureName="Faculty Entry" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <FacultyEntry />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
       case 'class-report':
-        return <ClassResults />;
+        return (
+          <FeatureErrorBoundary featureName="Class Results" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <ClassResults />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
       case 'student-card':
-        return <StudentScorecard />;
+        return (
+          <FeatureErrorBoundary featureName="Student Scorecard" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <StudentScorecard />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
+
       case 'management':
-        return <Management />;
+        return (
+          <FeatureErrorBoundary featureName="Management" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <Management />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
       default:
-        return <Dashboard onNavigateToManagement={() => setActiveView('management')} />;
+        return (
+          <FeatureErrorBoundary featureName="Dashboard" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <Dashboard onNavigateToManagement={() => setActiveView('management')} />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
     }
   };
 
   if (mode === 'public') {
     return (
+      <ApplicationErrorBoundary level="application" errorReporter={errorReporter}>
+        <MobileProvider>
+          <FeatureErrorBoundary featureName="Public Portal" errorReporter={errorReporter}>
+            <Suspense fallback={<ComponentLoadingFallback componentName="Public Portal" />}>
+              <PublicPortal onLoginClick={() => setMode('admin')} />
+            </Suspense>
+          </FeatureErrorBoundary>
+
+          {/* PWA Install Prompt */}
+          {showPWAPrompt && (
+            <Suspense fallback={null}>
+              <PWAInstallPrompt
+                onInstall={handlePWAInstall}
+                onDismiss={handlePWADismiss}
+              />
+            </Suspense>
+          )}
+
+          {/* Service Worker Update Notification */}
+          {swUpdateAvailable && (
+            <div className="fixed top-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm">
+              <div className="bg-blue-600 text-white rounded-xl p-4 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold">Update Available</h4>
+                    <p className="text-sm opacity-90">A new version is ready to install</p>
+                  </div>
+                  <button
+                    onClick={handleSWUpdate}
+                    className="bg-white text-blue-600 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors"
+                  >
+                    Update
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </MobileProvider>
+      </ApplicationErrorBoundary>
+    );
+  }
+
+  if (mode === 'admin' && !isLoggedIn) {
+    return (
+      <ApplicationErrorBoundary level="application" errorReporter={errorReporter}>
+        <MobileProvider>
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl">
+              <div className="text-center mb-10">
+                <div className="bg-slate-100 text-slate-900 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
+                  <i className="fa-solid fa-shield-halved text-4xl"></i>
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Admin Gateway</h2>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Faculty Identification Required</p>
+              </div>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Registry ID" />
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Security PIN" />
+                <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl transition-all hover:bg-slate-800">Authenticate</button>
+                <button type="button" onClick={() => setMode('public')} className="w-full text-slate-400 text-[10px] font-black uppercase mt-6 tracking-[0.2em] hover:text-slate-600">Cancel Access</button>
+              </form>
+            </div>
+          </div>
+
+          {/* PWA Install Prompt */}
+          {showPWAPrompt && (
+            <Suspense fallback={null}>
+              <PWAInstallPrompt
+                onInstall={handlePWAInstall}
+                onDismiss={handlePWADismiss}
+              />
+            </Suspense>
+          )}
+        </MobileProvider>
+      </ApplicationErrorBoundary>
+    );
+  }
+
+  return (
+    <ApplicationErrorBoundary level="application" errorReporter={errorReporter}>
       <MobileProvider>
-        <PublicPortal onLoginClick={() => setMode('admin')} />
+        <FeatureErrorBoundary featureName="Layout" errorReporter={errorReporter}>
+          <Suspense fallback={<ComponentLoadingFallback componentName="Admin Interface" />}>
+            <Layout activeView={activeView} setView={setActiveView} onLogout={handleLogout} isCloudActive={isCloudActive}>
+              {renderAdminContent()}
+            </Layout>
+          </Suspense>
+        </FeatureErrorBoundary>
 
         {/* PWA Install Prompt */}
         {showPWAPrompt && (
-          <PWAInstallPrompt
-            onInstall={handlePWAInstall}
-            onDismiss={handlePWADismiss}
-          />
+          <Suspense fallback={null}>
+            <PWAInstallPrompt
+              onInstall={handlePWAInstall}
+              onDismiss={handlePWADismiss}
+            />
+          </Suspense>
         )}
 
         {/* Service Worker Update Notification */}
@@ -211,75 +378,7 @@ const App: React.FC = () => {
           </div>
         )}
       </MobileProvider>
-    );
-  }
-
-  if (mode === 'admin' && !isLoggedIn) {
-    return (
-      <MobileProvider>
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl">
-            <div className="text-center mb-10">
-              <div className="bg-slate-100 text-slate-900 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
-                <i className="fa-solid fa-shield-halved text-4xl"></i>
-              </div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Admin Gateway</h2>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Faculty Identification Required</p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Registry ID" />
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Security PIN" />
-              <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl transition-all hover:bg-slate-800">Authenticate</button>
-              <button type="button" onClick={() => setMode('public')} className="w-full text-slate-400 text-[10px] font-black uppercase mt-6 tracking-[0.2em] hover:text-slate-600">Cancel Access</button>
-            </form>
-          </div>
-        </div>
-
-        {/* PWA Install Prompt */}
-        {showPWAPrompt && (
-          <PWAInstallPrompt
-            onInstall={handlePWAInstall}
-            onDismiss={handlePWADismiss}
-          />
-        )}
-      </MobileProvider>
-    );
-  }
-
-  return (
-    <MobileProvider>
-      <Layout activeView={activeView} setView={setActiveView} onLogout={handleLogout} isCloudActive={isCloudActive}>
-        {renderAdminContent()}
-      </Layout>
-
-      {/* PWA Install Prompt */}
-      {showPWAPrompt && (
-        <PWAInstallPrompt
-          onInstall={handlePWAInstall}
-          onDismiss={handlePWADismiss}
-        />
-      )}
-
-      {/* Service Worker Update Notification */}
-      {swUpdateAvailable && (
-        <div className="fixed top-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm">
-          <div className="bg-blue-600 text-white rounded-xl p-4 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-semibold">Update Available</h4>
-                <p className="text-sm opacity-90">A new version is ready to install</p>
-              </div>
-              <button
-                onClick={handleSWUpdate}
-                className="bg-white text-blue-600 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors"
-              >
-                Update
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </MobileProvider>
+    </ApplicationErrorBoundary>
   );
 };
 

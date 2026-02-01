@@ -42,6 +42,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="./print-styles.css">
   <link rel="stylesheet" href="./styles/mobile-first.css">
+  <link rel="stylesheet" href="./styles/browser-fallbacks.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Amiri:wght@400;700&display=swap');
 
@@ -162,7 +163,55 @@
 </script>
 </head>
 
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 text-slate-900 no-js">
+  <!-- Browser compatibility initialization -->
+  <script>
+    // Remove no-js class immediately to prevent FOUC
+    document.documentElement.classList.remove('no-js');
+    document.documentElement.classList.add('js');
+
+    // Basic feature detection for critical features
+    (function () {
+      var features = {
+        localStorage: (function () {
+          try {
+            var test = '__test__';
+            localStorage.setItem(test, test);
+            localStorage.removeItem(test);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        })(),
+
+        cssGrid: (function () {
+          return CSS && CSS.supports && CSS.supports('display', 'grid');
+        })(),
+
+        cssFlexbox: (function () {
+          return CSS && CSS.supports && CSS.supports('display', 'flex');
+        })(),
+
+        cssCustomProperties: (function () {
+          return CSS && CSS.supports && CSS.supports('--test', '0');
+        })(),
+
+        fetch: 'fetch' in window,
+        promises: 'Promise' in window,
+        serviceWorker: 'serviceWorker' in navigator
+      };
+
+      // Add feature classes to html element
+      var html = document.documentElement;
+      Object.keys(features).forEach(function (feature) {
+        html.classList.add(features[feature] ? 'has-' + feature : 'no-' + feature);
+      });
+
+      // Store features for later use
+      window.__browserFeatures = features;
+    })();
+  </script>
+
   <div id="root"></div>
   <script type="module" src="./index.tsx"></script>
 </body>
