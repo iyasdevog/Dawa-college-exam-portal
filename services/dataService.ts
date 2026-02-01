@@ -877,6 +877,168 @@ export class DataService {
         }
     }
 
+    // New method for updating only TA marks
+    async updateStudentTAMarks(studentId: string, subjectId: string, ta: number): Promise<void> {
+        if (!db) throw new Error('Firebase not initialized');
+
+        try {
+            const [studentDoc, subjectDoc] = await Promise.all([
+                getDoc(doc(db, this.studentsCollection, studentId)),
+                getDoc(doc(db, this.subjectsCollection, subjectId))
+            ]);
+
+            if (!studentDoc.exists()) {
+                throw new Error('Student not found');
+            }
+            if (!subjectDoc.exists()) {
+                throw new Error('Subject not found');
+            }
+
+            const student = studentDoc.data() as StudentRecord;
+            const subject = subjectDoc.data() as SubjectConfig;
+
+            // Get existing marks or create new entry
+            const existingMarks = student.marks[subjectId] || { ta: 0, ce: 0, total: 0, status: 'Pending' };
+            const ce = existingMarks.ce || 0;
+            const total = ta + ce;
+
+            // Calculate passing requirements: 40% of TA AND 50% of CE
+            const minTA = Math.ceil(subject.maxTA * 0.4);
+            const minCE = Math.ceil(subject.maxCE * 0.5);
+            const passedTA = ta >= minTA;
+            const passedCE = ce >= minCE;
+
+            // Status is only 'Passed' if both TA and CE are passing and both are entered
+            let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+            if (ta > 0 && ce > 0) {
+                status = (passedTA && passedCE) ? 'Passed' : 'Failed';
+            }
+
+            // Update marks
+            const updatedMarks = {
+                ...student.marks,
+                [subjectId]: {
+                    ta,
+                    ce,
+                    total,
+                    status
+                }
+            };
+
+            // Recalculate totals only if both TA and CE are present
+            const completeMarks = Object.values(updatedMarks).filter(mark => mark.ta > 0 && mark.ce > 0);
+            const grandTotal = completeMarks.reduce((sum, mark) => sum + mark.total, 0);
+            const average = completeMarks.length > 0 ? grandTotal / completeMarks.length : 0;
+
+            // Determine performance level
+            let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
+            if (average >= 80) performanceLevel = 'Excellent';
+            else if (average >= 70) performanceLevel = 'Good';
+            else if (average >= 60) performanceLevel = 'Average';
+            else if (average >= 40) performanceLevel = 'Needs Improvement';
+            else performanceLevel = 'Failed';
+
+            // Update student document
+            await updateDoc(doc(db, this.studentsCollection, studentId), {
+                marks: updatedMarks,
+                grandTotal,
+                average: Math.round(average * 100) / 100,
+                performanceLevel
+            });
+
+            // Recalculate class rankings only if we have complete marks
+            if (completeMarks.length > 0) {
+                await this.calculateClassRankings(student.className);
+            }
+
+            console.log('Student TA marks updated:', studentId, 'TA:', ta);
+        } catch (error) {
+            console.error('Error updating student TA marks:', error);
+            throw error;
+        }
+    }
+
+    // New method for updating only CE marks
+    async updateStudentCEMarks(studentId: string, subjectId: string, ce: number): Promise<void> {
+        if (!db) throw new Error('Firebase not initialized');
+
+        try {
+            const [studentDoc, subjectDoc] = await Promise.all([
+                getDoc(doc(db, this.studentsCollection, studentId)),
+                getDoc(doc(db, this.subjectsCollection, subjectId))
+            ]);
+
+            if (!studentDoc.exists()) {
+                throw new Error('Student not found');
+            }
+            if (!subjectDoc.exists()) {
+                throw new Error('Subject not found');
+            }
+
+            const student = studentDoc.data() as StudentRecord;
+            const subject = subjectDoc.data() as SubjectConfig;
+
+            // Get existing marks or create new entry
+            const existingMarks = student.marks[subjectId] || { ta: 0, ce: 0, total: 0, status: 'Pending' };
+            const ta = existingMarks.ta || 0;
+            const total = ta + ce;
+
+            // Calculate passing requirements: 40% of TA AND 50% of CE
+            const minTA = Math.ceil(subject.maxTA * 0.4);
+            const minCE = Math.ceil(subject.maxCE * 0.5);
+            const passedTA = ta >= minTA;
+            const passedCE = ce >= minCE;
+
+            // Status is only 'Passed' if both TA and CE are passing and both are entered
+            let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+            if (ta > 0 && ce > 0) {
+                status = (passedTA && passedCE) ? 'Passed' : 'Failed';
+            }
+
+            // Update marks
+            const updatedMarks = {
+                ...student.marks,
+                [subjectId]: {
+                    ta,
+                    ce,
+                    total,
+                    status
+                }
+            };
+
+            // Recalculate totals only if both TA and CE are present
+            const completeMarks = Object.values(updatedMarks).filter(mark => mark.ta > 0 && mark.ce > 0);
+            const grandTotal = completeMarks.reduce((sum, mark) => sum + mark.total, 0);
+            const average = completeMarks.length > 0 ? grandTotal / completeMarks.length : 0;
+
+            // Determine performance level
+            let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
+            if (average >= 80) performanceLevel = 'Excellent';
+            else if (average >= 70) performanceLevel = 'Good';
+            else if (average >= 60) performanceLevel = 'Average';
+            else if (average >= 40) performanceLevel = 'Needs Improvement';
+            else performanceLevel = 'Failed';
+
+            // Update student document
+            await updateDoc(doc(db, this.studentsCollection, studentId), {
+                marks: updatedMarks,
+                grandTotal,
+                average: Math.round(average * 100) / 100,
+                performanceLevel
+            });
+
+            // Recalculate class rankings only if we have complete marks
+            if (completeMarks.length > 0) {
+                await this.calculateClassRankings(student.className);
+            }
+
+            console.log('Student CE marks updated:', studentId, 'CE:', ce);
+        } catch (error) {
+            console.error('Error updating student CE marks:', error);
+            throw error;
+        }
+    }
+
     async clearSubjectMarks(subjectId: string, studentIds: string[]): Promise<void> {
         if (!db) throw new Error('Firebase not initialized');
 

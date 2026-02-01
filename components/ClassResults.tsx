@@ -119,6 +119,8 @@ const ClassResults: React.FC = () => {
                     <button
                         onClick={handleExport}
                         className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2 print:hidden"
+                        style={{ minHeight: '44px' }}
+                        aria-label="Export class results as CSV file"
                     >
                         <i className="fa-solid fa-download"></i>
                         Export CSV
@@ -126,6 +128,8 @@ const ClassResults: React.FC = () => {
                     <button
                         onClick={handlePrint}
                         className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 print:hidden"
+                        style={{ minHeight: '44px' }}
+                        aria-label="Print class results report"
                     >
                         <i className="fa-solid fa-print"></i>
                         Print Report
@@ -142,6 +146,8 @@ const ClassResults: React.FC = () => {
                             value={selectedClass}
                             onChange={(e) => setSelectedClass(e.target.value)}
                             className="p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium print:hidden"
+                            aria-label="Select class to view results"
+                            aria-describedby="class-results-help"
                         >
                             {CLASSES.map(cls => (
                                 <option key={cls} value={cls}>{cls}</option>
@@ -240,14 +246,14 @@ const ClassResults: React.FC = () => {
             {students.length > 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:shadow-none print:border print:border-slate-300 print:a4-content print:table-keep-together">
                     <div className="overflow-x-auto">
-                        <table className="w-full border-collapse print:table-compact">
+                        <table className="w-full border-collapse print:table-compact" role="table" aria-label="Class results table">
                             <thead className="print:keep-with-next">
-                                <tr className="bg-slate-50 print:bg-slate-100 print:break-inside-avoid">
-                                    <th className="text-left p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">Rank</th>
-                                    <th className="text-left p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">Adm No</th>
-                                    <th className="text-left p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">Student Name</th>
+                                <tr className="bg-slate-50 print:bg-slate-100 print:break-inside-avoid" role="row">
+                                    <th className="text-left p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Rank</th>
+                                    <th className="text-left p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Adm No</th>
+                                    <th className="text-left p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Student Name</th>
                                     {classSubjects.map(subject => (
-                                        <th key={subject.id} className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">
+                                        <th key={subject.id} className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="columnheader" scope="col">
                                             <div className="print:hidden">{subject.name}</div>
                                             <div className="hidden print:block">{subject.name.substring(0, 8)}</div>
                                             {subject.arabicName && (
@@ -255,25 +261,25 @@ const ClassResults: React.FC = () => {
                                             )}
                                         </th>
                                     ))}
-                                    <th className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">Total</th>
-                                    <th className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">Average</th>
-                                    <th className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">Status</th>
+                                    <th className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Total</th>
+                                    <th className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Average</th>
+                                    <th className="text-center p-4 font-bold text-slate-700 border-b border-slate-200 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {students.map((student, index) => (
-                                    <tr key={student.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-slate-100 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid`}>
-                                        <td className="p-4 border-b border-slate-100 print:p-1 print:text-xs print:table-cell-padding">
+                                    <tr key={student.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-slate-100 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid`} role="row">
+                                        <td className="p-4 border-b border-slate-100 print:p-1 print:text-xs print:table-cell-padding" role="cell">
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-sm print:w-4 print:h-4 print:text-xs print:leading-tight print:rounded-none ${student.rank === 1 ? 'bg-yellow-500 print:rank-gold' :
                                                 student.rank === 2 ? 'bg-slate-400 print:rank-silver' :
                                                     student.rank === 3 ? 'bg-amber-600 print:rank-bronze' :
                                                         'bg-slate-300 print:rank-default'
-                                                }`}>
+                                                }`} aria-label={`Rank ${student.rank}`}>
                                                 {student.rank}
                                             </div>
                                         </td>
-                                        <td className="p-4 font-medium text-slate-900 border-b border-slate-100 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">{student.adNo}</td>
-                                        <td className="p-4 font-medium text-slate-900 border-b border-slate-100 print:p-1 print:text-xs print:leading-tight print:table-cell-padding">{student.name}</td>
+                                        <td className="p-4 font-medium text-slate-900 border-b border-slate-100 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="cell">{student.adNo}</td>
+                                        <td className="p-4 font-medium text-slate-900 border-b border-slate-100 print:p-1 print:text-xs print:leading-tight print:table-cell-padding" role="cell">{student.name}</td>
                                         {classSubjects.map(subject => {
                                             const marks = student.marks[subject.id];
                                             return (
@@ -301,10 +307,10 @@ const ClassResults: React.FC = () => {
                                         </td>
                                         <td className="p-4 text-center border-b border-slate-100 print:p-1 print:table-cell-padding">
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider print:px-0 print:py-0 print:text-xs print:leading-tight ${student.performanceLevel === 'Excellent' ? 'bg-emerald-100 text-emerald-700 print:performance-excellent' :
-                                                    student.performanceLevel === 'Good' ? 'bg-blue-100 text-blue-700 print:performance-good' :
-                                                        student.performanceLevel === 'Average' ? 'bg-amber-100 text-amber-700 print:performance-average' :
-                                                            student.performanceLevel === 'Needs Improvement' ? 'bg-orange-100 text-orange-700 print:performance-needs-improvement' :
-                                                                'bg-red-100 text-red-700 print:performance-failed'
+                                                student.performanceLevel === 'Good' ? 'bg-blue-100 text-blue-700 print:performance-good' :
+                                                    student.performanceLevel === 'Average' ? 'bg-amber-100 text-amber-700 print:performance-average' :
+                                                        student.performanceLevel === 'Needs Improvement' ? 'bg-orange-100 text-orange-700 print:performance-needs-improvement' :
+                                                            'bg-red-100 text-red-700 print:performance-failed'
                                                 }`}>
                                                 {student.performanceLevel === 'Needs Improvement' ? 'Needs Imp.' : student.performanceLevel}
                                             </span>

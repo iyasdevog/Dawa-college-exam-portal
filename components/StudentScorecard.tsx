@@ -95,6 +95,8 @@ const StudentScorecard: React.FC = () => {
                     <button
                         onClick={handlePrint}
                         className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 print:hidden"
+                        style={{ minHeight: '44px' }}
+                        aria-label="Print student scorecard"
                     >
                         <i className="fa-solid fa-print"></i>
                         Print Scorecard
@@ -111,6 +113,8 @@ const StudentScorecard: React.FC = () => {
                             value={selectedClass}
                             onChange={(e) => setSelectedClass(e.target.value)}
                             className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 print:hidden"
+                            aria-label="Select class to view scorecards"
+                            aria-describedby="class-selection-help"
                         >
                             {CLASSES.map(cls => (
                                 <option key={cls} value={cls}>{cls}</option>
@@ -124,6 +128,8 @@ const StudentScorecard: React.FC = () => {
                             value={selectedStudent}
                             onChange={(e) => setSelectedStudent(e.target.value)}
                             className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 print:hidden"
+                            aria-label="Select student to view scorecard"
+                            aria-describedby="student-selection-help"
                         >
                             <option value="">Choose a student</option>
                             {classStudents.map(student => (
@@ -262,15 +268,15 @@ const StudentScorecard: React.FC = () => {
                             {/* Subject-wise Performance */}
                             {classSubjects.length > 0 ? (
                                 <div className="overflow-x-auto rounded-[2rem] border border-slate-100 print:border-black print:rounded-none print:table-keep-together print:break-inside-avoid">
-                                    <table className="w-full border-collapse print:table-compact">
+                                    <table className="w-full border-collapse print:table-compact" role="table" aria-label="Student subject-wise performance">
                                         <thead className="print:keep-with-next">
-                                            <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-white print:text-black print:text-xs print:border-b-2 print:border-black print:break-inside-avoid">
-                                                <th className="px-8 py-6 text-left print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding">Subject</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding">TA</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding">CE</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding">Total</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding">Max</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:leading-tight print:table-cell-padding">Status</th>
+                                            <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-white print:text-black print:text-xs print:border-b-2 print:border-black print:break-inside-avoid" role="row">
+                                                <th className="px-8 py-6 text-left print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Subject</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">TA</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">CE</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Total</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Max</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50 print:divide-black">
@@ -280,8 +286,8 @@ const StudentScorecard: React.FC = () => {
                                                 const percentage = marks ? Math.round((marks.total / maxTotal) * 100) : 0;
 
                                                 return (
-                                                    <tr key={subject.id} className="hover:bg-slate-50/50 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid">
-                                                        <td className="px-8 py-6 print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding">
+                                                    <tr key={subject.id} className="hover:bg-slate-50/50 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid" role="row">
+                                                        <td className="px-8 py-6 print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
                                                             <p className="font-black text-slate-800 text-lg tracking-tight print:text-xs print:text-black print:leading-tight">
                                                                 {subject.name}
                                                             </p>
@@ -296,14 +302,14 @@ const StudentScorecard: React.FC = () => {
                                                                 </p>
                                                             )}
                                                         </td>
-                                                        <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding">
-                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight">
+                                                        <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
+                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`TA marks: ${marks?.ta ?? 'Not assessed'} out of ${subject.maxTA}`}>
                                                                 {marks?.ta ?? '-'}
                                                                 <span className="text-xs text-slate-400 print:text-black">/{subject.maxTA}</span>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding">
-                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight">
+                                                        <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
+                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`CE marks: ${marks?.ce ?? 'Not assessed'} out of ${subject.maxCE}`}>
                                                                 {marks?.ce ?? '-'}
                                                                 <span className="text-xs text-slate-400 print:text-black">/{subject.maxCE}</span>
                                                             </div>

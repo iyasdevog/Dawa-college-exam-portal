@@ -8,6 +8,7 @@ import StudentScorecard from './components/StudentScorecard.tsx';
 import Management from './components/Management.tsx';
 import PublicPortal from './components/PublicPortal.tsx';
 import { ViewType } from './types.ts';
+import { serviceWorkerService } from './services/serviceWorkerService';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<'public' | 'admin'>('public');
@@ -25,6 +26,16 @@ const App: React.FC = () => {
       try {
         // Simple connectivity check
         setIsCloudActive(navigator.onLine);
+
+        // Register service worker for offline capability
+        if (process.env.NODE_ENV === 'production') {
+          try {
+            const swStatus = await serviceWorkerService.register();
+            console.log('Service Worker registration status:', swStatus);
+          } catch (error) {
+            console.error('Service Worker registration failed:', error);
+          }
+        }
       } catch (err) {
         console.error("Initialization error:", err);
         setIsCloudActive(false);
