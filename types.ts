@@ -48,4 +48,4 @@ export interface SubjectConfig {
   enrolledStudents?: string[]; // Student IDs for elective subjects
 }
 
-export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management';
+export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management' | 'public';

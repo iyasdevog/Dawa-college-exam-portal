@@ -4,6 +4,7 @@ import { CLASSES } from '../constants';
 import { dataService } from '../services/dataService';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { debounce, throttle, mobileStorage } from '../utils/mobileUtils';
+import * as XLSX from 'xlsx';
 
 interface DashboardProps {
     onNavigateToManagement: () => void;
@@ -1526,7 +1527,7 @@ This report contains confidential academic information.
                             {classStats.map((stat) => (
                                 <div key={stat.className} className="flex justify-between">
                                     <span className="text-slate-600">{stat.className}</span>
-                                    <span className="font-bold text-slate-900">{stat.averageScore.toFixed(1)}%</span>
+                                    <span className="font-bold text-slate-900">{stat.average.toFixed(1)}%</span>
                                 </div>
                             ))}
                         </div>

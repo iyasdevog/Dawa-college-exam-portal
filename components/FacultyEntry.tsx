@@ -13,6 +13,16 @@ import { useOfflineCapability } from '../hooks/useOfflineCapability';
 import OfflineStatusIndicator from './OfflineStatusIndicator';
 import DraftRecoveryModal from './DraftRecoveryModal';
 
+// Performance monitoring stubs
+const measureAsyncOperation = async (fn: () => Promise<void>, label?: string) => await fn();
+const measureInputLag = (id: string, type: string, context: string) => () => { };
+const recordCustomMetric = (name: string, value: number) => { };
+const lazyLoading = { checkAutoLoad: (index: number) => { } };
+const isMonitoring = false;
+const interactionCount = 0;
+const isHighMemory = false;
+const memoryInfo = null;
+
 const FacultyEntry: React.FC = () => {
     const [selectedClass, setSelectedClass] = useState('S1');
     const [selectedSubject, setSelectedSubject] = useState('');
@@ -190,7 +200,7 @@ const FacultyEntry: React.FC = () => {
                     // Only auto-save if there's actual data
                     const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
                     if (selectedSubjectData) {
-                        await offlineActions.autoSaveDraft(
+                        await offlineActions.saveDraft(
                             student.id,
                             selectedSubject,
                             marks.ta || '',
@@ -784,7 +794,7 @@ const FacultyEntry: React.FC = () => {
                             // Update draft with TA marks
                             const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
                             if (selectedSubjectData) {
-                                await offlineActions.autoSaveDraft(
+                                await offlineActions.saveDraft(
                                     student.id,
                                     selectedSubject,
                                     marks.ta,
@@ -868,7 +878,7 @@ const FacultyEntry: React.FC = () => {
                             // Update draft with CE marks
                             const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
                             if (selectedSubjectData) {
-                                await offlineActions.autoSaveDraft(
+                                await offlineActions.saveDraft(
                                     student.id,
                                     selectedSubject,
                                     marks.ta || '',

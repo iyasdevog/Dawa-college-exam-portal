@@ -461,7 +461,7 @@ class ServiceWorkerService {
 
         try {
             console.log('ServiceWorker: Registering background sync:', tag);
-            await this.registration.sync.register(tag);
+            await (this.registration as any).sync?.register(tag);
             console.log('ServiceWorker: Background sync registered:', tag);
         } catch (error) {
             console.error('ServiceWorker: Background sync registration failed:', error);
