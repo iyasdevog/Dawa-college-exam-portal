@@ -2,6 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { StudentRecord, SubjectConfig, SupplementaryExam } from '../types';
 import { CLASSES } from '../constants';
 import { dataService } from '../services/dataService';
+import { useMobile, useTouchInteraction } from '../hooks/useMobile';
+import { debounce, throttle, mobileStorage } from '../utils/mobileUtils';
+
+interface MobileAdminState {
+  viewMode: 'cards' | 'table' | 'compact';
+  isSelectionMode: boolean;
+  selectedItems: string[];
+  sortBy: 'name' | 'date' | 'class' | 'custom';
+  sortOrder: 'asc' | 'desc';
+  filterBy: string;
+  showAdvancedFilters: boolean;
+}
+
+interface BulkOperationState {
+  isActive: boolean;
+  operation: 'delete' | 'export' | 'modify' | null;
+  progress: number;
+  selectedCount: number;
+  stage: 'preparing' | 'processing' | 'completing' | 'complete';
+}
+
+interface MobileProgressFeedback {
+  isVisible: boolean;
+  operation: 'loading' | 'saving' | 'deleting' | 'importing' | 'exporting';
+  message: string;
+  progress: number;
+}
 
 const Management: React.FC = () => {
   const [activeTab, setActiveTab] = useState('students');
@@ -9,6 +36,56 @@ const Management: React.FC = () => {
   const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOperating, setIsOperating] = useState(false);
+
+  // Enhanced mobile detection and responsive hooks
+  const { isMobile, isTablet, screenWidth, orientation } = useMobile();
+  const { getTouchProps } = useTouchInteraction();
+
+  // Simple style helpers to replace removed functions
+  const getTouchTargetStyle = (size: 'min' | 'comfortable' | 'large') => {
+    switch (size) {
+      case 'min': return { minHeight: '32px', minWidth: '32px' };
+      case 'comfortable': return { minHeight: '48px', minWidth: '48px' };
+      case 'large': return { minHeight: '56px', minWidth: '56px' };
+      default: return {};
+    }
+  };
+
+  const getTypographyStyle = (variant: string) => {
+    switch (variant) {
+      case 'body-large': return { fontSize: '1.125rem', lineHeight: '1.75rem' };
+      case 'body-medium': return { fontSize: '1rem', lineHeight: '1.5rem' };
+      case 'body-small': return { fontSize: '0.875rem', lineHeight: '1.25rem' };
+      case 'caption': return { fontSize: '0.75rem', lineHeight: '1rem' };
+      default: return {};
+    }
+  };
+
+  // Mobile admin state management
+  const [mobileAdminState, setMobileAdminState] = useState<MobileAdminState>({
+    viewMode: 'cards',
+    isSelectionMode: false,
+    selectedItems: [],
+    sortBy: 'name',
+    sortOrder: 'asc',
+    filterBy: '',
+    showAdvancedFilters: false
+  });
+
+  const [bulkOperationState, setBulkOperationState] = useState<BulkOperationState>({
+    isActive: false,
+    operation: null,
+    progress: 0,
+    selectedCount: 0,
+    stage: 'preparing'
+  });
+
+  const [mobileProgressFeedback, setMobileProgressFeedback] = useState<MobileProgressFeedback>({
+    isVisible: false,
+    operation: 'loading',
+    message: '',
+    progress: 0
+  });
 
   // Student form state
   const [showStudentForm, setShowStudentForm] = useState(false);
@@ -74,7 +151,7 @@ const Management: React.FC = () => {
     { id: 'settings', label: 'Settings', icon: 'fa-cog' },
   ];
 
-  // Load data on component mount
+  // Load data on component mount with mobile optimizations
   useEffect(() => {
     loadData();
     // Load custom classes from localStorage
@@ -82,27 +159,202 @@ const Management: React.FC = () => {
     if (savedClasses) {
       setCustomClasses(JSON.parse(savedClasses));
     }
-  }, []);
 
+    // Load mobile admin preferences
+    if (isMobile) {
+      const savedMobileState = mobileStorage.get<Partial<MobileAdminState>>('management-mobile-state');
+      if (savedMobileState) {
+        setMobileAdminState(prev => ({
+          ...prev,
+          ...savedMobileState,
+          // Reset selection state on load
+          isSelectionMode: false,
+          selectedItems: []
+        }));
+      }
+    }
+  }, [isMobile]);
+
+  // Mobile-optimized data loading with progress feedback
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [studentsData, subjectsData] = await Promise.all([
-        dataService.getAllStudents(),
-        dataService.getAllSubjects()
-      ]);
+
+      if (isMobile) {
+        setMobileProgressFeedback({
+          isVisible: true,
+          operation: 'loading',
+          message: 'Loading management data...',
+          progress: 0
+        });
+      }
+
+      // Stage 1: Load students
+      if (isMobile) {
+        setMobileProgressFeedback(prev => ({ ...prev, progress: 30, message: 'Loading students...' }));
+      }
+      const studentsData = await dataService.getAllStudents();
+
+      // Stage 2: Load subjects
+      if (isMobile) {
+        setMobileProgressFeedback(prev => ({ ...prev, progress: 60, message: 'Loading subjects...' }));
+      }
+      const subjectsData = await dataService.getAllSubjects();
+
       setStudents(studentsData);
       setSubjects(subjectsData);
 
-      // Load supplementary exams after students and subjects are loaded
+      // Stage 3: Load supplementary exams
       if (studentsData.length > 0 && subjectsData.length > 0) {
+        if (isMobile) {
+          setMobileProgressFeedback(prev => ({ ...prev, progress: 90, message: 'Loading supplementary exams...' }));
+        }
         await loadSupplementaryExams();
+      }
+
+      if (isMobile) {
+        setMobileProgressFeedback(prev => ({ ...prev, progress: 100, message: 'Data loaded successfully!' }));
       }
     } catch (error) {
       console.error('Error loading data:', error);
+      if (isMobile) {
+        setMobileProgressFeedback(prev => ({ ...prev, message: 'Error loading data. Please try again.' }));
+      }
     } finally {
       setIsLoading(false);
+      if (isMobile) {
+        setTimeout(() => {
+          setMobileProgressFeedback(prev => ({ ...prev, isVisible: false }));
+        }, 1000);
+      }
     }
+  };
+
+  // Mobile-friendly bulk operations
+  const handleToggleSelectionMode = () => {
+    setMobileAdminState(prev => ({
+      ...prev,
+      isSelectionMode: !prev.isSelectionMode,
+      selectedItems: []
+    }));
+  };
+
+  const handleItemSelection = (itemId: string) => {
+    setMobileAdminState(prev => ({
+      ...prev,
+      selectedItems: prev.selectedItems.includes(itemId)
+        ? prev.selectedItems.filter(id => id !== itemId)
+        : [...prev.selectedItems, itemId]
+    }));
+  };
+
+  const handleSelectAll = (items: any[]) => {
+    const allIds = items.map(item => item.id);
+    setMobileAdminState(prev => ({
+      ...prev,
+      selectedItems: prev.selectedItems.length === allIds.length ? [] : allIds
+    }));
+  };
+
+  const handleBulkDelete = async () => {
+    if (mobileAdminState.selectedItems.length === 0) return;
+
+    const confirmMessage = `Are you sure you want to delete ${mobileAdminState.selectedItems.length} selected items? This action cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
+
+    setBulkOperationState({
+      isActive: true,
+      operation: 'delete',
+      progress: 0,
+      selectedCount: mobileAdminState.selectedItems.length,
+      stage: 'preparing'
+    });
+
+    setMobileProgressFeedback({
+      isVisible: true,
+      operation: 'deleting',
+      message: 'Preparing bulk delete...',
+      progress: 0
+    });
+
+    try {
+      const totalItems = mobileAdminState.selectedItems.length;
+      let completed = 0;
+
+      setBulkOperationState(prev => ({ ...prev, stage: 'processing' }));
+
+      for (const itemId of mobileAdminState.selectedItems) {
+        if (activeTab === 'students') {
+          await dataService.deleteStudent(itemId);
+        } else if (activeTab === 'subjects') {
+          await dataService.deleteSubject(itemId);
+        }
+
+        completed++;
+        const progress = Math.round((completed / totalItems) * 100);
+
+        setBulkOperationState(prev => ({ ...prev, progress }));
+        setMobileProgressFeedback(prev => ({
+          ...prev,
+          progress,
+          message: `Deleting ${completed}/${totalItems} items...`
+        }));
+
+        // Small delay for better UX
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      setBulkOperationState(prev => ({ ...prev, stage: 'completing' }));
+      setMobileProgressFeedback(prev => ({ ...prev, message: 'Refreshing data...' }));
+
+      await loadData();
+
+      setBulkOperationState(prev => ({ ...prev, stage: 'complete' }));
+      setMobileProgressFeedback(prev => ({ ...prev, message: 'Bulk delete completed successfully!' }));
+
+      // Reset selection
+      setMobileAdminState(prev => ({
+        ...prev,
+        selectedItems: [],
+        isSelectionMode: false
+      }));
+
+    } catch (error) {
+      console.error('Bulk delete failed:', error);
+      setMobileProgressFeedback(prev => ({
+        ...prev,
+        message: 'Bulk delete failed. Please try again.'
+      }));
+    } finally {
+      setTimeout(() => {
+        setBulkOperationState({
+          isActive: false,
+          operation: null,
+          progress: 0,
+          selectedCount: 0,
+          stage: 'preparing'
+        });
+        setMobileProgressFeedback(prev => ({ ...prev, isVisible: false }));
+      }, 2000);
+    }
+  };
+
+  const handleMobileViewModeChange = (viewMode: 'cards' | 'table' | 'compact') => {
+    setMobileAdminState(prev => ({ ...prev, viewMode }));
+
+    // Persist preference
+    mobileStorage.set('management-mobile-state', {
+      ...mobileAdminState,
+      viewMode
+    });
+  };
+
+  const handleMobileSortChange = (sortBy: 'name' | 'date' | 'class' | 'custom', sortOrder: 'asc' | 'desc') => {
+    setMobileAdminState(prev => ({ ...prev, sortBy, sortOrder }));
+  };
+
+  const handleMobileFilterChange = (filterBy: string) => {
+    setMobileAdminState(prev => ({ ...prev, filterBy }));
   };
 
   // Student operations
@@ -657,41 +909,173 @@ const Management: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">System Management</h1>
-        <p className="text-slate-600 mt-2">Manage students, subjects, classes, and system settings</p>
+      <div className={isMobile ? 'text-center' : ''}>
+        <h1 className={`font-black text-slate-900 tracking-tight ${isMobile ? 'text-2xl' : 'text-3xl'}`}>System Management</h1>
+        <p className={`text-slate-600 mt-2 ${isMobile ? 'text-sm' : ''}`}>Manage students, subjects, classes, and system settings</p>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Enhanced Mobile Tab Navigation */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:hidden">
         <div className="border-b border-slate-200">
-          <nav className="flex">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-3 px-6 py-4 font-bold transition-all ${activeTab === tab.id
-                  ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-600'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-              >
-                <i className={`fa-solid ${tab.icon}`}></i>
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+          {isMobile ? (
+            /* Mobile: Enhanced Dropdown Navigation with Quick Actions */
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <select
+                    value={activeTab}
+                    onChange={(e) => setActiveTab(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
+                    style={{ minHeight: '48px' }}
+                  >
+                    {tabs.map((tab) => (
+                      <option key={tab.id} value={tab.id}>
+                        {tab.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Mobile Quick Action Button */}
+                <button
+                  onClick={() => setMobileAdminState(prev => ({ ...prev, showAdvancedFilters: !prev.showAdvancedFilters }))}
+                  className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"
+                  style={getTouchTargetStyle('comfortable')}
+                  {...getTouchProps()}
+                >
+                  <i className="fa-solid fa-filter"></i>
+                </button>
+              </div>
+
+              {/* Mobile View Mode Switcher */}
+              <div className="flex items-center justify-center gap-2 bg-slate-100 rounded-xl p-1">
+                {(['cards', 'table', 'compact'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => handleMobileViewModeChange(mode)}
+                    className={`flex-1 px-3 py-2 rounded-lg font-medium transition-all text-xs ${mobileAdminState.viewMode === mode
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    style={getTouchTargetStyle('min')}
+                  >
+                    <i className={`fa-solid ${mode === 'cards' ? 'fa-th-large' :
+                      mode === 'table' ? 'fa-table' : 'fa-list'
+                      } mr-1`}></i>
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Advanced Mobile Filters */}
+              {mobileAdminState.showAdvancedFilters && (
+                <div className="bg-slate-50 rounded-xl p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+                      <select
+                        value={`${mobileAdminState.sortBy}-${mobileAdminState.sortOrder}`}
+                        onChange={(e) => {
+                          const [sortBy, sortOrder] = e.target.value.split('-') as ['name' | 'date' | 'class' | 'custom', 'asc' | 'desc'];
+                          handleMobileSortChange(sortBy, sortOrder);
+                        }}
+                        className="w-full px-2 py-1 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                        style={getTouchTargetStyle('min')}
+                      >
+                        <option value="name-asc">Name (A to Z)</option>
+                        <option value="name-desc">Name (Z to A)</option>
+                        <option value="date-desc">Date (Newest)</option>
+                        <option value="date-asc">Date (Oldest)</option>
+                        <option value="class-asc">Class (A to Z)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Filter</label>
+                      <input
+                        type="text"
+                        value={mobileAdminState.filterBy}
+                        onChange={(e) => handleMobileFilterChange(e.target.value)}
+                        placeholder="Search..."
+                        className="w-full px-2 py-1 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                        style={getTouchTargetStyle('min')}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Selection Mode Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-600">Bulk Operations</span>
+                    <button
+                      onClick={handleToggleSelectionMode}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${mobileAdminState.isSelectionMode
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-slate-200 text-slate-600'
+                        }`}
+                      style={getTouchTargetStyle('min')}
+                    >
+                      <i className="fa-solid fa-check-square mr-1"></i>
+                      {mobileAdminState.isSelectionMode ? 'Exit Select' : 'Select Mode'}
+                    </button>
+                  </div>
+
+                  {/* Bulk Actions */}
+                  {mobileAdminState.isSelectionMode && mobileAdminState.selectedItems.length > 0 && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-orange-700 font-medium">
+                          {mobileAdminState.selectedItems.length} selected
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setMobileAdminState(prev => ({ ...prev, selectedItems: [] }))}
+                            className="text-orange-600 hover:text-orange-800"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            onClick={handleBulkDelete}
+                            className="text-red-600 hover:text-red-800 font-medium"
+                          >
+                            Delete All
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Desktop: Tab Navigation */
+            <nav className="flex">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-3 px-6 py-4 font-bold transition-all ${activeTab === tab.id
+                    ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-600'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                >
+                  <i className={`fa-solid ${tab.icon}`}></i>
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          )}
         </div>
 
         <div className="p-6">
           {/* Students Tab */}
           {activeTab === 'students' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black text-slate-900">Student Management</h2>
-                <div className="flex gap-3">
+              <div className={`flex items-center justify-between ${isMobile ? 'flex-col gap-4' : ''}`}>
+                <h2 className={`font-black text-slate-900 ${isMobile ? 'text-lg text-center' : 'text-xl'}`}>Student Management</h2>
+                <div className={`flex gap-3 ${isMobile ? 'w-full flex-col' : ''}`}>
                   <button
                     onClick={() => setShowBulkImport(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+                    className={`px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2 ${isMobile ? 'justify-center' : ''}`}
+                    style={{ minHeight: '44px' }}
                   >
                     <i className="fa-solid fa-upload"></i>
                     Bulk Import
@@ -699,7 +1083,8 @@ const Management: React.FC = () => {
                   <button
                     onClick={handleAddStudent}
                     disabled={isOperating}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className={`px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${isMobile ? 'justify-center' : ''}`}
+                    style={{ minHeight: '44px' }}
                   >
                     <i className="fa-solid fa-plus"></i>
                     Add Student
@@ -707,79 +1092,274 @@ const Management: React.FC = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                {students.length > 0 ? (
-                  <table className="w-full">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="text-left p-4 font-bold text-slate-700">Adm No</th>
-                        <th className="text-left p-4 font-bold text-slate-700">Name</th>
-                        <th className="text-left p-4 font-bold text-slate-700">Class</th>
-                        <th className="text-left p-4 font-bold text-slate-700">Semester</th>
-                        <th className="text-center p-4 font-bold text-slate-700">Total</th>
-                        <th className="text-center p-4 font-bold text-slate-700">Rank</th>
-                        <th className="text-center p-4 font-bold text-slate-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {students.map((student, index) => (
-                        <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                          <td className="p-4 font-medium text-slate-900">{student.adNo}</td>
-                          <td className="p-4 font-medium text-slate-900">{student.name}</td>
-                          <td className="p-4 text-slate-600">{student.className}</td>
-                          <td className="p-4 text-slate-600">{student.semester}</td>
-                          <td className="p-4 text-center font-bold text-slate-900">{student.grandTotal}</td>
-                          <td className="p-4 text-center">
-                            <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-bold">
-                              #{student.rank}
-                            </span>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
+              {/* Enhanced Mobile Student Management */}
+              {isMobile ? (
+                /* Mobile: Enhanced Card Layout with Selection Support */
+                <div className="space-y-4">
+                  {students.length > 0 ? (
+                    <>
+                      {/* Mobile Selection Header */}
+                      {mobileAdminState.isSelectionMode && (
+                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
                               <button
-                                onClick={() => handleEditStudent(student)}
-                                disabled={isOperating}
-                                className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-all disabled:opacity-50"
+                                onClick={() => handleSelectAll(students)}
+                                className="p-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-all"
+                                style={getTouchTargetStyle('min')}
                               >
-                                <i className="fa-solid fa-edit"></i>
+                                <i className={`fa-solid ${mobileAdminState.selectedItems.length === students.length
+                                  ? 'fa-check-square'
+                                  : 'fa-square'
+                                  }`}></i>
                               </button>
-                              <button
-                                onClick={() => handleDeleteStudent(student)}
-                                disabled={isOperating}
-                                className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-all disabled:opacity-50"
-                              >
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
+                              <span className="font-medium text-orange-700">
+                                {mobileAdminState.selectedItems.length === students.length ? 'Deselect All' : 'Select All'}
+                              </span>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="text-center py-12">
-                    <i className="fa-solid fa-users text-4xl text-slate-300 mb-4"></i>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">No Students Found</h3>
-                    <p className="text-slate-600 mb-6">The system is empty. Add students manually or use bulk import to get started.</p>
-                    <div className="flex gap-3 justify-center">
+                            <span className="text-sm text-orange-600">
+                              {mobileAdminState.selectedItems.length}/{students.length} selected
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mobile Student Cards */}
+                      <div className={`space-y-3 ${mobileAdminState.viewMode === 'compact' ? 'space-y-2' : 'space-y-4'
+                        }`}>
+                        {students
+                          .filter(student =>
+                            !mobileAdminState.filterBy ||
+                            student.name.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
+                            student.adNo.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
+                            student.className.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase())
+                          )
+                          .sort((a, b) => {
+                            const { sortBy, sortOrder } = mobileAdminState;
+                            let comparison = 0;
+
+                            switch (sortBy) {
+                              case 'name':
+                                comparison = a.name.localeCompare(b.name);
+                                break;
+                              case 'class':
+                                comparison = a.className.localeCompare(b.className);
+                                break;
+                              default:
+                                comparison = a.name.localeCompare(b.name);
+                            }
+
+                            return sortOrder === 'asc' ? comparison : -comparison;
+                          })
+                          .map((student, index) => (
+                            <div
+                              key={student.id}
+                              className={`bg-slate-50 rounded-xl p-4 transition-all ${mobileAdminState.isSelectionMode && mobileAdminState.selectedItems.includes(student.id)
+                                ? 'bg-orange-50 border-2 border-orange-200'
+                                : 'hover:bg-slate-100'
+                                } ${mobileAdminState.viewMode === 'compact' ? 'p-3' : 'p-4'}`}
+                              style={getTouchTargetStyle('comfortable')}
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* Selection Checkbox */}
+                                {mobileAdminState.isSelectionMode && (
+                                  <button
+                                    onClick={() => handleItemSelection(student.id)}
+                                    className="p-2 rounded-lg transition-all"
+                                    style={getTouchTargetStyle('min')}
+                                  >
+                                    <i className={`fa-solid ${mobileAdminState.selectedItems.includes(student.id)
+                                      ? 'fa-check-square text-orange-600'
+                                      : 'fa-square text-slate-400'
+                                      }`}></i>
+                                  </button>
+                                )}
+
+                                {/* Student Info */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex-1 min-w-0">
+                                      <h3
+                                        className="font-bold text-slate-900 truncate"
+                                        style={getTypographyStyle(mobileAdminState.viewMode === 'compact' ? 'body-medium' : 'body-large')}
+                                      >
+                                        {student.name}
+                                      </h3>
+                                      <p
+                                        className="text-slate-600 truncate"
+                                        style={getTypographyStyle('body-small')}
+                                      >
+                                        Adm: {student.adNo} • {student.className} • {student.semester}
+                                      </p>
+                                    </div>
+
+                                    {mobileAdminState.viewMode !== 'compact' && (
+                                      <div className="text-right ml-3">
+                                        <p
+                                          className="font-bold text-slate-900"
+                                          style={getTypographyStyle('body-large')}
+                                        >
+                                          {student.grandTotal}
+                                        </p>
+                                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">
+                                          #{student.rank}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Performance Indicator */}
+                                  {!mobileAdminState.isSelectionMode && mobileAdminState.viewMode !== 'compact' && (
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className={`w-2 h-2 rounded-full ${student.performanceLevel === 'Excellent' ? 'bg-green-500' :
+                                        student.performanceLevel === 'Good' ? 'bg-blue-500' :
+                                          student.performanceLevel === 'Average' ? 'bg-yellow-500' :
+                                            student.performanceLevel === 'Needs Improvement' ? 'bg-orange-500' :
+                                              'bg-red-500'
+                                        }`}></div>
+                                      <span
+                                        className="text-slate-600"
+                                        style={getTypographyStyle('caption')}
+                                      >
+                                        {student.performanceLevel} • {student.average.toFixed(1)}% avg
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Action Buttons */}
+                                  {!mobileAdminState.isSelectionMode && (
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleEditStudent(student)}
+                                        disabled={isOperating}
+                                        className="flex-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg font-medium hover:bg-blue-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                        style={getTouchTargetStyle('comfortable')}
+                                        {...getTouchProps()}
+                                      >
+                                        <i className="fa-solid fa-edit"></i>
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteStudent(student)}
+                                        disabled={isOperating}
+                                        className="flex-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg font-medium hover:bg-red-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                        style={getTouchTargetStyle('comfortable')}
+                                        {...getTouchProps()}
+                                      >
+                                        <i className="fa-solid fa-trash"></i>
+                                        Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <i className="fa-solid fa-users text-4xl text-slate-300 mb-4"></i>
+                      <p
+                        className="text-slate-600 font-bold mb-2"
+                        style={getTypographyStyle('body-large')}
+                      >
+                        No students found
+                      </p>
+                      <p
+                        className="text-slate-500 mb-4"
+                        style={getTypographyStyle('body-medium')}
+                      >
+                        Add students to get started
+                      </p>
                       <button
                         onClick={handleAddStudent}
-                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2"
+                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 mx-auto"
+                        style={getTouchTargetStyle('comfortable')}
+                        {...getTouchProps()}
                       >
                         <i className="fa-solid fa-plus"></i>
                         Add First Student
                       </button>
-                      <button
-                        onClick={() => setShowBulkImport(true)}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
-                      >
-                        <i className="fa-solid fa-upload"></i>
-                        Bulk Import
-                      </button>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              ) : (
+                /* Desktop: Table Layout */
+                <div className="overflow-x-auto">
+                  {students.length > 0 ? (
+                    <table className="w-full">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-4 font-bold text-slate-700">Adm No</th>
+                          <th className="text-left p-4 font-bold text-slate-700">Name</th>
+                          <th className="text-left p-4 font-bold text-slate-700">Class</th>
+                          <th className="text-left p-4 font-bold text-slate-700">Semester</th>
+                          <th className="text-center p-4 font-bold text-slate-700">Total</th>
+                          <th className="text-center p-4 font-bold text-slate-700">Rank</th>
+                          <th className="text-center p-4 font-bold text-slate-700">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {students.map((student, index) => (
+                          <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                            <td className="p-4 font-medium text-slate-900">{student.adNo}</td>
+                            <td className="p-4 font-medium text-slate-900">{student.name}</td>
+                            <td className="p-4 text-slate-600">{student.className}</td>
+                            <td className="p-4 text-slate-600">{student.semester}</td>
+                            <td className="p-4 text-center font-bold text-slate-900">{student.grandTotal}</td>
+                            <td className="p-4 text-center">
+                              <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-bold">
+                                #{student.rank}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleEditStudent(student)}
+                                  disabled={isOperating}
+                                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-all disabled:opacity-50"
+                                >
+                                  <i className="fa-solid fa-edit"></i>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteStudent(student)}
+                                  disabled={isOperating}
+                                  className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-all disabled:opacity-50"
+                                >
+                                  <i className="fa-solid fa-trash"></i>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-center py-12">
+                      <i className="fa-solid fa-users text-4xl text-slate-300 mb-4"></i>
+                      <h3 className="text-xl font-bold text-slate-900 mb-2">No Students Found</h3>
+                      <p className="text-slate-600 mb-6">The system is empty. Add students manually or use bulk import to get started.</p>
+                      <div className="flex gap-3 justify-center">
+                        <button
+                          onClick={handleAddStudent}
+                          className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2"
+                        >
+                          <i className="fa-solid fa-plus"></i>
+                          Add First Student
+                        </button>
+                        <button
+                          onClick={() => setShowBulkImport(true)}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+                        >
+                          <i className="fa-solid fa-upload"></i>
+                          Bulk Import
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1922,6 +2502,103 @@ const Management: React.FC = () => {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Mobile Progress Feedback Overlay */}
+      {isMobile && mobileProgressFeedback.isVisible && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center">
+            <div className="mb-4">
+              <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${mobileProgressFeedback.operation === 'loading' ? 'bg-blue-100' :
+                mobileProgressFeedback.operation === 'saving' ? 'bg-green-100' :
+                  mobileProgressFeedback.operation === 'deleting' ? 'bg-red-100' :
+                    mobileProgressFeedback.operation === 'importing' ? 'bg-purple-100' :
+                      'bg-orange-100'
+                }`}>
+                <i className={`fa-solid text-2xl ${mobileProgressFeedback.operation === 'loading' ? 'fa-spinner fa-spin text-blue-600' :
+                  mobileProgressFeedback.operation === 'saving' ? 'fa-save text-green-600' :
+                    mobileProgressFeedback.operation === 'deleting' ? 'fa-trash text-red-600' :
+                      mobileProgressFeedback.operation === 'importing' ? 'fa-upload text-purple-600' :
+                        'fa-download text-orange-600'
+                  }`}></i>
+              </div>
+
+              {mobileProgressFeedback.progress > 0 && (
+                <div className="w-full bg-slate-200 rounded-full h-2 mb-3">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${mobileProgressFeedback.operation === 'loading' ? 'bg-blue-600' :
+                      mobileProgressFeedback.operation === 'saving' ? 'bg-green-600' :
+                        mobileProgressFeedback.operation === 'deleting' ? 'bg-red-600' :
+                          mobileProgressFeedback.operation === 'importing' ? 'bg-purple-600' :
+                            'bg-orange-600'
+                      }`}
+                    style={{ width: `${mobileProgressFeedback.progress}%` }}
+                  ></div>
+                </div>
+              )}
+            </div>
+
+            <p
+              className="text-slate-900 font-medium mb-2"
+              style={getTypographyStyle('body-large')}
+            >
+              {mobileProgressFeedback.message}
+            </p>
+
+            {mobileProgressFeedback.progress > 0 && (
+              <p
+                className="text-slate-600"
+                style={getTypographyStyle('body-small')}
+              >
+                {mobileProgressFeedback.progress}% complete
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Operation Progress Overlay */}
+      {isMobile && bulkOperationState.isActive && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center">
+            <div className="mb-4">
+              <div className="w-16 h-16 mx-auto bg-orange-100 rounded-full flex items-center justify-center mb-4">
+                <i className="fa-solid fa-tasks text-2xl text-orange-600"></i>
+              </div>
+
+              <div className="w-full bg-slate-200 rounded-full h-2 mb-3">
+                <div
+                  className="bg-orange-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${bulkOperationState.progress}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <p
+              className="text-slate-900 font-medium mb-2"
+              style={getTypographyStyle('body-large')}
+            >
+              Bulk {bulkOperationState.operation} in progress...
+            </p>
+
+            <p
+              className="text-slate-600"
+              style={getTypographyStyle('body-small')}
+            >
+              {bulkOperationState.progress}% complete • {bulkOperationState.selectedCount} items
+            </p>
+
+            <div className="mt-4">
+              <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${bulkOperationState.stage === 'preparing' ? 'bg-blue-100 text-blue-700' :
+                bulkOperationState.stage === 'processing' ? 'bg-orange-100 text-orange-700' :
+                  bulkOperationState.stage === 'completing' ? 'bg-green-100 text-green-700' :
+                    'bg-emerald-100 text-emerald-700'
+                }`}>
+                <div className="w-2 h-2 rounded-full bg-current animate-pulse"></div>
+                {bulkOperationState.stage.charAt(0).toUpperCase() + bulkOperationState.stage.slice(1)}
               </div>
             </div>
           </div>

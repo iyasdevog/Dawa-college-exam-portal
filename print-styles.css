@@ -1867,6 +1867,414 @@
     .print\\:contain-strict {
         contain: strict !important;
     }
+
+    /* ========================================
+       ENHANCED @PAGE RULES AND PAPER SIZES
+       Additional page configurations (Requirement 5.4)
+       ======================================== */
+
+    /* Executive size support - 7.25" x 10.5" */
+    @page executive {
+        size: 7.25in 10.5in;
+        margin: 0.75in 1in;
+    }
+
+    /* Tabloid size support - 11" x 17" */
+    @page tabloid {
+        size: 11in 17in;
+        margin: 1in 1.25in;
+    }
+
+    /* Custom scorecard page with optimized margins */
+    @page scorecard-mobile {
+        size: A4 portrait;
+        margin: 0.25in 0.35in;
+        orphans: 2;
+        widows: 2;
+    }
+
+    /* Multi-column layout page */
+    @page multi-column {
+        size: A4 landscape;
+        margin: 0.5in 0.75in;
+        columns: 2;
+        column-gap: 1in;
+    }
+
+    /* Certificate page layout */
+    @page certificate {
+        size: A4 landscape;
+        margin: 0.75in 1in;
+        orphans: 4;
+        widows: 4;
+    }
+
+    /* Enhanced page break utilities */
+    .print\\:page-break-auto {
+        page-break-before: auto !important;
+        page-break-after: auto !important;
+        break-before: auto !important;
+        break-after: auto !important;
+    }
+
+    .print\\:page-break-left {
+        page-break-before: left !important;
+        break-before: left !important;
+    }
+
+    .print\\:page-break-right {
+        page-break-before: right !important;
+        break-before: right !important;
+    }
+
+    /* Column break controls */
+    .print\\:column-break-before {
+        column-break-before: always !important;
+        break-before: column !important;
+    }
+
+    .print\\:column-break-after {
+        column-break-after: always !important;
+        break-after: column !important;
+    }
+
+    .print\\:column-break-avoid {
+        column-break-inside: avoid !important;
+        break-inside: avoid-column !important;
+    }
+
+    /* ========================================
+       ADDITIONAL PRINT-ONLY UTILITY CLASSES
+       Extended formatting and layout controls
+       ======================================== */
+
+    /* Advanced text utilities */
+    .print\\:text-indent-0 {
+        text-indent: 0 !important;
+    }
+
+    .print\\:text-indent-1 {
+        text-indent: 0.25rem !important;
+    }
+
+    .print\\:text-indent-2 {
+        text-indent: 0.5rem !important;
+    }
+
+    .print\\:text-indent-4 {
+        text-indent: 1rem !important;
+    }
+
+    .print\\:text-indent-8 {
+        text-indent: 2rem !important;
+    }
+
+    /* White space control */
+    .print\\:whitespace-normal {
+        white-space: normal !important;
+    }
+
+    .print\\:whitespace-nowrap {
+        white-space: nowrap !important;
+    }
+
+    .print\\:whitespace-pre {
+        white-space: pre !important;
+    }
+
+    .print\\:whitespace-pre-line {
+        white-space: pre-line !important;
+    }
+
+    .print\\:whitespace-pre-wrap {
+        white-space: pre-wrap !important;
+    }
+
+    /* Word break utilities */
+    .print\\:break-words {
+        overflow-wrap: break-word !important;
+        word-wrap: break-word !important;
+    }
+
+    .print\\:break-all {
+        word-break: break-all !important;
+    }
+
+    .print\\:break-keep {
+        word-break: keep-all !important;
+    }
+
+    /* Hyphenation control */
+    .print\\:hyphens-none {
+        hyphens: none !important;
+        -webkit-hyphens: none !important;
+        -ms-hyphens: none !important;
+    }
+
+    .print\\:hyphens-manual {
+        hyphens: manual !important;
+        -webkit-hyphens: manual !important;
+        -ms-hyphens: manual !important;
+    }
+
+    .print\\:hyphens-auto {
+        hyphens: auto !important;
+        -webkit-hyphens: auto !important;
+        -ms-hyphens: auto !important;
+    }
+
+    /* List styling utilities */
+    .print\\:list-none {
+        list-style-type: none !important;
+    }
+
+    .print\\:list-disc {
+        list-style-type: disc !important;
+    }
+
+    .print\\:list-decimal {
+        list-style-type: decimal !important;
+    }
+
+    .print\\:list-roman {
+        list-style-type: upper-roman !important;
+    }
+
+    .print\\:list-alpha {
+        list-style-type: upper-alpha !important;
+    }
+
+    .print\\:list-inside {
+        list-style-position: inside !important;
+    }
+
+    .print\\:list-outside {
+        list-style-position: outside !important;
+    }
+
+    /* Table layout utilities */
+    .print\\:table-auto {
+        table-layout: auto !important;
+    }
+
+    .print\\:table-fixed {
+        table-layout: fixed !important;
+    }
+
+    .print\\:caption-top {
+        caption-side: top !important;
+    }
+
+    .print\\:caption-bottom {
+        caption-side: bottom !important;
+    }
+
+    /* Border collapse utilities */
+    .print\\:border-collapse {
+        border-collapse: collapse !important;
+    }
+
+    .print\\:border-separate {
+        border-collapse: separate !important;
+    }
+
+    /* Vertical alignment utilities */
+    .print\\:align-baseline {
+        vertical-align: baseline !important;
+    }
+
+    .print\\:align-top {
+        vertical-align: top !important;
+    }
+
+    .print\\:align-middle {
+        vertical-align: middle !important;
+    }
+
+    .print\\:align-bottom {
+        vertical-align: bottom !important;
+    }
+
+    .print\\:align-text-top {
+        vertical-align: text-top !important;
+    }
+
+    .print\\:align-text-bottom {
+        vertical-align: text-bottom !important;
+    }
+
+    /* Print-specific sizing utilities */
+    .print\\:max-w-none {
+        max-width: none !important;
+    }
+
+    .print\\:max-w-xs {
+        max-width: 20rem !important;
+    }
+
+    .print\\:max-w-sm {
+        max-width: 24rem !important;
+    }
+
+    .print\\:max-w-md {
+        max-width: 28rem !important;
+    }
+
+    .print\\:max-w-lg {
+        max-width: 32rem !important;
+    }
+
+    .print\\:max-w-xl {
+        max-width: 36rem !important;
+    }
+
+    .print\\:max-w-2xl {
+        max-width: 42rem !important;
+    }
+
+    .print\\:max-w-full {
+        max-width: 100% !important;
+    }
+
+    /* Print-specific height utilities */
+    .print\\:max-h-none {
+        max-height: none !important;
+    }
+
+    .print\\:max-h-full {
+        max-height: 100% !important;
+    }
+
+    .print\\:min-h-0 {
+        min-height: 0 !important;
+    }
+
+    .print\\:min-h-full {
+        min-height: 100% !important;
+    }
+
+    /* Print-specific aspect ratio utilities */
+    .print\\:aspect-square {
+        aspect-ratio: 1 / 1 !important;
+    }
+
+    .print\\:aspect-video {
+        aspect-ratio: 16 / 9 !important;
+    }
+
+    .print\\:aspect-auto {
+        aspect-ratio: auto !important;
+    }
+}
+
+/* ========================================
+   MOBILE BROWSER PRINT DIALOG OPTIMIZATION
+   Enhanced mobile print experience (Requirement 5.5)
+   ======================================== */
+
+/* Mobile print dialog optimization */
+@media print and (max-width: 768px) {
+
+    /* Optimize page setup for mobile print */
+    @page {
+        margin: 0.3in 0.4in !important;
+        size: A4 portrait !important;
+    }
+
+    /* Mobile-specific font sizing for print */
+    body {
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Ensure minimum readable font sizes */
+    .print\\:mobile-text-xs {
+        font-size: 11px !important;
+        line-height: 1.3 !important;
+    }
+
+    .print\\:mobile-text-sm {
+        font-size: 12px !important;
+        line-height: 1.3 !important;
+    }
+
+    .print\\:mobile-text-base {
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+    }
+
+    .print\\:mobile-text-lg {
+        font-size: 16px !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Mobile print layout optimizations */
+    .print\\:mobile-compact {
+        padding: 0.25rem !important;
+        margin: 0.125rem 0 !important;
+    }
+
+    .print\\:mobile-spacing {
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* Mobile table optimizations for print */
+    .print\\:mobile-table {
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+    }
+
+    .print\\:mobile-table-cell {
+        padding: 0.125rem !important;
+    }
+
+    /* Mobile print header/footer spacing */
+    .print\\:mobile-header {
+        margin-bottom: 0.75rem !important;
+        padding-bottom: 0.25rem !important;
+        border-bottom: 1px solid black !important;
+    }
+
+    .print\\:mobile-footer {
+        margin-top: 0.75rem !important;
+        padding-top: 0.25rem !important;
+        border-top: 1px solid black !important;
+    }
+}
+
+/* iOS Safari specific print optimizations */
+@supports (-webkit-touch-callout: none) {
+    @media print {
+        body {
+            -webkit-print-color-adjust: exact !important;
+            -webkit-font-smoothing: antialiased !important;
+        }
+
+        .print\\:ios-optimize {
+            -webkit-transform: translateZ(0) !important;
+            -webkit-backface-visibility: hidden !important;
+        }
+
+        /* iOS print dialog font size optimization */
+        .print\\:ios-text {
+            font-size: 16px !important;
+            line-height: 1.4 !important;
+        }
+    }
+}
+
+/* Android Chrome print optimizations */
+@media print and (-webkit-min-device-pixel-ratio: 0) and (max-width: 768px) {
+    .print\\:android-optimize {
+        -webkit-print-color-adjust: exact !important;
+        text-rendering: optimizeLegibility !important;
+    }
+
+    /* Android print spacing adjustments */
+    .print\\:android-spacing {
+        margin: 0.25rem 0 !important;
+        padding: 0.25rem !important;
+    }
 }
 
 /* Mobile-specific optimizations */
@@ -1904,6 +2312,15 @@
     .mobile-focus:focus {
         outline: 3px solid #10b981 !important;
         outline-offset: 2px !important;
+    }
+
+    /* Mobile print button optimization */
+    .mobile-print-button {
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 12px 20px !important;
+        border-radius: 8px !important;
+        touch-action: manipulation !important;
     }
 }
 

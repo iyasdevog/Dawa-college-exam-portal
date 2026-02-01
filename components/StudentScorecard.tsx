@@ -239,15 +239,15 @@ const StudentScorecard: React.FC = () => {
                         <div className="p-12 print:p-2 print:break-inside-avoid print:keep-together">
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12 print:grid-cols-4 print:gap-2 print:mb-3 print:break-inside-avoid">
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
-                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Total Points</p>
+                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Total Marks</p>
                                     <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{selectedStudentData.grandTotal}</p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
-                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Average Score</p>
+                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Average Percentage</p>
                                     <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{selectedStudentData.average.toFixed(1)}%</p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
-                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Performance</p>
+                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Grade</p>
                                     <p className={`text-4xl font-black print:text-sm print:leading-tight ${selectedStudentData.performanceLevel === 'Failed' ? 'text-red-500 print:performance-failed' :
                                         selectedStudentData.performanceLevel === 'Excellent' ? 'text-emerald-500 print:performance-excellent' :
                                             selectedStudentData.performanceLevel === 'Good' ? 'text-blue-500 print:performance-good' :
@@ -370,11 +370,11 @@ const StudentScorecard: React.FC = () => {
                                                 <span className="font-bold text-red-600">{studentStats.failedSubjects}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-600">Highest Score:</span>
+                                                <span className="text-slate-600">Highest Marks:</span>
                                                 <span className="font-bold text-slate-900">{studentStats.highestScore}</span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-600">Lowest Score:</span>
+                                                <span className="text-slate-600">Lowest Marks:</span>
                                                 <span className="font-bold text-slate-900">{studentStats.lowestScore}</span>
                                             </div>
                                         </div>
@@ -486,4 +486,4 @@ const StudentScorecard: React.FC = () => {
     );
 };
 
-export default StudentScorecard;
+export default React.memo(StudentScorecard);

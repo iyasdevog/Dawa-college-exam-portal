@@ -1,5 +1,5 @@
-// Service Worker Registration and Management Service
-// Handles service worker lifecycle and communication
+// Enhanced Service Worker Registration and Management Service
+// Handles service worker lifecycle, PWA features, and communication
 
 export interface ServiceWorkerStatus {
     isSupported: boolean;
@@ -7,18 +7,33 @@ export interface ServiceWorkerStatus {
     isActive: boolean;
     registration: ServiceWorkerRegistration | null;
     updateAvailable: boolean;
+    version: string;
+    cacheStatus: any;
+    isOnline: boolean;
+    installPromptAvailable: boolean;
+}
+
+export interface PWAInstallStatus {
+    canInstall: boolean;
+    isInstalled: boolean;
+    isStandalone: boolean;
+    prompt: any;
 }
 
 class ServiceWorkerService {
     private registration: ServiceWorkerRegistration | null = null;
     private updateAvailable = false;
     private listeners: Map<string, Function[]> = new Map();
+    private installPrompt: any = null;
+    private isInstalled = false;
 
     constructor() {
         this.setupMessageListener();
+        this.setupInstallPromptListener();
+        this.checkInstallStatus();
     }
 
-    // Register service worker
+    // Enhanced service worker registration with PWA features
     public async register(): Promise<ServiceWorkerStatus> {
         if (!this.isSupported()) {
             console.log('ServiceWorker: Not supported in this browser');
@@ -35,11 +50,13 @@ class ServiceWorkerService {
 
             console.log('ServiceWorker: Registered successfully');
 
-            // Setup update detection
+            // Setup enhanced features
             this.setupUpdateDetection();
-
-            // Setup state change listeners
             this.setupStateChangeListeners();
+            this.setupPerformanceMonitoring();
+
+            // Precache critical resources
+            await this.precacheCriticalResources();
 
             return this.getStatus();
         } catch (error) {
@@ -53,17 +70,135 @@ class ServiceWorkerService {
         return 'serviceWorker' in navigator;
     }
 
-    // Get current status
+    // Enhanced status with PWA information
     public getStatus(): ServiceWorkerStatus {
         return {
             isSupported: this.isSupported(),
             isRegistered: this.registration !== null,
             isActive: this.registration?.active !== null,
             registration: this.registration,
-            updateAvailable: this.updateAvailable
+            updateAvailable: this.updateAvailable,
+            version: this.getServiceWorkerVersion(),
+            cacheStatus: null, // Will be populated by getCacheStatus
+            isOnline: navigator.onLine,
+            installPromptAvailable: this.installPrompt !== null
         };
     }
 
+    // Get service worker version
+    private getServiceWorkerVersion(): string {
+        // This would be populated by the service worker
+        return '2.0.0';
+    }
+
+    // PWA Installation Methods
+
+    // Setup install prompt listener
+    private setupInstallPromptListener(): void {
+        window.addEventListener('beforeinstallprompt', (event) => {
+            console.log('ServiceWorker: Before install prompt received');
+            event.preventDefault();
+            this.installPrompt = event;
+            this.emit('installPromptAvailable', event);
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('ServiceWorker: App installed');
+            this.isInstalled = true;
+            this.installPrompt = null;
+            this.emit('appInstalled');
+        });
+    }
+
+    // Check if app is installed
+    private checkInstallStatus(): void {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+            (window.navigator as any).standalone ||
+            document.referrer.includes('android-app://');
+
+        this.isInstalled = isStandalone;
+    }
+
+    // Get PWA install status
+    public getPWAInstallStatus(): PWAInstallStatus {
+        return {
+            canInstall: this.installPrompt !== null,
+            isInstalled: this.isInstalled,
+            isStandalone: window.matchMedia('(display-mode: standalone)').matches,
+            prompt: this.installPrompt
+        };
+    }
+
+    // Trigger install prompt
+    public async triggerInstallPrompt(): Promise<boolean> {
+        if (!this.installPrompt) {
+            throw new Error('Install prompt not available');
+        }
+
+        try {
+            await this.installPrompt.prompt();
+            const { outcome } = await this.installPrompt.userChoice;
+
+            console.log('ServiceWorker: Install prompt result:', outcome);
+
+            if (outcome === 'accepted') {
+                this.emit('installAccepted');
+                return true;
+            } else {
+                this.emit('installDismissed');
+                return false;
+            }
+        } catch (error) {
+            console.error('ServiceWorker: Install prompt failed:', error);
+            throw error;
+        } finally {
+            this.installPrompt = null;
+        }
+    }
+
+    // Setup performance monitoring
+    private setupPerformanceMonitoring(): void {
+        // Monitor service worker performance
+        if (this.registration) {
+            this.registration.addEventListener('updatefound', () => {
+                console.log('ServiceWorker: Performance - Update detected');
+                this.emit('performanceEvent', { type: 'update_detected', timestamp: Date.now() });
+            });
+        }
+
+        // Monitor online/offline status
+        window.addEventListener('online', () => {
+            console.log('ServiceWorker: Performance - Back online');
+            this.emit('performanceEvent', { type: 'online', timestamp: Date.now() });
+        });
+
+        window.addEventListener('offline', () => {
+            console.log('ServiceWorker: Performance - Gone offline');
+            this.emit('performanceEvent', { type: 'offline', timestamp: Date.now() });
+        });
+    }
+
+    // Precache critical resources
+    private async precacheCriticalResources(): Promise<void> {
+        if (!this.registration) return;
+
+        try {
+            const criticalResources = [
+                '/',
+                '/manifest.json',
+                // Add other critical resources
+            ];
+
+            await this.sendMessage({
+                type: 'PRECACHE_RESOURCES',
+                urls: criticalResources
+            });
+
+            console.log('ServiceWorker: Critical resources precached');
+        } catch (error) {
+            console.error('ServiceWorker: Failed to precache critical resources:', error);
+        }
+    }
     // Setup update detection
     private setupUpdateDetection(): void {
         if (!this.registration) return;
@@ -93,7 +228,7 @@ class ServiceWorkerService {
             console.log('ServiceWorker: Controller changed');
             this.emit('controllerChange');
 
-            // Reload the page to ensure fresh content
+            // Reload the page to ensure fresh content (except for admin pages)
             if (!window.location.pathname.includes('/admin')) {
                 window.location.reload();
             }
@@ -113,31 +248,6 @@ class ServiceWorkerService {
         navigator.serviceWorker.addEventListener('message', (event) => {
             this.handleServiceWorkerMessage(event.data);
         });
-    }
-
-    // Handle messages from service worker
-    private handleServiceWorkerMessage(data: any): void {
-        if (!data || !data.type) return;
-
-        switch (data.type) {
-            case 'SYNC_COMPLETE':
-                console.log('ServiceWorker: Sync completed:', data.data);
-                this.emit('syncComplete', data.data);
-                break;
-
-            case 'CACHE_UPDATED':
-                console.log('ServiceWorker: Cache updated:', data.data);
-                this.emit('cacheUpdated', data.data);
-                break;
-
-            case 'OFFLINE_READY':
-                console.log('ServiceWorker: Offline ready');
-                this.emit('offlineReady');
-                break;
-
-            default:
-                console.log('ServiceWorker: Unknown message type:', data.type);
-        }
     }
 
     // Update service worker
@@ -230,13 +340,116 @@ class ServiceWorkerService {
         });
     }
 
-    // Get cache status from service worker
+    // Enhanced cache management
     public async getCacheStatus(): Promise<any> {
         try {
-            return await this.sendMessage({ type: 'GET_CACHE_STATUS' });
+            const status = await this.sendMessage({ type: 'GET_CACHE_STATUS' });
+            return status;
         } catch (error) {
             console.error('ServiceWorker: Failed to get cache status:', error);
             return null;
+        }
+    }
+
+    // Clear specific cache
+    public async clearCache(cacheName?: string): Promise<boolean> {
+        try {
+            const result = await this.sendMessage({
+                type: 'CLEAR_CACHE',
+                cacheName
+            });
+            return result.success;
+        } catch (error) {
+            console.error('ServiceWorker: Failed to clear cache:', error);
+            return false;
+        }
+    }
+
+    // Get offline data summary
+    public async getOfflineDataSummary(): Promise<any> {
+        try {
+            return await this.sendMessage({ type: 'GET_OFFLINE_DATA' });
+        } catch (error) {
+            console.error('ServiceWorker: Failed to get offline data summary:', error);
+            return null;
+        }
+    }
+
+    // Force background sync
+    public async forceSync(tag: string = 'sync-offline-actions'): Promise<void> {
+        try {
+            await this.sendMessage({
+                type: 'FORCE_SYNC',
+                tag
+            });
+            console.log('ServiceWorker: Background sync triggered:', tag);
+        } catch (error) {
+            console.error('ServiceWorker: Failed to trigger sync:', error);
+            throw error;
+        }
+    }
+
+    // Update cache strategy
+    public async updateCacheStrategy(strategy: any): Promise<void> {
+        try {
+            await this.sendMessage({
+                type: 'UPDATE_CACHE_STRATEGY',
+                strategy
+            });
+            console.log('ServiceWorker: Cache strategy updated');
+        } catch (error) {
+            console.error('ServiceWorker: Failed to update cache strategy:', error);
+            throw error;
+        }
+    }
+
+    // Enhanced message handling
+    private handleServiceWorkerMessage(data: any): void {
+        if (!data || !data.type) return;
+
+        switch (data.type) {
+            case 'SW_ACTIVATED':
+                console.log('ServiceWorker: Activated with version:', data.version);
+                this.emit('activated', data);
+                break;
+
+            case 'SYNC_COMPLETE':
+                console.log('ServiceWorker: Sync completed:', data.data);
+                this.emit('syncComplete', data.data);
+                break;
+
+            case 'SYNC_ERROR':
+                console.log('ServiceWorker: Sync error:', data.data);
+                this.emit('syncError', data.data);
+                break;
+
+            case 'SYNC_CONFLICT':
+                console.log('ServiceWorker: Sync conflict:', data.data);
+                this.emit('syncConflict', data.data);
+                break;
+
+            case 'CACHE_UPDATED':
+                console.log('ServiceWorker: Cache updated:', data);
+                this.emit('cacheUpdated', data);
+                break;
+
+            case 'PERFORMANCE_METRICS':
+                console.log('ServiceWorker: Performance metrics:', data.data);
+                this.emit('performanceMetrics', data.data);
+                break;
+
+            case 'APP_INSTALLED':
+                console.log('ServiceWorker: App installation tracked:', data.data);
+                this.emit('appInstallTracked', data.data);
+                break;
+
+            case 'OFFLINE_READY':
+                console.log('ServiceWorker: Offline ready');
+                this.emit('offlineReady');
+                break;
+
+            default:
+                console.log('ServiceWorker: Unknown message type:', data.type);
         }
     }
 

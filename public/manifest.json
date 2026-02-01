@@ -1,19 +1,51 @@
 {
     "name": "AIC Da'wa College Exam Portal",
     "short_name": "AIC Exam Portal",
-    "description": "Comprehensive exam portal and student result management system for AIC Da'wa College",
+    "description": "Comprehensive exam portal and student result management system for AIC Da'wa College with offline capability",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#ffffff",
+    "background_color": "#0f172a",
     "theme_color": "#059669",
     "orientation": "portrait-primary",
     "scope": "/",
     "lang": "en",
+    "dir": "ltr",
     "categories": [
         "education",
-        "productivity"
+        "productivity",
+        "utilities"
     ],
     "icons": [
+        {
+            "src": "/icon-72x72.png",
+            "sizes": "72x72",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icon-96x96.png",
+            "sizes": "96x96",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icon-128x128.png",
+            "sizes": "128x128",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icon-144x144.png",
+            "sizes": "144x144",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icon-152x152.png",
+            "sizes": "152x152",
+            "type": "image/png",
+            "purpose": "any"
+        },
         {
             "src": "/icon-192x192.png",
             "sizes": "192x192",
@@ -21,34 +53,53 @@
             "purpose": "maskable any"
         },
         {
+            "src": "/icon-384x384.png",
+            "sizes": "384x384",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
             "src": "/icon-512x512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable any"
+        },
+        {
+            "src": "/apple-touch-icon.png",
+            "sizes": "180x180",
+            "type": "image/png",
+            "purpose": "any"
         }
     ],
     "screenshots": [
         {
-            "src": "/screenshot-mobile.png",
+            "src": "/screenshot-mobile-faculty.png",
             "sizes": "390x844",
             "type": "image/png",
             "form_factor": "narrow",
-            "label": "Mobile Faculty Entry Interface"
+            "label": "Mobile Faculty Entry Interface - Enter student marks quickly and efficiently"
         },
         {
-            "src": "/screenshot-desktop.png",
+            "src": "/screenshot-mobile-results.png",
+            "sizes": "390x844",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Mobile Student Results - View results and scorecards on mobile"
+        },
+        {
+            "src": "/screenshot-desktop-dashboard.png",
             "sizes": "1920x1080",
             "type": "image/png",
             "form_factor": "wide",
-            "label": "Desktop Dashboard View"
+            "label": "Desktop Dashboard - Comprehensive admin interface with charts and analytics"
         }
     ],
     "shortcuts": [
         {
             "name": "Faculty Entry",
             "short_name": "Marks Entry",
-            "description": "Enter student marks quickly",
-            "url": "/?view=faculty",
+            "description": "Enter student marks quickly with mobile optimization",
+            "url": "/?view=faculty&shortcut=true",
             "icons": [
                 {
                     "src": "/icon-192x192.png",
@@ -61,7 +112,33 @@
             "name": "Student Results",
             "short_name": "Results",
             "description": "View student results and scorecards",
-            "url": "/?view=public",
+            "url": "/?view=public&shortcut=true",
+            "icons": [
+                {
+                    "src": "/icon-192x192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Admin Dashboard",
+            "short_name": "Dashboard",
+            "description": "Access administrative dashboard and analytics",
+            "url": "/?view=admin&shortcut=true",
+            "icons": [
+                {
+                    "src": "/icon-192x192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Offline Mode",
+            "short_name": "Offline",
+            "description": "Access cached data and offline functionality",
+            "url": "/?offline=true",
             "icons": [
                 {
                     "src": "/icon-192x192.png",
@@ -78,5 +155,48 @@
     },
     "launch_handler": {
         "client_mode": "navigate-existing"
+    },
+    "display_override": [
+        "window-controls-overlay",
+        "standalone",
+        "minimal-ui"
+    ],
+    "protocol_handlers": [
+        {
+            "protocol": "web+aicexam",
+            "url": "/?protocol=%s"
+        }
+    ],
+    "file_handlers": [
+        {
+            "action": "/import",
+            "accept": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+                    ".xlsx"
+                ],
+                "text/csv": [
+                    ".csv"
+                ]
+            }
+        }
+    ],
+    "share_target": {
+        "action": "/share",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url",
+            "files": [
+                {
+                    "name": "file",
+                    "accept": [
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "text/csv"
+                    ]
+                }
+            ]
+        }
     }
 }

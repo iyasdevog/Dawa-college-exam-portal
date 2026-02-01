@@ -1,0 +1,2130 @@
+/* Mobile-First Foundation CSS */
+/* AIC Da'wa College Exam Portal - Comprehensive Mobile UX */
+
+/* ===== MOBILE-FIRST RESPONSIVE BREAKPOINTS ===== */
+/* Base: 320px - 639px (Mobile) */
+/* sm: 640px+ (Large Mobile/Small Tablet) */
+/* md: 768px+ (Tablet) */
+/* lg: 1024px+ (Desktop) */
+/* xl: 1280px+ (Large Desktop) */
+
+/* ===== CSS CUSTOM PROPERTIES FOR MOBILE-FIRST DESIGN ===== */
+:root {
+    /* Mobile-First Spacing Scale */
+    --spacing-xs: 0.25rem;
+    /* 4px */
+    --spacing-sm: 0.5rem;
+    /* 8px */
+    --spacing-md: 0.75rem;
+    /* 12px */
+    --spacing-lg: 1rem;
+    /* 16px */
+    --spacing-xl: 1.25rem;
+    /* 20px */
+    --spacing-2xl: 1.5rem;
+    /* 24px */
+    --spacing-3xl: 2rem;
+    /* 32px */
+    --spacing-4xl: 2.5rem;
+    /* 40px */
+    --spacing-5xl: 3rem;
+    /* 48px */
+
+    /* Mobile-First Typography Scale */
+    --text-xs: 0.75rem;
+    /* 12px */
+    --text-sm: 0.875rem;
+    /* 14px */
+    --text-base: 1rem;
+    /* 16px */
+    --text-lg: 1.125rem;
+    /* 18px */
+    --text-xl: 1.25rem;
+    /* 20px */
+    --text-2xl: 1.5rem;
+    /* 24px */
+    --text-3xl: 1.875rem;
+    /* 30px */
+    --text-4xl: 2.25rem;
+    /* 36px */
+
+    /* Mobile-First Line Heights */
+    --leading-tight: 1.25;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.625;
+
+    /* Touch Target Sizes */
+    --touch-target-min: 44px;
+    --touch-target-comfortable: 48px;
+    --touch-target-large: 56px;
+
+    /* Mobile-First Container Widths */
+    --container-mobile: 100%;
+    --container-sm: 640px;
+    --container-md: 768px;
+    --container-lg: 1024px;
+    --container-xl: 1280px;
+
+    /* Mobile-Optimized Border Radius */
+    --radius-sm: 0.5rem;
+    /* 8px */
+    --radius-md: 0.75rem;
+    /* 12px */
+    --radius-lg: 1rem;
+    /* 16px */
+    --radius-xl: 1.5rem;
+    /* 24px */
+    --radius-2xl: 2rem;
+    /* 32px */
+
+    /* Mobile-First Z-Index Scale */
+    --z-dropdown: 1000;
+    --z-sticky: 1020;
+    --z-fixed: 1030;
+    --z-modal-backdrop: 1040;
+    --z-modal: 1050;
+    --z-popover: 1060;
+    --z-tooltip: 1070;
+    --z-toast: 1080;
+}
+
+/* ===== MOBILE-FIRST BASE STYLES ===== */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    /* Prevent zoom on iOS when focusing inputs */
+    -webkit-text-size-adjust: 100%;
+    /* Smooth scrolling for mobile */
+    scroll-behavior: smooth;
+}
+
+body {
+    /* Mobile-optimized font stack */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    /* Prevent horizontal scroll on mobile */
+    overflow-x: hidden;
+    /* Optimize text rendering on mobile */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* ===== MOBILE-FIRST CONTAINER SYSTEM ===== */
+.container-mobile {
+    width: 100%;
+    max-width: var(--container-mobile);
+    margin: 0 auto;
+    padding: 0 var(--spacing-lg);
+}
+
+@media (min-width: 640px) {
+    .container-mobile {
+        max-width: var(--container-sm);
+        padding: 0 var(--spacing-xl);
+    }
+}
+
+@media (min-width: 768px) {
+    .container-mobile {
+        max-width: var(--container-md);
+        padding: 0 var(--spacing-2xl);
+    }
+}
+
+@media (min-width: 1024px) {
+    .container-mobile {
+        max-width: var(--container-lg);
+        padding: 0 var(--spacing-3xl);
+    }
+}
+
+@media (min-width: 1280px) {
+    .container-mobile {
+        max-width: var(--container-xl);
+        padding: 0 var(--spacing-4xl);
+    }
+}
+
+/* ===== MOBILE-FIRST TYPOGRAPHY UTILITIES ===== */
+.text-mobile-xs {
+    font-size: var(--text-xs);
+}
+
+.text-mobile-sm {
+    font-size: var(--text-sm);
+}
+
+.text-mobile-base {
+    font-size: var(--text-base);
+}
+
+.text-mobile-lg {
+    font-size: var(--text-lg);
+}
+
+.text-mobile-xl {
+    font-size: var(--text-xl);
+}
+
+.text-mobile-2xl {
+    font-size: var(--text-2xl);
+}
+
+.text-mobile-3xl {
+    font-size: var(--text-3xl);
+}
+
+.text-mobile-4xl {
+    font-size: var(--text-4xl);
+}
+
+/* Responsive typography scaling */
+@media (min-width: 640px) {
+    .text-mobile-lg {
+        font-size: 1.25rem;
+    }
+
+    .text-mobile-xl {
+        font-size: 1.375rem;
+    }
+
+    .text-mobile-2xl {
+        font-size: 1.625rem;
+    }
+
+    .text-mobile-3xl {
+        font-size: 2rem;
+    }
+
+    .text-mobile-4xl {
+        font-size: 2.5rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .text-mobile-xl {
+        font-size: 1.5rem;
+    }
+
+    .text-mobile-2xl {
+        font-size: 1.875rem;
+    }
+
+    .text-mobile-3xl {
+        font-size: 2.25rem;
+    }
+
+    .text-mobile-4xl {
+        font-size: 3rem;
+    }
+}
+
+/* ===== MOBILE-FIRST SPACING UTILITIES ===== */
+.space-mobile-xs {
+    margin: var(--spacing-xs);
+}
+
+.space-mobile-sm {
+    margin: var(--spacing-sm);
+}
+
+.space-mobile-md {
+    margin: var(--spacing-md);
+}
+
+.space-mobile-lg {
+    margin: var(--spacing-lg);
+}
+
+.space-mobile-xl {
+    margin: var(--spacing-xl);
+}
+
+.space-mobile-2xl {
+    margin: var(--spacing-2xl);
+}
+
+.space-mobile-3xl {
+    margin: var(--spacing-3xl);
+}
+
+.p-mobile-xs {
+    padding: var(--spacing-xs);
+}
+
+.p-mobile-sm {
+    padding: var(--spacing-sm);
+}
+
+.p-mobile-md {
+    padding: var(--spacing-md);
+}
+
+.p-mobile-lg {
+    padding: var(--spacing-lg);
+}
+
+.p-mobile-xl {
+    padding: var(--spacing-xl);
+}
+
+.p-mobile-2xl {
+    padding: var(--spacing-2xl);
+}
+
+.p-mobile-3xl {
+    padding: var(--spacing-3xl);
+}
+
+.px-mobile-lg {
+    padding-left: var(--spacing-lg);
+    padding-right: var(--spacing-lg);
+}
+
+.py-mobile-lg {
+    padding-top: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+}
+
+/* ===== TOUCH TARGET UTILITIES ===== */
+.touch-target-min {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+}
+
+.touch-target-comfortable {
+    min-height: var(--touch-target-comfortable);
+    min-width: var(--touch-target-comfortable);
+}
+
+.touch-target-large {
+    min-height: var(--touch-target-large);
+    min-width: var(--touch-target-large);
+}
+
+/* ===== MOBILE-FIRST LAYOUT UTILITIES ===== */
+.mobile-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+@media (min-width: 768px) {
+    .mobile-stack {
+        flex-direction: row;
+        align-items: center;
+    }
+}
+
+.mobile-grid-1 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-lg);
+}
+
+@media (min-width: 640px) {
+    .mobile-grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 768px) {
+    .mobile-grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .mobile-grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* ===== MOBILE-FIRST FORM UTILITIES ===== */
+.form-input-mobile {
+    width: 100%;
+    min-height: var(--touch-target-min);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: 2px solid #e2e8f0;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    background-color: #ffffff;
+    transition: all 0.2s ease-in-out;
+
+    /* Mobile-specific optimizations */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.form-input-mobile:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.form-button-mobile {
+    width: 100%;
+    min-height: var(--touch-target-min);
+    padding: var(--spacing-md) var(--spacing-xl);
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+
+    /* Touch feedback */
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.form-button-mobile:active {
+    transform: translateY(1px);
+}
+
+/* ===== MOBILE-FIRST CARD UTILITIES ===== */
+.card-mobile {
+    background-color: #ffffff;
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-xl);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #f1f5f9;
+}
+
+@media (min-width: 768px) {
+    .card-mobile {
+        padding: var(--spacing-2xl);
+    }
+}
+
+/* ===== MOBILE NAVIGATION UTILITIES ===== */
+.mobile-nav-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: var(--z-modal-backdrop);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.mobile-nav-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.mobile-nav-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 80vw;
+    background-color: #0f172a;
+    z-index: var(--z-modal);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    overflow-y: auto;
+}
+
+.mobile-nav-menu.active {
+    transform: translateX(0);
+}
+
+/* ===== MOBILE-FIRST RESPONSIVE UTILITIES ===== */
+.mobile-hidden {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .mobile-hidden {
+        display: block;
+    }
+
+    .desktop-hidden {
+        display: none;
+    }
+}
+
+/* ===== MOBILE-OPTIMIZED ANIMATIONS ===== */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Mobile-friendly fade in animation */
+@keyframes mobile-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-mobile-fade-in {
+    animation: mobile-fade-in 0.3s ease-out;
+}
+
+/* Mobile-friendly slide animations */
+@keyframes mobile-slide-in-left {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes mobile-slide-in-right {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+.animate-mobile-slide-in-left {
+    animation: mobile-slide-in-left 0.3s ease-out;
+}
+
+.animate-mobile-slide-in-right {
+    animation: mobile-slide-in-right 0.3s ease-out;
+}
+
+/* ===== MOBILE-FIRST TABLE UTILITIES ===== */
+.table-mobile-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-mobile-scroll::-webkit-scrollbar {
+    height: 4px;
+}
+
+.table-mobile-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+.table-mobile-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+}
+
+/* ===== MOBILE-FIRST ACCESSIBILITY UTILITIES ===== */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.focus-visible:focus {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+}
+
+/* ===== MOBILE-FIRST PRINT UTILITIES ===== */
+@media print {
+    .print-hidden {
+        display: none !important;
+    }
+
+    .print-visible {
+        display: block !important;
+    }
+
+    body {
+        font-size: 12pt;
+        line-height: 1.4;
+    }
+
+    .card-mobile {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+}
+
+/* ===== MOBILE-SPECIFIC PERFORMANCE OPTIMIZATIONS ===== */
+.mobile-optimized {
+    /* Enable hardware acceleration for smooth animations */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+
+    /* Optimize rendering */
+    will-change: transform;
+
+    /* Improve scrolling performance */
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ===== MOBILE-FIRST LOADING STATES ===== */
+.mobile-skeleton {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: mobile-shimmer 2s ease-in-out infinite;
+    border-radius: var(--radius-md);
+}
+
+@keyframes mobile-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Enhanced mobile loading animations */
+.animate-shimmer {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Mobile dashboard loading states */
+.mobile-dashboard-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.mobile-dashboard-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    animation: dashboard-loading-sweep 2s ease-in-out infinite;
+    z-index: 1;
+    pointer-events: none;
+}
+
+@keyframes dashboard-loading-sweep {
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 100%;
+    }
+}
+
+/* Progressive loading indicator */
+.mobile-progress-ring {
+    position: relative;
+    display: inline-block;
+}
+
+.mobile-progress-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 4px solid transparent;
+    border-top-color: currentColor;
+    animation: mobile-progress-spin 1s linear infinite;
+}
+
+@keyframes mobile-progress-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Touch feedback animations */
+.touch-feedback-pulse {
+    animation: touch-pulse 0.3s ease-out;
+}
+
+@keyframes touch-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(0.95);
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Mobile loading dots */
+.mobile-loading-dots {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    justify-content: center;
+}
+
+.mobile-loading-dots>div {
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 50%;
+    background-color: currentColor;
+    animation: mobile-loading-bounce 1.4s ease-in-out infinite both;
+}
+
+.mobile-loading-dots>div:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.mobile-loading-dots>div:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes mobile-loading-bounce {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+        opacity: 0.5;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Enhanced touch target feedback */
+.touch-target-comfortable:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease-out;
+}
+
+.touch-target-large:active {
+    transform: scale(0.96);
+    transition: transform 0.1s ease-out;
+}
+
+/* ===== MOBILE-FIRST ERROR STATES ===== */
+.mobile-error-card {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    text-align: center;
+}
+
+.mobile-error-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto var(--spacing-lg);
+    background-color: #fee2e2;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #dc2626;
+}
+
+/* ===== MOBILE-FIRST SUCCESS STATES ===== */
+.mobile-success-card {
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    text-align: center;
+}
+
+.mobile-success-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto var(--spacing-lg);
+    background-color: #dcfce7;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #16a34a;
+}
+
+/* ===== ENHANCED LAYOUT MOBILE UTILITIES ===== */
+
+/* Landscape mobile optimizations */
+.landscape-mobile {
+    /* Adjust for landscape orientation on mobile */
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height for mobile browsers */
+}
+
+/* Touch scroll optimization */
+.touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+}
+
+/* Motion reduction support */
+.motion-reduce * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+}
+
+/* Mobile header enhancements */
+.mobile-header-gradient {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.mobile-status-indicator {
+    position: relative;
+    overflow: hidden;
+}
+
+.mobile-status-indicator::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.mobile-status-indicator:hover::before {
+    left: 100%;
+}
+
+/* Enhanced touch targets for mobile layout */
+.layout-touch-target {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.layout-touch-target:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease-out;
+}
+
+/* Mobile-optimized cloud status animations */
+@keyframes mobile-pulse-slow {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.mobile-cloud-pulse {
+    animation: mobile-pulse-slow 2s ease-in-out infinite;
+}
+
+/* Mobile header shadow variations */
+.mobile-header-shadow-light {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mobile-header-shadow-medium {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+.mobile-header-shadow-heavy {
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile content spacing utilities */
+.mobile-content-spacing-xs {
+    padding: var(--spacing-sm);
+}
+
+.mobile-content-spacing-sm {
+    padding: var(--spacing-md);
+}
+
+.mobile-content-spacing-md {
+    padding: var(--spacing-lg);
+}
+
+.mobile-content-spacing-lg {
+    padding: var(--spacing-xl);
+}
+
+.mobile-content-spacing-xl {
+    padding: var(--spacing-2xl);
+}
+
+/* Responsive content spacing */
+@media (min-width: 640px) {
+    .mobile-content-spacing-sm {
+        padding: var(--spacing-lg);
+    }
+
+    .mobile-content-spacing-md {
+        padding: var(--spacing-xl);
+    }
+
+    .mobile-content-spacing-lg {
+        padding: var(--spacing-2xl);
+    }
+
+    .mobile-content-spacing-xl {
+        padding: var(--spacing-3xl);
+    }
+}
+
+@media (min-width: 768px) {
+    .mobile-content-spacing-lg {
+        padding: var(--spacing-3xl);
+    }
+
+    .mobile-content-spacing-xl {
+        padding: var(--spacing-4xl);
+    }
+}
+
+/* Mobile layout flex utilities */
+.mobile-flex-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+@media (min-width: 768px) {
+    .mobile-flex-stack {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--spacing-lg);
+    }
+}
+
+/* Mobile-first responsive text truncation */
+.mobile-text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+@media (min-width: 640px) {
+    .mobile-text-truncate {
+        max-width: 200px;
+    }
+}
+
+@media (min-width: 768px) {
+    .mobile-text-truncate {
+        max-width: 300px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .mobile-text-truncate {
+        max-width: none;
+    }
+}
+
+/* Mobile layout transition utilities */
+.mobile-layout-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-layout-transition-fast {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-layout-transition-slow {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Mobile-specific focus states */
+.mobile-focus-ring:focus {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
+}
+
+.mobile-focus-ring:focus-visible {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
+}
+
+/* Mobile layout safe areas for notched devices */
+.mobile-safe-area-top {
+    padding-top: env(safe-area-inset-top);
+}
+
+.mobile-safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-safe-area-left {
+    padding-left: env(safe-area-inset-left);
+}
+
+.mobile-safe-area-right {
+    padding-right: env(safe-area-inset-right);
+}
+
+/* Mobile viewport height utilities */
+.mobile-vh-100 {
+    height: 100vh;
+    height: 100dvh;
+    /* Dynamic viewport height */
+}
+
+.mobile-min-vh-100 {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height */
+}
+
+/* Mobile-optimized backdrop blur */
+.mobile-backdrop-blur {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+@supports not (backdrop-filter: blur(8px)) {
+    .mobile-backdrop-blur {
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+}
+
+/* ===== ORIENTATION CHANGE HANDLING - REQUIREMENT 1.7 ===== */
+
+/* Smooth orientation change transitions with content preservation */
+.orientation-changing {
+    transition: all 0.3s ease-in-out;
+    /* Prevent content jumping during orientation change */
+    contain: layout style paint;
+    will-change: transform, opacity;
+}
+
+.orientation-transitioning {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.orientation-transitioning * {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced mobile landscape specific styles */
+.mobile-landscape {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height */
+    --mobile-padding: 1rem;
+    --mobile-header-height: 3.5rem;
+    --mobile-content-padding: 0.75rem;
+}
+
+.mobile-portrait {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height */
+    --mobile-padding: 1rem;
+    --mobile-header-height: 4rem;
+    --mobile-content-padding: 1rem;
+}
+
+/* Orientation-specific layout adjustments with smooth transitions */
+@media screen and (orientation: landscape) {
+    .mobile-device {
+        --mobile-padding: 1rem;
+        --mobile-header-height: 3.5rem;
+        --mobile-content-padding: 0.75rem;
+    }
+
+    /* Compact header in landscape with smooth transition */
+    .mobile-header {
+        height: var(--mobile-header-height);
+        padding: 0.5rem 1rem;
+        transition: height 0.3s ease-in-out, padding 0.3s ease-in-out;
+    }
+
+    /* Adjust content padding in landscape */
+    .mobile-content {
+        padding: var(--mobile-content-padding) 1rem;
+        transition: padding 0.3s ease-in-out;
+    }
+
+    /* Optimize grid layout for landscape */
+    .mobile-grid-landscape {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-md);
+        transition: grid-template-columns 0.3s ease-in-out, gap 0.3s ease-in-out;
+    }
+
+    /* Landscape-specific form optimizations */
+    .form-input-mobile {
+        min-height: calc(var(--touch-target-min) - 4px);
+        transition: min-height 0.3s ease-in-out;
+    }
+
+    /* Compact navigation in landscape */
+    .mobile-nav-menu {
+        width: 240px;
+        transition: width 0.3s ease-in-out;
+    }
+}
+
+@media screen and (orientation: portrait) {
+    .mobile-device {
+        --mobile-padding: 1rem;
+        --mobile-header-height: 4rem;
+        --mobile-content-padding: 1rem;
+    }
+
+    /* Standard header in portrait with smooth transition */
+    .mobile-header {
+        height: var(--mobile-header-height);
+        padding: 1rem;
+        transition: height 0.3s ease-in-out, padding 0.3s ease-in-out;
+    }
+
+    /* Standard content padding in portrait */
+    .mobile-content {
+        padding: var(--mobile-content-padding);
+        transition: padding 0.3s ease-in-out;
+    }
+
+    /* Portrait-specific grid layout */
+    .mobile-grid-portrait {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-lg);
+        transition: grid-template-columns 0.3s ease-in-out, gap 0.3s ease-in-out;
+    }
+
+    /* Standard form inputs in portrait */
+    .form-input-mobile {
+        min-height: var(--touch-target-min);
+        transition: min-height 0.3s ease-in-out;
+    }
+
+    /* Standard navigation width in portrait */
+    .mobile-nav-menu {
+        width: 280px;
+        transition: width 0.3s ease-in-out;
+    }
+}
+
+/* Content preservation during orientation changes */
+.orientation-changing .main-content {
+    transform: translateZ(0);
+    /* Force hardware acceleration */
+    backface-visibility: hidden;
+    will-change: transform;
+    /* Prevent content reflow during transition */
+    contain: layout style paint;
+}
+
+/* Enhanced layout element transitions */
+.mobile-layout-element {
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        margin 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Optimize rendering during transitions */
+    will-change: transform, width, height, padding, margin;
+}
+
+/* Form input preservation during orientation changes */
+.orientation-changing input,
+.orientation-changing textarea,
+.orientation-changing select {
+    /* Prevent input value loss during orientation change */
+    pointer-events: none;
+    transition: none;
+}
+
+.orientation-transitioning input,
+.orientation-transitioning textarea,
+.orientation-transitioning select {
+    /* Re-enable interactions after transition */
+    pointer-events: auto;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Orientation change loading state with enhanced animation */
+.orientation-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.orientation-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    animation: orientation-shimmer 1s ease-in-out;
+    z-index: 1;
+    pointer-events: none;
+}
+
+@keyframes orientation-shimmer {
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 100%;
+    }
+}
+
+/* Enhanced viewport management for orientation changes */
+.mobile-viewport-managed {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    /* Dynamic viewport height for modern browsers */
+    overflow: hidden;
+    /* Smooth viewport transitions */
+    transition: width 0.3s ease-in-out, height 0.3s ease-in-out;
+}
+
+/* Enhanced safe area adjustments for orientation changes */
+@supports (padding: env(safe-area-inset-top)) {
+    .orientation-safe-area {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        transition: padding 0.3s ease-in-out;
+    }
+
+    /* Landscape-specific safe area adjustments with transitions */
+    @media screen and (orientation: landscape) {
+        .orientation-safe-area {
+            padding-left: max(env(safe-area-inset-left), 1rem);
+            padding-right: max(env(safe-area-inset-right), 1rem);
+            padding-top: max(env(safe-area-inset-top), 0.5rem);
+            padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+        }
+    }
+
+    /* Portrait-specific safe area adjustments */
+    @media screen and (orientation: portrait) {
+        .orientation-safe-area {
+            padding-left: max(env(safe-area-inset-left), 1rem);
+            padding-right: max(env(safe-area-inset-right), 1rem);
+            padding-top: max(env(safe-area-inset-top), 1rem);
+            padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+        }
+    }
+}
+
+/* Prevent zoom during orientation change on iOS with enhanced handling */
+@media screen and (max-device-width: 768px) {
+    .ios-orientation-fix {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        /* Prevent layout shift during orientation change */
+        contain: layout style;
+    }
+
+    /* iOS-specific orientation transition optimizations */
+    .orientation-changing.ios-orientation-fix {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+    }
+}
+
+/* Enhanced motion reduction for orientation changes */
+@media (prefers-reduced-motion: reduce) {
+
+    .orientation-changing,
+    .orientation-transitioning,
+    .orientation-changing *,
+    .orientation-transitioning *,
+    .mobile-layout-element {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Orientation-specific grid adjustments with smooth transitions */
+@media screen and (orientation: landscape) and (max-width: 767px) {
+    .mobile-grid-adaptive {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-md);
+        transition: grid-template-columns 0.3s ease-in-out, gap 0.3s ease-in-out;
+    }
+
+    /* Landscape-specific card layouts */
+    .card-mobile {
+        padding: var(--spacing-lg);
+        transition: padding 0.3s ease-in-out;
+    }
+
+    /* Compact typography in landscape */
+    .text-mobile-lg {
+        font-size: 1.125rem;
+        transition: font-size 0.3s ease-in-out;
+    }
+}
+
+@media screen and (orientation: portrait) and (max-width: 767px) {
+    .mobile-grid-adaptive {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-lg);
+        transition: grid-template-columns 0.3s ease-in-out, gap 0.3s ease-in-out;
+    }
+
+    /* Portrait-specific card layouts */
+    .card-mobile {
+        padding: var(--spacing-xl);
+        transition: padding 0.3s ease-in-out;
+    }
+
+    /* Standard typography in portrait */
+    .text-mobile-lg {
+        font-size: 1.25rem;
+        transition: font-size 0.3s ease-in-out;
+    }
+}
+
+/* Orientation change performance optimizations */
+.orientation-optimized {
+    contain: layout style paint;
+    will-change: transform, opacity;
+    /* GPU acceleration for smooth transitions */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+/* Smooth scroll restoration after orientation change */
+.orientation-scroll-restore {
+    scroll-behavior: auto;
+    /* Immediate positioning during orientation change */
+    transition: scroll-behavior 0.3s ease-in-out;
+}
+
+.orientation-scroll-restore.smooth {
+    scroll-behavior: smooth;
+}
+
+/* Enhanced table handling during orientation changes */
+.table-mobile-scroll {
+    transition: width 0.3s ease-in-out;
+}
+
+@media screen and (orientation: landscape) and (max-width: 767px) {
+    .table-mobile-scroll {
+        /* Better horizontal scrolling in landscape */
+        max-width: calc(100vw - 2rem);
+    }
+}
+
+/* Form layout adaptations for orientation changes */
+.mobile-form-adaptive {
+    transition: flex-direction 0.3s ease-in-out, gap 0.3s ease-in-out;
+}
+
+@media screen and (orientation: landscape) and (max-width: 767px) {
+    .mobile-form-adaptive {
+        display: flex;
+        flex-direction: row;
+        gap: var(--spacing-md);
+    }
+
+    .mobile-form-adaptive .form-input-mobile {
+        flex: 1;
+    }
+}
+
+@media screen and (orientation: portrait) and (max-width: 767px) {
+    .mobile-form-adaptive {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-lg);
+    }
+}
+
+/* Navigation menu adaptations for orientation */
+@media screen and (orientation: landscape) and (max-width: 767px) {
+    .mobile-nav-menu {
+        /* Compact navigation in landscape */
+        width: 240px;
+        max-width: 70vw;
+    }
+
+    .mobile-nav-menu .nav-item {
+        padding: 0.75rem 1rem;
+        transition: padding 0.3s ease-in-out;
+    }
+}
+
+@media screen and (orientation: portrait) and (max-width: 767px) {
+    .mobile-nav-menu {
+        /* Standard navigation in portrait */
+        width: 280px;
+        max-width: 80vw;
+    }
+
+    .mobile-nav-menu .nav-item {
+        padding: 1rem;
+        transition: padding 0.3s ease-in-out;
+    }
+}
+
+/* Content area adaptations with smooth transitions */
+.mobile-content-adaptive {
+    transition: padding 0.3s ease-in-out, margin 0.3s ease-in-out;
+}
+
+@media screen and (orientation: landscape) and (max-width: 767px) {
+    .mobile-content-adaptive {
+        padding: 0.75rem 1rem;
+        margin-top: 0.5rem;
+    }
+}
+
+@media screen and (orientation: portrait) and (max-width: 767px) {
+    .mobile-content-adaptive {
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+}
+
+/* ===== MOBILE RESULT DISPLAY ENHANCEMENTS - TASK 4.3 ===== */
+
+/* Mobile card layout for result display */
+.mobile-card-layout {
+    background: #ffffff;
+    border: 2px solid #f1f5f9;
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-xl);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.mobile-card-layout:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+/* Mobile result card animations */
+@keyframes mobile-card-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-mobile-card-slide-in {
+    animation: mobile-card-slide-in 0.4s ease-out forwards;
+}
+
+/* Mobile progress bar animations */
+@keyframes mobile-progress-fill {
+    from {
+        width: 0%;
+    }
+
+    to {
+        width: var(--progress-width, 0%);
+    }
+}
+
+.mobile-progress-animated {
+    animation: mobile-progress-fill 1s ease-out forwards;
+}
+
+/* Mobile result grid layout */
+.mobile-result-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+}
+
+@media (max-width: 480px) {
+    .mobile-result-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+    }
+}
+
+/* Mobile result status indicators */
+.mobile-status-passed {
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    border: 1px solid #86efac;
+    color: #166534;
+}
+
+.mobile-status-failed {
+    background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+}
+
+/* Mobile subject header styling */
+.mobile-subject-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-lg);
+    gap: var(--spacing-md);
+}
+
+.mobile-subject-title {
+    flex: 1;
+    min-width: 0;
+    /* Allow text truncation */
+}
+
+.mobile-subject-status {
+    flex-shrink: 0;
+    margin-left: var(--spacing-md);
+}
+
+/* Mobile marks display grid */
+.mobile-marks-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.mobile-marks-cell {
+    background: #f8fafc;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    text-align: center;
+    transition: all 0.2s ease-in-out;
+}
+
+.mobile-marks-cell:hover {
+    background: #f1f5f9;
+    transform: translateY(-1px);
+}
+
+.mobile-marks-cell-total {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 1px solid #bbf7d0;
+}
+
+.mobile-marks-cell-total.failed {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 1px solid #fecaca;
+}
+
+/* Mobile progress bar styling */
+.mobile-progress-container {
+    margin-top: var(--spacing-lg);
+}
+
+.mobile-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.mobile-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1s ease-out;
+    position: relative;
+}
+
+.mobile-progress-fill.passed {
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+}
+
+.mobile-progress-fill.failed {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+
+/* Mobile progress bar shimmer effect */
+.mobile-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: mobile-progress-shimmer 2s ease-in-out infinite;
+}
+
+@keyframes mobile-progress-shimmer {
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 100%;
+    }
+}
+
+/* Mobile result header enhancements */
+.mobile-result-header {
+    background: linear-gradient(135deg, #0f172a 0%, #065f46 100%);
+    color: white;
+    padding: var(--spacing-xl);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.mobile-result-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.05) 50%, transparent 70%);
+    pointer-events: none;
+}
+
+/* Mobile performance summary cards */
+.mobile-performance-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.mobile-performance-card:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-performance-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+}
+
+/* Mobile print button enhancements */
+.mobile-print-button {
+    width: 100%;
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    color: white;
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    font-weight: 600;
+    font-size: var(--text-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    position: relative;
+    overflow: hidden;
+    min-height: var(--touch-target-large);
+}
+
+.mobile-print-button:hover {
+    background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3);
+}
+
+.mobile-print-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(5, 150, 105, 0.3);
+}
+
+.mobile-print-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease-in-out;
+}
+
+.mobile-print-button:hover::before {
+    left: 100%;
+}
+
+/* Mobile error state enhancements */
+.mobile-error-enhanced {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 2px solid #fca5a5;
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-xl);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.mobile-error-enhanced::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+
+.mobile-error-icon-enhanced {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--spacing-lg);
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    border: 2px solid #fca5a5;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #dc2626;
+    font-size: 1.5rem;
+    animation: mobile-error-pulse 2s ease-in-out infinite;
+}
+
+@keyframes mobile-error-pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 0.9;
+    }
+}
+
+/* Mobile success state enhancements */
+.mobile-success-enhanced {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 2px solid #bbf7d0;
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-xl);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.mobile-success-enhanced::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+}
+
+.mobile-success-icon-enhanced {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--spacing-lg);
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    border: 2px solid #86efac;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #059669;
+    font-size: 1.5rem;
+    animation: mobile-success-bounce 1s ease-out;
+}
+
+@keyframes mobile-success-bounce {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Mobile loading state for results */
+.mobile-result-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-5xl);
+    text-align: center;
+}
+
+.mobile-result-loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #e2e8f0;
+    border-top: 4px solid #10b981;
+    border-radius: 50%;
+    animation: mobile-result-spin 1s linear infinite;
+    margin-bottom: var(--spacing-lg);
+}
+
+@keyframes mobile-result-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Mobile table alternative - horizontal scroll with sticky columns */
+.mobile-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-lg);
+    border: 1px solid #e2e8f0;
+    background: white;
+}
+
+.mobile-table-scroll::-webkit-scrollbar {
+    height: 6px;
+}
+
+.mobile-table-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.mobile-table-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.mobile-table-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.mobile-table-sticky {
+    position: sticky;
+    left: 0;
+    background: white;
+    z-index: 10;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile-specific responsive adjustments */
+@media (max-width: 480px) {
+    .mobile-card-layout {
+        padding: var(--spacing-lg);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .mobile-marks-grid {
+        gap: var(--spacing-sm);
+    }
+
+    .mobile-marks-cell {
+        padding: var(--spacing-sm);
+    }
+
+    .mobile-performance-card {
+        padding: var(--spacing-lg);
+    }
+
+    .mobile-result-header {
+        padding: var(--spacing-lg);
+    }
+}
+
+/* Enhanced mobile focus states for result display */
+.mobile-card-layout:focus-within {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+    border-color: #10b981;
+}
+
+.mobile-print-button:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+}
+
+/* Mobile result display accessibility enhancements */
+.mobile-result-accessible {
+    /* Ensure sufficient color contrast */
+    --text-contrast-high: #1f2937;
+    --text-contrast-medium: #4b5563;
+    --text-contrast-low: #6b7280;
+
+    /* High contrast mode support */
+    forced-color-adjust: auto;
+}
+
+@media (prefers-contrast: high) {
+    .mobile-card-layout {
+        border-width: 2px;
+        border-color: #000000;
+    }
+
+    .mobile-marks-cell {
+        border: 1px solid #000000;
+    }
+
+    .mobile-progress-bar {
+        border: 1px solid #000000;
+    }
+}
+
+/* Reduced motion support for mobile result display */
+@media (prefers-reduced-motion: reduce) {
+
+    .mobile-card-layout,
+    .mobile-performance-card,
+    .mobile-print-button,
+    .mobile-marks-cell {
+        transition: none;
+        animation: none;
+    }
+
+    .mobile-progress-fill {
+        transition: none;
+    }
+
+    .mobile-progress-fill::after {
+        animation: none;
+    }
+
+    .animate-mobile-card-slide-in {
+        animation: none;
+    }
+}
+
+/* ===== ENHANCED SHIMMER ANIMATIONS FOR LOADING STATES ===== */
+
+/* Enhanced shimmer animations with different speeds and intensities */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+@keyframes shimmer-slow {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+@keyframes shimmer-fast {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.animate-shimmer {
+    animation: shimmer 2s ease-in-out infinite;
+}
+
+.animate-shimmer-slow {
+    animation: shimmer-slow 3s ease-in-out infinite;
+}
+
+.animate-shimmer-fast {
+    animation: shimmer-fast 1s ease-in-out infinite;
+}
+
+/* Enhanced skeleton loading with better visual feedback */
+.skeleton-subtle {
+    background: linear-gradient(90deg, #f8fafc 25%, #f1f5f9 50%, #f8fafc 75%);
+    background-size: 200% 100%;
+}
+
+.skeleton-normal {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+}
+
+.skeleton-strong {
+    background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+}
+
+/* Progressive loading ring animation */
+@keyframes progress-ring {
+    0% {
+        stroke-dasharray: 0 100;
+    }
+
+    100% {
+        stroke-dasharray: 100 0;
+    }
+}
+
+.animate-progress-ring {
+    animation: progress-ring 2s ease-in-out infinite;
+}
+
+/* Enhanced loading dots with staggered animation */
+.loading-dots-stagger>*:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.loading-dots-stagger>*:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.loading-dots-stagger>*:nth-child(3) {
+    animation-delay: 0.2s;
+}
+
+.loading-dots-stagger>*:nth-child(4) {
+    animation-delay: 0.3s;
+}
+
+/* Contextual loading animations for different operations */
+@keyframes save-pulse {
+
+    0%,
+    100% {
+        background-color: #10b981;
+        transform: scale(1);
+    }
+
+    50% {
+        background-color: #059669;
+        transform: scale(1.05);
+    }
+}
+
+@keyframes clear-pulse {
+
+    0%,
+    100% {
+        background-color: #ef4444;
+        transform: scale(1);
+    }
+
+    50% {
+        background-color: #dc2626;
+        transform: scale(1.05);
+    }
+}
+
+@keyframes validate-pulse {
+
+    0%,
+    100% {
+        background-color: #f59e0b;
+        transform: scale(1);
+    }
+
+    50% {
+        background-color: #d97706;
+        transform: scale(1.05);
+    }
+}
+
+.animate-save-pulse {
+    animation: save-pulse 1.5s ease-in-out infinite;
+}
+
+.animate-clear-pulse {
+    animation: clear-pulse 1.5s ease-in-out infinite;
+}
+
+.animate-validate-pulse {
+    animation: validate-pulse 1.5s ease-in-out infinite;
+}
