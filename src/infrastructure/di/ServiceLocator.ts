@@ -4,6 +4,7 @@
  * Following Clean Architecture principles
  */
 
+import React, { createContext, useContext, ReactNode } from 'react';
 import { Container, SERVICE_IDENTIFIERS } from './Container';
 import { getContainer } from './ContainerConfig';
 
@@ -13,7 +14,6 @@ import type { ISubjectRepository } from '../../domain/interfaces/ISubjectReposit
 import type { IExamRepository } from '../../domain/interfaces/IExamRepository';
 import type { IUserRepository } from '../../domain/interfaces/IUserRepository';
 import type { IErrorReporter } from '../../domain/interfaces/IErrorReporter';
-import type { IPerformanceMonitor } from '../../domain/interfaces/IPerformanceMonitor';
 import type { IApiErrorHandler } from '../../domain/interfaces/IApiErrorHandler';
 
 // Domain services
@@ -29,7 +29,6 @@ import type { ExamUseCases } from '../../domain/usecases/ExamUseCases';
 import type { ConfigurationService } from '../services/ConfigurationService';
 import type { AIService } from '../services/AIService';
 import type { ErrorReportingService } from '../services/ErrorReportingService';
-import type { ApiErrorHandler } from '../services/ApiErrorHandler';
 import type { EnhancedDataService } from '../services/EnhancedDataService';
 import type { AuthenticationService } from '../security/AuthenticationService';
 
@@ -59,10 +58,6 @@ export class ServiceLocator {
 
     getErrorReporter(): IErrorReporter {
         return this.container.resolve<IErrorReporter>(SERVICE_IDENTIFIERS.IErrorReporter);
-    }
-
-    getPerformanceMonitor(): IPerformanceMonitor {
-        return this.container.resolve<IPerformanceMonitor>(SERVICE_IDENTIFIERS.IPerformanceMonitor);
     }
 
     getApiErrorHandler(): IApiErrorHandler {
@@ -105,8 +100,6 @@ export class ServiceLocator {
     getErrorReportingService(): ErrorReportingService {
         return this.container.resolve<ErrorReportingService>(SERVICE_IDENTIFIERS.ErrorReportingService);
     }
-
-
 
     getEnhancedDataService(): EnhancedDataService {
         return this.container.resolve<EnhancedDataService>(SERVICE_IDENTIFIERS.EnhancedDataService);
@@ -186,8 +179,6 @@ export function withServices<P extends object>(
 /**
  * Service provider context for React
  */
-import React, { createContext, useContext, ReactNode } from 'react';
-
 const ServiceContext = createContext<ServiceLocator | null>(null);
 
 interface ServiceProviderProps {
@@ -205,7 +196,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
         <ServiceContext.Provider value= { services } >
         { children }
         </ServiceContext.Provider>
-  );
+    );
 };
 
 export function useServiceContext(): ServiceLocator {
