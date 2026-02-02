@@ -20,6 +20,7 @@ import { loadExcelLibrary } from './dynamicImports';
 
 export class DataService {
     // Helper to calculate performance level
+    // Helper to calculate performance level
     private calculatePerformanceLevel(average: number): PerformanceLevel {
         if (average > 95) return 'O (Outstanding)';
         if (average > 85) return 'A+ (Excellent)';
@@ -717,12 +718,25 @@ export class DataService {
             // Sort by grand total (descending)
             const sortedStudents = students.sort((a, b) => b.grandTotal - a.grandTotal);
 
-            // Update ranks
+            // Update ranks with standard competition ranking (1, 2, 2, 4)
             const batch = writeBatch(this.db);
-            sortedStudents.forEach((student, index) => {
+            let currentRank = 1;
+
+            for (let i = 0; i < sortedStudents.length; i++) {
+                const student = sortedStudents[i];
+
+                // If not the first student and has same total as previous, give same rank
+                if (i > 0 && student.grandTotal === sortedStudents[i - 1].grandTotal) {
+                    // rank remains same as previous student's rank
+                } else {
+                    // rank becomes current position (1-based index)
+                    currentRank = i + 1;
+                }
+
                 const docRef = doc(this.db, this.studentsCollection, student.id);
-                batch.update(docRef, { rank: index + 1 });
-            });
+                // Only update if rank has changed to save writes? Batch writes are cheap enough.
+                batch.update(docRef, { rank: currentRank });
+            }
 
             await batch.commit();
             console.log('Class rankings updated for:', className);
@@ -1147,12 +1161,12 @@ export class DataService {
             const XLSX = await loadExcelLibrary();
 
             // Create workbook
-            const workbook = XLSX.utils.book_new();
+            const workbook = (XLSX as any).utils.book_new();
 
             // Create marks data sheet
             const marksData = this.prepareMarksDataForExport(students, subjects);
-            const marksWorksheet = XLSX.utils.json_to_sheet(marksData);
-            XLSX.utils.book_append_sheet(workbook, marksWorksheet, 'Student Marks');
+            const marksWorksheet = (XLSX as any).utils.json_to_sheet(marksData);
+            (XLSX as any).utils.book_append_sheet(workbook, marksWorksheet, 'Student Marks');
 
             // Create subjects reference sheet
             const subjectsData = subjects.map(subject => ({
@@ -1165,8 +1179,8 @@ export class DataService {
                 'Max CE': subject.maxCE,
                 'Faculty': subject.facultyName
             }));
-            const subjectsWorksheet = XLSX.utils.json_to_sheet(subjectsData);
-            XLSX.utils.book_append_sheet(workbook, subjectsWorksheet, 'Subjects Reference');
+            const subjectsWorksheet = (XLSX as any).utils.json_to_sheet(subjectsData);
+            (XLSX as any).utils.book_append_sheet(workbook, subjectsWorksheet, 'Subjects Reference');
 
             // Create students reference sheet
             const studentsData = students.map(student => ({
@@ -1180,8 +1194,8 @@ export class DataService {
                 'Rank': student.rank,
                 'Performance Level': student.performanceLevel
             }));
-            const studentsWorksheet = XLSX.utils.json_to_sheet(studentsData);
-            XLSX.utils.book_append_sheet(workbook, studentsWorksheet, 'Students Reference');
+            const studentsWorksheet = (XLSX as any).utils.json_to_sheet(studentsData);
+            (XLSX as any).utils.book_append_sheet(workbook, studentsWorksheet, 'Students Reference');
             // Generate filename with timestamp
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             const filename = `AIC_Dawa_College_Marks_Backup_${timestamp}.xlsx`;
@@ -1341,7 +1355,7 @@ export class DataService {
 
             // Read file
             const arrayBuffer = await file.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            const workbook = (XLSX as any).read(arrayBuffer, { type: 'array' });
 
             // Get the marks sheet
             const marksSheetName = 'Student Marks';
@@ -1350,7 +1364,7 @@ export class DataService {
             }
 
             const marksSheet = workbook.Sheets[marksSheetName];
-            const marksData = XLSX.utils.sheet_to_json(marksSheet);
+            const marksData = (XLSX as any).utils.sheet_to_json(marksSheet);
 
             if (marksData.length === 0) {
                 throw new Error('No data found in Student Marks sheet');

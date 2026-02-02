@@ -1277,9 +1277,13 @@ const FacultyEntry: React.FC = () => {
                                                 type="number"
                                                 value={studentMarks.ce}
                                                 onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
-                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                                                className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxTA === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
                                                 max={selectedSubjectData?.maxCE}
                                                 min="0"
+                                                disabled={selectedSubjectData?.maxTA === 100}
+                                                data-student={student.id}
+                                                data-field="ce"
+                                                placeholder={selectedSubjectData?.maxTA === 100 ? "N/A" : ""}
                                             />
                                         </div>
                                     </div>
