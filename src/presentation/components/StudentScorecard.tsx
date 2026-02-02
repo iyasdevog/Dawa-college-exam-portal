@@ -159,20 +159,19 @@ const StudentScorecard: React.FC = () => {
                         <div className="border-b-4 border-black print:pb-4 print:mb-4 print:a4-content">
                             {/* College Logo/Emblem Area */}
                             <div className="print:mb-3">
-                                <div className="w-16 h-16 mx-auto border-2 border-black rounded-full flex items-center justify-center print:mb-2">
-                                    <span className="text-black font-bold text-lg">AIC</span>
-                                </div>
+                                <img
+                                    src="/logo-black.png"
+                                    alt="AIC Da'wa College Logo"
+                                    className="h-24 mx-auto object-contain print:mb-2"
+                                />
                             </div>
 
                             {/* Official College Header */}
                             <h1 className="print:text-2xl font-black text-black print:mb-2 print:leading-tight tracking-wider">
                                 AIC DA'WA COLLEGE
                             </h1>
-                            <div className="print:text-sm text-black print:mb-2 print:leading-tight font-semibold">
-                                Affiliated to University of Calicut | NAAC Accredited
-                            </div>
                             <div className="print:text-xs text-black print:mb-3 print:leading-tight">
-                                Melattur, Malappuram District, Kerala - 676517
+                                Virippadam, Akkod, Vazhakkad, Kerala 673640
                             </div>
 
                             {/* Document Title */}
@@ -184,7 +183,7 @@ const StudentScorecard: React.FC = () => {
                             <div className="grid grid-cols-3 gap-4 print:text-xs text-black print:leading-tight">
                                 <div className="text-left">
                                     <div className="font-bold">Academic Session:</div>
-                                    <div>2024-25</div>
+                                    <div>2026-27</div>
                                 </div>
                                 <div className="text-center">
                                     <div className="font-bold">Document Type:</div>
@@ -248,11 +247,12 @@ const StudentScorecard: React.FC = () => {
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
                                     <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Grade</p>
-                                    <p className={`text-4xl font-black print:text-sm print:leading-tight ${selectedStudentData.performanceLevel === 'Failed' ? 'text-red-500 print:performance-failed' :
-                                        selectedStudentData.performanceLevel === 'Excellent' ? 'text-emerald-500 print:performance-excellent' :
-                                            selectedStudentData.performanceLevel === 'Good' ? 'text-blue-500 print:performance-good' :
-                                                selectedStudentData.performanceLevel === 'Average' ? 'text-amber-500 print:performance-average' :
-                                                    'text-orange-500 print:performance-needs-improvement'
+                                    <p className={`text-4xl font-black print:text-sm print:leading-tight ${selectedStudentData.performanceLevel === 'F (Failed)' ? 'text-red-500 print:performance-failed' :
+                                        selectedStudentData.performanceLevel.includes('Outstanding') ? 'text-purple-500 print:performance-excellent' :
+                                            selectedStudentData.performanceLevel.includes('Excellent') ? 'text-emerald-500 print:performance-excellent' :
+                                                selectedStudentData.performanceLevel.includes('Very Good') ? 'text-blue-500 print:performance-good' :
+                                                    selectedStudentData.performanceLevel.includes('Good') ? 'text-teal-500 print:performance-good' :
+                                                        'text-amber-500 print:performance-average'
                                         }`}>
                                         {selectedStudentData.performanceLevel}
                                     </p>
@@ -389,9 +389,12 @@ const StudentScorecard: React.FC = () => {
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-slate-600">Overall Grade:</span>
-                                                <span className={`font-bold ${selectedStudentData.performanceLevel === 'Failed' ? 'text-red-600' :
-                                                    selectedStudentData.performanceLevel === 'Excellent' ? 'text-emerald-600' :
-                                                        selectedStudentData.performanceLevel === 'Good' ? 'text-blue-600' : 'text-amber-600'
+                                                <span className={`font-bold ${selectedStudentData.performanceLevel === 'F (Failed)' ? 'text-red-600' :
+                                                    selectedStudentData.performanceLevel.includes('Outstanding') ? 'text-purple-600' :
+                                                        selectedStudentData.performanceLevel.includes('Excellent') ? 'text-emerald-600' :
+                                                            selectedStudentData.performanceLevel.includes('Very Good') ? 'text-blue-600' :
+                                                                selectedStudentData.performanceLevel.includes('Good') ? 'text-teal-600' :
+                                                                    'text-amber-600'
                                                     }`}>
                                                     {selectedStudentData.performanceLevel}
                                                 </span>

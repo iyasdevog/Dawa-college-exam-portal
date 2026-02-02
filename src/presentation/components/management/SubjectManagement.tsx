@@ -283,7 +283,14 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                     <label className="block text-sm font-bold mb-1">Max TA</label>
                                     <select
                                         value={subjectForm.maxTA}
-                                        onChange={e => setSubjectForm(prev => ({ ...prev, maxTA: parseInt(e.target.value) }))}
+                                        onChange={e => {
+                                            const newMaxTA = parseInt(e.target.value);
+                                            setSubjectForm(prev => ({
+                                                ...prev,
+                                                maxTA: newMaxTA,
+                                                maxCE: newMaxTA === 100 ? 0 : (prev.maxCE === 0 ? 30 : prev.maxCE)
+                                            }));
+                                        }}
                                         className="w-full p-3 border rounded-xl"
                                     >
                                         <option value={100}>100</option>
@@ -297,10 +304,17 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                     <select
                                         value={subjectForm.maxCE}
                                         onChange={e => setSubjectForm(prev => ({ ...prev, maxCE: parseInt(e.target.value) }))}
-                                        className="w-full p-3 border rounded-xl"
+                                        className="w-full p-3 border rounded-xl disabled:bg-slate-100 disabled:text-slate-400"
+                                        disabled={subjectForm.maxTA === 100}
                                     >
-                                        <option value={50}>50</option>
-                                        <option value={30}>30</option>
+                                        {subjectForm.maxTA === 100 ? (
+                                            <option value={0}>0 (Not Applicable)</option>
+                                        ) : (
+                                            <>
+                                                <option value={50}>50</option>
+                                                <option value={30}>30</option>
+                                            </>
+                                        )}
                                     </select>
                                 </div>
                             </div>

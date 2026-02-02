@@ -730,11 +730,11 @@ This report contains confidential academic information.
 
                 classAnalysisData.push([
                     stat.className,
-                    stat.studentCount,
+                    String(stat.studentCount),
                     `${stat.average}%`,
                     `${passRate}%`,
-                    highestScore,
-                    lowestScore,
+                    String(highestScore),
+                    String(lowestScore),
                     stat.topStudent?.name || 'N/A'
                 ]);
             });
@@ -996,20 +996,15 @@ This report contains confidential academic information.
                 <div className="border-b-4 border-black print:pb-4 print:mb-4 print:a4-content">
                     {/* College Logo/Emblem Area */}
                     <div className="print:mb-3">
-                        <div className="w-16 h-16 mx-auto border-2 border-black rounded-full flex items-center justify-center print:mb-2">
-                            <span className="text-black font-bold text-lg">AIC</span>
-                        </div>
+                        <img src="/logo-black.png" alt="AIC Logo" className="h-16 w-auto mx-auto object-contain print:mb-2" />
                     </div>
 
                     {/* Official College Header */}
                     <h1 className="print:text-2xl font-black text-black print:mb-2 print:leading-tight tracking-wider">
                         AIC DA'WA COLLEGE
                     </h1>
-                    <div className="print:text-sm text-black print:mb-2 print:leading-tight font-semibold">
-                        Affiliated to University of Calicut | NAAC Accredited
-                    </div>
                     <div className="print:text-xs text-black print:mb-3 print:leading-tight">
-                        Melattur, Malappuram District, Kerala - 676517
+                        Virippadam, Akkod, Vazhakkad, Kerala 673640
                     </div>
 
                     {/* Document Title */}
@@ -1021,7 +1016,7 @@ This report contains confidential academic information.
                     <div className="grid grid-cols-3 gap-4 print:text-xs text-black print:leading-tight">
                         <div className="text-left">
                             <div className="font-bold">Academic Session:</div>
-                            <div>2024-25</div>
+                            <div>2026-27</div>
                         </div>
                         <div className="text-center">
                             <div className="font-bold">Report Type:</div>
@@ -1420,11 +1415,12 @@ This report contains confidential academic information.
                             {Object.entries(gradeStats).map(([level, count]) => (
                                 <div key={level} className="text-center">
                                     <div
-                                        className={`mx-auto rounded-full flex items-center justify-center text-white font-black mb-2 ${level === 'Excellent' ? 'bg-emerald-500' :
-                                            level === 'Good' ? 'bg-blue-500' :
-                                                level === 'Average' ? 'bg-amber-500' :
-                                                    level === 'Needs Improvement' ? 'bg-orange-500' :
-                                                        'bg-red-500'
+                                        className={`mx-auto rounded-full flex items-center justify-center text-white font-black mb-2 ${level.includes('Outstanding') ? 'bg-purple-500' :
+                                            level.includes('Excellent') ? 'bg-emerald-500' :
+                                                level.includes('Very Good') ? 'bg-blue-500' :
+                                                    level.includes('Good') ? 'bg-teal-500' :
+                                                        level.includes('Average') ? 'bg-amber-500' :
+                                                            'bg-red-500'
                                             }`}
                                         style={{
                                             width: isMobile ? '56px' : '64px',
@@ -1442,7 +1438,7 @@ This report contains confidential academic information.
                                             fontSize: isMobile ? '0.75rem' : '0.625rem'
                                         }}
                                     >
-                                        {level}
+                                        {level.split(' ')[0]}
                                     </p>
                                 </div>
                             ))}

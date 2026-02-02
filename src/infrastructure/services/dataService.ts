@@ -14,11 +14,22 @@ import {
     Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 
 export class DataService {
+    // Helper to calculate performance level
+    private calculatePerformanceLevel(average: number): PerformanceLevel {
+        if (average > 95) return 'O (Outstanding)';
+        if (average > 85) return 'A+ (Excellent)';
+        if (average > 75) return 'A (Very Good)';
+        if (average >= 65) return 'B+ (Good)';
+        if (average >= 55) return 'B (Good)';
+        if (average >= 40) return 'C (Average)';
+        return 'F (Failed)';
+    }
+
     // Collections
     private studentsCollection = 'students';
     private subjectsCollection = 'subjects';
@@ -589,7 +600,7 @@ export class DataService {
                             grandTotal: student.grandTotal || 0,
                             average: student.average || 0,
                             rank: student.rank || 0,
-                            performanceLevel: student.performanceLevel || 'Needs Improvement'
+                            performanceLevel: student.performanceLevel || 'C (Average)'
                         });
 
                         results.success++;
@@ -845,12 +856,7 @@ export class DataService {
             const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
             // Determine performance level
-            let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
-            if (average >= 80) performanceLevel = 'Excellent';
-            else if (average >= 70) performanceLevel = 'Good';
-            else if (average >= 60) performanceLevel = 'Average';
-            else if (average >= 40) performanceLevel = 'Needs Improvement';
-            else performanceLevel = 'Failed';
+            const performanceLevel = this.calculatePerformanceLevel(average);
 
             // Update student document
             await updateDoc(doc(this.db, this.studentsCollection, studentId), {
@@ -922,12 +928,7 @@ export class DataService {
             const average = completeMarks.length > 0 ? grandTotal / completeMarks.length : 0;
 
             // Determine performance level
-            let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
-            if (average >= 80) performanceLevel = 'Excellent';
-            else if (average >= 70) performanceLevel = 'Good';
-            else if (average >= 60) performanceLevel = 'Average';
-            else if (average >= 40) performanceLevel = 'Needs Improvement';
-            else performanceLevel = 'Failed';
+            const performanceLevel = this.calculatePerformanceLevel(average);
 
             // Update student document
             await updateDoc(doc(this.db, this.studentsCollection, studentId), {
@@ -1001,12 +1002,7 @@ export class DataService {
             const average = completeMarks.length > 0 ? grandTotal / completeMarks.length : 0;
 
             // Determine performance level
-            let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
-            if (average >= 80) performanceLevel = 'Excellent';
-            else if (average >= 70) performanceLevel = 'Good';
-            else if (average >= 60) performanceLevel = 'Average';
-            else if (average >= 40) performanceLevel = 'Needs Improvement';
-            else performanceLevel = 'Failed';
+            const performanceLevel = this.calculatePerformanceLevel(average);
 
             // Update student document
             await updateDoc(doc(this.db, this.studentsCollection, studentId), {
@@ -1051,12 +1047,7 @@ export class DataService {
                 const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
                 // Determine performance level
-                let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
-                if (average >= 80) performanceLevel = 'Excellent';
-                else if (average >= 70) performanceLevel = 'Good';
-                else if (average >= 60) performanceLevel = 'Average';
-                else if (average >= 40) performanceLevel = 'Needs Improvement';
-                else performanceLevel = 'Failed';
+                const performanceLevel = this.calculatePerformanceLevel(average);
 
                 // Update student document
                 await updateDoc(doc(this.db, this.studentsCollection, studentId), {
@@ -1113,12 +1104,7 @@ export class DataService {
             const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
             // Determine performance level
-            let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
-            if (average >= 80) performanceLevel = 'Excellent';
-            else if (average >= 70) performanceLevel = 'Good';
-            else if (average >= 60) performanceLevel = 'Average';
-            else if (average >= 40) performanceLevel = 'Needs Improvement';
-            else performanceLevel = 'Failed';
+            const performanceLevel = this.calculatePerformanceLevel(average);
 
             // Update student document
             await updateDoc(doc(this.db, this.studentsCollection, studentId), {

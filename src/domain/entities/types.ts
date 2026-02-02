@@ -1,5 +1,13 @@
 
-export type PerformanceLevel = 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
+export type PerformanceLevel =
+  | 'O (Outstanding)'
+  | 'A+ (Excellent)'
+  | 'A (Very Good)'
+  | 'B+ (Good)'
+  | 'B (Good)'
+  | 'C (Average)'
+  | 'F (Failed)'
+  | 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed'; // Keep old types temporarily for migration
 
 export interface SubjectMarks {
   ta: number;

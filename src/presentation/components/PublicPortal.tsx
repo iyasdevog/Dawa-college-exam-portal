@@ -460,20 +460,15 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                             <div className="border-b-4 border-black print:pb-4 print:mb-4 print:a4-content">
                                 {/* College Logo/Emblem Area */}
                                 <div className="print:mb-3">
-                                    <div className="w-16 h-16 mx-auto border-2 border-black rounded-full flex items-center justify-center print:mb-2">
-                                        <span className="text-black font-bold text-lg">AIC</span>
-                                    </div>
+                                    <img src="/logo-black.png" alt="AIC Logo" className="h-20 mx-auto object-contain print:mb-2" />
                                 </div>
 
                                 {/* Official College Header */}
                                 <h1 className="print:text-2xl font-black text-black print:mb-2 print:leading-tight tracking-wider">
                                     AIC DA'WA COLLEGE
                                 </h1>
-                                <div className="print:text-sm text-black print:mb-2 print:leading-tight font-semibold">
-                                    Affiliated to University of Calicut | NAAC Accredited
-                                </div>
                                 <div className="print:text-xs text-black print:mb-3 print:leading-tight">
-                                    Melattur, Malappuram District, Kerala - 676517
+                                    Virippadam, Akkod, Vazhakkad, Kerala 673640
                                 </div>
 
                                 {/* Document Title */}
@@ -485,7 +480,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                 <div className="grid grid-cols-3 gap-4 print:text-xs text-black print:leading-tight">
                                     <div className="text-left">
                                         <div className="font-bold">Academic Session:</div>
-                                        <div>2024-25</div>
+                                        <div>2026-27</div>
                                     </div>
                                     <div className="text-center">
                                         <div className="font-bold">Document Type:</div>
@@ -589,9 +584,12 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                         <p className={`uppercase font-black text-slate-400 mb-2 tracking-widest ${isMobile ? 'text-xs' : 'text-[10px]'}`}>
                                             Grade
                                         </p>
-                                        <p className={`font-black print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'} ${result.performanceLevel === 'Failed' ? 'text-red-500' :
-                                            result.performanceLevel === 'Excellent' ? 'text-emerald-500' :
-                                                result.performanceLevel === 'Good' ? 'text-blue-500' : 'text-amber-500'
+                                        <p className={`font-black print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'} ${result.performanceLevel === 'F (Failed)' ? 'text-red-500' :
+                                            result.performanceLevel.includes('Outstanding') ? 'text-purple-500' :
+                                                result.performanceLevel.includes('Excellent') ? 'text-emerald-500' :
+                                                    result.performanceLevel.includes('Very Good') ? 'text-blue-500' :
+                                                        result.performanceLevel.includes('Good') ? 'text-teal-500' :
+                                                            'text-amber-500'
                                             }`}>
                                             {result.performanceLevel}
                                         </p>
@@ -829,7 +827,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     <span className="text-white font-black tracking-widest text-sm">AIC EXAM PORTAL</span>
                 </div>
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em]">
-                    &copy; 2024 AIC Da'wa College | Secure Academic Excellence System
+                    &copy; 2026 AIC Da'wa College | Secure Academic Excellence System
                 </p>
             </footer>
         </div>

@@ -114,6 +114,8 @@ const ClassResults: React.FC = () => {
 
     return (
         <div className="space-y-8 print:space-y-4">
+
+
             {/* Header - Hidden on Print */}
             <div className={`flex items-center justify-between print:hidden ${isMobile ? 'flex-col gap-4' : ''}`}>
                 <div className={isMobile ? 'text-center' : ''}>
@@ -236,20 +238,15 @@ const ClassResults: React.FC = () => {
                 <div className="border-b-4 border-black print:pb-4 print:mb-4 print:a4-content">
                     {/* College Logo/Emblem Area */}
                     <div className="print:mb-3">
-                        <div className="w-16 h-16 mx-auto border-2 border-black rounded-full flex items-center justify-center print:mb-2">
-                            <span className="text-black font-bold text-lg">AIC</span>
-                        </div>
+                        <img src="/logo-black.png" alt="AIC Logo" className="h-20 mx-auto object-contain print:mb-2" />
                     </div>
 
                     {/* Official College Header */}
                     <h1 className="print:text-2xl font-black text-black print:mb-2 print:leading-tight tracking-wider">
                         AIC DA'WA COLLEGE
                     </h1>
-                    <div className="print:text-sm text-black print:mb-2 print:leading-tight font-semibold">
-                        Affiliated to University of Calicut | NAAC Accredited
-                    </div>
                     <div className="print:text-xs text-black print:mb-3 print:leading-tight">
-                        Melattur, Malappuram District, Kerala - 676517
+                        Virippadam, Akkod, Vazhakkad, Kerala 673640
                     </div>
 
                     {/* Document Title */}
@@ -261,7 +258,7 @@ const ClassResults: React.FC = () => {
                     <div className="grid grid-cols-4 gap-3 print:text-xs text-black print:leading-tight print:mb-3 print:break-inside-avoid">
                         <div className="text-center border-r border-black">
                             <div className="font-bold">Academic Session</div>
-                            <div>2024-25</div>
+                            <div>2026-27</div>
                         </div>
                         <div className="text-center border-r border-black">
                             <div className="font-bold">Total Students</div>
@@ -441,13 +438,14 @@ const ClassResults: React.FC = () => {
                                                 </td>
                                                 <td className={`text-center border-b border-slate-100 ${isMobile ? 'p-2' : 'p-4'} print:p-1 print:table-cell-padding`}>
                                                     <span className={`px-3 py-1 rounded-full font-bold uppercase tracking-wider print:px-0 print:py-0 print:text-xs print:leading-tight ${isMobile ? 'text-xs px-2' : 'text-xs'
-                                                        } ${student.performanceLevel === 'Excellent' ? 'bg-emerald-100 text-emerald-700 print:performance-excellent' :
-                                                            student.performanceLevel === 'Good' ? 'bg-blue-100 text-blue-700 print:performance-good' :
-                                                                student.performanceLevel === 'Average' ? 'bg-amber-100 text-amber-700 print:performance-average' :
-                                                                    student.performanceLevel === 'Needs Improvement' ? 'bg-orange-100 text-orange-700 print:performance-needs-improvement' :
-                                                                        'bg-red-100 text-red-700 print:performance-failed'
+                                                        } ${student.performanceLevel.includes('Outstanding') ? 'bg-purple-100 text-purple-700 print:text-black' :
+                                                            student.performanceLevel.includes('Excellent') ? 'bg-emerald-100 text-emerald-700 print:text-black' :
+                                                                student.performanceLevel.includes('Very Good') ? 'bg-blue-100 text-blue-700 print:text-black' :
+                                                                    student.performanceLevel.includes('Good') ? 'bg-teal-100 text-teal-700 print:text-black' :
+                                                                        student.performanceLevel.includes('Average') ? 'bg-amber-100 text-amber-700 print:text-black' :
+                                                                            'bg-red-100 text-red-700 print:text-black'
                                                         }`}>
-                                                        {student.performanceLevel === 'Needs Improvement' ? 'Needs Imp.' : student.performanceLevel}
+                                                        {student.performanceLevel}
                                                     </span>
                                                 </td>
                                             </tr>
@@ -475,7 +473,7 @@ const ClassResults: React.FC = () => {
                         <div className="space-y-1">
                             <div><span className="font-semibold">Report Type:</span> Class Results</div>
                             <div><span className="font-semibold">Class:</span> {selectedClass}</div>
-                            <div><span className="font-semibold">Academic Year:</span> 2024-25</div>
+                            <div><span className="font-semibold">Academic Year:</span> 2026-27</div>
                             <div><span className="font-semibold">Generated:</span> {new Date().toLocaleDateString('en-IN')}</div>
                             <div><span className="font-semibold">Document ID:</span></div>
                             <div className="font-mono">AIC-CR-{selectedClass}-{Date.now().toString().slice(-8)}</div>

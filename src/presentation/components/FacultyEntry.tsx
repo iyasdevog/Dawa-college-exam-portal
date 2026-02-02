@@ -16,6 +16,7 @@ import OfflineStatusIndicator from './OfflineStatusIndicator';
 
 const FacultyEntry: React.FC = () => {
     const [selectedClass, setSelectedClass] = useState('S1');
+    const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
     const [selectedSubject, setSelectedSubject] = useState('');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
@@ -67,15 +68,27 @@ const FacultyEntry: React.FC = () => {
         loadData();
     }, []);
 
-    // Update class subjects when class changes
+    // Update class subjects when class or subject type changes
     useEffect(() => {
-        const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
+        const filteredSubjects = subjects.filter(s => {
+            // For elective subjects, show all of them regardless of class
+            if (subjectType === 'elective') {
+                return s.subjectType === 'elective';
+            }
+            // For general subjects, filter by class and type
+            return s.targetClasses.includes(selectedClass) && s.subjectType === 'general';
+        });
         setClassSubjects(filteredSubjects);
 
-        if (filteredSubjects.length > 0 && !selectedSubject) {
-            setSelectedSubject(filteredSubjects[0].id);
+        // Reset selected subject if it's not in the new list, or select first available
+        if (filteredSubjects.length > 0) {
+            if (!selectedSubject || !filteredSubjects.find(s => s.id === selectedSubject)) {
+                setSelectedSubject(filteredSubjects[0].id);
+            }
+        } else {
+            setSelectedSubject('');
         }
-    }, [selectedClass, subjects, selectedSubject]);
+    }, [selectedClass, subjects, subjectType]);
 
     // Load students when class or subject changes
     useEffect(() => {
@@ -412,6 +425,7 @@ const FacultyEntry: React.FC = () => {
                 console.log('=== DEBUGGING STUDENT LOADING ===');
                 console.log('Selected Subject ID:', selectedSubject);
                 console.log('Selected Class:', selectedClass);
+                console.log('Subject Type:', subjectType);
                 console.log('Show Supplementary Only:', showSupplementaryOnly);
 
                 if (showSupplementaryOnly) {
@@ -426,14 +440,19 @@ const FacultyEntry: React.FC = () => {
                 } else {
                     // Get enrolled students for the selected subject
                     console.log('Getting enrolled students for subject...');
-                    studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject);
-                    console.log('Total enrolled students found:', studentsToShow.length);
-                    console.log('Students before class filter:', studentsToShow.map(s => ({ name: s.name, class: s.className })));
 
-                    // Filter by selected class
-                    studentsToShow = studentsToShow.filter(student => student.className === selectedClass);
-                    console.log('Students after class filter:', studentsToShow.length);
-                    console.log('Final students:', studentsToShow.map(s => ({ name: s.name, class: s.className })));
+                    // The dataService.getEnrolledStudentsForSubject already handles differentiation 
+                    // between general and elective subjects internally.
+                    // For General subjects: it fetches all students in target classes
+                    // For Elective subjects: it fetches only enrolled students
+                    studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject);
+                    console.log('Total students found for subject:', studentsToShow.length);
+
+                    // Filter by selected class ONLY for general subjects
+                    if (subjectType === 'general') {
+                        studentsToShow = studentsToShow.filter(student => student.className === selectedClass);
+                        console.log('Students after class filter:', studentsToShow.length);
+                    }
                 }
             } else {
                 console.log('No subject selected, getting all students from class...');
@@ -872,21 +891,40 @@ const FacultyEntry: React.FC = () => {
                 background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
             }}>
-                <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-6">
+
+                <div className={`space-y-4 md:space-y-0 md:grid ${subjectType === 'elective' ? 'md:grid-cols-2' : 'md:grid-cols-3'} md:gap-6`}>
+
+                    {subjectType === 'general' && (
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Class</label>
+                            <select
+                                value={selectedClass}
+                                onChange={(e) => setSelectedClass(e.target.value)}
+                                className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
+                                disabled={isSaving || operationLoading.type !== null}
+                                style={{ minHeight: '48px' }}
+                                aria-label="Select class for marks entry"
+                                aria-describedby="class-help"
+                            >
+                                {CLASSES.map(cls => (
+                                    <option key={cls} value={cls}>{cls}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Class</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Subject Type</label>
                         <select
-                            value={selectedClass}
-                            onChange={(e) => setSelectedClass(e.target.value)}
+                            value={subjectType}
+                            onChange={(e) => setSubjectType(e.target.value as 'general' | 'elective')}
                             className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
                             disabled={isSaving || operationLoading.type !== null}
                             style={{ minHeight: '48px' }}
-                            aria-label="Select class for marks entry"
-                            aria-describedby="class-help"
+                            aria-label="Select subject type"
                         >
-                            {CLASSES.map(cls => (
-                                <option key={cls} value={cls}>{cls}</option>
-                            ))}
+                            <option value="general">General</option>
+                            <option value="elective">Elective</option>
                         </select>
                     </div>
 
