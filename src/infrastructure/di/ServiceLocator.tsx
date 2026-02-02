@@ -14,7 +14,7 @@ import type { ISubjectRepository } from '../../domain/interfaces/ISubjectReposit
 import type { IExamRepository } from '../../domain/interfaces/IExamRepository';
 import type { IUserRepository } from '../../domain/interfaces/IUserRepository';
 import type { IErrorReporter } from '../../domain/interfaces/IErrorReporter';
-import type { IApiErrorHandler } from '../../domain/interfaces/IApiErrorHandler';
+import { IApiErrorHandler } from '../../domain/interfaces/IApiErrorHandler';
 
 // Domain services
 import type { GradingService } from '../../domain/services/GradingService';

@@ -1,0 +1,152 @@
+import React, { useState } from 'react';
+import { dataService } from '../../../infrastructure/services/dataService';
+
+interface SettingsManagementProps {
+    onRefresh: () => Promise<void>;
+}
+
+const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) => {
+    const [isOperating, setIsOperating] = useState(false);
+    const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
+
+    const handleExportMarks = async () => {
+        try {
+            setIsOperating(true);
+            await dataService.exportMarksToExcel();
+            alert('Marks exported successfully! Check your downloads folder.');
+        } catch (error) {
+            console.error('Error exporting marks:', error);
+            alert(`Error exporting marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
+    const handleImportMarks = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+            alert('Please select an Excel file (.xlsx or .xls)');
+            return;
+        }
+
+        if (!confirm('This will import marks from the Excel file and may overwrite existing marks. Are you sure you want to continue?')) {
+            event.target.value = '';
+            return;
+        }
+
+        try {
+            setIsOperating(true);
+            setImportResults(null);
+
+            const results = await dataService.importMarksFromExcel(file);
+            setImportResults(results);
+
+            await onRefresh();
+
+            if (results.errors.length === 0) {
+                alert(`Import completed successfully! ${results.success} records imported.`);
+            } else {
+                alert(`Import completed with ${results.success} successful records and ${results.errors.length} errors.`);
+            }
+        } catch (error) {
+            console.error('Error importing marks:', error);
+            alert(`Error importing marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsOperating(false);
+            event.target.value = '';
+        }
+    };
+
+    const downloadSampleCSV = () => {
+        const sampleData = [
+            ['adNo', 'name', 'className', 'semester'],
+            ['001', 'Ahmed Ali', 'S1', 'Odd'],
+            ['002', 'Fatima Hassan', 'S1', 'Odd'],
+            ['003', 'Omar Khalid', 'D1', 'Even']
+        ];
+
+        const csvContent = sampleData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'student_import_sample.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    return (
+        <div className="space-y-6">
+            <h2 className="text-xl font-black text-slate-900">System Settings & Data Tools</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Data Management Card */}
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-lg mb-4 text-slate-800">Data Import/Export</h3>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-sm text-slate-600 mb-2">Export all marks to Excel for reporting or backup.</p>
+                            <button
+                                onClick={handleExportMarks}
+                                disabled={isOperating}
+                                className="w-full py-3 bg-blue-50 text-blue-700 rounded-xl font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-download"></i>
+                                Export Marks to Excel
+                            </button>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <p className="text-sm text-slate-600 mb-2">Import marks from Excel. Existing marks may be updated.</p>
+                            <label className={`w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2 cursor-pointer ${isOperating ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <i className="fa-solid fa-file-excel"></i>
+                                {isOperating ? 'Importing...' : 'Import Marks from Excel'}
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={handleImportMarks}
+                                    disabled={isOperating}
+                                    className="hidden"
+                                />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Templates Card */}
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-lg mb-4 text-slate-800">Templates & Resources</h3>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-sm text-slate-600 mb-2">Download CSV template for bulk student import.</p>
+                            <button
+                                onClick={downloadSampleCSV}
+                                className="w-full py-3 bg-slate-50 text-slate-700 rounded-xl font-bold hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-file-csv"></i>
+                                Download Student CSV Template
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Import Results Log */}
+            {importResults && importResults.errors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                    <h4 className="font-bold text-red-800 mb-2">Import Issues</h4>
+                    <p className="text-sm text-red-600 mb-4">The following errors occurred during import:</p>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-red-700 max-h-48 overflow-y-auto">
+                        {importResults.errors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default SettingsManagement;

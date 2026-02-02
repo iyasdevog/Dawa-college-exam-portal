@@ -375,7 +375,7 @@ const ClassResults: React.FC = () => {
                                 </div>
                             )}
                             <div className="overflow-x-auto mobile-table-scroll">
-                                <table className="w-full border-collapse print:table-compact" role="table" aria-label="Class results table" style={{ minWidth: isMobile ? '800px' : 'auto' }}>
+                                <table className="w-full border-collapse print:table-compact whitespace-nowrap" role="table" aria-label="Class results table" style={{ minWidth: 'max-content' }}>
                                     <thead className="print:keep-with-next">
                                         <tr className="bg-slate-50 print:bg-slate-100 print:break-inside-avoid" role="row">
                                             <th className={`text-left font-bold text-slate-700 border-b border-slate-200 sticky left-0 bg-slate-50 z-10 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">Rank</th>

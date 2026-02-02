@@ -1,3 +1,5 @@
+import { TimeRange } from './IErrorReporter';
+
 /**
  * Domain interface for API error handling and retry mechanisms
  * Implements Requirements 5.2 - API error handling and retry mechanisms
@@ -121,11 +123,6 @@ export interface IApiErrorHandler {
      * Get error statistics for monitoring
      */
     getErrorStatistics(timeRange?: TimeRange): Promise<ApiErrorStatistics>;
-}
-
-export interface TimeRange {
-    start: Date;
-    end: Date;
 }
 
 export interface ApiErrorStatistics {
