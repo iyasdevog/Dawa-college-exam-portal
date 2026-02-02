@@ -37,13 +37,13 @@ export class ConfigurationService {
         try {
             // Load from environment variables
             const firebaseConfig = {
-                apiKey: this.getEnvVar('VITE_FIREBASE_API_KEY', 'AIzaSyAdLPv3dTm2xbVuWnfSYD0-3szsAQPZm3w'),
-                authDomain: this.getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', 'my-edumark-portal.firebaseapp.com'),
-                projectId: this.getEnvVar('VITE_FIREBASE_PROJECT_ID', 'my-edumark-portal'),
-                storageBucket: this.getEnvVar('VITE_FIREBASE_STORAGE_BUCKET', 'my-edumark-portal.firebasestorage.app'),
-                messagingSenderId: this.getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID', '445255012917'),
-                appId: this.getEnvVar('VITE_FIREBASE_APP_ID', '1:445255012917:web:c4ed8b06b6dfa84d84977c'),
-                measurementId: this.getEnvVar('VITE_FIREBASE_MEASUREMENT_ID', 'G-LLMWHDTZ1T', false)
+                apiKey: this.getEnvVar('VITE_FIREBASE_API_KEY', ''),
+                authDomain: this.getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', ''),
+                projectId: this.getEnvVar('VITE_FIREBASE_PROJECT_ID', ''),
+                storageBucket: this.getEnvVar('VITE_FIREBASE_STORAGE_BUCKET', ''),
+                messagingSenderId: this.getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID', ''),
+                appId: this.getEnvVar('VITE_FIREBASE_APP_ID', ''),
+                measurementId: this.getEnvVar('VITE_FIREBASE_MEASUREMENT_ID', '', false)
             };
 
             const geminiApiKey = this.getEnvVar('VITE_GEMINI_API_KEY', '', false);

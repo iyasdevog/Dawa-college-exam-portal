@@ -2,18 +2,12 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 
+import { configurationService } from "../services/ConfigurationService";
+
 /**
- * Verified Firebase Project Configuration for 'aic-dawa-college-portal'
+ * Validated Firebase Project Configuration from ConfigurationService
  */
-const firebaseConfig = {
-  apiKey: "AIzaSyAdLPv3dTm2xbVuWnfSYD0-3szsAQPZm3w",
-  authDomain: "my-edumark-portal.firebaseapp.com",
-  projectId: "my-edumark-portal",
-  storageBucket: "my-edumark-portal.firebasestorage.app",
-  messagingSenderId: "445255012917",
-  appId: "1:445255012917:web:c4ed8b06b6dfa84d84977c",
-  measurementId: "G-LLMWHDTZ1T"
-};
+const firebaseConfig = configurationService.getFirebaseConfig();
 
 // Initialize Firebase safely
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();

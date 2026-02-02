@@ -1,22 +1,22 @@
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { ApplicationErrorBoundary, FeatureErrorBoundary } from './src/presentation/components/ErrorBoundary';
-import { MobileProvider } from './src/presentation/viewmodels/MobileContext';
-import { ViewType } from './src/domain/entities/types';
-import { serviceWorkerService } from './src/infrastructure/services/serviceWorkerService';
-import { ErrorReportingService } from './src/infrastructure/services/ErrorReportingService';
-import { browserCompatibility } from './src/infrastructure/services/BrowserCompatibilityService';
-import { progressiveEnhancement } from './src/infrastructure/services/ProgressiveEnhancementService';
+import { ApplicationErrorBoundary, FeatureErrorBoundary } from './components/ErrorBoundary';
+import { MobileProvider } from './viewmodels/MobileContext';
+import { ViewType } from '../domain/entities/types';
+import { serviceWorkerService } from '../infrastructure/services/serviceWorkerService';
+import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
+import { browserCompatibility } from '../infrastructure/services/BrowserCompatibilityService';
+import { progressiveEnhancement } from '../infrastructure/services/ProgressiveEnhancementService';
 
 // Lazy load components for code splitting
-const Layout = lazy(() => import('./src/presentation/components/Layout'));
-const Dashboard = lazy(() => import('./src/presentation/components/Dashboard'));
-const FacultyEntry = lazy(() => import('./src/presentation/components/FacultyEntry'));
-const ClassResults = lazy(() => import('./src/presentation/components/ClassResults'));
-const StudentScorecard = lazy(() => import('./src/presentation/components/StudentScorecard'));
-const Management = lazy(() => import('./src/presentation/components/Management'));
-const PublicPortal = lazy(() => import('./src/presentation/components/PublicPortal'));
-const PWAInstallPrompt = lazy(() => import('./src/presentation/components/PWAInstallPrompt'));
+const Layout = lazy(() => import('./components/Layout'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const FacultyEntry = lazy(() => import('./components/FacultyEntry'));
+const ClassResults = lazy(() => import('./components/ClassResults'));
+const StudentScorecard = lazy(() => import('./components/StudentScorecard'));
+const Management = lazy(() => import('./components/Management'));
+const PublicPortal = lazy(() => import('./components/PublicPortal'));
+const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 
 // Loading fallback components
 const ComponentLoadingFallback: React.FC<{ componentName: string }> = ({ componentName }) => (
