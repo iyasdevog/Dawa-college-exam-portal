@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { offlineStorageService, OfflineStatus } from '../../infrastructure/services/offlineStorageService';
-import { serviceWorkerService } from '../../infrastructure/services/serviceWorkerService';
 
 interface OfflineStatusIndicatorProps {
     className?: string;
@@ -25,22 +24,24 @@ const OfflineStatusIndicator: React.FC<OfflineStatusIndicatorProps> = ({
         loadStatus();
 
         // Setup online/offline listeners
-        const cleanup = serviceWorkerService.onOnlineStatusChange((isOnline) => {
-            setStatus(prev => ({ ...prev, isOnline }));
-            if (isOnline) {
-                handleAutoSync();
-            }
-        });
+        const handleOnline = () => {
+            setStatus(prev => ({ ...prev, isOnline: true }));
+            handleAutoSync();
+        };
 
-        // Setup service worker listeners
-        serviceWorkerService.on('syncComplete', handleSyncComplete);
+        const handleOffline = () => {
+            setStatus(prev => ({ ...prev, isOnline: false }));
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
 
         // Periodic status updates
         const interval = setInterval(loadStatus, 30000); // Every 30 seconds
 
         return () => {
-            cleanup();
-            serviceWorkerService.off('syncComplete', handleSyncComplete);
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
             clearInterval(interval);
         };
     }, []);

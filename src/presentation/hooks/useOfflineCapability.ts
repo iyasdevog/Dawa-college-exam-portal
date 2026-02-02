@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { offlineStorageService, OfflineStatus, OfflineDraft } from '../../infrastructure/services/offlineStorageService';
-import { serviceWorkerService } from '../../infrastructure/services/serviceWorkerService';
 
 export interface UseOfflineCapabilityOptions {
     autoSaveInterval?: number; // Auto-save interval in milliseconds
@@ -72,14 +71,15 @@ export function useOfflineCapability(options: UseOfflineCapabilityOptions = {}):
 
     // Setup online/offline listeners
     useEffect(() => {
-        const cleanup = serviceWorkerService.onOnlineStatusChange(handleOnlineStatusChange);
+        const handleOnline = () => handleOnlineStatusChange(true);
+        const handleOffline = () => handleOnlineStatusChange(false);
 
-        // Setup service worker event listeners
-        serviceWorkerService.on('syncComplete', handleSyncComplete);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
 
         return () => {
-            cleanup();
-            serviceWorkerService.off('syncComplete', handleSyncComplete);
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
         };
     }, [enableAutoSync]);
 
