@@ -1,7 +1,7 @@
 // Enhanced Service Worker for AIC Da'wa College Exam Portal
 // Provides comprehensive PWA functionality with advanced caching strategies
 
-const CACHE_VERSION = '2.0.0';
+const CACHE_VERSION = '2.1.0';
 const CACHE_NAME = `aic-dawa-college-v${CACHE_VERSION}`;
 const STATIC_CACHE_NAME = `aic-dawa-static-v${CACHE_VERSION}`;
 const DYNAMIC_CACHE_NAME = `aic-dawa-dynamic-v${CACHE_VERSION}`;
@@ -50,6 +50,7 @@ const CACHE_ROUTE_STRATEGIES = {
     '/assets/': CACHE_STRATEGIES.CACHE_FIRST,
     '/images/': CACHE_STRATEGIES.STALE_WHILE_REVALIDATE,
     '/fonts/': CACHE_STRATEGIES.CACHE_FIRST,
+    '/index.html': CACHE_STRATEGIES.NETWORK_FIRST,
     '/': CACHE_STRATEGIES.NETWORK_FIRST
 };
 
