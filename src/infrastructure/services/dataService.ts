@@ -86,8 +86,20 @@ export class DataService {
                 ...doc.data()
             } as StudentRecord));
 
-            // Sort manually by rank
-            students.sort((a, b) => (a.rank || 0) - (b.rank || 0));
+            // Sort manually by import row number (priority) or rank
+            students.sort((a, b) => {
+                // If both have importRowNumber, use it (ascending)
+                if (a.importRowNumber !== undefined && b.importRowNumber !== undefined) {
+                    return a.importRowNumber - b.importRowNumber;
+                }
+                // If only a has it, it comes first (or last? usually explicit order first)
+                // Let's keep mixed content sorted by rank if row number missing
+                if (a.importRowNumber !== undefined) return -1;
+                if (b.importRowNumber !== undefined) return 1;
+
+                // Fallback to rank
+                return (a.rank || 0) - (b.rank || 0);
+            });
 
             console.log('Total students in database:', students.length);
 
@@ -453,6 +465,28 @@ export class DataService {
         }
     }
 
+    async deleteAllSupplementaryExams(): Promise<void> {
+        try {
+            console.log('Starting to clear all supplementary exam data...');
+
+            // Get all exams
+            const snapshot = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            console.log(`Found ${snapshot.docs.length} supplementary exams to delete`);
+
+            // Delete all
+            const batch = writeBatch(this.db);
+            snapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+
+            await batch.commit();
+            console.log('All supplementary exam data cleared successfully');
+        } catch (error) {
+            console.error('Error clearing supplementary exam data:', error);
+            throw error;
+        }
+    }
+
     async getStudentsWithSupplementaryExams(subjectId: string, year: number): Promise<{ student: StudentRecord, supplementaryExam: SupplementaryExam }[]> {
         try {
             // Get supplementary exams for the subject and year
@@ -487,8 +521,15 @@ export class DataService {
                     ...doc.data()
                 } as StudentRecord));
 
-                // Sort manually by rank
-                students.sort((a, b) => (a.rank || 0) - (b.rank || 0));
+                // Sort manually by import row number (priority) or rank
+                students.sort((a, b) => {
+                    if (a.importRowNumber !== undefined && b.importRowNumber !== undefined) {
+                        return a.importRowNumber - b.importRowNumber;
+                    }
+                    if (a.importRowNumber !== undefined) return -1;
+                    if (b.importRowNumber !== undefined) return 1;
+                    return (a.rank || 0) - (b.rank || 0);
+                });
 
                 callback(students);
             },
@@ -581,6 +622,7 @@ export class DataService {
         const lines = csvText.trim().split('\n');
         const students: Omit<StudentRecord, 'id'>[] = [];
         const errors: string[] = [];
+        const timestamp = Date.now(); // Base timestamp for ordering imports
 
         if (lines.length < 2) {
             errors.push('CSV must contain at least a header row and one data row');
@@ -626,7 +668,8 @@ export class DataService {
                     grandTotal: 0,
                     average: 0,
                     rank: 0,
-                    performanceLevel: 'Needs Improvement'
+                    performanceLevel: 'Needs Improvement',
+                    importRowNumber: timestamp + i // Use timestamp to ensure later imports come after earlier ones
                 };
 
                 // Validate required fields
@@ -1153,7 +1196,6 @@ export class DataService {
             }));
             const studentsWorksheet = XLSX.utils.json_to_sheet(studentsData);
             XLSX.utils.book_append_sheet(workbook, studentsWorksheet, 'Students Reference');
-
             // Generate filename with timestamp
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             const filename = `AIC_Dawa_College_Marks_Backup_${timestamp}.xlsx`;
@@ -1164,6 +1206,100 @@ export class DataService {
             console.log('Marks exported successfully to:', filename);
         } catch (error) {
             console.error('Error exporting marks to Excel:', error);
+            throw error;
+        }
+    }
+
+    // Excel import functionality for students
+    async importStudentsFromExcel(file: File): Promise<{ success: number; errors: string[] }> {
+        const results = { success: 0, errors: [] as string[] };
+        const timestamp = Date.now(); // Base timestamp for ordering
+
+        try {
+            console.log('Starting student import from Excel...');
+
+            // Import XLSX dynamically
+            const XLSX = await loadExcelLibrary();
+
+            // Read file
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+            // Get the first sheet
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+
+            // Convert to JSON
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            if (jsonData.length === 0) {
+                throw new Error('No data found in the Excel file');
+            }
+
+            const studentsToImport: Omit<StudentRecord, 'id'>[] = [];
+
+            // Process each row
+            for (let i = 0; i < jsonData.length; i++) {
+                const row = jsonData[i] as any;
+                const rowNum = i + 2; // Excel row number (header is 1)
+
+                try {
+                    // Normalize keys (handle case sensitivity and spaces)
+                    const normalizedRow: any = {};
+                    Object.keys(row).forEach(key => {
+                        const cleanKey = key.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+                        normalizedRow[cleanKey] = row[key];
+                    });
+
+                    // Map fields based on normalized keys
+                    // Expected keys: adno, name, classname, semester
+                    const adNo = normalizedRow['adno'] || normalizedRow['admissionno'] || normalizedRow['id'];
+                    const name = normalizedRow['name'] || normalizedRow['studentname'] || normalizedRow['fullname'];
+                    const className = normalizedRow['classname'] || normalizedRow['class'] || normalizedRow['grade'];
+                    let semester = normalizedRow['semester'] || normalizedRow['term'];
+
+                    // Validation
+                    if (!adNo || !name || !className) {
+                        results.errors.push(`Row ${rowNum}: Missing required fields (AdNo, Name, or Class)`);
+                        continue;
+                    }
+
+                    // Normalize semester
+                    if (!semester) semester = 'Odd'; // Default
+                    if (semester.toString().toLowerCase().includes('even') || semester.toString() === '2') semester = 'Even';
+                    else semester = 'Odd';
+
+                    const student: Omit<StudentRecord, 'id'> = {
+                        adNo: String(adNo).trim(),
+                        name: String(name).trim(),
+                        className: String(className).trim(),
+                        semester: semester as 'Odd' | 'Even',
+                        marks: {},
+                        grandTotal: 0,
+                        average: 0,
+                        rank: 0,
+                        performanceLevel: 'Needs Improvement',
+                        importRowNumber: timestamp + i
+                    };
+
+                    studentsToImport.push(student);
+
+                } catch (error) {
+                    results.errors.push(`Row ${rowNum}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+            }
+
+            if (studentsToImport.length > 0) {
+                const importResult = await this.bulkImportStudents(studentsToImport);
+                results.success = importResult.success;
+                results.errors = [...results.errors, ...importResult.errors];
+            }
+
+            console.log(`Excel import processing completed. Found ${studentsToImport.length} valid rows.`);
+            return results;
+
+        } catch (error) {
+            console.error('Error importing students from Excel:', error);
             throw error;
         }
     }

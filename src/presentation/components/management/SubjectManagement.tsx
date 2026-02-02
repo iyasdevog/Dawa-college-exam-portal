@@ -268,6 +268,16 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 <label className="block text-sm font-bold mb-1">Subject Name</label>
                                 <input type="text" value={subjectForm.name} onChange={e => setSubjectForm(prev => ({ ...prev, name: e.target.value }))} className="w-full p-3 border rounded-xl" required />
                             </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-1">Faculty Name</label>
+                                <input
+                                    type="text"
+                                    value={subjectForm.facultyName}
+                                    onChange={e => setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }))}
+                                    className="w-full p-3 border rounded-xl"
+                                    placeholder="e.g. Ustadh Ahmed"
+                                />
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold mb-1">Max TA</label>
@@ -473,8 +483,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                                     key={student.id}
                                                     onClick={() => handleToggleStudentSelection(student.id)}
                                                     className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${isSelected
-                                                            ? 'bg-purple-50 border-purple-200'
-                                                            : 'hover:bg-slate-50 border-slate-100'
+                                                        ? 'bg-purple-50 border-purple-200'
+                                                        : 'hover:bg-slate-50 border-slate-100'
                                                         }`}
                                                 >
                                                     <div>
@@ -482,8 +492,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                                         <p className="text-xs text-slate-500">Adm: {student.adNo}</p>
                                                     </div>
                                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${isSelected
-                                                            ? 'bg-purple-600 border-purple-600 text-white'
-                                                            : 'border-slate-300 bg-white'
+                                                        ? 'bg-purple-600 border-purple-600 text-white'
+                                                        : 'border-slate-300 bg-white'
                                                         }`}>
                                                         {isSelected && <i className="fa-solid fa-check text-xs"></i>}
                                                     </div>

@@ -33,6 +33,7 @@ export interface StudentRecord {
   average: number;
   rank: number;
   performanceLevel: PerformanceLevel;
+  importRowNumber?: number; // Track original import order
 }
 
 export interface SubjectConfig {

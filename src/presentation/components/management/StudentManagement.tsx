@@ -259,9 +259,36 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         }
     };
 
+    const [excelFile, setExcelFile] = useState<File | null>(null);
+
     const handleBulkImport = async () => {
+        // Excel Import Path
+        if (excelFile) {
+            try {
+                setIsImporting(true);
+                setImportResults(null);
+
+                const results = await dataService.importStudentsFromExcel(excelFile);
+                setImportResults(results);
+
+                if (results.success > 0) {
+                    await onRefresh();
+                    setExcelFile(null); // Reset file
+                }
+            } catch (error) {
+                setImportResults({
+                    success: 0,
+                    errors: [error instanceof Error ? error.message : 'Unknown error during Excel import']
+                });
+            } finally {
+                setIsImporting(false);
+            }
+            return;
+        }
+
+        // CSV Text Path (Legacy/Fallback)
         if (!csvData.trim()) {
-            alert('Please enter CSV data');
+            alert('Please select an Excel file or enter CSV data');
             return;
         }
         try {
@@ -286,6 +313,23 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         } finally {
             setIsImporting(false);
         }
+    };
+
+    const downloadTemplate = () => {
+        // Simple CSV template for now, could be Excel in future
+        const headers = ['adNo', 'name', 'className', 'semester'];
+        const sample = ['1001', 'John Doe', 'S1', 'Odd'];
+        const csvContent = [headers.join(','), sample.join(',')].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'student_import_template.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     // Filtered students logic
@@ -448,6 +492,98 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                 <button type="submit" className="flex-1 py-3 bg-emerald-600 text-white rounded-xl">Save</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Import Modal */}
+            {showBulkImport && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl w-full max-w-lg p-6">
+                        <h3 className="text-xl font-bold mb-4">Bulk Import Students</h3>
+
+                        <div className="space-y-4">
+                            {/* File Upload Section */}
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <label className="block text-sm font-bold mb-2 text-slate-700">Option 1: Upload Excel File (Recommended)</label>
+                                <div className="flex flex-col gap-2">
+                                    <input
+                                        type="file"
+                                        accept=".xlsx, .xls"
+                                        onChange={(e) => setExcelFile(e.target.files?.[0] || null)}
+                                        className="block w-full text-sm text-slate-500
+                                            file:mr-4 file:py-2 file:px-4
+                                            file:rounded-full file:border-0
+                                            file:text-sm file:font-semibold
+                                            file:bg-blue-50 file:text-blue-700
+                                            hover:file:bg-blue-100"
+                                    />
+                                    <button
+                                        onClick={downloadTemplate}
+                                        className="text-xs text-blue-600 hover:text-blue-800 text-left flex items-center gap-1"
+                                    >
+                                        <i className="fa-solid fa-download"></i> Download Excel Template
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* CSV Text Area Section */}
+                            <div>
+                                <label className="block text-sm font-bold mb-2 text-slate-700">Option 2: Paste CSV Data</label>
+                                <textarea
+                                    value={csvData}
+                                    onChange={e => setCsvData(e.target.value)}
+                                    placeholder="adNo,name,className,semester&#10;1001,John Doe,S1,Odd"
+                                    className="w-full p-3 border rounded-xl h-32 text-sm font-mono"
+                                    disabled={!!excelFile}
+                                />
+                                {excelFile && <p className="text-xs text-amber-600 mt-1">CSV input disabled because an Excel file is selected.</p>}
+                            </div>
+
+                            {importResults && (
+                                <div className={`p-4 rounded-xl text-sm ${importResults.success > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                                    {importResults.success > 0 ? (
+                                        <p>✅ Successfully imported {importResults.success} students!</p>
+                                    ) : (
+                                        <div>
+                                            <p className="font-bold">Import Failed:</p>
+                                            <ul className="list-disc list-inside mt-1 max-h-32 overflow-y-auto">
+                                                {importResults.errors.map((err, i) => <li key={i}>{err}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    onClick={() => {
+                                        setShowBulkImport(false);
+                                        setImportResults(null);
+                                        setCsvData('');
+                                        setExcelFile(null);
+                                    }}
+                                    className="flex-1 py-3 bg-slate-100 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleBulkImport}
+                                    disabled={isImporting || (!csvData.trim() && !excelFile)}
+                                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isImporting ? (
+                                        <>
+                                            <i className="fa-solid fa-spinner fa-spin"></i> Importing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fa-solid fa-file-import"></i> Import Students
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
