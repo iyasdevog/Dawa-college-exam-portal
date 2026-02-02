@@ -3,10 +3,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ApplicationErrorBoundary, FeatureErrorBoundary } from './components/ErrorBoundary';
 import { MobileProvider } from './viewmodels/MobileContext';
 import { ViewType } from '../domain/entities/types';
-import { serviceWorkerService } from '../infrastructure/services/serviceWorkerService';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
-import { browserCompatibility } from '../infrastructure/services/BrowserCompatibilityService';
-import { progressiveEnhancement } from '../infrastructure/services/ProgressiveEnhancementService';
 
 // Lazy load components for code splitting
 const Layout = lazy(() => import('./components/Layout'));
@@ -16,7 +13,6 @@ const ClassResults = lazy(() => import('./components/ClassResults'));
 const StudentScorecard = lazy(() => import('./components/StudentScorecard'));
 const Management = lazy(() => import('./components/Management'));
 const PublicPortal = lazy(() => import('./components/PublicPortal'));
-const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 
 // Loading fallback components
 const ComponentLoadingFallback: React.FC<{ componentName: string }> = ({ componentName }) => (
@@ -44,8 +40,6 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewType>('dashboard');
   const [isLoading, setIsLoading] = useState(true);
   const [isCloudActive, setIsCloudActive] = useState(true);
-  const [showPWAPrompt, setShowPWAPrompt] = useState(false);
-  const [swUpdateAvailable, setSwUpdateAvailable] = useState(false);
 
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -61,62 +55,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       try {
-        // Initialize browser compatibility first
-        console.log('App: Initializing browser compatibility...');
-        const features = browserCompatibility.getFeatures();
-        console.log('App: Browser features detected:', features);
-
-        // Initialize progressive enhancement
-        console.log('App: Setting up progressive enhancement...');
+        console.log('App: Initializing...');
 
         // Simple connectivity check
         setIsCloudActive(navigator.onLine);
-
-        // Register service worker with enhanced PWA features
-        /* TEMPORARILY DISABLED TO FIX CRASH LOOP
-        if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'development') {
-          try {
-            const swStatus = await serviceWorkerService.register();
-            console.log('Service Worker registration status:', swStatus);
-
-            // Setup service worker event listeners
-            serviceWorkerService.on('updateAvailable', () => {
-              console.log('App: Service worker update available');
-              setSwUpdateAvailable(true);
-            });
-
-            serviceWorkerService.on('installPromptAvailable', () => {
-              console.log('App: PWA install prompt available');
-              setShowPWAPrompt(true);
-            });
-
-            serviceWorkerService.on('appInstalled', () => {
-              console.log('App: PWA installed successfully');
-              setShowPWAPrompt(false);
-            });
-
-            serviceWorkerService.on('syncComplete', (data) => {
-              console.log('App: Background sync completed:', data);
-              // Could show a toast notification here
-            });
-
-            serviceWorkerService.on('performanceMetrics', (metrics) => {
-              console.log('App: Performance metrics:', metrics);
-              // Could update performance dashboard
-            });
-
-            // Check if PWA install prompt should be shown
-            const pwaStatus = serviceWorkerService.getPWAInstallStatus();
-            if (pwaStatus.canInstall && !pwaStatus.isInstalled) {
-              // Delay showing prompt to avoid interrupting initial load
-              setTimeout(() => setShowPWAPrompt(true), 5000);
-            }
-
-          } catch (error) {
-            console.error('Service Worker registration failed:', error);
-          }
-        }
-        */
 
         // Setup online/offline listeners
         const handleOnline = () => {
@@ -150,32 +92,7 @@ const App: React.FC = () => {
   }, []);
 
   // PWA event handlers
-  const handlePWAInstall = async () => {
-    try {
-      const success = await serviceWorkerService.triggerInstallPrompt();
-      if (success) {
-        console.log('App: PWA installation initiated');
-        setShowPWAPrompt(false);
-      }
-    } catch (error) {
-      console.error('App: PWA installation failed:', error);
-    }
-  };
-
-  const handlePWADismiss = () => {
-    setShowPWAPrompt(false);
-    console.log('App: PWA install prompt dismissed');
-  };
-
-  const handleSWUpdate = async () => {
-    try {
-      await serviceWorkerService.skipWaiting();
-      setSwUpdateAvailable(false);
-      // Page will reload automatically
-    } catch (error) {
-      console.error('App: Service worker update failed:', error);
-    }
-  };
+  // PWA event handlers removed
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,35 +185,6 @@ const App: React.FC = () => {
             </Suspense>
           </FeatureErrorBoundary>
 
-          {/* PWA Install Prompt */}
-          {showPWAPrompt && (
-            <Suspense fallback={null}>
-              <PWAInstallPrompt
-                onInstall={handlePWAInstall}
-                onDismiss={handlePWADismiss}
-              />
-            </Suspense>
-          )}
-
-          {/* Service Worker Update Notification */}
-          {swUpdateAvailable && (
-            <div className="fixed top-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm">
-              <div className="bg-blue-600 text-white rounded-xl p-4 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-semibold">Update Available</h4>
-                    <p className="text-sm opacity-90">A new version is ready to install</p>
-                  </div>
-                  <button
-                    onClick={handleSWUpdate}
-                    className="bg-white text-blue-600 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors"
-                  >
-                    Update
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </MobileProvider>
       </ApplicationErrorBoundary>
     );
@@ -324,15 +212,6 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* PWA Install Prompt */}
-          {showPWAPrompt && (
-            <Suspense fallback={null}>
-              <PWAInstallPrompt
-                onInstall={handlePWAInstall}
-                onDismiss={handlePWADismiss}
-              />
-            </Suspense>
-          )}
         </MobileProvider>
       </ApplicationErrorBoundary>
     );
@@ -350,34 +229,6 @@ const App: React.FC = () => {
         </FeatureErrorBoundary>
 
         {/* PWA Install Prompt */}
-        {showPWAPrompt && (
-          <Suspense fallback={null}>
-            <PWAInstallPrompt
-              onInstall={handlePWAInstall}
-              onDismiss={handlePWADismiss}
-            />
-          </Suspense>
-        )}
-
-        {/* Service Worker Update Notification */}
-        {swUpdateAvailable && (
-          <div className="fixed top-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm">
-            <div className="bg-blue-600 text-white rounded-xl p-4 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-semibold">Update Available</h4>
-                  <p className="text-sm opacity-90">A new version is ready to install</p>
-                </div>
-                <button
-                  onClick={handleSWUpdate}
-                  className="bg-white text-blue-600 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors"
-                >
-                  Update
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </MobileProvider>
     </ApplicationErrorBoundary>
   );
