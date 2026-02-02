@@ -73,6 +73,7 @@ const App: React.FC = () => {
         setIsCloudActive(navigator.onLine);
 
         // Register service worker with enhanced PWA features
+        /* TEMPORARILY DISABLED TO FIX CRASH LOOP
         if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'development') {
           try {
             const swStatus = await serviceWorkerService.register();
@@ -115,6 +116,7 @@ const App: React.FC = () => {
             console.error('Service Worker registration failed:', error);
           }
         }
+        */
 
         // Setup online/offline listeners
         const handleOnline = () => {
