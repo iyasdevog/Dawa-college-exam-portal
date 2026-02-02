@@ -73,18 +73,67 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         setShowSubjectForm(true);
     };
 
+    // State for tabs
+    const [activeTab, setActiveTab] = useState<'subjects' | 'faculty'>('subjects');
+
+    const toSentenceCase = (str: string) => {
+        if (!str) return '';
+        return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    };
+
     const handleSaveSubject = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const normalizedName = toSentenceCase(subjectForm.name.trim());
+
+            // Validation: Check for existing subjects for selected classes
+            const conflictingClasses: string[] = [];
+
+            subjects.forEach(s => {
+                if (editingSubject && s.id === editingSubject.id) return; // Skip itself
+
+                // Compare names
+                if (s.name.trim().toLowerCase() === normalizedName.toLowerCase()) {
+                    // Check intersection of classes
+                    const existingClasses = s.targetClasses || [];
+                    const newClasses = subjectForm.targetClasses || [];
+
+                    newClasses.forEach(c => {
+                        if (existingClasses.includes(c)) {
+                            conflictingClasses.push(c);
+                        }
+                    });
+                }
+            });
+
+            // Filter out conflicting classes to prevent duplicates
+            const uniqueTargetClasses = subjectForm.targetClasses.filter(c => !conflictingClasses.includes(c));
+
+            if (uniqueTargetClasses.length === 0) {
+                // If all selected classes already have this subject
+                if (conflictingClasses.length > 0) {
+                    alert(`Subject "${normalizedName}" already exists for: ${conflictingClasses.join(', ')}.\n\nNo changes saved.`);
+                } else {
+                    alert('Please select at least one class.');
+                }
+                return;
+            }
+
+            // If some classes were duplicates, warn but proceed with unique ones
+            if (conflictingClasses.length > 0) {
+                const proceed = confirm(`Subject "${normalizedName}" already exists for: ${conflictingClasses.join(', ')}.\n\nIt will only be created/updated for: ${uniqueTargetClasses.join(', ')}.\n\nProceed?`);
+                if (!proceed) return;
+            }
+
             setIsOperating(true);
             const subjectData = {
-                name: subjectForm.name.trim(),
+                name: normalizedName,
                 arabicName: subjectForm.arabicName.trim(),
                 maxTA: subjectForm.maxTA,
                 maxCE: subjectForm.maxCE,
                 passingTotal: subjectForm.passingTotal,
                 facultyName: subjectForm.facultyName.trim(),
-                targetClasses: subjectForm.targetClasses,
+                targetClasses: uniqueTargetClasses, // Use filtered classes
                 subjectType: subjectForm.subjectType,
                 enrolledStudents: subjectForm.enrolledStudents
             };
@@ -105,14 +154,37 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         }
     };
 
-    const handleDeleteSubject = async (subject: SubjectConfig) => {
-        if (!confirm(`Delete subject ${subject.name}?`)) return;
+    // Updated to handle deletion of specific class or bulk deletion of grouped subjects
+    const handleDeleteSubject = async (subject: SubjectConfig & { relatedIds?: string[] }, specificClass?: string) => {
+        const confirmMsg = specificClass
+            ? `Remove ${subject.name} from class ${specificClass}?`
+            : `Delete subject ${subject.name} entirely?`;
+
+        if (!confirm(confirmMsg)) return;
+
         try {
             setIsOperating(true);
-            await dataService.deleteSubject(subject.id);
+
+            if (specificClass && subject.targetClasses && subject.targetClasses.length > 1 && !subject.relatedIds) {
+                // Remove only this class from the subject (Old General Subject logic)
+                const updatedClasses = subject.targetClasses.filter(c => c !== specificClass);
+                await dataService.updateSubject(subject.id, {
+                    ...subject,
+                    targetClasses: updatedClasses
+                });
+            } else if (subject.relatedIds && subject.relatedIds.length > 0) {
+                // Bulk delete for grouped electives
+                for (const id of subject.relatedIds) {
+                    await dataService.deleteSubject(id);
+                }
+            } else {
+                // Delete the whole subject if it's the last class or no class specified
+                await dataService.deleteSubject(subject.id);
+            }
+
             await onRefresh();
-            alert('Subject deleted.');
         } catch (error) {
+            console.error(error);
             alert('Error deleting subject.');
         } finally {
             setIsOperating(false);
@@ -202,6 +274,133 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         });
     };
 
+    // Group subjects by faculty for the overview tab
+    const subjectsByFaculty = React.useMemo(() => {
+        const grouped: Record<string, (SubjectConfig & { specificClass: string | string[] })[]> = {};
+
+        // Helper to find existing group for electives
+        const findExistingElective = (facultyList: any[], name: string) => {
+            return facultyList.find(s => s.subjectType === 'elective' && s.name.toLowerCase() === name.toLowerCase());
+        };
+
+        const normalizedSubjects = subjects.map(s => ({
+            ...s,
+            facultyName: s.facultyName || 'Unassigned'
+        }));
+
+        normalizedSubjects.forEach(subject => {
+            const faculty = subject.facultyName;
+            if (!grouped[faculty]) {
+                grouped[faculty] = [];
+            }
+
+            if (subject.subjectType === 'elective') {
+                // Group separate elective records
+                const existing = findExistingElective(grouped[faculty], subject.name);
+                if (existing) {
+                    // Append classes
+                    const currentClasses = Array.isArray(existing.specificClass) ? existing.specificClass : [existing.specificClass];
+                    const newClasses = subject.targetClasses || [];
+                    const merged = Array.from(new Set([...currentClasses, ...newClasses])).sort();
+                    existing.specificClass = merged;
+                } else {
+                    grouped[faculty].push({
+                        ...subject,
+                        specificClass: subject.targetClasses || []
+                    });
+                }
+            } else {
+                // Split general subjects by class
+                if (subject.targetClasses && subject.targetClasses.length > 0) {
+                    subject.targetClasses.forEach(cls => {
+                        grouped[faculty].push({
+                            ...subject,
+                            specificClass: cls
+                        });
+                    });
+                } else {
+                    grouped[faculty].push({
+                        ...subject,
+                        specificClass: 'No Class'
+                    });
+                }
+            }
+        });
+
+        // Sort faculties alphabetically
+        return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [subjects]);
+
+    // Flatten subjects for the list tab
+    const [subjectFacultyFilter, setSubjectFacultyFilter] = useState<string>('All');
+
+    // Get unique faculties for filter
+    const uniqueFaculties = React.useMemo(() => {
+        const faculties = new Set(subjects.map(s => s.facultyName || 'Unassigned'));
+        return Array.from(faculties).sort();
+    }, [subjects]);
+
+    const flattenedSubjectList = React.useMemo(() => {
+        const electiveGroups: Record<string, SubjectConfig & { specificClass: string[], relatedIds: string[] }> = {};
+        const flattened: (SubjectConfig & { specificClass: string | string[], relatedIds?: string[] })[] = [];
+
+        subjects.forEach(subject => {
+            if (subject.subjectType === 'elective') {
+                const key = `${subject.name.trim().toLowerCase()}-${(subject.facultyName || '').trim().toLowerCase()}`;
+
+                if (electiveGroups[key]) {
+                    const existing = electiveGroups[key];
+                    if (subject.targetClasses) {
+                        subject.targetClasses.forEach(c => {
+                            if (!existing.specificClass.includes(c)) {
+                                existing.specificClass.push(c);
+                            }
+                        });
+                    }
+                    existing.relatedIds.push(subject.id);
+                    if (subject.enrolledStudents) {
+                        const currentEnrolled = existing.enrolledStudents || [];
+                        existing.enrolledStudents = Array.from(new Set([...currentEnrolled, ...subject.enrolledStudents]));
+                    }
+                } else {
+                    electiveGroups[key] = {
+                        ...subject,
+                        specificClass: [...(subject.targetClasses || [])],
+                        relatedIds: [subject.id]
+                    };
+                }
+            } else {
+                if (subject.targetClasses && subject.targetClasses.length > 0) {
+                    subject.targetClasses.forEach(cls => {
+                        flattened.push({ ...subject, specificClass: cls });
+                    });
+                } else {
+                    flattened.push({ ...subject, specificClass: '-' });
+                }
+            }
+        });
+
+        Object.values(electiveGroups).forEach(group => {
+            flattened.push({
+                ...group,
+                specificClass: group.specificClass.length > 0 ? group.specificClass.sort() : ['-']
+            });
+        });
+
+        const filtered = subjectFacultyFilter === 'All'
+            ? flattened
+            : flattened.filter(s => (s.facultyName || 'Unassigned') === subjectFacultyFilter);
+
+        return filtered.sort((a, b) => {
+            const nameCompare = a.name.localeCompare(b.name);
+            if (nameCompare !== 0) return nameCompare;
+
+            const classA = Array.isArray(a.specificClass) ? a.specificClass.join(',') : a.specificClass;
+            const classB = Array.isArray(b.specificClass) ? b.specificClass.join(',') : b.specificClass;
+            return classA.localeCompare(classB);
+        });
+    }, [subjects, subjectFacultyFilter]);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -216,47 +415,145 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                 </button>
             </div>
 
-            <div className="overflow-x-auto">
-                {subjects.length > 0 ? (
-                    <table className="w-full">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="text-left p-4 font-bold text-slate-700">Name</th>
-                                <th className="text-left p-4 font-bold text-slate-700">Faculty</th>
-                                <th className="text-center p-4 font-bold text-slate-700">Type</th>
-                                <th className="text-center p-4 font-bold text-slate-700">Max TA/CE</th>
-                                <th className="text-center p-4 font-bold text-slate-700">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {subjects.map((subject, index) => (
-                                <tr key={subject.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                    <td className="p-4 font-medium">{subject.name}</td>
-                                    <td className="p-4">{subject.facultyName}</td>
-                                    <td className="p-4 text-center">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                                            {(subject.subjectType || 'general').toUpperCase()}
-                                        </span>
-                                        {subject.subjectType === 'elective' && (
-                                            <div className="text-xs text-slate-500 mt-1">{(subject.enrolledStudents || []).length} enrolled</div>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-center">{subject.maxTA} / {subject.maxCE}</td>
-                                    <td className="p-4 text-center flex justify-center gap-2">
-                                        {subject.subjectType === 'elective' && (
-                                            <button onClick={() => handleManageEnrollment(subject)} className="text-purple-600 mr-2"><i className="fa-solid fa-users"></i></button>
-                                        )}
-                                        <button onClick={() => handleEditSubject(subject)} className="text-blue-600 mr-2"><i className="fa-solid fa-edit"></i></button>
-                                        <button onClick={() => handleDeleteSubject(subject)} className="text-red-600"><i className="fa-solid fa-trash"></i></button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                ) : (
-                    <div className="text-center p-8 text-slate-500">No subjects found. Add a subject to get started.</div>
-                )}
+            {/* Tabs */}
+            <div className="flex gap-4 border-b border-slate-200">
+                <button
+                    onClick={() => setActiveTab('subjects')}
+                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeTab === 'subjects' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    Subject List
+                </button>
+                <button
+                    onClick={() => setActiveTab('faculty')}
+                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeTab === 'faculty' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    Faculty Overview
+                </button>
             </div>
+
+            {activeTab === 'subjects' ? (
+                <div className="space-y-4">
+                    <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2">
+                            <i className="fa-solid fa-filter text-slate-400"></i>
+                            <label className="font-bold text-sm text-slate-700">Filter by Faculty:</label>
+                        </div>
+                        <select
+                            value={subjectFacultyFilter}
+                            onChange={(e) => setSubjectFacultyFilter(e.target.value)}
+                            className="p-2 pl-3 pr-8 border rounded-lg bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                            <option value="All">All Faculties</option>
+                            {uniqueFaculties.map(f => (
+                                <option key={f} value={f}>{f}</option>
+                            ))}
+                        </select>
+                        <span className="text-xs text-slate-400 ml-auto font-medium">
+                            {flattenedSubjectList.length} assignments found
+                        </span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                        {flattenedSubjectList.length > 0 ? (
+                            <table className="w-full">
+                                <thead className="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th className="text-left p-4 font-bold text-slate-700">Name</th>
+                                        <th className="text-left p-4 font-bold text-slate-700">Faculty</th>
+                                        <th className="text-center p-4 font-bold text-slate-700">Type</th>
+                                        <th className="text-center p-4 font-bold text-slate-700">Max TA/CE</th>
+                                        <th className="text-center p-4 font-bold text-slate-700">Class</th>
+                                        <th className="text-center p-4 font-bold text-slate-700">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {flattenedSubjectList.map((subject, index) => (
+                                        <tr key={`${subject.id}-${Array.isArray(subject.specificClass) ? 'all' : subject.specificClass}-${index}`} className="bg-white hover:bg-slate-50 transition-colors">
+                                            <td className="p-4 font-bold text-slate-800">{subject.name}</td>
+                                            <td className="p-4 text-slate-600">{subject.facultyName || '-'}</td>
+                                            <td className="p-4 text-center">
+                                                <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
+                                                    {subject.subjectType || 'general'}
+                                                </span>
+                                                {subject.subjectType === 'elective' && (
+                                                    <div className="text-[10px] text-slate-400 mt-1 font-medium">{(subject.enrolledStudents || []).length} enrolled</div>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxTA} / {subject.maxCE}</td>
+                                            <td className="p-4 text-center">
+                                                {Array.isArray(subject.specificClass) ? (
+                                                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">
+                                                        {subject.specificClass.join(', ')}
+                                                    </span>
+                                                ) : (
+                                                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">{subject.specificClass}</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-center flex justify-center gap-2">
+                                                {subject.subjectType === 'elective' && (
+                                                    <button onClick={() => handleManageEnrollment(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users"></i></button>
+                                                )}
+                                                <button onClick={() => handleEditSubject(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit"><i className="fa-solid fa-pen"></i></button>
+                                                {!Array.isArray(subject.specificClass) ? (
+                                                    <button onClick={() => handleDeleteSubject(subject, subject.specificClass as string)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Remove from this class"><i className="fa-solid fa-trash"></i></button>
+                                                ) : (
+                                                    <button onClick={() => handleDeleteSubject(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Delete Subject"><i className="fa-solid fa-trash"></i></button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div className="text-center p-12 text-slate-400">
+                                <i className="fa-solid fa-folder-open text-4xl mb-3 opacity-20"></i>
+                                <p>No subjects found.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {subjectsByFaculty.map(([faculty, facultySubjects]) => (
+                        <div key={faculty} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+                                <h3 className="font-bold text-slate-900">{faculty}</h3>
+                                <span className="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded-full font-bold">{facultySubjects.length} Subject{facultySubjects.length !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="p-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {facultySubjects.map((subject, idx) => (
+                                        <div key={`${subject.id}-${subject.specificClass}-${idx}`} className="border rounded-lg p-3 hover:bg-slate-50 transition-colors">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h4 className="font-bold text-emerald-800">{subject.name}</h4>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${subject.subjectType === 'elective' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {subject.subjectType || 'General'}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                {Array.isArray(subject.specificClass) ? (
+                                                    <span className="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold shadow-sm">
+                                                        {subject.specificClass.join(', ')}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold shadow-sm">{subject.specificClass}</span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-slate-400">
+                                                Max TA: {subject.maxTA} | Max CE: {subject.maxCE}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {subjectsByFaculty.length === 0 && (
+                        <div className="text-center p-8 text-slate-500">No faculty assignments found.</div>
+                    )}
+                </div>
+            )}
+
 
             {/* Subject Form Modal */}
             {showSubjectForm && (
@@ -362,6 +659,15 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                         }
                                     })}
                                 </div>
+                                {subjectForm.targetClasses.length > 1 && (
+                                    <div className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-start gap-2">
+                                        <i className="fa-solid fa-lightbulb mt-0.5"></i>
+                                        <p>
+                                            <strong>Note:</strong> Selecting multiple classes means this exact subject (with same grading) applies to all.
+                                            If the grading differs, please create separate subjects for each class.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex gap-3 pt-4">
                                 <button type="button" onClick={() => setShowSubjectForm(false)} className="flex-1 py-3 bg-slate-100 rounded-xl">Cancel</button>
