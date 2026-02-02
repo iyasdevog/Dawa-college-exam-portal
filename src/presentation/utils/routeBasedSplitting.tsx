@@ -116,9 +116,9 @@ export const preloadRoutes = {
      */
     admin: () => {
         // Preload admin components
-        import('../../components/Dashboard.tsx').catch(() => { });
-        import('../../components/FacultyEntry.tsx').catch(() => { });
-        import('../../components/Management.tsx').catch(() => { });
+        import('../../components/Dashboard').catch(() => { });
+        import('../../components/FacultyEntry').catch(() => { });
+        import('../../components/Management').catch(() => { });
     },
 
     /**
@@ -126,9 +126,9 @@ export const preloadRoutes = {
      */
     public: () => {
         // Preload public components
-        import('../../components/PublicPortal.tsx').catch(() => { });
-        import('../../components/ClassResults.tsx').catch(() => { });
-        import('../../components/StudentScorecard.tsx').catch(() => { });
+        import('../../components/PublicPortal').catch(() => { });
+        import('../../components/ClassResults').catch(() => { });
+        import('../../components/StudentScorecard').catch(() => { });
     },
 
     /**
@@ -136,8 +136,8 @@ export const preloadRoutes = {
      */
     reports: () => {
         // Preload reporting components
-        import('../../components/ClassResults.tsx').catch(() => { });
-        import('../../components/StudentScorecard.tsx').catch(() => { });
+        import('../../components/ClassResults').catch(() => { });
+        import('../../components/StudentScorecard').catch(() => { });
     }
 };
 
@@ -147,42 +147,42 @@ export const preloadRoutes = {
  */
 export const routeConfig = {
     dashboard: {
-        component: () => import('../../components/Dashboard.tsx'),
+        component: () => import('../../components/Dashboard'),
         preload: () => {
             // Preload dashboard when user is authenticated
             return localStorage.getItem('isAuthenticated') === 'true';
         }
     },
     facultyEntry: {
-        component: () => import('../../components/FacultyEntry.tsx'),
+        component: () => import('../../components/FacultyEntry'),
         preload: () => {
             // Preload when user has admin privileges
             return localStorage.getItem('userRole') === 'admin';
         }
     },
     management: {
-        component: () => import('../../components/Management.tsx'),
+        component: () => import('../../components/Management'),
         preload: () => {
             // Preload when user has admin privileges
             return localStorage.getItem('userRole') === 'admin';
         }
     },
     publicPortal: {
-        component: () => import('../../components/PublicPortal.tsx'),
+        component: () => import('../../components/PublicPortal'),
         preload: () => {
             // Always preload public portal as it's the entry point
             return true;
         }
     },
     classResults: {
-        component: () => import('../../components/ClassResults.tsx'),
+        component: () => import('../../components/ClassResults'),
         preload: () => {
             // Preload when user is viewing results
             return window.location.hash.includes('results');
         }
     },
     studentScorecard: {
-        component: () => import('../../components/StudentScorecard.tsx'),
+        component: () => import('../../components/StudentScorecard'),
         preload: () => {
             // Preload when user is viewing student details
             return window.location.hash.includes('student');
