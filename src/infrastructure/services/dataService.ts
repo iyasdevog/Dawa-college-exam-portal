@@ -1003,6 +1003,70 @@ export class DataService {
         }
     }
 
+    /**
+     * Recalculates all mark statuses for all students.
+     * Use this when status calculation logic changes or after imports.
+     */
+    async recalculateAllMarkStatuses(): Promise<{ updated: number; errors: string[] }> {
+        const results = { updated: 0, errors: [] as string[] };
+        try {
+            console.log('Recalculating all mark statuses...');
+            const [students, subjects] = await Promise.all([
+                this.getAllStudents(),
+                this.getAllSubjects()
+            ]);
+
+            const subjectMap = new Map(subjects.map(s => [s.id, s]));
+
+            for (const student of students) {
+                let studentUpdated = false;
+                const updatedMarks = { ...student.marks };
+
+                for (const subjectId in updatedMarks) {
+                    const subject = subjectMap.get(subjectId);
+                    if (!subject) continue;
+
+                    const marks = updatedMarks[subjectId] as any;
+                    const ta = marks.ta || 0;
+                    const ce = marks.ce || 0;
+
+                    const minTA = Math.ceil(subject.maxTA * 0.4);
+                    const minCE = Math.ceil(subject.maxCE * 0.5);
+                    const passedTA = ta >= minTA;
+                    const passedCE = ce >= minCE;
+
+                    const isFullTA = subject.maxTA === 100;
+                    const taReady = subject.maxTA > 0 ? ta > 0 : true;
+                    // For full TA subjects, CE is always considered ready
+                    const ceReady = isFullTA || subject.maxCE === 0 || (subject.maxCE > 0 && ce > 0);
+
+                    let newStatus: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+                    if (taReady && ceReady) {
+                        const finalPassedCE = isFullTA || passedCE || subject.maxCE === 0;
+                        newStatus = (passedTA && finalPassedCE) ? 'Passed' : 'Failed';
+                    }
+
+                    if (marks.status !== newStatus) {
+                        updatedMarks[subjectId] = { ...marks, status: newStatus };
+                        studentUpdated = true;
+                    }
+                }
+
+                if (studentUpdated) {
+                    await updateDoc(doc(this.db, this.studentsCollection, student.id), { marks: updatedMarks });
+                    results.updated++;
+                }
+            }
+
+            console.log(`Status recalculation complete. Updated ${results.updated} students.`);
+            this.invalidateCache();
+            return results;
+        } catch (error) {
+            console.error('Error recalculating statuses:', error);
+            throw error;
+        }
+    }
+
     async updateStudentMarks(studentId: string, subjectId: string, ta: number, ce: number): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
@@ -1021,11 +1085,14 @@ export class DataService {
             const subject = subjectDoc.data() as SubjectConfig;
             const total = ta + ce;
 
-            // Calculate passing requirements: 40% of TA AND 50% of CE
+            // Calculate passing requirements
+            // If Max TA is 100, we ignore CE requirements (usually CE is 0 anyway)
+            const isFullTA = subject.maxTA === 100;
             const minTA = Math.ceil(subject.maxTA * 0.4);
-            const minCE = Math.ceil(subject.maxCE * 0.5);
+            const minCE = isFullTA ? 0 : Math.ceil(subject.maxCE * 0.5);
+
             const passedTA = ta >= minTA;
-            const passedCE = ce >= minCE;
+            const passedCE = isFullTA || ce >= minCE || subject.maxCE === 0;
             const status = (passedTA && passedCE) ? 'Passed' : 'Failed';
 
             // Update marks
@@ -1087,7 +1154,7 @@ export class DataService {
             const ce = existingMarks.ce || 0;
             const total = ta + ce;
 
-            // Calculate passing requirements: 40% of TA AND 50% of CE
+            // Calculate passing requirements
             const minTA = Math.ceil(subject.maxTA * 0.4);
             const minCE = Math.ceil(subject.maxCE * 0.5);
             const passedTA = ta >= minTA;
@@ -1095,11 +1162,15 @@ export class DataService {
 
             // Status transitions from 'Pending' if all required components are entered
             let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+            const isFullTA = subject.maxTA === 100;
             const taReady = subject.maxTA > 0 ? ta > 0 : true;
-            const ceReady = subject.maxCE > 0 ? ce > 0 : true;
+            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are > 0
+            const ceReady = isFullTA || subject.maxCE === 0 || ce > 0;
 
             if (taReady && ceReady) {
-                status = (passedTA && passedCE) ? 'Passed' : 'Failed';
+                // If neglecting CE, only TA needs to pass
+                const finalPassedCE = isFullTA || passedCE || subject.maxCE === 0;
+                status = (passedTA && finalPassedCE) ? 'Passed' : 'Failed';
             }
 
             // Update marks
@@ -1161,7 +1232,7 @@ export class DataService {
             const ta = existingMarks.ta || 0;
             const total = ta + ce;
 
-            // Calculate passing requirements: 40% of TA AND 50% of CE
+            // Calculate passing requirements
             const minTA = Math.ceil(subject.maxTA * 0.4);
             const minCE = Math.ceil(subject.maxCE * 0.5);
             const passedTA = ta >= minTA;
@@ -1169,11 +1240,15 @@ export class DataService {
 
             // Status transitions from 'Pending' if all required components are entered
             let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+            const isFullTA = subject.maxTA === 100;
             const taReady = subject.maxTA > 0 ? ta > 0 : true;
-            const ceReady = subject.maxCE > 0 ? ce > 0 : true;
+            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are > 0
+            const ceReady = isFullTA || subject.maxCE === 0 || ce > 0;
 
             if (taReady && ceReady) {
-                status = (passedTA && passedCE) ? 'Passed' : 'Failed';
+                // If neglecting CE, only TA needs to pass
+                const finalPassedCE = isFullTA || passedCE || subject.maxCE === 0;
+                status = (passedTA && finalPassedCE) ? 'Passed' : 'Failed';
             }
 
             // Update marks
@@ -1600,9 +1675,13 @@ export class DataService {
                             }
 
                             // Calculate status
+                            const isFullTA = subject.maxTA === 100;
                             const minTA = Math.ceil(subject.maxTA * 0.4);
-                            const minCE = Math.ceil(subject.maxCE * 0.5);
-                            const status = (ta >= minTA && ce >= minCE) ? 'Passed' : 'Failed';
+                            const minCE = isFullTA ? 0 : Math.ceil(subject.maxCE * 0.5);
+
+                            const passedTA = ta >= minTA;
+                            const passedCE = isFullTA || ce >= minCE || subject.maxCE === 0;
+                            const status = (passedTA && passedCE) ? 'Passed' : 'Failed';
 
                             updatedMarks[subject.id] = {
                                 ta,

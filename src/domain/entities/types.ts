@@ -13,7 +13,7 @@ export interface SubjectMarks {
   ta: number;
   ce: number;
   total: number;
-  status: 'Passed' | 'Failed';
+  status: 'Passed' | 'Failed' | 'Pending';
   isSupplementary?: boolean; // Indicates if this is a supplementary exam
   supplementaryYear?: number; // Year of the supplementary exam
 }

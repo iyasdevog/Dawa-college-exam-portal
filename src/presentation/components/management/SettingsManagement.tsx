@@ -213,6 +213,34 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                                 {isOperating ? 'Deduplicating...' : 'Deduplicate Faculty Names'}
                             </button>
                         </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <p className="text-sm text-slate-600 mb-2">
+                                <strong>Fix Mark Statuses:</strong> Recalculate Passed/Failed/Pending status for all subjects (e.g., fixing 'Pending' status for subjects with 100 max TA).
+                            </p>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will recalculate all student mark statuses (Passed/Failed/Pending) based on the latest rules.\n\nThis fixes "PENDING" status for subjects that should be Passed/Failed.\n\nContinue?')) return;
+
+                                    try {
+                                        setIsOperating(true);
+                                        const results = await dataService.recalculateAllMarkStatuses();
+                                        await onRefresh();
+                                        alert(`✅ Statuses updated for ${results.updated} students.`);
+                                    } catch (error) {
+                                        console.error('Error recalculating statuses:', error);
+                                        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-check-double"></i>
+                                {isOperating ? 'Updating...' : 'Fix Mark Statuses'}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
