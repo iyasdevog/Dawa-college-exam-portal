@@ -140,7 +140,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             <div
                 className={`
           fixed inset-0 bg-black/50 backdrop-blur-sm z-40
-          transition-all duration-300 ease-in-out
+          transition-all duration-300 ease-in-out print:hidden
           ${isMobileMenuOpen
                         ? 'opacity-100 visible'
                         : 'opacity-0 invisible'
@@ -158,7 +158,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw]
           bg-slate-900 text-white z-50
           transform transition-transform duration-300 ease-in-out
-          overflow-y-auto
+          overflow-y-auto print:hidden
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
                 aria-label="Mobile navigation"

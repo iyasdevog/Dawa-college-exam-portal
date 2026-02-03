@@ -200,8 +200,8 @@ export const useTouchInteraction = () => {
             onTouchStart: handleTouchStart,
             onTouchEnd: handleTouchEnd,
         },
-        getTouchProps: (onClick?: () => void) => ({
-            onClick,
+        getTouchProps: (onClick?: (e: any) => void) => ({
+            ...(onClick ? { onClick } : {}),
             onTouchStart: handleTouchStart,
             onTouchEnd: handleTouchEnd,
             style: {

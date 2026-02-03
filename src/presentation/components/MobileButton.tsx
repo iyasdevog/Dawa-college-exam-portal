@@ -170,7 +170,7 @@ export const MobileButton = forwardRef<HTMLButtonElement, MobileButtonProps>(({
             }}
             disabled={disabled || loading}
             onClick={handleClick}
-            {...getTouchProps()}
+            {...getTouchProps(handleClick)}
             {...props}
             aria-label={props['aria-label'] || (typeof children === 'string' ? children : undefined)}
             role="button"

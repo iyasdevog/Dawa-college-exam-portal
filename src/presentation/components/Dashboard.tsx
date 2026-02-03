@@ -1618,7 +1618,7 @@ This report contains confidential academic information.
                             className={`px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 active:bg-emerald-800 transition-all flex items-center gap-2 mx-auto print:hidden ${isMobile ? 'w-full max-w-sm' : ''
                                 }`}
                             style={isMobile ? getTouchTargetStyle('comfortable') : {}}
-                            {...(isMobile ? getTouchProps() : {})}
+                            {...(isMobile ? getTouchProps(handleNavigateToManagement) : {})}
                         >
                             <i className="fa-solid fa-plus"></i>
                             Add Students
@@ -1643,7 +1643,7 @@ This report contains confidential academic information.
                             onClick={handleNavigateToManagement}
                             className="w-full p-6 bg-emerald-50 border-2 border-emerald-200 rounded-xl hover:bg-emerald-100 active:bg-emerald-200 transition-all text-left touch-target-comfortable"
                             style={getTouchTargetStyle('comfortable')}
-                            {...getTouchProps()}
+                            {...getTouchProps(handleNavigateToManagement)}
                         >
                             <div className="flex items-center gap-4 mb-3">
                                 <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
@@ -1671,7 +1671,7 @@ This report contains confidential academic information.
                             onClick={handleNavigateToManagement}
                             className="w-full p-6 bg-blue-50 border-2 border-blue-200 rounded-xl hover:bg-blue-100 active:bg-blue-200 transition-all text-left touch-target-comfortable"
                             style={getTouchTargetStyle('comfortable')}
-                            {...getTouchProps()}
+                            {...getTouchProps(handleNavigateToManagement)}
                         >
                             <div className="flex items-center gap-4 mb-3">
                                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -1699,7 +1699,7 @@ This report contains confidential academic information.
                             onClick={handleRefreshData}
                             className="w-full p-6 bg-amber-50 border-2 border-amber-200 rounded-xl hover:bg-amber-100 active:bg-amber-200 transition-all text-left touch-target-comfortable"
                             style={getTouchTargetStyle('comfortable')}
-                            {...getTouchProps()}
+                            {...getTouchProps(handleRefreshData)}
                         >
                             <div className="flex items-center gap-4 mb-3">
                                 <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
@@ -1729,7 +1729,7 @@ This report contains confidential academic information.
                                 onClick={handlePrint}
                                 className="p-4 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 active:bg-purple-200 transition-all text-center touch-target-comfortable"
                                 style={getTouchTargetStyle('comfortable')}
-                                {...getTouchProps()}
+                                {...getTouchProps(handlePrint)}
                             >
                                 <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                                     <i className="fa-solid fa-print text-purple-600"></i>
@@ -1746,7 +1746,7 @@ This report contains confidential academic information.
                                 onClick={handleExport}
                                 className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 active:bg-indigo-200 transition-all text-center touch-target-comfortable"
                                 style={getTouchTargetStyle('comfortable')}
-                                {...getTouchProps()}
+                                {...getTouchProps(handleExport)}
                             >
                                 <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                                     <i className="fa-solid fa-download text-indigo-600"></i>
@@ -1827,10 +1827,10 @@ This report contains confidential academic information.
                         </button>
                     </div>
                 )}
-            </div>
+            </div >
 
             {/* Enhanced Authentication Footer for Print Only */}
-            <div className="hidden print:block print:mt-6 print:pt-4 border-t-2 border-black print:break-inside-avoid print:keep-with-previous print:keep-together">
+            < div className="hidden print:block print:mt-6 print:pt-4 border-t-2 border-black print:break-inside-avoid print:keep-with-previous print:keep-together" >
                 <div className="grid grid-cols-3 gap-4 print:text-xs text-black print:leading-tight">
                     {/* Generation Details */}
                     <div>
@@ -1891,16 +1891,18 @@ This report contains confidential academic information.
                         For verification and queries, contact: examinations@aicdawacollege.edu.in | Phone: +91-483-2734567
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* Simple touch feedback for mobile */}
-            {isMobile && touchFeedback.isVisible && (
-                <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-4 shadow-lg">
-                        <p className="text-slate-900 font-medium">{touchFeedback.action}</p>
+            {
+                isMobile && touchFeedback.isVisible && (
+                    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-xl p-4 shadow-lg">
+                            <p className="text-slate-900 font-medium">{touchFeedback.action}</p>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div >
     );
 };

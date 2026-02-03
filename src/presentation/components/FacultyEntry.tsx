@@ -52,8 +52,10 @@ const FacultyEntry: React.FC = () => {
     // Simple pagination for large student lists
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 50; // Increased from 10 to 50 for better mobile list visibility
-    const paginatedStudents = students.slice(0, currentPage * pageSize);
-    const hasMore = students.length > currentPage * pageSize;
+    const paginatedStudents = useMemo(() => {
+        return filteredStudents.slice(0, currentPage * pageSize);
+    }, [filteredStudents, currentPage, pageSize]);
+    const hasMore = filteredStudents.length > currentPage * pageSize;
 
     // Touch/swipe gesture state
     const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -1060,7 +1062,7 @@ const FacultyEntry: React.FC = () => {
                     {selectedSubject && students.length > 0 ? (
                         <div className="mx-6 md:mx-0 print:hidden">
                             {/* Mobile Card View */}
-                            <div className="block md:hidden space-y-8 pb-32">{/* Added bottom padding for sticky buttons */}
+                            <div className="block md:hidden space-y-8 pb-[32rem]">{/* Significantly increased bottom padding for sticky buttons and visibility */}
                                 {/* Enhanced Mobile Navigation Header */}
                                 <div className="bg-white rounded-3xl p-6 shadow-xl border-2 border-slate-200 sticky top-4 z-40" style={{
                                     background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
@@ -1332,10 +1334,21 @@ const FacultyEntry: React.FC = () => {
                                 {hasMore && (
                                     <button
                                         onClick={() => setCurrentPage(prev => prev + 1)}
-                                        className="w-full p-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all"
+                                        className="w-full p-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg active:scale-95 mb-8"
+                                        style={{ minHeight: '48px' }}
                                     >
-                                        Load More ({students.length - paginatedStudents.length} remaining)
+                                        Load More ({filteredStudents.length - paginatedStudents.length} remaining)
                                     </button>
+                                )}
+
+                                {/* End of List Indicator */}
+                                {!hasMore && filteredStudents.length > 0 && (
+                                    <div className="py-12 text-center">
+                                        <div className="inline-flex flex-col items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl border border-slate-200">
+                                            <i className="fa-solid fa-flag-checkered text-slate-400"></i>
+                                            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">End of Student List</span>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
 
