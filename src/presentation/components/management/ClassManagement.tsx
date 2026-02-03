@@ -31,6 +31,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, onUpda
         onUpdateCustomClasses(updatedCustomClasses);
         setNewClassName('');
         setShowClassForm(false);
+        alert(`Class "${newClassName.trim()}" added successfully!`);
     };
 
     const handleDeleteClass = (className: string) => {

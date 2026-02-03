@@ -199,6 +199,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
             await onRefresh();
             setShowStudentForm(false);
             setEditingStudent(null);
+            alert(`Student "${studentForm.name.trim()}" saved successfully!`);
         } catch (error) {
             console.error('Error saving student:', error);
             alert('Error saving student. Please try again.');

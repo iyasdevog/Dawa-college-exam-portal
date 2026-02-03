@@ -146,6 +146,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             await onRefresh();
             setShowSubjectForm(false);
             setEditingSubject(null);
+            alert(`Subject "${subjectData.name}" saved successfully!`);
         } catch (error) {
             console.error('Error saving subject:', error);
             alert('Error saving subject.');

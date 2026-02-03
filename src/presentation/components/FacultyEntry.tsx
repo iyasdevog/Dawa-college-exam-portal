@@ -57,6 +57,9 @@ const FacultyEntry: React.FC = () => {
     }, [filteredStudents, currentPage, pageSize]);
     const hasMore = filteredStudents.length > currentPage * pageSize;
 
+    // Flag to prevent draft operations during subject switching
+    const [isSubjectSwitching, setIsSubjectSwitching] = useState(false);
+
     // Touch/swipe gesture state
     const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
     const [touchEnd, setTouchEnd] = useState<{ x: number; y: number } | null>(null);
@@ -65,6 +68,7 @@ const FacultyEntry: React.FC = () => {
     const [showScrollToTop, setShowScrollToTop] = useState(false);
     const [isScrolling, setIsScrolling] = useState(false);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const loadedSubjectIdRef = useRef<string>('');
 
     // Offline capability integration
     const { isOnline, saveDraft, getDraft, deleteDraft } = useOfflineCapability();
@@ -108,24 +112,49 @@ const FacultyEntry: React.FC = () => {
         }
     }, [selectedClass, selectedSubject]);
 
-    // Reset current student index only when class or subject changes, not upon every student data refresh
+    // Reset current student index and clear marks data only when class or subject changes, not upon every student data refresh
     useEffect(() => {
         setCurrentStudentIndex(0);
+        // Set switching flag to prevent draft operations during transition
+        setIsSubjectSwitching(true);
+        // Immediately clear UI and ref to prevent old marks from being visible or auto-saved incorrectly
+        setMarksData({});
+        loadedSubjectIdRef.current = '';
+
+        // Reset switching flag after a short delay to allow loadStudentsByClass to complete
+        const timer = setTimeout(() => {
+            setIsSubjectSwitching(false);
+        }, 100);
+
+        return () => {
+            clearTimeout(timer);
+        };
     }, [selectedClass, selectedSubject]);
 
     // Load drafts when students or subject changes
     useEffect(() => {
-        if (selectedSubject && students.length > 0) {
+        // Skip if we're currently switching subjects
+        if (isSubjectSwitching) return;
+
+        if (selectedSubject && students.length > 0 && loadedSubjectIdRef.current === selectedSubject) {
             loadDraftsForCurrentSubject();
         }
-    }, [selectedSubject, students]);
+    }, [selectedSubject, students, isSubjectSwitching]);
 
     // Auto-save drafts when marks data changes
     useEffect(() => {
-        if (selectedSubject && students.length > 0) {
-            autoSaveCurrentDrafts();
+        // Skip if we're currently switching subjects
+        if (isSubjectSwitching) return;
+
+        if (selectedSubject && students.length > 0 && loadedSubjectIdRef.current === selectedSubject) {
+            // Add a small debounce to prevent rapid saves during UI updates
+            const timer = setTimeout(() => {
+                autoSaveCurrentDrafts();
+            }, 300);
+
+            return () => clearTimeout(timer);
         }
-    }, [marksData, selectedSubject, students]);
+    }, [marksData, selectedSubject, students, isSubjectSwitching]);
 
     // Scroll detection for sticky buttons
     useEffect(() => {
@@ -170,7 +199,8 @@ const FacultyEntry: React.FC = () => {
 
     // Load drafts for current subject and populate marks data
     const loadDraftsForCurrentSubject = useCallback(async () => {
-        if (!selectedSubject || students.length === 0) return;
+        // Strong guard: only load if subject is fully loaded and matches
+        if (!selectedSubject || students.length === 0 || selectedSubject !== loadedSubjectIdRef.current || isSubjectSwitching) return;
 
         try {
             const updatedMarksData = { ...marksData };
@@ -195,11 +225,22 @@ const FacultyEntry: React.FC = () => {
         } catch (error) {
             console.error('FacultyEntry: Failed to load drafts:', error);
         }
-    }, [selectedSubject, students, marksData, getDraft]);
+    }, [selectedSubject, students, marksData, getDraft, isSubjectSwitching]);
 
     // Auto-save current drafts
     const autoSaveCurrentDrafts = useCallback(async () => {
-        if (!selectedSubject || students.length === 0) return;
+        // Strong guard: only save if subject is fully loaded and matches
+        if (!selectedSubject || students.length === 0 || selectedSubject !== loadedSubjectIdRef.current || isSubjectSwitching) return;
+
+        // Protection: Ensure we're not saving stale data (e.g., marks for students of a different subject)
+        const studentIds = new Set(students.map(s => s.id));
+        const currentMarkIds = Object.keys(marksData);
+
+        // If marksData contains IDs not in current student list, it's stale - don't save.
+        // We allow empty marksData (cleared on subject change) which is handled below.
+        if (currentMarkIds.length > 0 && !currentMarkIds.every(id => studentIds.has(id))) {
+            return;
+        }
 
         try {
             for (const student of students) {
@@ -216,7 +257,7 @@ const FacultyEntry: React.FC = () => {
         } catch (error) {
             console.error('FacultyEntry: Auto-save failed:', error);
         }
-    }, [selectedSubject, students, marksData, saveDraft]);
+    }, [selectedSubject, students, marksData, saveDraft, isSubjectSwitching]);
 
     // Handle draft recovery - DEPRECATED/REMOVED
     // Handle draft deletion - DEPRECATED/REMOVED
@@ -427,6 +468,12 @@ const FacultyEntry: React.FC = () => {
     };
 
     const loadStudentsByClass = async () => {
+        const currentRequestSubjectId = selectedSubject;
+
+        // Clear marks data immediately to prevent showing stale data
+        setMarksData({});
+        loadedSubjectIdRef.current = '';
+
         try {
             setOperationLoading({ type: 'loading-students', message: 'Fetching student records for selected class and subject...' });
 
@@ -472,6 +519,12 @@ const FacultyEntry: React.FC = () => {
                 console.log('Students from class:', studentsToShow.length);
             }
 
+            // Check if subject changed during the async operation
+            if (currentRequestSubjectId !== selectedSubject) {
+                console.log('loadStudentsByClass: Subject changed during loading, discarding data.');
+                return;
+            }
+
             setStudents(studentsToShow);
 
             // Initialize marks data with existing marks
@@ -495,7 +548,17 @@ const FacultyEntry: React.FC = () => {
                     ce: existingMarks?.ce?.toString() || ''
                 };
             });
+
+            // Final check before setting marks data
+            if (currentRequestSubjectId !== selectedSubject) {
+                console.log('loadStudentsByClass: Subject changed before setting marks, discarding data.');
+                return;
+            }
+
             setMarksData(initialMarks);
+            // Mark the subject as correctly loaded to allow auto-saving/draft loading
+            loadedSubjectIdRef.current = selectedSubject;
+            console.log('loadStudentsByClass: Successfully loaded marks for subject:', selectedSubject);
 
         } catch (error) {
             console.error('Error loading students:', error);
