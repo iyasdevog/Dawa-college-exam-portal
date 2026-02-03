@@ -8,6 +8,16 @@ interface SettingsManagementProps {
 const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) => {
     const [isOperating, setIsOperating] = useState(false);
     const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
+    const [isDangerZoneUnlocked, setIsDangerZoneUnlocked] = useState(false);
+    const [unlockPassword, setUnlockPassword] = useState('');
+    const DANGER_PASSWORD = 'pleasecareful';
+
+    const verifyPassword = () => {
+        const input = prompt('Please enter the security password to confirm this action:');
+        if (input === DANGER_PASSWORD) return true;
+        if (input !== null) alert('Incorrect password. Action cancelled.');
+        return false;
+    };
 
     const handleExportMarks = async () => {
         try {
@@ -183,100 +193,130 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                     Critical data management controls. Actions performed here are irreversible.
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button
-                        onClick={async () => {
-                            if (!confirm('CRITICAL WARNING: This will DELETE ALL STUDENTS and their marks. This action CANNOT be undone. Are you sure?')) return;
-                            if (!confirm('Double Check: Are you absolutely sure you want to wipe all student data?')) return;
+                {!isDangerZoneUnlocked ? (
+                    <div className="flex flex-col sm:flex-row gap-3 items-center bg-white p-4 rounded-xl border border-red-100">
+                        <input
+                            type="password"
+                            placeholder="Enter password to unlock..."
+                            value={unlockPassword}
+                            onChange={(e) => setUnlockPassword(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && unlockPassword === DANGER_PASSWORD && setIsDangerZoneUnlocked(true)}
+                            className="w-full px-4 py-2 border border-red-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                        <button
+                            onClick={() => {
+                                if (unlockPassword === DANGER_PASSWORD) {
+                                    setIsDangerZoneUnlocked(true);
+                                    setUnlockPassword('');
+                                } else {
+                                    alert('Incorrect password');
+                                }
+                            }}
+                            className="w-full sm:w-auto px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
+                        >
+                            Unlock Zone
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                            onClick={async () => {
+                                if (!verifyPassword()) return;
+                                if (!confirm('CRITICAL WARNING: This will DELETE ALL STUDENTS and their marks. This action CANNOT be undone. Are you sure?')) return;
+                                if (!confirm('Double Check: Are you absolutely sure you want to wipe all student data?')) return;
 
-                            try {
-                                setIsOperating(true);
-                                await dataService.clearAllData();
-                                await onRefresh();
-                                alert('All student data has been cleared.');
-                            } catch (error) {
-                                console.error('Error clearing student data:', error);
-                                alert('Failed to clear student data.');
-                            } finally {
-                                setIsOperating(false);
-                            }
-                        }}
-                        disabled={isOperating}
-                        className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                        <i className="fa-solid fa-user-xmark"></i>
-                        Delete All Students
-                    </button>
+                                try {
+                                    setIsOperating(true);
+                                    await dataService.clearAllData();
+                                    await onRefresh();
+                                    alert('All student data has been cleared.');
+                                } catch (error) {
+                                    console.error('Error clearing student data:', error);
+                                    alert('Failed to clear student data.');
+                                } finally {
+                                    setIsOperating(false);
+                                }
+                            }}
+                            disabled={isOperating}
+                            className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                            <i className="fa-solid fa-user-xmark"></i>
+                            Delete All Students
+                        </button>
 
-                    <button
-                        onClick={async () => {
-                            if (!confirm('CRITICAL WARNING: This will DELETE ALL SUBJECTS and their configurations. This action CANNOT be undone. Are you sure?')) return;
+                        <button
+                            onClick={async () => {
+                                if (!verifyPassword()) return;
+                                if (!confirm('CRITICAL WARNING: This will DELETE ALL SUBJECTS and their configurations. This action CANNOT be undone. Are you sure?')) return;
 
-                            try {
-                                setIsOperating(true);
-                                await dataService.clearAllSubjects();
-                                await onRefresh();
-                                alert('All subjects have been deleted.');
-                            } catch (error) {
-                                console.error('Error clearing subjects:', error);
-                                alert('Failed to clear subjects.');
-                            } finally {
-                                setIsOperating(false);
-                            }
-                        }}
-                        disabled={isOperating}
-                        className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                        <i className="fa-solid fa-book-skull"></i>
-                        Delete All Subjects
-                    </button>
+                                try {
+                                    setIsOperating(true);
+                                    await dataService.clearAllSubjects();
+                                    await onRefresh();
+                                    alert('All subjects have been deleted.');
+                                } catch (error) {
+                                    console.error('Error clearing subjects:', error);
+                                    alert('Failed to clear subjects.');
+                                } finally {
+                                    setIsOperating(false);
+                                }
+                            }}
+                            disabled={isOperating}
+                            className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                            <i className="fa-solid fa-book-skull"></i>
+                            Delete All Subjects
+                        </button>
 
-                    <button
-                        onClick={async () => {
-                            if (!confirm('WARNING: This will DELETE ALL SUPPLEMENTARY EXAMS. This action CANNOT be undone. Are you sure?')) return;
+                        <button
+                            onClick={async () => {
+                                if (!verifyPassword()) return;
+                                if (!confirm('WARNING: This will DELETE ALL SUPPLEMENTARY EXAMS. This action CANNOT be undone. Are you sure?')) return;
 
-                            try {
-                                setIsOperating(true);
-                                await dataService.deleteAllSupplementaryExams();
-                                await onRefresh();
-                                alert('All supplementary exams have been deleted.');
-                            } catch (error) {
-                                console.error('Error clearing supplementary exams:', error);
-                                alert('Failed to clear supplementary exams.');
-                            } finally {
-                                setIsOperating(false);
-                            }
-                        }}
-                        disabled={isOperating}
-                        className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                        <i className="fa-solid fa-file-circle-xmark"></i>
-                        Delete All Supplementary Exams
-                    </button>
+                                try {
+                                    setIsOperating(true);
+                                    await dataService.deleteAllSupplementaryExams();
+                                    await onRefresh();
+                                    alert('All supplementary exams have been deleted.');
+                                } catch (error) {
+                                    console.error('Error clearing supplementary exams:', error);
+                                    alert('Failed to clear supplementary exams.');
+                                } finally {
+                                    setIsOperating(false);
+                                }
+                            }}
+                            disabled={isOperating}
+                            className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                            <i className="fa-solid fa-file-circle-xmark"></i>
+                            Delete All Supplementary Exams
+                        </button>
 
-                    <button
-                        onClick={async () => {
-                            if (!confirm('WARNING: This will RESET ALL CUSTOM CLASSES. System default classes will remain. Are you sure?')) return;
+                        <button
+                            onClick={async () => {
+                                if (!verifyPassword()) return;
+                                if (!confirm('WARNING: This will RESET ALL CUSTOM CLASSES. System default classes will remain. Are you sure?')) return;
 
-                            try {
-                                setIsOperating(true);
-                                localStorage.removeItem('customClasses');
-                                // Force reload to reflect class changes as they are often read at startup
-                                alert('Custom classes reset. The page will reload.');
-                                window.location.reload();
-                            } catch (error) {
-                                console.error('Error resetting classes:', error);
-                                alert('Failed to reset classes.');
-                                setIsOperating(false);
-                            }
-                        }}
-                        disabled={isOperating}
-                        className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                        <i className="fa-solid fa-layer-group"></i>
-                        Reset Custom Classes
-                    </button>
-                </div>
+                                try {
+                                    setIsOperating(true);
+                                    localStorage.removeItem('customClasses');
+                                    // Force reload to reflect class changes as they are often read at startup
+                                    alert('Custom classes reset. The page will reload.');
+                                    window.location.reload();
+                                } catch (error) {
+                                    console.error('Error resetting classes:', error);
+                                    alert('Failed to reset classes.');
+                                    setIsOperating(false);
+                                }
+                            }}
+                            disabled={isOperating}
+                            className="py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                            <i className="fa-solid fa-layer-group"></i>
+                            Reset Custom Classes
+                        </button>
+                    </div>
+                )}
             </div>
         </div >
     );

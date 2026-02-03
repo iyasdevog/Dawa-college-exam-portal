@@ -108,10 +108,10 @@ const FacultyEntry: React.FC = () => {
         }
     }, [selectedClass, selectedSubject]);
 
-    // Reset current student index when students change
+    // Reset current student index only when class or subject changes, not upon every student data refresh
     useEffect(() => {
         setCurrentStudentIndex(0);
-    }, [students]);
+    }, [selectedClass, selectedSubject]);
 
     // Load drafts when students or subject changes
     useEffect(() => {
@@ -1062,7 +1062,7 @@ const FacultyEntry: React.FC = () => {
                     {selectedSubject && students.length > 0 ? (
                         <div className="mx-6 md:mx-0 print:hidden">
                             {/* Mobile Card View */}
-                            <div className="block md:hidden space-y-8 pb-[32rem]">{/* Significantly increased bottom padding for sticky buttons and visibility */}
+                            <div className="block md:hidden space-y-8 pb-[18rem]">
                                 {/* Enhanced Mobile Navigation Header */}
                                 <div className="bg-white rounded-3xl p-6 shadow-xl border-2 border-slate-200 sticky top-4 z-40" style={{
                                     background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
@@ -1282,15 +1282,15 @@ const FacultyEntry: React.FC = () => {
                                         <div
                                             key={student.id}
                                             ref={el => { studentRefs.current[student.id] = el; }}
-                                            className={`bg-slate-50 rounded-xl p-4 transition-all ${isCurrent ? 'ring-2 ring-emerald-500 bg-emerald-50' : ''}`}
+                                            className={`bg-white rounded-xl p-3 border border-slate-200 shadow-sm transition-all ${isCurrent ? 'ring-2 ring-emerald-500 bg-emerald-50/50' : ''}`}
                                         >
-                                            <div className="flex items-center justify-between mb-3">
-                                                <div>
-                                                    <h3 className="font-bold text-slate-900">{student.name}</h3>
-                                                    <p className="text-sm text-slate-600">Adm: {student.adNo}</p>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex flex-col">
+                                                    <h3 className="font-bold text-slate-900 text-sm leading-tight">{student.name}</h3>
+                                                    <p className="text-[10px] uppercase font-black text-slate-400">ADM: {student.adNo}</p>
                                                 </div>
-                                                <span className="text-xs text-slate-500">
-                                                    {index + 1} of {students.length}
+                                                <span className="px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-[10px] font-bold">
+                                                    {index + 1} / {students.length}
                                                 </span>
                                             </div>
 
@@ -1596,118 +1596,82 @@ const FacultyEntry: React.FC = () => {
                                 <div className="absolute inset-0 bg-white/80 backdrop-blur-md border-t border-slate-200/50"></div>
 
                                 {/* Action buttons container */}
-                                <div className="relative p-4 pb-6">
+                                <div className="relative p-3 pb-4">
                                     {/* Scroll to top button */}
                                     {showScrollToTop && (
-                                        <div className="flex justify-center mb-4">
-                                            <button
-                                                onClick={scrollToTop}
-                                                className="flex items-center justify-center w-12 h-12 bg-slate-600 hover:bg-slate-700 active:bg-slate-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-110 active:scale-95"
-                                                title="Scroll to top"
-                                                style={{
-                                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)'
-                                                }}
-                                            >
-                                                <i className="fa-solid fa-chevron-up text-lg"></i>
-                                            </button>
-                                        </div>
+                                        <button
+                                            onClick={scrollToTop}
+                                            className="fixed bottom-32 right-4 flex items-center justify-center w-10 h-10 bg-slate-800/80 text-white rounded-full shadow-lg backdrop-blur-sm z-50 transform active:scale-95"
+                                            title="Scroll to top"
+                                        >
+                                            <i className="fa-solid fa-chevron-up text-sm"></i>
+                                        </button>
                                     )}
 
-                                    {/* Status display */}
-                                    <div className="text-center mb-4">
-                                        <div className="text-lg font-black text-slate-900 mb-1">
-                                            {completionStats.completed} of {completionStats.total}
+                                    {/* Compact Status display */}
+                                    <div className="flex items-center justify-between mb-2 px-1">
+                                        <div className="text-xs font-bold text-slate-500">
+                                            PROGRESS: <span className="text-slate-900">{completionStats.completed} / {completionStats.total}</span>
                                         </div>
-                                        <div className="text-sm text-slate-600 font-semibold">students completed</div>
                                         {invalidMarksInfo.hasInvalid && (
-                                            <div className="mt-3 p-3 bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300 rounded-xl shadow-md">
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <i className="fa-solid fa-exclamation-triangle text-red-600 text-sm animate-pulse"></i>
-                                                    <span className="text-sm font-bold text-red-700">
-                                                        {invalidMarksInfo.count} student(s) have invalid marks
-                                                    </span>
-                                                </div>
+                                            <div className="flex items-center gap-1 text-[10px] font-black text-red-600 animate-pulse">
+                                                <i className="fa-solid fa-triangle-exclamation"></i>
+                                                {invalidMarksInfo.count} INVALID
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Enhanced Action buttons with separate TA/CE save options */}
-                                    <div className="space-y-3">
-                                        {/* Primary save buttons row */}
+                                    {/* Condensed Action buttons */}
+                                    <div className="space-y-2">
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={handleSaveTAMarks}
                                                 disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                                className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg"
-                                                style={{
-                                                    minHeight: '48px',
-                                                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)'
-                                                }}
-                                                aria-label="Save TA marks only"
+                                                className="flex-1 py-2 px-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transform active:scale-95 shadow-md"
+                                                style={{ minHeight: '44px' }}
+                                                aria-label="Save TA marks"
                                             >
-                                                <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                                <span className="text-sm">Save TA</span>
+                                                <i className="fa-solid fa-clipboard-check text-xs"></i>
+                                                <span className="text-xs">Save TA</span>
                                             </button>
-
                                             <button
                                                 onClick={handleSaveCEMarks}
                                                 disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                                className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95 hover:from-purple-700 hover:to-purple-800 hover:shadow-lg"
-                                                style={{
-                                                    minHeight: '48px',
-                                                    boxShadow: '0 4px 6px -1px rgba(147, 51, 234, 0.3)'
-                                                }}
-                                                aria-label="Save CE marks only"
+                                                className="flex-1 py-2 px-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transform active:scale-95 shadow-md"
+                                                style={{ minHeight: '44px' }}
+                                                aria-label="Save CE marks"
                                             >
-                                                <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                                <span className="text-sm">Save CE</span>
+                                                <i className="fa-solid fa-clipboard-check text-xs"></i>
+                                                <span className="text-xs">Save CE</span>
                                             </button>
-
                                             <button
                                                 onClick={handleClearAll}
                                                 disabled={isSaving || operationLoading.type !== null}
-                                                className="flex-1 py-3 px-4 border-2 border-slate-400 text-slate-700 bg-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 hover:bg-slate-50 hover:border-slate-500 hover:shadow-lg"
-                                                style={{
-                                                    minHeight: '48px',
-                                                    boxShadow: '0 2px 4px -1px rgba(0, 0, 0, 0.1)'
-                                                }}
-                                                aria-label="Clear all marks"
+                                                className="py-2 px-3 border border-slate-300 text-slate-600 bg-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 transform active:scale-95"
+                                                style={{ minHeight: '44px' }}
+                                                aria-label="Clear all"
                                             >
-                                                <i className="fa-solid fa-trash-can text-sm"></i>
-                                                <span className="text-sm">Clear</span>
+                                                <i className="fa-solid fa-trash-can text-xs"></i>
+                                                <span className="text-xs">Clear</span>
                                             </button>
                                         </div>
 
-                                        {/* Main save all button */}
                                         <button
                                             onClick={handleSaveMarks}
                                             disabled={isSaving || operationLoading.type !== null || !selectedSubject || invalidMarksInfo.hasInvalid}
-                                            className={`w-full py-4 px-6 rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 transform active:scale-95 ${invalidMarksInfo.hasInvalid
-                                                ? 'bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 active:from-red-800 active:to-red-900 hover:shadow-xl active:shadow-inner'
-                                                : 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 active:from-emerald-800 active:to-emerald-900 hover:shadow-xl active:shadow-inner'
+                                            className={`w-full py-3 px-6 rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95 ${invalidMarksInfo.hasInvalid
+                                                ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md'
+                                                : 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md'
                                                 }`}
-                                            style={{
-                                                minHeight: '56px',
-                                                boxShadow: invalidMarksInfo.hasInvalid
-                                                    ? '0 10px 25px -5px rgba(220, 38, 38, 0.4), 0 4px 6px -1px rgba(220, 38, 38, 0.1)'
-                                                    : '0 10px 25px -5px rgba(16, 185, 129, 0.4), 0 4px 6px -1px rgba(16, 185, 129, 0.1)'
-                                            }}
-                                            aria-label="Save all marks (both TA and CE)"
+                                            style={{ minHeight: '48px' }}
+                                            aria-label="Save all marks"
                                         >
                                             {isSaving ? (
-                                                <>
-                                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                                    <span>Saving...</span>
-                                                </>
-                                            ) : invalidMarksInfo.hasInvalid ? (
-                                                <>
-                                                    <i className="fa-solid fa-exclamation-triangle text-base"></i>
-                                                    <span>Fix Invalid Marks</span>
-                                                </>
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                             ) : (
                                                 <>
-                                                    <i className="fa-solid fa-save text-base"></i>
-                                                    <span>Save All Marks</span>
+                                                    <i className={`fa-solid ${invalidMarksInfo.hasInvalid ? 'fa-triangle-exclamation' : 'fa-save'} text-sm`}></i>
+                                                    <span className="text-sm">{invalidMarksInfo.hasInvalid ? 'Fix Invalid Marks' : 'Save All Marks'}</span>
                                                 </>
                                             )}
                                         </button>
