@@ -9,6 +9,7 @@ import {
     OperationLoadingSkeleton
 } from './SkeletonLoaders';
 import { useDebounce } from '../hooks/useDebounce';
+import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { useOfflineCapability } from '../hooks/useOfflineCapability';
 import OfflineStatusIndicator from './OfflineStatusIndicator';
 
@@ -22,6 +23,8 @@ const FacultyEntry: React.FC = () => {
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
+    const { isMobile, isTablet, orientation } = useMobile();
+    const { getTouchProps } = useTouchInteraction();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [marksData, setMarksData] = useState<Record<string, { ta: string; ce: string }>>({});
@@ -48,7 +51,7 @@ const FacultyEntry: React.FC = () => {
 
     // Simple pagination for large student lists
     const [currentPage, setCurrentPage] = useState(1);
-    const pageSize = 10;
+    const pageSize = 50; // Increased from 10 to 50 for better mobile list visibility
     const paginatedStudents = students.slice(0, currentPage * pageSize);
     const hasMore = students.length > currentPage * pageSize;
 
@@ -1077,7 +1080,7 @@ const FacultyEntry: React.FC = () => {
                                         <div className="flex items-center gap-4">
                                             {/* Quick Access Button */}
                                             <button
-                                                onClick={() => setShowStudentList(!showStudentList)}
+                                                {...getTouchProps(() => setShowStudentList(!showStudentList))}
                                                 className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg"
                                                 title="Quick Student Access"
                                                 style={{ minHeight: '48px', minWidth: '48px' }}
@@ -1276,6 +1279,7 @@ const FacultyEntry: React.FC = () => {
                                     return (
                                         <div
                                             key={student.id}
+                                            ref={el => { studentRefs.current[student.id] = el; }}
                                             className={`bg-slate-50 rounded-xl p-4 transition-all ${isCurrent ? 'ring-2 ring-emerald-500 bg-emerald-50' : ''}`}
                                         >
                                             <div className="flex items-center justify-between mb-3">

@@ -43,7 +43,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   );
 
   const MobileHeader = () => (
-    <header className={`sticky top-0 z-30 bg-white border-b border-slate-200 transition-all duration-300 ease-in-out ${isMobile ? 'h-16 px-4' : 'h-20 px-6 md:px-8'} ${isMobileMenuOpen ? 'shadow-lg' : 'shadow-sm'}`}>
+    <header className={`sticky top-0 z-30 bg-white border-b border-slate-200 transition-all duration-300 ease-in-out print:hidden ${isMobile ? 'h-16 px-4' : 'h-20 px-6 md:px-8'} ${isMobileMenuOpen ? 'shadow-lg' : 'shadow-sm'}`}>
       <div className="flex items-center justify-between h-full">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {isMobile && <HamburgerMenu activeView={activeView} setView={setView} onLogout={onLogout} isCloudActive={isCloudActive} />}

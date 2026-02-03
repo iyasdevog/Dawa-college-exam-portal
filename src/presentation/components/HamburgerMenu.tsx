@@ -37,7 +37,6 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         { id: 'entry', icon: 'fa-edit', label: 'Marks Entry', description: 'Enter and manage student marks' },
         { id: 'class-report', icon: 'fa-table', label: 'Class Report', description: 'Generate class performance reports' },
         { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards', description: 'View individual student scorecards' },
-        { id: 'performance', icon: 'fa-tachometer-alt', label: 'Performance', description: 'Monitor system performance and metrics' },
         { id: 'management', icon: 'fa-sliders', label: 'Management', description: 'System administration and settings' },
     ];
 
