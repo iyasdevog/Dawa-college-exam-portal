@@ -17,6 +17,7 @@ import { getDb } from '../config/firebaseConfig';
 import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
+import { normalizeName } from './formatUtils';
 
 export class DataService {
     // Helper to calculate performance level
@@ -248,8 +249,14 @@ export class DataService {
 
     async addSubject(subject: Omit<SubjectConfig, 'id'>): Promise<string> {
         try {
-            const docRef = await addDoc(collection(this.db, this.subjectsCollection), subject);
+            // Normalize faculty name before saving
+            const normalizedSubject = {
+                ...subject,
+                facultyName: subject.facultyName ? normalizeName(subject.facultyName) : ''
+            };
+            const docRef = await addDoc(collection(this.db, this.subjectsCollection), normalizedSubject);
             console.log('Subject added with ID:', docRef.id);
+            this.invalidateCache();
             return docRef.id;
         } catch (error) {
             console.error('Error adding subject:', error);
@@ -260,8 +267,16 @@ export class DataService {
     async updateSubject(id: string, updates: Partial<SubjectConfig>): Promise<void> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
-            await updateDoc(docRef, updates);
+
+            // Normalize faculty name if it's being updated
+            const normalizedUpdates = { ...updates };
+            if (updates.facultyName !== undefined) {
+                normalizedUpdates.facultyName = updates.facultyName ? normalizeName(updates.facultyName) : '';
+            }
+
+            await updateDoc(docRef, normalizedUpdates);
             console.log('Subject updated:', id);
+            this.invalidateCache();
         } catch (error) {
             console.error('Error updating subject:', error);
             throw error;
@@ -715,10 +730,10 @@ export class DataService {
         try {
             const students = await this.getStudentsByClass(className);
 
-            // Sort by grand total (descending)
-            const sortedStudents = students.sort((a, b) => b.grandTotal - a.grandTotal);
+            // Sort by grand total (descending) - handle undefined totals
+            const sortedStudents = [...students].sort((a, b) => (b.grandTotal || 0) - (a.grandTotal || 0));
 
-            // Update ranks with standard competition ranking (1, 2, 2, 4)
+            // Update ranks with standard competition ranking (1, 1, 3, 4)
             const batch = writeBatch(this.db);
             let currentRank = 1;
 
@@ -729,12 +744,11 @@ export class DataService {
                 if (i > 0 && student.grandTotal === sortedStudents[i - 1].grandTotal) {
                     // rank remains same as previous student's rank
                 } else {
-                    // rank becomes current position (1-based index)
+                    // rank becomes current position (1-based index) - this creates gaps (1, 1, 3)
                     currentRank = i + 1;
                 }
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
-                // Only update if rank has changed to save writes? Batch writes are cheap enough.
                 batch.update(docRef, { rank: currentRank });
             }
 
@@ -858,6 +872,7 @@ export class DataService {
         }
     }
 
+
     // Complete database reset - REMOVED (no seeding should occur)
     async completeReset(): Promise<void> {
         try {
@@ -873,6 +888,117 @@ export class DataService {
             console.log('Complete database reset successful - system is now empty');
         } catch (error) {
             console.error('Error during complete reset:', error);
+            throw error;
+        }
+    }
+
+    // Recalculate all student totals and averages
+    async recalculateAllStudentTotals(): Promise<{ updated: number; errors: string[] }> {
+        const results = { updated: 0, errors: [] as string[] };
+
+        try {
+            console.log('Starting recalculation of all student totals and averages...');
+
+            // Get all students
+            const allStudents = await this.getAllStudents();
+            console.log(`Found ${allStudents.length} students to recalculate`);
+
+            // Process in batches of 500 (Firestore limit)
+            const batchSize = 500;
+
+            for (let i = 0; i < allStudents.length; i += batchSize) {
+                const batch = writeBatch(this.db);
+                const currentBatch = allStudents.slice(i, i + batchSize);
+
+                for (const student of currentBatch) {
+                    try {
+                        // Recalculate grandTotal as sum of all subject totals
+                        const grandTotal = Object.values(student.marks)
+                            .reduce((sum, mark) => sum + mark.total, 0);
+
+                        // Calculate average
+                        const average = Object.keys(student.marks).length > 0
+                            ? grandTotal / Object.keys(student.marks).length
+                            : 0;
+
+                        // Determine performance level
+                        const performanceLevel = this.calculatePerformanceLevel(average);
+
+                        const docRef = doc(this.db, this.studentsCollection, student.id);
+                        batch.update(docRef, {
+                            grandTotal,
+                            average: Math.round(average * 100) / 100,
+                            performanceLevel
+                        });
+
+                        results.updated++;
+                        console.log(`Recalculated ${student.name}: grandTotal=${grandTotal}, average=${average.toFixed(2)}%`);
+                    } catch (error) {
+                        results.errors.push(`${student.name} (${student.adNo}): ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    }
+                }
+
+                if (currentBatch.length > 0) {
+                    await batch.commit();
+                    console.log(`Batch ${Math.floor(i / batchSize) + 1} committed (${currentBatch.length} students)`);
+                }
+            }
+
+            // Recalculate rankings for all classes
+            console.log('Recalculating class rankings...');
+            const uniqueClasses = [...new Set(allStudents.map(s => s.className))];
+            for (const className of uniqueClasses) {
+                await this.calculateClassRankings(className);
+            }
+
+            console.log(`✅ Recalculation completed: ${results.updated} students updated, ${results.errors.length} errors`);
+            return results;
+        } catch (error) {
+            console.error('Error recalculating student totals:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Normalizes all faculty names in the subjects collection to Title Case.
+     * Merges variation like "usman hudawi" -> "Usman Hudawi".
+     */
+    async normalizeAllFacultyNames(): Promise<{ updated: number; merged: number; errors: string[] }> {
+        const results = { updated: 0, merged: 0, errors: [] as string[] };
+        try {
+            console.log('Starting normalization of all faculty names...');
+            const subjects = await this.getAllSubjects();
+            const batch = writeBatch(this.db);
+            let operationCount = 0;
+
+            for (const subject of subjects) {
+                if (!subject.facultyName) continue;
+
+                const normalized = normalizeName(subject.facultyName);
+                if (normalized !== subject.facultyName) {
+                    const docRef = doc(this.db, this.subjectsCollection, subject.id);
+                    batch.update(docRef, { facultyName: normalized });
+                    results.updated++;
+                    operationCount++;
+
+                    // Firestore batch limit is 500
+                    if (operationCount >= 450) {
+                        await batch.commit();
+                        operationCount = 0;
+                        console.log('Intermediate batch committed...');
+                    }
+                }
+            }
+
+            if (operationCount > 0) {
+                await batch.commit();
+            }
+
+            console.log(`Faculty normalization complete: ${results.updated} subjects fixed.`);
+            this.invalidateCache();
+            return results;
+        } catch (error) {
+            console.error('Error normalizing faculty names:', error);
             throw error;
         }
     }
@@ -967,9 +1093,12 @@ export class DataService {
             const passedTA = ta >= minTA;
             const passedCE = ce >= minCE;
 
-            // Status is only 'Passed' if both TA and CE are passing and both are entered
+            // Status transitions from 'Pending' if all required components are entered
             let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
-            if (ta > 0 && ce > 0) {
+            const taReady = subject.maxTA > 0 ? ta > 0 : true;
+            const ceReady = subject.maxCE > 0 ? ce > 0 : true;
+
+            if (taReady && ceReady) {
                 status = (passedTA && passedCE) ? 'Passed' : 'Failed';
             }
 
@@ -984,10 +1113,9 @@ export class DataService {
                 }
             };
 
-            // Recalculate totals only if both TA and CE are present
-            const completeMarks = Object.values(updatedMarks).filter(mark => mark.ta > 0 && mark.ce > 0);
-            const grandTotal = completeMarks.reduce((sum, mark) => sum + mark.total, 0);
-            const average = completeMarks.length > 0 ? grandTotal / completeMarks.length : 0;
+            // Recalculate totals - Sum all available marks
+            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
+            const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
             // Determine performance level
             const performanceLevel = this.calculatePerformanceLevel(average);
@@ -1000,10 +1128,8 @@ export class DataService {
                 performanceLevel
             });
 
-            // Recalculate class rankings only if we have complete marks
-            if (completeMarks.length > 0) {
-                await this.calculateClassRankings(student.className);
-            }
+            // Recalculate class rankings to keep totals up-to-date
+            await this.calculateClassRankings(student.className);
 
             console.log('Student TA marks updated:', studentId, 'TA:', ta);
         } catch (error) {
@@ -1041,9 +1167,12 @@ export class DataService {
             const passedTA = ta >= minTA;
             const passedCE = ce >= minCE;
 
-            // Status is only 'Passed' if both TA and CE are passing and both are entered
+            // Status transitions from 'Pending' if all required components are entered
             let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
-            if (ta > 0 && ce > 0) {
+            const taReady = subject.maxTA > 0 ? ta > 0 : true;
+            const ceReady = subject.maxCE > 0 ? ce > 0 : true;
+
+            if (taReady && ceReady) {
                 status = (passedTA && passedCE) ? 'Passed' : 'Failed';
             }
 
@@ -1058,10 +1187,9 @@ export class DataService {
                 }
             };
 
-            // Recalculate totals only if both TA and CE are present
-            const completeMarks = Object.values(updatedMarks).filter(mark => mark.ta > 0 && mark.ce > 0);
-            const grandTotal = completeMarks.reduce((sum, mark) => sum + mark.total, 0);
-            const average = completeMarks.length > 0 ? grandTotal / completeMarks.length : 0;
+            // Recalculate totals - Sum all available marks
+            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
+            const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
             // Determine performance level
             const performanceLevel = this.calculatePerformanceLevel(average);
@@ -1074,10 +1202,8 @@ export class DataService {
                 performanceLevel
             });
 
-            // Recalculate class rankings only if we have complete marks
-            if (completeMarks.length > 0) {
-                await this.calculateClassRankings(student.className);
-            }
+            // Recalculate class rankings to keep totals up-to-date
+            await this.calculateClassRankings(student.className);
 
             console.log('Student CE marks updated:', studentId, 'CE:', ce);
         } catch (error) {
@@ -1451,11 +1577,16 @@ export class DataService {
                         const ceKey = `${subjectName} - CE`;
                         const statusKey = `${subjectName} - Status`;
 
-                        if (row[taKey] !== undefined && row[ceKey] !== undefined &&
-                            row[taKey] !== '' && row[ceKey] !== '') {
+                        const taProvided = row[taKey] !== undefined && row[taKey] !== '';
+                        const ceProvided = row[ceKey] !== undefined && row[ceKey] !== '';
 
-                            const ta = parseInt(row[taKey]);
-                            const ce = parseInt(row[ceKey]);
+                        // Only proceed if all required components for this subject are provided
+                        const taOk = subject.maxTA > 0 ? taProvided : true;
+                        const ceOk = subject.maxCE > 0 ? ceProvided : true;
+
+                        if (taOk && ceOk && (taProvided || ceProvided)) {
+                            const ta = taProvided ? parseInt(row[taKey]) : 0;
+                            const ce = ceProvided ? parseInt(row[ceKey]) : 0;
 
                             if (isNaN(ta) || isNaN(ce)) {
                                 results.errors.push(`Row ${rowNum}: Invalid marks for ${subjectName} (TA: ${row[taKey]}, CE: ${row[ceKey]})`);
@@ -1489,12 +1620,7 @@ export class DataService {
                         const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
                         // Determine performance level
-                        let performanceLevel: 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
-                        if (average >= 80) performanceLevel = 'Excellent';
-                        else if (average >= 70) performanceLevel = 'Good';
-                        else if (average >= 60) performanceLevel = 'Average';
-                        else if (average >= 40) performanceLevel = 'Needs Improvement';
-                        else performanceLevel = 'Failed';
+                        const performanceLevel = this.calculatePerformanceLevel(average);
 
                         // Update student document
                         await updateDoc(doc(this.db, this.studentsCollection, studentId), {

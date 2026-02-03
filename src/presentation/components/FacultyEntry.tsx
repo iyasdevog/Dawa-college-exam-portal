@@ -12,6 +12,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { useOfflineCapability } from '../hooks/useOfflineCapability';
 import OfflineStatusIndicator from './OfflineStatusIndicator';
+import { normalizeName } from '../../infrastructure/services/formatUtils';
 
 
 
@@ -21,6 +22,7 @@ const FacultyEntry: React.FC = () => {
     const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
     const [selectedSubject, setSelectedSubject] = useState('');
     const [students, setStudents] = useState<StudentRecord[]>([]);
+    const [allStudents, setAllStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
     const { isMobile, isTablet, orientation } = useMobile();
@@ -82,6 +84,13 @@ const FacultyEntry: React.FC = () => {
     useEffect(() => {
         loadData();
     }, []);
+
+    // Refresh all students when switching to tracker
+    useEffect(() => {
+        if (activeTab === 'upload-tracker') {
+            loadAllStudents();
+        }
+    }, [activeTab]);
 
     // Update class subjects when class or subject type changes
     useEffect(() => {
@@ -432,6 +441,15 @@ const FacultyEntry: React.FC = () => {
         };
     }, [students, validationHelpers]);
 
+    const loadAllStudents = async () => {
+        try {
+            const data = await dataService.getAllStudents();
+            setAllStudents(data);
+        } catch (error) {
+            console.error('Error loading all students:', error);
+        }
+    };
+
     const loadData = async () => {
         try {
             setIsLoading(true);
@@ -443,12 +461,14 @@ const FacultyEntry: React.FC = () => {
             setLoadingProgress(25);
 
             setLoadingStage('loading-subjects');
-            const [allSubjects] = await Promise.all([
-                dataService.getAllSubjects()
+            const [allSubjects, allStudentsData] = await Promise.all([
+                dataService.getAllSubjects(),
+                dataService.getAllStudents()
             ]);
             setLoadingProgress(75);
 
             setSubjects(allSubjects);
+            setAllStudents(allStudentsData);
             setLoadingProgress(90);
 
             setLoadingStage('preparing-interface');
@@ -857,7 +877,10 @@ const FacultyEntry: React.FC = () => {
 
             // Try to reload students to get updated data (only if online)
             if (isOnline) {
-                await loadStudentsByClass();
+                await Promise.all([
+                    loadStudentsByClass(),
+                    loadAllStudents()
+                ]);
             }
 
             // Show appropriate success message
@@ -922,7 +945,10 @@ const FacultyEntry: React.FC = () => {
 
             // Try to reload students to get updated data (only if online)
             if (isOnline) {
-                await loadStudentsByClass();
+                await Promise.all([
+                    loadStudentsByClass(),
+                    loadAllStudents()
+                ]);
             }
 
             // Show appropriate success message
@@ -1817,9 +1843,24 @@ const FacultyEntry: React.FC = () => {
                                     className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white"
                                 >
                                     <option value="all">All Faculty Members</option>
-                                    {Array.from(new Set(subjects.map(s => s.facultyName).filter(Boolean))).map(teacher => (
-                                        <option key={teacher} value={teacher}>{teacher}</option>
-                                    ))}
+                                    {(() => {
+                                        const facultyNames = subjects
+                                            .map(s => s.facultyName)
+                                            .filter(Boolean)
+                                            .map(f => normalizeName(f));
+
+                                        const uniqueMap = new Map<string, string>();
+                                        facultyNames.forEach(name => {
+                                            const key = name.toLowerCase();
+                                            if (!uniqueMap.has(key)) {
+                                                uniqueMap.set(key, name);
+                                            }
+                                        });
+
+                                        return Array.from(uniqueMap.values()).sort().map(teacher => (
+                                            <option key={teacher} value={teacher}>{teacher}</option>
+                                        ));
+                                    })()}
                                 </select>
                             </div>
 
@@ -1877,19 +1918,17 @@ const FacultyEntry: React.FC = () => {
                             if (subject.subjectType === 'general' && subject.isExpanded) {
                                 // For general subjects (now split by class), only count students from the specific class
                                 const className = subject.displayClass!;
-                                const classStudents = students.filter(s => s.className === className);
+                                const classStudents = allStudents.filter(s => s.className === className);
                                 totalStudents = classStudents.length;
                                 uploadedStudents = classStudents.filter(s =>
-                                    s.marks[subject.id]?.ta > 0 && s.marks[subject.id]?.ce > 0
+                                    s.marks && s.marks[subject.id]
                                 ).length;
                             } else {
                                 // For elective subjects, count enrolled students
                                 const enrolledStudentIds = subject.enrolledStudents || [];
                                 totalStudents = enrolledStudentIds.length;
-                                uploadedStudents = students.filter(s =>
-                                    enrolledStudentIds.includes(s.id) &&
-                                    s.marks[subject.id]?.ta > 0 &&
-                                    s.marks[subject.id]?.ce > 0
+                                uploadedStudents = allStudents.filter(s =>
+                                    enrolledStudentIds.includes(s.id) && s.marks && s.marks[subject.id]
                                 ).length;
                             }
 

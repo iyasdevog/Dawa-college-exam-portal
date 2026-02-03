@@ -39,11 +39,23 @@ const ClassResults: React.FC = () => {
 
     const loadClassData = async () => {
         try {
-            const [classStudents] = await Promise.all([
-                dataService.getStudentsByClass(selectedClass)
-            ]);
+            const classStudents = await dataService.getStudentsByClass(selectedClass);
 
-            setStudents(classStudents);
+            // Sort by grand total descending and calculate ranks client-side for immediate consistency
+            const sortedStudents = [...classStudents].sort((a, b) => (b.grandTotal || 0) - (a.grandTotal || 0));
+
+            let currentRank = 1;
+            const rankedStudents = sortedStudents.map((student, index) => {
+                if (index > 0 && student.grandTotal === sortedStudents[index - 1].grandTotal) {
+                    // Same total, same rank
+                } else {
+                    // Different total, rank is position + 1
+                    currentRank = index + 1;
+                }
+                return { ...student, rank: currentRank };
+            });
+
+            setStudents(rankedStudents);
 
             // Filter subjects for this class
             const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));

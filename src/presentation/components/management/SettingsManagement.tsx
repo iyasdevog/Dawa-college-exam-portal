@@ -148,6 +148,71 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                                 {isOperating ? 'Recalculating...' : 'Recalculate Student Grades'}
                             </button>
                         </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <p className="text-sm text-slate-600 mb-2">
+                                <strong>Fix Totals & Rankings:</strong> Recalculate total marks (sum of all subjects), averages, and class rankings for all students. Use this if totals or rankings are showing incorrect values.
+                            </p>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will recalculate the total marks and averages for all students by summing their subject marks.\n\nThis fixes incorrect totals/percentages in Class Results.\n\nContinue?')) return;
+
+                                    try {
+                                        setIsOperating(true);
+                                        const results = await dataService.recalculateAllStudentTotals();
+                                        await onRefresh();
+
+                                        let message = `✅ Recalculation complete!\n\n${results.updated} students updated successfully.`;
+                                        if (results.errors.length > 0) {
+                                            message += `\n\n⚠️ Errors: ${results.errors.length}\n${results.errors.slice(0, 5).join('\n')}`;
+                                            if (results.errors.length > 5) {
+                                                message += `\n... and ${results.errors.length - 5} more errors`;
+                                            }
+                                        }
+                                        alert(message);
+                                    } catch (error) {
+                                        console.error('Error recalculating totals:', error);
+                                        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full py-3 bg-amber-50 text-amber-700 rounded-xl font-bold hover:bg-amber-100 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-wrench"></i>
+                                {isOperating ? 'Recalculating...' : 'Fix Totals & Rankings'}
+                            </button>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <p className="text-sm text-slate-600 mb-2">
+                                <strong>Deduplicate Faculty Names:</strong> Standardizes all faculty names in the database to Title Case (e.g., merging "usman hudawi" and "Usman Hudawi" into one good name).
+                            </p>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will analyze all subjects and convert every faculty name to Title Case.\n\nThis merges variations like "usman hudawi" and "Usman Hudawi" into a single consistent name everywhere.\n\nContinue?')) return;
+
+                                    try {
+                                        setIsOperating(true);
+                                        const results = await dataService.normalizeAllFacultyNames();
+                                        await onRefresh();
+
+                                        alert(`✅ Deduplication complete!\n\n${results.updated} subject faculty names were standardized.`);
+                                    } catch (error) {
+                                        console.error('Error deduplicating faculty:', error);
+                                        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full py-3 bg-blue-50 text-blue-700 rounded-xl font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-users-gear"></i>
+                                {isOperating ? 'Deduplicating...' : 'Deduplicate Faculty Names'}
+                            </button>
+                        </div>
                     </div>
                 </div>
 

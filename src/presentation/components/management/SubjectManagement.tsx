@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SubjectConfig, StudentRecord } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
+import { normalizeName } from '../../../infrastructure/services/formatUtils';
 
 interface SubjectManagementProps {
     subjects: SubjectConfig[];
@@ -38,11 +39,13 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const [showClassSelectionModal, setShowClassSelectionModal] = useState(false);
     const [activeClassForSelection, setActiveClassForSelection] = useState<string>('');
     const [studentSearchQuery, setStudentSearchQuery] = useState('');
+    const [isCreatingNewFaculty, setIsCreatingNewFaculty] = useState(false);
 
     const uniqueClasses = Array.from(new Set(students.map(s => s.className))).sort();
 
     const handleAddSubject = () => {
         setEditingSubject(null);
+        setIsCreatingNewFaculty(false);
         setSubjectForm({
             name: '',
             arabicName: '',
@@ -59,6 +62,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
 
     const handleEditSubject = (subject: SubjectConfig) => {
         setEditingSubject(subject);
+        setIsCreatingNewFaculty(false);
         setSubjectForm({
             name: subject.name,
             arabicName: subject.arabicName || '',
@@ -126,13 +130,20 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             }
 
             setIsOperating(true);
+
+            // Normalize faculty name to Title Case
+            const normalizedFacultyName = subjectForm.facultyName.trim()
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+
             const subjectData = {
                 name: normalizedName,
                 arabicName: subjectForm.arabicName.trim(),
                 maxTA: subjectForm.maxTA,
                 maxCE: subjectForm.maxCE,
                 passingTotal: subjectForm.passingTotal,
-                facultyName: subjectForm.facultyName.trim(),
+                facultyName: normalizedFacultyName,
                 targetClasses: uniqueTargetClasses, // Use filtered classes
                 subjectType: subjectForm.subjectType,
                 enrolledStudents: subjectForm.enrolledStudents
@@ -339,6 +350,26 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const uniqueFaculties = React.useMemo(() => {
         const faculties = new Set(subjects.map(s => s.facultyName || 'Unassigned'));
         return Array.from(faculties).sort();
+    }, [subjects]);
+
+    // Get normalized unique faculties for dropdown (with proper Title Case)
+    const normalizedFaculties = React.useMemo(() => {
+        // Extract all faculty names
+        const allFaculties = subjects
+            .map(s => s.facultyName)
+            .filter(f => f && f.trim() !== '')
+            .map(f => normalizeName(f));
+
+        // Create a map to deduplicate (case-insensitive)
+        const uniqueMap = new Map<string, string>();
+        allFaculties.forEach(name => {
+            const key = name.toLowerCase();
+            if (!uniqueMap.has(key)) {
+                uniqueMap.set(key, name);
+            }
+        });
+
+        return Array.from(uniqueMap.values()).sort();
     }, [subjects]);
 
     const flattenedSubjectList = React.useMemo(() => {
@@ -568,13 +599,50 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                             </div>
                             <div>
                                 <label className="block text-sm font-bold mb-1">Faculty Name</label>
-                                <input
-                                    type="text"
-                                    value={subjectForm.facultyName}
-                                    onChange={e => setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }))}
-                                    className="w-full p-3 border rounded-xl"
-                                    placeholder="e.g. Ustadh Ahmed"
-                                />
+                                <select
+                                    value={isCreatingNewFaculty ? '___CREATE_NEW___' : subjectForm.facultyName}
+                                    onChange={(e) => {
+                                        if (e.target.value === '___CREATE_NEW___') {
+                                            setIsCreatingNewFaculty(true);
+                                            setSubjectForm(prev => ({ ...prev, facultyName: '' }));
+                                        } else {
+                                            setIsCreatingNewFaculty(false);
+                                            setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }));
+                                        }
+                                    }}
+                                    className="w-full p-3 border rounded-xl bg-white"
+                                >
+                                    <option value="">-- Select Faculty --</option>
+                                    {normalizedFaculties.map(faculty => (
+                                        <option key={faculty} value={faculty}>{faculty}</option>
+                                    ))}
+                                    <option value="___CREATE_NEW___">➕ Create New Faculty</option>
+                                </select>
+
+                                {/* Show text input when creating new */}
+                                {isCreatingNewFaculty && (
+                                    <div className="mt-2">
+                                        <input
+                                            type="text"
+                                            value={subjectForm.facultyName}
+                                            onChange={e => setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }))}
+                                            className="w-full p-3 border-2 rounded-xl bg-emerald-50 border-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                            placeholder="Enter new faculty name"
+                                            autoFocus
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsCreatingNewFaculty(false);
+                                                setSubjectForm(prev => ({ ...prev, facultyName: '' }));
+                                            }}
+                                            className="mt-2 text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                                        >
+                                            <i className="fa-solid fa-arrow-left"></i>
+                                            Back to list
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
