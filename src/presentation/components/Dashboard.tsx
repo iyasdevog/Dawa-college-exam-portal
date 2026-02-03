@@ -287,7 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         },
         {
             id: 'average-percentage',
-            title: 'Average Percentage',
+            title: 'Average',
             value: `${averagePercentage}%`,
             icon: 'fa-solid fa-chart-line',
             color: 'text-amber-600',

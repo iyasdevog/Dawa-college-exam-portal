@@ -22,9 +22,9 @@ export class DataService {
     // Helper to calculate performance level
     // Helper to calculate performance level
     private calculatePerformanceLevel(average: number): PerformanceLevel {
-        if (average > 95) return 'O (Outstanding)';
-        if (average > 85) return 'A+ (Excellent)';
-        if (average > 75) return 'A (Very Good)';
+        if (average >= 95) return 'O (Outstanding)';
+        if (average >= 85) return 'A+ (Excellent)';
+        if (average >= 75) return 'A (Very Good)';
         if (average >= 65) return 'B+ (Good)';
         if (average >= 55) return 'B (Good)';
         if (average >= 40) return 'C (Average)';
@@ -806,6 +806,54 @@ export class DataService {
             console.log('All subject data cleared successfully');
         } catch (error) {
             console.error('Error clearing subject data:', error);
+            throw error;
+        }
+    }
+
+    // Recalculate all student performance levels with updated grading thresholds
+    async recalculateAllStudentPerformanceLevels(): Promise<{ updated: number; errors: string[] }> {
+        const results = { updated: 0, errors: [] as string[] };
+
+        try {
+            console.log('Starting bulk recalculation of student performance levels...');
+
+            // Get all students
+            const allStudents = await this.getAllStudents();
+            console.log(`Found ${allStudents.length} students to recalculate`);
+
+            // Process in batches of 500 (Firestore limit)
+            const batchSize = 500;
+
+            for (let i = 0; i < allStudents.length; i += batchSize) {
+                const batch = writeBatch(this.db);
+                const currentBatch = allStudents.slice(i, i + batchSize);
+
+                for (const student of currentBatch) {
+                    try {
+                        // Recalculate performance level based on current average
+                        const performanceLevel = this.calculatePerformanceLevel(student.average);
+
+                        // Only update if performance level has changed
+                        if (student.performanceLevel !== performanceLevel) {
+                            const docRef = doc(this.db, this.studentsCollection, student.id);
+                            batch.update(docRef, { performanceLevel });
+                            results.updated++;
+                            console.log(`Updated ${student.name}: ${student.average}% from "${student.performanceLevel}" to "${performanceLevel}"`);
+                        }
+                    } catch (error) {
+                        results.errors.push(`${student.name} (${student.adNo}): ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    }
+                }
+
+                if (currentBatch.length > 0) {
+                    await batch.commit();
+                }
+            }
+
+            console.log(`Bulk recalculation completed: ${results.updated} students updated, ${results.errors.length} errors`);
+            return results;
+        } catch (error) {
+            console.error('Error in bulk recalculation:', error);
             throw error;
         }
     }

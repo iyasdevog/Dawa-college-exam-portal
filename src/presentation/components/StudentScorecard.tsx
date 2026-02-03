@@ -242,13 +242,13 @@ const StudentScorecard: React.FC = () => {
                                     <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{selectedStudentData.grandTotal}</p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
-                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Average Percentage</p>
+                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Average</p>
                                     <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{selectedStudentData.average.toFixed(1)}%</p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
                                     <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Grade</p>
-                                    <p className={`text-4xl font-black print:text-sm print:leading-tight ${selectedStudentData.performanceLevel === 'F (Failed)' ? 'text-red-500 print:performance-failed' :
-                                        selectedStudentData.performanceLevel.includes('Outstanding') ? 'text-purple-500 print:performance-excellent' :
+                                    <p className={`text-3xl font-black print:text-sm print:leading-tight ${selectedStudentData.performanceLevel === 'F (Failed)' ? 'text-red-500 print:performance-failed' :
+                                        selectedStudentData.performanceLevel.includes('Outstanding') ? 'text-emerald-600 print:performance-excellent' :
                                             selectedStudentData.performanceLevel.includes('Excellent') ? 'text-emerald-500 print:performance-excellent' :
                                                 selectedStudentData.performanceLevel.includes('Very Good') ? 'text-blue-500 print:performance-good' :
                                                     selectedStudentData.performanceLevel.includes('Good') ? 'text-teal-500 print:performance-good' :
@@ -258,7 +258,7 @@ const StudentScorecard: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
-                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Subjects</p>
+                                    <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Subjects Cleared</p>
                                     <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">
                                         {studentStats?.passedSubjects}/{studentStats?.totalSubjects}
                                     </p>

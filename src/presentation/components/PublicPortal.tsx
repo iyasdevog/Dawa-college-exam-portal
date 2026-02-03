@@ -574,7 +574,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     </div>
                                     <div className={`bg-slate-50 border border-slate-100 text-center print:p-4 print:rounded-2xl ${isMobile ? 'p-6 rounded-2xl' : 'p-8 rounded-[2rem]'}`}>
                                         <p className={`uppercase font-black text-slate-400 mb-2 tracking-widest ${isMobile ? 'text-xs' : 'text-[10px]'}`}>
-                                            Average Percentage
+                                            Average
                                         </p>
                                         <p className={`font-black text-slate-900 print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'}`}>
                                             {result.average.toFixed(1)}%
@@ -584,8 +584,8 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                         <p className={`uppercase font-black text-slate-400 mb-2 tracking-widest ${isMobile ? 'text-xs' : 'text-[10px]'}`}>
                                             Grade
                                         </p>
-                                        <p className={`font-black print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'} ${result.performanceLevel === 'F (Failed)' ? 'text-red-500' :
-                                            result.performanceLevel.includes('Outstanding') ? 'text-purple-500' :
+                                        <p className={`font-black print:text-2xl ${isMobile ? 'text-2xl' : 'text-3xl'} ${result.performanceLevel === 'F (Failed)' ? 'text-red-500' :
+                                            result.performanceLevel.includes('Outstanding') ? 'text-emerald-600' :
                                                 result.performanceLevel.includes('Excellent') ? 'text-emerald-500' :
                                                     result.performanceLevel.includes('Very Good') ? 'text-blue-500' :
                                                         result.performanceLevel.includes('Good') ? 'text-teal-500' :

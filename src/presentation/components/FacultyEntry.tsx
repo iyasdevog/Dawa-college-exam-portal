@@ -15,6 +15,7 @@ import OfflineStatusIndicator from './OfflineStatusIndicator';
 
 
 const FacultyEntry: React.FC = () => {
+    const [activeTab, setActiveTab] = useState<'marks-entry' | 'upload-tracker'>('marks-entry');
     const [selectedClass, setSelectedClass] = useState('S1');
     const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
     const [selectedSubject, setSelectedSubject] = useState('');
@@ -62,6 +63,11 @@ const FacultyEntry: React.FC = () => {
 
     // Offline capability integration
     const { isOnline, saveDraft, getDraft, deleteDraft } = useOfflineCapability();
+
+    // Upload Tracker filter states
+    const [trackerClassFilter, setTrackerClassFilter] = useState<string>('all');
+    const [trackerTeacherFilter, setTrackerTeacherFilter] = useState<string>('all');
+    const [trackerSubjectSearch, setTrackerSubjectSearch] = useState<string>('');
 
     // Load initial data
     useEffect(() => {
@@ -884,825 +890,1105 @@ const FacultyEntry: React.FC = () => {
             <div className="px-4 md:px-0">
                 <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Faculty Marks Entry</h1>
                 <p className="text-slate-600 mt-2 text-sm md:text-base">Enter and manage student marks for assessments</p>
-            </div>
 
-            {/* Mobile-Optimized Selection Controls */}
-            <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-xl border-2 border-slate-200 mx-6 md:mx-0 print:hidden" style={{
-                background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-            }}>
-
-                <div className={`space-y-4 md:space-y-0 md:grid ${subjectType === 'elective' ? 'md:grid-cols-2' : 'md:grid-cols-3'} md:gap-6`}>
-
-                    {subjectType === 'general' && (
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Class</label>
-                            <select
-                                value={selectedClass}
-                                onChange={(e) => setSelectedClass(e.target.value)}
-                                className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
-                                disabled={isSaving || operationLoading.type !== null}
-                                style={{ minHeight: '48px' }}
-                                aria-label="Select class for marks entry"
-                                aria-describedby="class-help"
-                            >
-                                {CLASSES.map(cls => (
-                                    <option key={cls} value={cls}>{cls}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Subject Type</label>
-                        <select
-                            value={subjectType}
-                            onChange={(e) => setSubjectType(e.target.value as 'general' | 'elective')}
-                            className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
-                            disabled={isSaving || operationLoading.type !== null}
-                            style={{ minHeight: '48px' }}
-                            aria-label="Select subject type"
-                        >
-                            <option value="general">General</option>
-                            <option value="elective">Elective</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-bold text-slate-700">Subject</label>
-                            {/* Offline Status Indicator */}
-                            <OfflineStatusIndicator
-                                className="md:block hidden"
-                            />
-                        </div>
-                        <select
-                            value={selectedSubject}
-                            onChange={(e) => setSelectedSubject(e.target.value)}
-                            className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
-                            disabled={isSaving || operationLoading.type !== null}
-                            style={{ minHeight: '48px' }}
-                            aria-label="Select subject for marks entry"
-                            aria-describedby="subject-help"
-                        >
-                            <option value="">Select Subject</option>
-                            {classSubjects.map(subject => (
-                                <option key={subject.id} value={subject.id}>
-                                    {subject.name} {subject.arabicName && `(${subject.arabicName})`}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                {/* Tab Navigation */}
+                <div className="flex gap-2 mt-6 border-b border-slate-200">
+                    <button
+                        onClick={() => setActiveTab('marks-entry')}
+                        className={`px-6 py-3 font-bold text-sm md:text-base transition-all duration-200 border-b-4 ${activeTab === 'marks-entry'
+                            ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
+                            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                            }`}
+                    >
+                        <i className="fa-solid fa-pen-to-square mr-2"></i>
+                        Marks Entry
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('upload-tracker')}
+                        className={`px-6 py-3 font-bold text-sm md:text-base transition-all duration-200 border-b-4 ${activeTab === 'upload-tracker'
+                            ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
+                            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                            }`}
+                    >
+                        <i className="fa-solid fa-chart-bar mr-2"></i>
+                        Upload Tracker
+                    </button>
                 </div>
-
-                {selectedSubject && (
-                    <div className="mt-4 flex items-center gap-4 print:hidden">
-                        <label className="flex items-center gap-2 print:hidden">
-                            <input
-                                type="checkbox"
-                                checked={showSupplementaryOnly}
-                                onChange={(e) => {
-                                    setShowSupplementaryOnly(e.target.checked);
-                                    // Reload students when toggling supplementary mode
-                                    setTimeout(() => loadStudentsByClass(), 100);
-                                }}
-                                className="w-5 h-5 text-orange-600 focus:ring-orange-500 border-slate-300 rounded print:hidden"
-                                disabled={isSaving || operationLoading.type !== null}
-                                aria-describedby="supplementary-help"
-                                style={{ minHeight: '44px', minWidth: '44px' }}
-                            />
-                            <span className="text-xs md:text-sm font-medium text-slate-700" id="supplementary-help">
-                                Show Supplementary Exam Students Only
-                            </span>
-                        </label>
-                        {showSupplementaryOnly && (
-                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
-                                Supplementary Mode
-                            </span>
-                        )}
-                    </div>
-                )}
-
-                {selectedSubjectData && (
-                    <div className="mt-4 p-3 md:p-4 bg-slate-50 rounded-xl">
-                        <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 text-sm">
-                            <div className="space-y-2">
-                                <div>
-                                    <span className="font-bold text-slate-700">Max TA:</span>
-                                    <span className="ml-2 text-slate-600">{selectedSubjectData.maxTA}</span>
-                                    <span className="ml-2 text-red-600 font-medium">
-                                        (Min: {Math.ceil(selectedSubjectData.maxTA * 0.4)})
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="font-bold text-slate-700">Max CE:</span>
-                                    <span className="ml-2 text-slate-600">{selectedSubjectData.maxCE}</span>
-                                    <span className="ml-2 text-red-600 font-medium">
-                                        (Min: {Math.ceil(selectedSubjectData.maxCE * 0.5)})
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <div>
-                                    <span className="font-bold text-slate-700">Faculty:</span>
-                                    <span className="ml-2 text-slate-600">{selectedSubjectData.facultyName}</span>
-                                </div>
-                                <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded">
-                                    <strong>Passing Rule:</strong> Students must achieve both TA minimum (40%) AND CE minimum (50%) to pass
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-
-
-                {/* Draft Recovery Controls - REMOVED */}
             </div>
 
-            {/* Mobile-Optimized Marks Entry */}
-            {selectedSubject && students.length > 0 ? (
-                <div className="mx-6 md:mx-0 print:hidden">
-                    {/* Mobile Card View */}
-                    <div className="block md:hidden space-y-8 pb-32">{/* Added bottom padding for sticky buttons */}
-                        {/* Enhanced Mobile Navigation Header */}
-                        <div className="bg-white rounded-3xl p-6 shadow-xl border-2 border-slate-200 sticky top-4 z-40" style={{
-                            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-                        }}>
-                            {/* Subject and Student Count */}
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                                        {selectedSubjectData?.name}
-                                    </h2>
-                                    {/* Mobile Offline Status Indicator */}
+            {/* Marks Entry Tab Content */}
+            {activeTab === 'marks-entry' && (
+                <>
+                    {/* Mobile-Optimized Selection Controls */}
+                    <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-xl border-2 border-slate-200 mx-6 md:mx-0 print:hidden" style={{
+                        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                    }}>
+
+                        <div className={`space-y-4 md:space-y-0 md:grid ${subjectType === 'elective' ? 'md:grid-cols-2' : 'md:grid-cols-3'} md:gap-6`}>
+
+                            {subjectType === 'general' && (
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">Class</label>
+                                    <select
+                                        value={selectedClass}
+                                        onChange={(e) => setSelectedClass(e.target.value)}
+                                        className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
+                                        disabled={isSaving || operationLoading.type !== null}
+                                        style={{ minHeight: '48px' }}
+                                        aria-label="Select class for marks entry"
+                                        aria-describedby="class-help"
+                                    >
+                                        {CLASSES.map(cls => (
+                                            <option key={cls} value={cls}>{cls}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">Subject Type</label>
+                                <select
+                                    value={subjectType}
+                                    onChange={(e) => setSubjectType(e.target.value as 'general' | 'elective')}
+                                    className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
+                                    disabled={isSaving || operationLoading.type !== null}
+                                    style={{ minHeight: '48px' }}
+                                    aria-label="Select subject type"
+                                >
+                                    <option value="general">General</option>
+                                    <option value="elective">Elective</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-bold text-slate-700">Subject</label>
+                                    {/* Offline Status Indicator */}
                                     <OfflineStatusIndicator
-                                        className="md:hidden block"
+                                        className="md:block hidden"
                                     />
                                 </div>
-                                <div className="flex items-center gap-4">
-                                    {/* Quick Access Button */}
-                                    <button
-                                        onClick={() => setShowStudentList(!showStudentList)}
-                                        className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg"
-                                        title="Quick Student Access"
-                                        style={{ minHeight: '48px', minWidth: '48px' }}
-                                        aria-label={showStudentList ? "Close student list" : "Open student list"}
-                                        aria-expanded={showStudentList}
-                                        aria-controls="student-list-panel"
-                                    >
-                                        <i className={`fa-solid ${showStudentList ? 'fa-times' : 'fa-list'} text-white text-base`}></i>
-                                    </button>
-                                    <div className="text-right">
-                                        <div className="text-base text-slate-700 font-bold">
-                                            {students.length} students
+                                <select
+                                    value={selectedSubject}
+                                    onChange={(e) => setSelectedSubject(e.target.value)}
+                                    className="w-full p-4 text-xl md:text-base border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white transition-all duration-300 ease-out hover:border-slate-400 hover:shadow-sm active:scale-[0.99] print:hidden"
+                                    disabled={isSaving || operationLoading.type !== null}
+                                    style={{ minHeight: '48px' }}
+                                    aria-label="Select subject for marks entry"
+                                    aria-describedby="subject-help"
+                                >
+                                    <option value="">Select Subject</option>
+                                    {classSubjects.map(subject => (
+                                        <option key={subject.id} value={subject.id}>
+                                            {subject.name} {subject.arabicName && `(${subject.arabicName})`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {selectedSubject && (
+                            <div className="mt-4 flex items-center gap-4 print:hidden">
+                                <label className="flex items-center gap-2 print:hidden">
+                                    <input
+                                        type="checkbox"
+                                        checked={showSupplementaryOnly}
+                                        onChange={(e) => {
+                                            setShowSupplementaryOnly(e.target.checked);
+                                            // Reload students when toggling supplementary mode
+                                            setTimeout(() => loadStudentsByClass(), 100);
+                                        }}
+                                        className="w-5 h-5 text-orange-600 focus:ring-orange-500 border-slate-300 rounded print:hidden"
+                                        disabled={isSaving || operationLoading.type !== null}
+                                        aria-describedby="supplementary-help"
+                                        style={{ minHeight: '44px', minWidth: '44px' }}
+                                    />
+                                    <span className="text-xs md:text-sm font-medium text-slate-700" id="supplementary-help">
+                                        Show Supplementary Exam Students Only
+                                    </span>
+                                </label>
+                                {showSupplementaryOnly && (
+                                    <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                                        Supplementary Mode
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {selectedSubjectData && (
+                            <div className="mt-4 p-3 md:p-4 bg-slate-50 rounded-xl">
+                                <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 text-sm">
+                                    <div className="space-y-2">
+                                        <div>
+                                            <span className="font-bold text-slate-700">Max TA:</span>
+                                            <span className="ml-2 text-slate-600">{selectedSubjectData.maxTA}</span>
+                                            <span className="ml-2 text-red-600 font-medium">
+                                                (Min: {Math.ceil(selectedSubjectData.maxTA * 0.4)})
+                                            </span>
                                         </div>
-                                        <div className="text-sm text-slate-500 font-medium">
-                                            {completionStats.completed} completed
+                                        <div>
+                                            <span className="font-bold text-slate-700">Max CE:</span>
+                                            <span className="ml-2 text-slate-600">{selectedSubjectData.maxCE}</span>
+                                            <span className="ml-2 text-red-600 font-medium">
+                                                (Min: {Math.ceil(selectedSubjectData.maxCE * 0.5)})
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <span className="font-bold text-slate-700">Faculty:</span>
+                                            <span className="ml-2 text-slate-600">{selectedSubjectData.facultyName}</span>
+                                        </div>
+                                        <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded">
+                                            <strong>Passing Rule:</strong> Students must achieve both TA minimum (40%) AND CE minimum (50%) to pass
                                         </div>
                                     </div>
                                 </div>
                             </div>
+                        )}
 
-                            {/* Expandable Student List with Search */}
-                            {showStudentList && (
-                                <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in slide-in-from-top-2 duration-300" id="student-list-panel" role="region" aria-label="Student list panel">
-                                    {/* Search Input */}
-                                    <div className="mb-3">
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                placeholder="Search by name or admission number..."
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="w-full p-3 pl-10 text-sm border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-blue-500/40 focus:border-blue-500 bg-white transition-all duration-200"
-                                                style={{ minHeight: '44px' }}
-                                                aria-label="Search students by name or admission number"
-                                                role="searchbox"
-                                                aria-describedby="search-results-count"
+
+
+                        {/* Draft Recovery Controls - REMOVED */}
+                    </div>
+
+                    {/* Mobile-Optimized Marks Entry */}
+                    {selectedSubject && students.length > 0 ? (
+                        <div className="mx-6 md:mx-0 print:hidden">
+                            {/* Mobile Card View */}
+                            <div className="block md:hidden space-y-8 pb-32">{/* Added bottom padding for sticky buttons */}
+                                {/* Enhanced Mobile Navigation Header */}
+                                <div className="bg-white rounded-3xl p-6 shadow-xl border-2 border-slate-200 sticky top-4 z-40" style={{
+                                    background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                                }}>
+                                    {/* Subject and Student Count */}
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div className="flex items-center gap-3">
+                                            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                                                {selectedSubjectData?.name}
+                                            </h2>
+                                            {/* Mobile Offline Status Indicator */}
+                                            <OfflineStatusIndicator
+                                                className="md:hidden block"
                                             />
-                                            <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"></i>
-                                            {searchQuery && (
-                                                <button
-                                                    onClick={() => setSearchQuery('')}
-                                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors duration-200 w-6 h-6 flex items-center justify-center"
-                                                    aria-label="Clear search"
-                                                    style={{ minHeight: '44px', minWidth: '44px' }}
-                                                >
-                                                    <i className="fa-solid fa-times text-sm"></i>
-                                                </button>
-                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            {/* Quick Access Button */}
+                                            <button
+                                                onClick={() => setShowStudentList(!showStudentList)}
+                                                className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg"
+                                                title="Quick Student Access"
+                                                style={{ minHeight: '48px', minWidth: '48px' }}
+                                                aria-label={showStudentList ? "Close student list" : "Open student list"}
+                                                aria-expanded={showStudentList}
+                                                aria-controls="student-list-panel"
+                                            >
+                                                <i className={`fa-solid ${showStudentList ? 'fa-times' : 'fa-list'} text-white text-base`}></i>
+                                            </button>
+                                            <div className="text-right">
+                                                <div className="text-base text-slate-700 font-bold">
+                                                    {students.length} students
+                                                </div>
+                                                <div className="text-sm text-slate-500 font-medium">
+                                                    {completionStats.completed} completed
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Student List */}
-                                    <div className="max-h-64 overflow-y-auto space-y-2" role="list" aria-label="Student list" id="search-results-count" aria-live="polite">
-                                        {filteredStudents.length > 0 ? (
-                                            filteredStudents.map((student, index) => {
-                                                const originalIndex = students.findIndex(s => s.id === student.id);
-                                                const isCompleted = marksData[student.id]?.ta && marksData[student.id]?.ce;
-                                                const isCurrent = originalIndex === currentStudentIndex;
+                                    {/* Expandable Student List with Search */}
+                                    {showStudentList && (
+                                        <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in slide-in-from-top-2 duration-300" id="student-list-panel" role="region" aria-label="Student list panel">
+                                            {/* Search Input */}
+                                            <div className="mb-3">
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search by name or admission number..."
+                                                        value={searchQuery}
+                                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                                        className="w-full p-3 pl-10 text-sm border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-blue-500/40 focus:border-blue-500 bg-white transition-all duration-200"
+                                                        style={{ minHeight: '44px' }}
+                                                        aria-label="Search students by name or admission number"
+                                                        role="searchbox"
+                                                        aria-describedby="search-results-count"
+                                                    />
+                                                    <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"></i>
+                                                    {searchQuery && (
+                                                        <button
+                                                            onClick={() => setSearchQuery('')}
+                                                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors duration-200 w-6 h-6 flex items-center justify-center"
+                                                            aria-label="Clear search"
+                                                            style={{ minHeight: '44px', minWidth: '44px' }}
+                                                        >
+                                                            <i className="fa-solid fa-times text-sm"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Student List */}
+                                            <div className="max-h-64 overflow-y-auto space-y-2" role="list" aria-label="Student list" id="search-results-count" aria-live="polite">
+                                                {filteredStudents.length > 0 ? (
+                                                    filteredStudents.map((student, index) => {
+                                                        const originalIndex = students.findIndex(s => s.id === student.id);
+                                                        const isCompleted = marksData[student.id]?.ta && marksData[student.id]?.ce;
+                                                        const isCurrent = originalIndex === currentStudentIndex;
+
+                                                        return (
+                                                            <button
+                                                                key={student.id}
+                                                                onClick={() => jumpToStudent(student.id)}
+                                                                className={`w-full p-3 text-left rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] ${isCurrent
+                                                                    ? 'bg-blue-500 text-white shadow-md'
+                                                                    : isCompleted
+                                                                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                                                        : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                                                                    }`}
+                                                                style={{ minHeight: '44px' }}
+                                                                role="listitem"
+                                                                aria-label={`Navigate to ${student.name}, admission ${student.adNo}, position ${originalIndex + 1} of ${students.length}${isCompleted ? ', completed' : ', pending'}${isCurrent ? ', currently selected' : ''}`}
+                                                            >
+                                                                <div className="flex items-center justify-between">
+                                                                    <div>
+                                                                        <div className="font-medium text-sm">
+                                                                            {student.name}
+                                                                        </div>
+                                                                        <div className="text-xs opacity-75">
+                                                                            Adm: {student.adNo}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs font-medium">
+                                                                            #{originalIndex + 1}
+                                                                        </span>
+                                                                        {isCompleted && (
+                                                                            <i className="fa-solid fa-check-circle text-xs"></i>
+                                                                        )}
+                                                                        {isCurrent && (
+                                                                            <i className="fa-solid fa-arrow-right text-xs"></i>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="text-center py-4 text-slate-500">
+                                                        <i className="fa-solid fa-search text-2xl mb-2"></i>
+                                                        <div className="text-sm">
+                                                            {searchQuery ? 'No students found matching your search' : 'No students available'}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Quick Stats */}
+                                            {searchQuery && filteredStudents.length > 0 && (
+                                                <div className="mt-3 pt-3 border-t border-slate-300">
+                                                    <div className="text-xs text-slate-600 text-center">
+                                                        Showing {filteredStudents.length} of {students.length} students
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Student Navigation Controls */}
+                                    {students.length > 0 && (
+                                        <div className="mb-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                {/* Previous Button */}
+                                                <button
+                                                    onClick={navigateToPrevious}
+                                                    disabled={currentStudentIndex === 0}
+                                                    className="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 active:scale-95"
+                                                    style={{ minHeight: '48px', minWidth: '48px' }}
+                                                    title="Previous Student"
+                                                    aria-label="Navigate to previous student"
+                                                    aria-disabled={currentStudentIndex === 0}
+                                                >
+                                                    <i className="fa-solid fa-chevron-left text-slate-600 text-lg"></i>
+                                                </button>
+
+                                                {/* Current Student Position and Progress */}
+                                                <div className="flex-1 mx-4 text-center">
+                                                    <div className="text-lg font-black text-slate-900 mb-1">
+                                                        Student {currentStudentIndex + 1} of {students.length}
+                                                    </div>
+                                                    <div className="text-sm text-slate-600 mb-2">
+                                                        {students[currentStudentIndex]?.name}
+                                                    </div>
+
+                                                    {/* Swipe Hint */}
+                                                    {students.length > 1 && (
+                                                        <div className="flex items-center justify-center gap-2 mb-2">
+                                                            <i className="fa-solid fa-hand-pointer text-xs text-slate-400"></i>
+                                                            <span className="text-xs text-slate-500">Swipe cards to navigate</span>
+                                                            <i className="fa-solid fa-arrows-left-right text-xs text-slate-400"></i>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Completion Status Indicator */}
+                                                    <div className="flex items-center justify-center gap-2 mb-2">
+                                                        {marksData[students[currentStudentIndex]?.id]?.ta && marksData[students[currentStudentIndex]?.id]?.ce ? (
+                                                            <div className="flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+                                                                <i className="fa-solid fa-check-circle"></i>
+                                                                <span>Completed</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                                                                <i className="fa-solid fa-clock"></i>
+                                                                <span>Pending</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Next Button */}
+                                                <button
+                                                    onClick={navigateToNext}
+                                                    disabled={currentStudentIndex === students.length - 1}
+                                                    className="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 active:scale-95"
+                                                    style={{ minHeight: '48px', minWidth: '48px' }}
+                                                    title="Next Student"
+                                                    aria-label="Navigate to next student"
+                                                    aria-disabled={currentStudentIndex === students.length - 1}
+                                                >
+                                                    <i className="fa-solid fa-chevron-right text-slate-600 text-lg"></i>
+                                                </button>
+                                            </div>
+
+
+
+
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Render visible students with pagination */}
+                                {paginatedStudents.map((student, index) => {
+                                    const isCurrent = index === currentStudentIndex;
+                                    const studentMarks = marksData[student.id] || { ta: '', ce: '' };
+
+                                    return (
+                                        <div
+                                            key={student.id}
+                                            className={`bg-slate-50 rounded-xl p-4 transition-all ${isCurrent ? 'ring-2 ring-emerald-500 bg-emerald-50' : ''}`}
+                                        >
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div>
+                                                    <h3 className="font-bold text-slate-900">{student.name}</h3>
+                                                    <p className="text-sm text-slate-600">Adm: {student.adNo}</p>
+                                                </div>
+                                                <span className="text-xs text-slate-500">
+                                                    {index + 1} of {students.length}
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                                        TA (Max: {selectedSubjectData?.maxTA})
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        value={studentMarks.ta}
+                                                        onChange={(e) => handleMarksChange(student.id, 'ta', e.target.value)}
+                                                        className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                                                        max={selectedSubjectData?.maxTA}
+                                                        min="0"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                                        CE (Max: {selectedSubjectData?.maxCE})
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        value={studentMarks.ce}
+                                                        onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
+                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxTA === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
+                                                        max={selectedSubjectData?.maxCE}
+                                                        min="0"
+                                                        disabled={selectedSubjectData?.maxTA === 100}
+                                                        data-student={student.id}
+                                                        data-field="ce"
+                                                        placeholder={selectedSubjectData?.maxTA === 100 ? "N/A" : ""}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Load More Button */}
+                                {hasMore && (
+                                    <button
+                                        onClick={() => setCurrentPage(prev => prev + 1)}
+                                        className="w-full p-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all"
+                                    >
+                                        Load More ({students.length - paginatedStudents.length} remaining)
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Desktop Table View - Hidden on Mobile */}
+                            <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                {/* Desktop table content remains the same as original */}
+                                <div className="p-6 border-b border-slate-200">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-xl font-black text-slate-900">
+                                            {selectedSubjectData?.name} - {selectedClass} Class
+                                        </h2>
+                                        <div className="text-sm text-slate-600">
+                                            {students.length} students
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-slate-50">
+                                            <tr>
+                                                <th className="text-left p-4 font-bold text-slate-700">Adm No</th>
+                                                <th className="text-left p-4 font-bold text-slate-700">Student Name</th>
+                                                <th className="text-center p-4 font-bold text-slate-700">
+                                                    TA ({selectedSubjectData?.maxTA})
+                                                </th>
+                                                <th className="text-center p-4 font-bold text-slate-700">
+                                                    CE ({selectedSubjectData?.maxCE})
+                                                </th>
+                                                <th className="text-center p-4 font-bold text-slate-700">Total</th>
+                                                <th className="text-center p-4 font-bold text-slate-700">Status</th>
+                                                <th className="text-center p-4 font-bold text-slate-700">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {students.map((student, index) => {
+                                                const total = validationHelpers?.calculateTotal(student.id) || 0;
+                                                const status = validationHelpers?.getStatus(student.id) || 'Pending';
+                                                const isTAExceeding = validationHelpers?.isTAExceedingMax(student.id) || false;
+                                                const isCEExceeding = validationHelpers?.isCEExceedingMax(student.id) || false;
+                                                const isTAFailing = validationHelpers?.isTAFailing(student.id) || false;
+                                                const isCEFailing = validationHelpers?.isCEFailing(student.id) || false;
 
                                                 return (
-                                                    <button
-                                                        key={student.id}
-                                                        onClick={() => jumpToStudent(student.id)}
-                                                        className={`w-full p-3 text-left rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] ${isCurrent
-                                                            ? 'bg-blue-500 text-white shadow-md'
-                                                            : isCompleted
-                                                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                                                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                                                            }`}
-                                                        style={{ minHeight: '44px' }}
-                                                        role="listitem"
-                                                        aria-label={`Navigate to ${student.name}, admission ${student.adNo}, position ${originalIndex + 1} of ${students.length}${isCompleted ? ', completed' : ', pending'}${isCurrent ? ', currently selected' : ''}`}
-                                                    >
-                                                        <div className="flex items-center justify-between">
-                                                            <div>
-                                                                <div className="font-medium text-sm">
-                                                                    {student.name}
+                                                    <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                                        <td className="p-4 font-medium text-slate-900">{student.adNo}</td>
+                                                        <td className="p-4 font-medium text-slate-900">{student.name}</td>
+                                                        <td className="p-4 text-center">
+                                                            <input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                pattern="[0-9]*"
+                                                                autoComplete="off"
+                                                                autoCorrect="off"
+                                                                autoCapitalize="off"
+                                                                spellCheck="false"
+                                                                enterKeyHint="next"
+                                                                data-student={student.id}
+                                                                data-field="ta"
+                                                                value={marksData[student.id]?.ta || ''}
+                                                                onChange={(e) => handleMarksChange(student.id, 'ta', e.target.value)}
+                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'ta')}
+                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isTAExceeding
+                                                                    ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
+                                                                    : isTAFailing
+                                                                        ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                        : marksData[student.id]?.ta && !isTAFailing && !isTAExceeding
+                                                                            ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                            : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
+                                                                    }`}
+                                                                placeholder="0"
+                                                                disabled={isSaving || operationLoading.type !== null}
+                                                                maxLength={3}
+                                                                style={{ minHeight: '48px' }}
+                                                            />
+                                                            {isTAExceeding && (
+                                                                <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
+                                                                    <i className="fa-solid fa-exclamation-triangle mr-1"></i>
+                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxTA}
                                                                 </div>
-                                                                <div className="text-xs opacity-75">
-                                                                    Adm: {student.adNo}
+                                                            )}
+                                                            {!isTAExceeding && isTAFailing && (
+                                                                <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
+                                                                    <i className="fa-solid fa-exclamation-circle mr-1"></i>
+                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxTA || 0) * 0.4)}
                                                                 </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-xs font-medium">
-                                                                    #{originalIndex + 1}
-                                                                </span>
-                                                                {isCompleted && (
-                                                                    <i className="fa-solid fa-check-circle text-xs"></i>
-                                                                )}
-                                                                {isCurrent && (
-                                                                    <i className="fa-solid fa-arrow-right text-xs"></i>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </button>
+                                                            )}
+                                                            {marksData[student.id]?.ta && !isTAFailing && !isTAExceeding && (
+                                                                <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
+                                                                    <i className="fa-solid fa-check-circle mr-1"></i>
+                                                                    Valid
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 text-center">
+                                                            <input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                pattern="[0-9]*"
+                                                                autoComplete="off"
+                                                                autoCorrect="off"
+                                                                autoCapitalize="off"
+                                                                spellCheck="false"
+                                                                enterKeyHint="done"
+                                                                data-student={student.id}
+                                                                data-field="ce"
+                                                                value={marksData[student.id]?.ce || ''}
+                                                                onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
+                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'ce')}
+                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isCEExceeding
+                                                                    ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
+                                                                    : isCEFailing
+                                                                        ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                        : marksData[student.id]?.ce && !isCEFailing && !isCEExceeding
+                                                                            ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                            : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
+                                                                    }`}
+                                                                placeholder="0"
+                                                                disabled={isSaving || operationLoading.type !== null}
+                                                                maxLength={3}
+                                                                style={{ minHeight: '48px' }}
+                                                            />
+                                                            {isCEExceeding && (
+                                                                <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
+                                                                    <i className="fa-solid fa-exclamation-triangle mr-1"></i>
+                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxCE}
+                                                                </div>
+                                                            )}
+                                                            {!isCEExceeding && isCEFailing && (
+                                                                <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
+                                                                    <i className="fa-solid fa-exclamation-circle mr-1"></i>
+                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxCE || 0) * 0.5)}
+                                                                </div>
+                                                            )}
+                                                            {marksData[student.id]?.ce && !isCEFailing && !isCEExceeding && (
+                                                                <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
+                                                                    <i className="fa-solid fa-check-circle mr-1"></i>
+                                                                    Valid
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 text-center font-bold text-slate-900">
+                                                            {marksData[student.id]?.ta && marksData[student.id]?.ce ? total : '-'}
+                                                        </td>
+                                                        <td className="p-4 text-center">
+                                                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${status === 'Passed' ? 'bg-emerald-100 text-emerald-700' :
+                                                                status === 'Failed' ? 'bg-red-100 text-red-700' :
+                                                                    'bg-slate-100 text-slate-600'
+                                                                }`}>
+                                                                {status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 text-center">
+                                                            <button
+                                                                onClick={() => handleClearStudentMarks(student.id, student.name)}
+                                                                disabled={isSaving || operationLoading.type !== null || (!marksData[student.id]?.ta && !marksData[student.id]?.ce)}
+                                                                className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 hover:shadow-sm"
+                                                                title={`Clear marks for ${student.name}`}
+                                                            >
+                                                                <i className="fa-solid fa-trash text-xs"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
                                                 );
-                                            })
-                                        ) : (
-                                            <div className="text-center py-4 text-slate-500">
-                                                <i className="fa-solid fa-search text-2xl mb-2"></i>
-                                                <div className="text-sm">
-                                                    {searchQuery ? 'No students found matching your search' : 'No students available'}
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="p-6 border-t border-slate-200 flex justify-between items-center">
+                                    <div className="text-sm text-slate-600">
+                                        {completionStats.completed} of {completionStats.total} students have marks entered
+                                        {invalidMarksInfo.hasInvalid && (
+                                            <div className="text-red-600 font-medium mt-1">
+                                                ⚠️ {invalidMarksInfo.count} student(s) have invalid marks exceeding maximum values
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleSaveTAMarks}
+                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                            className="px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
+                                            style={{ minHeight: '44px' }}
+                                            aria-label="Save TA marks only"
+                                        >
+                                            <i className="fa-solid fa-clipboard-check text-sm"></i>
+                                            Save TA
+                                        </button>
+                                        <button
+                                            onClick={handleSaveCEMarks}
+                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                            className="px-4 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
+                                            style={{ minHeight: '44px' }}
+                                            aria-label="Save CE marks only"
+                                        >
+                                            <i className="fa-solid fa-clipboard-check text-sm"></i>
+                                            Save CE
+                                        </button>
+                                        <button
+                                            onClick={handleClearAll}
+                                            disabled={isSaving || operationLoading.type !== null}
+                                            className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md active:shadow-inner"
+                                            style={{ minHeight: '44px' }}
+                                            aria-label="Clear all marks"
+                                        >
+                                            Clear All
+                                        </button>
+                                        <button
+                                            onClick={handleSaveMarks}
+                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject || invalidMarksInfo.hasInvalid}
+                                            className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg active:shadow-inner ${invalidMarksInfo.hasInvalid
+                                                ? 'bg-red-600 text-white hover:bg-red-700'
+                                                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                                }`}
+                                            style={{ minHeight: '44px' }}
+                                            aria-label="Save all marks (both TA and CE)"
+                                        >
+                                            {isSaving ? (
+                                                <>
+                                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                    Saving Marks...
+                                                </>
+                                            ) : invalidMarksInfo.hasInvalid ? (
+                                                <>
+                                                    <i className="fa-solid fa-exclamation-triangle"></i>
+                                                    Fix Invalid Marks
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fa-solid fa-save"></i>
+                                                    Save All Marks
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Enhanced Mobile Action Buttons with Sticky Positioning */}
+                            <div className={`block md:hidden fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 ease-out ${isScrolling ? 'transform translate-y-1 scale-[0.98]' : 'transform translate-y-0 scale-100'
+                                }`}>
+                                {/* Background blur and shadow */}
+                                <div className="absolute inset-0 bg-white/80 backdrop-blur-md border-t border-slate-200/50"></div>
+
+                                {/* Action buttons container */}
+                                <div className="relative p-4 pb-6">
+                                    {/* Scroll to top button */}
+                                    {showScrollToTop && (
+                                        <div className="flex justify-center mb-4">
+                                            <button
+                                                onClick={scrollToTop}
+                                                className="flex items-center justify-center w-12 h-12 bg-slate-600 hover:bg-slate-700 active:bg-slate-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-110 active:scale-95"
+                                                title="Scroll to top"
+                                                style={{
+                                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)'
+                                                }}
+                                            >
+                                                <i className="fa-solid fa-chevron-up text-lg"></i>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Status display */}
+                                    <div className="text-center mb-4">
+                                        <div className="text-lg font-black text-slate-900 mb-1">
+                                            {completionStats.completed} of {completionStats.total}
+                                        </div>
+                                        <div className="text-sm text-slate-600 font-semibold">students completed</div>
+                                        {invalidMarksInfo.hasInvalid && (
+                                            <div className="mt-3 p-3 bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300 rounded-xl shadow-md">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <i className="fa-solid fa-exclamation-triangle text-red-600 text-sm animate-pulse"></i>
+                                                    <span className="text-sm font-bold text-red-700">
+                                                        {invalidMarksInfo.count} student(s) have invalid marks
+                                                    </span>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Quick Stats */}
-                                    {searchQuery && filteredStudents.length > 0 && (
-                                        <div className="mt-3 pt-3 border-t border-slate-300">
-                                            <div className="text-xs text-slate-600 text-center">
-                                                Showing {filteredStudents.length} of {students.length} students
-                                            </div>
+                                    {/* Enhanced Action buttons with separate TA/CE save options */}
+                                    <div className="space-y-3">
+                                        {/* Primary save buttons row */}
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleSaveTAMarks}
+                                                disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                                className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg"
+                                                style={{
+                                                    minHeight: '48px',
+                                                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)'
+                                                }}
+                                                aria-label="Save TA marks only"
+                                            >
+                                                <i className="fa-solid fa-clipboard-check text-sm"></i>
+                                                <span className="text-sm">Save TA</span>
+                                            </button>
+
+                                            <button
+                                                onClick={handleSaveCEMarks}
+                                                disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                                className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95 hover:from-purple-700 hover:to-purple-800 hover:shadow-lg"
+                                                style={{
+                                                    minHeight: '48px',
+                                                    boxShadow: '0 4px 6px -1px rgba(147, 51, 234, 0.3)'
+                                                }}
+                                                aria-label="Save CE marks only"
+                                            >
+                                                <i className="fa-solid fa-clipboard-check text-sm"></i>
+                                                <span className="text-sm">Save CE</span>
+                                            </button>
+
+                                            <button
+                                                onClick={handleClearAll}
+                                                disabled={isSaving || operationLoading.type !== null}
+                                                className="flex-1 py-3 px-4 border-2 border-slate-400 text-slate-700 bg-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 hover:bg-slate-50 hover:border-slate-500 hover:shadow-lg"
+                                                style={{
+                                                    minHeight: '48px',
+                                                    boxShadow: '0 2px 4px -1px rgba(0, 0, 0, 0.1)'
+                                                }}
+                                                aria-label="Clear all marks"
+                                            >
+                                                <i className="fa-solid fa-trash-can text-sm"></i>
+                                                <span className="text-sm">Clear</span>
+                                            </button>
                                         </div>
-                                    )}
-                                </div>
-                            )}
 
-                            {/* Student Navigation Controls */}
-                            {students.length > 0 && (
-                                <div className="mb-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                        {/* Previous Button */}
+                                        {/* Main save all button */}
                                         <button
-                                            onClick={navigateToPrevious}
-                                            disabled={currentStudentIndex === 0}
-                                            className="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 active:scale-95"
-                                            style={{ minHeight: '48px', minWidth: '48px' }}
-                                            title="Previous Student"
-                                            aria-label="Navigate to previous student"
-                                            aria-disabled={currentStudentIndex === 0}
+                                            onClick={handleSaveMarks}
+                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject || invalidMarksInfo.hasInvalid}
+                                            className={`w-full py-4 px-6 rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 transform active:scale-95 ${invalidMarksInfo.hasInvalid
+                                                ? 'bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 active:from-red-800 active:to-red-900 hover:shadow-xl active:shadow-inner'
+                                                : 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 active:from-emerald-800 active:to-emerald-900 hover:shadow-xl active:shadow-inner'
+                                                }`}
+                                            style={{
+                                                minHeight: '56px',
+                                                boxShadow: invalidMarksInfo.hasInvalid
+                                                    ? '0 10px 25px -5px rgba(220, 38, 38, 0.4), 0 4px 6px -1px rgba(220, 38, 38, 0.1)'
+                                                    : '0 10px 25px -5px rgba(16, 185, 129, 0.4), 0 4px 6px -1px rgba(16, 185, 129, 0.1)'
+                                            }}
+                                            aria-label="Save all marks (both TA and CE)"
                                         >
-                                            <i className="fa-solid fa-chevron-left text-slate-600 text-lg"></i>
-                                        </button>
-
-                                        {/* Current Student Position and Progress */}
-                                        <div className="flex-1 mx-4 text-center">
-                                            <div className="text-lg font-black text-slate-900 mb-1">
-                                                Student {currentStudentIndex + 1} of {students.length}
-                                            </div>
-                                            <div className="text-sm text-slate-600 mb-2">
-                                                {students[currentStudentIndex]?.name}
-                                            </div>
-
-                                            {/* Swipe Hint */}
-                                            {students.length > 1 && (
-                                                <div className="flex items-center justify-center gap-2 mb-2">
-                                                    <i className="fa-solid fa-hand-pointer text-xs text-slate-400"></i>
-                                                    <span className="text-xs text-slate-500">Swipe cards to navigate</span>
-                                                    <i className="fa-solid fa-arrows-left-right text-xs text-slate-400"></i>
-                                                </div>
+                                            {isSaving ? (
+                                                <>
+                                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                    <span>Saving...</span>
+                                                </>
+                                            ) : invalidMarksInfo.hasInvalid ? (
+                                                <>
+                                                    <i className="fa-solid fa-exclamation-triangle text-base"></i>
+                                                    <span>Fix Invalid Marks</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fa-solid fa-save text-base"></i>
+                                                    <span>Save All Marks</span>
+                                                </>
                                             )}
-
-                                            {/* Completion Status Indicator */}
-                                            <div className="flex items-center justify-center gap-2 mb-2">
-                                                {marksData[students[currentStudentIndex]?.id]?.ta && marksData[students[currentStudentIndex]?.id]?.ce ? (
-                                                    <div className="flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
-                                                        <i className="fa-solid fa-check-circle"></i>
-                                                        <span>Completed</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-                                                        <i className="fa-solid fa-clock"></i>
-                                                        <span>Pending</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Next Button */}
-                                        <button
-                                            onClick={navigateToNext}
-                                            disabled={currentStudentIndex === students.length - 1}
-                                            className="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 active:scale-95"
-                                            style={{ minHeight: '48px', minWidth: '48px' }}
-                                            title="Next Student"
-                                            aria-label="Navigate to next student"
-                                            aria-disabled={currentStudentIndex === students.length - 1}
-                                        >
-                                            <i className="fa-solid fa-chevron-right text-slate-600 text-lg"></i>
                                         </button>
                                     </div>
 
-
-
-
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Render visible students with pagination */}
-                        {paginatedStudents.map((student, index) => {
-                            const isCurrent = index === currentStudentIndex;
-                            const studentMarks = marksData[student.id] || { ta: '', ce: '' };
-
-                            return (
-                                <div
-                                    key={student.id}
-                                    className={`bg-slate-50 rounded-xl p-4 transition-all ${isCurrent ? 'ring-2 ring-emerald-500 bg-emerald-50' : ''}`}
-                                >
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div>
-                                            <h3 className="font-bold text-slate-900">{student.name}</h3>
-                                            <p className="text-sm text-slate-600">Adm: {student.adNo}</p>
-                                        </div>
-                                        <span className="text-xs text-slate-500">
-                                            {index + 1} of {students.length}
-                                        </span>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">
-                                                TA (Max: {selectedSubjectData?.maxTA})
-                                            </label>
-                                            <input
-                                                type="number"
-                                                value={studentMarks.ta}
-                                                onChange={(e) => handleMarksChange(student.id, 'ta', e.target.value)}
-                                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                                                max={selectedSubjectData?.maxTA}
-                                                min="0"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">
-                                                CE (Max: {selectedSubjectData?.maxCE})
-                                            </label>
-                                            <input
-                                                type="number"
-                                                value={studentMarks.ce}
-                                                onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
-                                                className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxTA === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
-                                                max={selectedSubjectData?.maxCE}
-                                                min="0"
-                                                disabled={selectedSubjectData?.maxTA === 100}
-                                                data-student={student.id}
-                                                data-field="ce"
-                                                placeholder={selectedSubjectData?.maxTA === 100 ? "N/A" : ""}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-
-                        {/* Load More Button */}
-                        {hasMore && (
-                            <button
-                                onClick={() => setCurrentPage(prev => prev + 1)}
-                                className="w-full p-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all"
-                            >
-                                Load More ({students.length - paginatedStudents.length} remaining)
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Desktop Table View - Hidden on Mobile */}
-                    <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                        {/* Desktop table content remains the same as original */}
-                        <div className="p-6 border-b border-slate-200">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-xl font-black text-slate-900">
-                                    {selectedSubjectData?.name} - {selectedClass} Class
-                                </h2>
-                                <div className="text-sm text-slate-600">
-                                    {students.length} students
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-slate-50">
-                                    <tr>
-                                        <th className="text-left p-4 font-bold text-slate-700">Adm No</th>
-                                        <th className="text-left p-4 font-bold text-slate-700">Student Name</th>
-                                        <th className="text-center p-4 font-bold text-slate-700">
-                                            TA ({selectedSubjectData?.maxTA})
-                                        </th>
-                                        <th className="text-center p-4 font-bold text-slate-700">
-                                            CE ({selectedSubjectData?.maxCE})
-                                        </th>
-                                        <th className="text-center p-4 font-bold text-slate-700">Total</th>
-                                        <th className="text-center p-4 font-bold text-slate-700">Status</th>
-                                        <th className="text-center p-4 font-bold text-slate-700">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {students.map((student, index) => {
-                                        const total = validationHelpers?.calculateTotal(student.id) || 0;
-                                        const status = validationHelpers?.getStatus(student.id) || 'Pending';
-                                        const isTAExceeding = validationHelpers?.isTAExceedingMax(student.id) || false;
-                                        const isCEExceeding = validationHelpers?.isCEExceedingMax(student.id) || false;
-                                        const isTAFailing = validationHelpers?.isTAFailing(student.id) || false;
-                                        const isCEFailing = validationHelpers?.isCEFailing(student.id) || false;
-
-                                        return (
-                                            <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                                <td className="p-4 font-medium text-slate-900">{student.adNo}</td>
-                                                <td className="p-4 font-medium text-slate-900">{student.name}</td>
-                                                <td className="p-4 text-center">
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        pattern="[0-9]*"
-                                                        autoComplete="off"
-                                                        autoCorrect="off"
-                                                        autoCapitalize="off"
-                                                        spellCheck="false"
-                                                        enterKeyHint="next"
-                                                        data-student={student.id}
-                                                        data-field="ta"
-                                                        value={marksData[student.id]?.ta || ''}
-                                                        onChange={(e) => handleMarksChange(student.id, 'ta', e.target.value)}
-                                                        onKeyDown={(e) => handleKeyDown(e, student.id, 'ta')}
-                                                        className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isTAExceeding
-                                                            ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
-                                                            : isTAFailing
-                                                                ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                : marksData[student.id]?.ta && !isTAFailing && !isTAExceeding
-                                                                    ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                    : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
-                                                            }`}
-                                                        placeholder="0"
-                                                        disabled={isSaving || operationLoading.type !== null}
-                                                        maxLength={3}
-                                                        style={{ minHeight: '48px' }}
-                                                    />
-                                                    {isTAExceeding && (
-                                                        <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
-                                                            <i className="fa-solid fa-exclamation-triangle mr-1"></i>
-                                                            Max: {subjects.find(s => s.id === selectedSubject)?.maxTA}
-                                                        </div>
-                                                    )}
-                                                    {!isTAExceeding && isTAFailing && (
-                                                        <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
-                                                            <i className="fa-solid fa-exclamation-circle mr-1"></i>
-                                                            Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxTA || 0) * 0.4)}
-                                                        </div>
-                                                    )}
-                                                    {marksData[student.id]?.ta && !isTAFailing && !isTAExceeding && (
-                                                        <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
-                                                            <i className="fa-solid fa-check-circle mr-1"></i>
-                                                            Valid
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="p-4 text-center">
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        pattern="[0-9]*"
-                                                        autoComplete="off"
-                                                        autoCorrect="off"
-                                                        autoCapitalize="off"
-                                                        spellCheck="false"
-                                                        enterKeyHint="done"
-                                                        data-student={student.id}
-                                                        data-field="ce"
-                                                        value={marksData[student.id]?.ce || ''}
-                                                        onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
-                                                        onKeyDown={(e) => handleKeyDown(e, student.id, 'ce')}
-                                                        className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isCEExceeding
-                                                            ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
-                                                            : isCEFailing
-                                                                ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                : marksData[student.id]?.ce && !isCEFailing && !isCEExceeding
-                                                                    ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                    : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
-                                                            }`}
-                                                        placeholder="0"
-                                                        disabled={isSaving || operationLoading.type !== null}
-                                                        maxLength={3}
-                                                        style={{ minHeight: '48px' }}
-                                                    />
-                                                    {isCEExceeding && (
-                                                        <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
-                                                            <i className="fa-solid fa-exclamation-triangle mr-1"></i>
-                                                            Max: {subjects.find(s => s.id === selectedSubject)?.maxCE}
-                                                        </div>
-                                                    )}
-                                                    {!isCEExceeding && isCEFailing && (
-                                                        <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
-                                                            <i className="fa-solid fa-exclamation-circle mr-1"></i>
-                                                            Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxCE || 0) * 0.5)}
-                                                        </div>
-                                                    )}
-                                                    {marksData[student.id]?.ce && !isCEFailing && !isCEExceeding && (
-                                                        <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
-                                                            <i className="fa-solid fa-check-circle mr-1"></i>
-                                                            Valid
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="p-4 text-center font-bold text-slate-900">
-                                                    {marksData[student.id]?.ta && marksData[student.id]?.ce ? total : '-'}
-                                                </td>
-                                                <td className="p-4 text-center">
-                                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${status === 'Passed' ? 'bg-emerald-100 text-emerald-700' :
-                                                        status === 'Failed' ? 'bg-red-100 text-red-700' :
-                                                            'bg-slate-100 text-slate-600'
-                                                        }`}>
-                                                        {status}
+                                    {/* Visual feedback indicator */}
+                                    {(isSaving || operationLoading.type !== null) && (
+                                        <div className="absolute inset-0 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                                            <div className="bg-white rounded-xl p-4 shadow-xl border border-slate-200">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-6 h-6 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin"></div>
+                                                    <span className="text-sm font-medium text-slate-700">
+                                                        {operationLoading.message || 'Processing...'}
                                                     </span>
-                                                </td>
-                                                <td className="p-4 text-center">
-                                                    <button
-                                                        onClick={() => handleClearStudentMarks(student.id, student.name)}
-                                                        disabled={isSaving || operationLoading.type !== null || (!marksData[student.id]?.ta && !marksData[student.id]?.ce)}
-                                                        className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 hover:shadow-sm"
-                                                        title={`Clear marks for ${student.name}`}
-                                                    >
-                                                        <i className="fa-solid fa-trash text-xs"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div className="p-6 border-t border-slate-200 flex justify-between items-center">
-                            <div className="text-sm text-slate-600">
-                                {completionStats.completed} of {completionStats.total} students have marks entered
-                                {invalidMarksInfo.hasInvalid && (
-                                    <div className="text-red-600 font-medium mt-1">
-                                        ⚠️ {invalidMarksInfo.count} student(s) have invalid marks exceeding maximum values
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={handleSaveTAMarks}
-                                    disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                    className="px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
-                                    style={{ minHeight: '44px' }}
-                                    aria-label="Save TA marks only"
-                                >
-                                    <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                    Save TA
-                                </button>
-                                <button
-                                    onClick={handleSaveCEMarks}
-                                    disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                    className="px-4 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
-                                    style={{ minHeight: '44px' }}
-                                    aria-label="Save CE marks only"
-                                >
-                                    <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                    Save CE
-                                </button>
-                                <button
-                                    onClick={handleClearAll}
-                                    disabled={isSaving || operationLoading.type !== null}
-                                    className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md active:shadow-inner"
-                                    style={{ minHeight: '44px' }}
-                                    aria-label="Clear all marks"
-                                >
-                                    Clear All
-                                </button>
-                                <button
-                                    onClick={handleSaveMarks}
-                                    disabled={isSaving || operationLoading.type !== null || !selectedSubject || invalidMarksInfo.hasInvalid}
-                                    className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg active:shadow-inner ${invalidMarksInfo.hasInvalid
-                                        ? 'bg-red-600 text-white hover:bg-red-700'
-                                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                        }`}
-                                    style={{ minHeight: '44px' }}
-                                    aria-label="Save all marks (both TA and CE)"
-                                >
-                                    {isSaving ? (
-                                        <>
-                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                            Saving Marks...
-                                        </>
-                                    ) : invalidMarksInfo.hasInvalid ? (
-                                        <>
-                                            <i className="fa-solid fa-exclamation-triangle"></i>
-                                            Fix Invalid Marks
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="fa-solid fa-save"></i>
-                                            Save All Marks
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Enhanced Mobile Action Buttons with Sticky Positioning */}
-                    <div className={`block md:hidden fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 ease-out ${isScrolling ? 'transform translate-y-1 scale-[0.98]' : 'transform translate-y-0 scale-100'
-                        }`}>
-                        {/* Background blur and shadow */}
-                        <div className="absolute inset-0 bg-white/80 backdrop-blur-md border-t border-slate-200/50"></div>
-
-                        {/* Action buttons container */}
-                        <div className="relative p-4 pb-6">
-                            {/* Scroll to top button */}
-                            {showScrollToTop && (
-                                <div className="flex justify-center mb-4">
-                                    <button
-                                        onClick={scrollToTop}
-                                        className="flex items-center justify-center w-12 h-12 bg-slate-600 hover:bg-slate-700 active:bg-slate-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-110 active:scale-95"
-                                        title="Scroll to top"
-                                        style={{
-                                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)'
-                                        }}
-                                    >
-                                        <i className="fa-solid fa-chevron-up text-lg"></i>
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Status display */}
-                            <div className="text-center mb-4">
-                                <div className="text-lg font-black text-slate-900 mb-1">
-                                    {completionStats.completed} of {completionStats.total}
-                                </div>
-                                <div className="text-sm text-slate-600 font-semibold">students completed</div>
-                                {invalidMarksInfo.hasInvalid && (
-                                    <div className="mt-3 p-3 bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300 rounded-xl shadow-md">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <i className="fa-solid fa-exclamation-triangle text-red-600 text-sm animate-pulse"></i>
-                                            <span className="text-sm font-bold text-red-700">
-                                                {invalidMarksInfo.count} student(s) have invalid marks
-                                            </span>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Enhanced Action buttons with separate TA/CE save options */}
-                            <div className="space-y-3">
-                                {/* Primary save buttons row */}
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={handleSaveTAMarks}
-                                        disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                        className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg"
-                                        style={{
-                                            minHeight: '48px',
-                                            boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)'
-                                        }}
-                                        aria-label="Save TA marks only"
-                                    >
-                                        <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                        <span className="text-sm">Save TA</span>
-                                    </button>
-
-                                    <button
-                                        onClick={handleSaveCEMarks}
-                                        disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                        className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95 hover:from-purple-700 hover:to-purple-800 hover:shadow-lg"
-                                        style={{
-                                            minHeight: '48px',
-                                            boxShadow: '0 4px 6px -1px rgba(147, 51, 234, 0.3)'
-                                        }}
-                                        aria-label="Save CE marks only"
-                                    >
-                                        <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                        <span className="text-sm">Save CE</span>
-                                    </button>
-
-                                    <button
-                                        onClick={handleClearAll}
-                                        disabled={isSaving || operationLoading.type !== null}
-                                        className="flex-1 py-3 px-4 border-2 border-slate-400 text-slate-700 bg-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 hover:bg-slate-50 hover:border-slate-500 hover:shadow-lg"
-                                        style={{
-                                            minHeight: '48px',
-                                            boxShadow: '0 2px 4px -1px rgba(0, 0, 0, 0.1)'
-                                        }}
-                                        aria-label="Clear all marks"
-                                    >
-                                        <i className="fa-solid fa-trash-can text-sm"></i>
-                                        <span className="text-sm">Clear</span>
-                                    </button>
-                                </div>
-
-                                {/* Main save all button */}
-                                <button
-                                    onClick={handleSaveMarks}
-                                    disabled={isSaving || operationLoading.type !== null || !selectedSubject || invalidMarksInfo.hasInvalid}
-                                    className={`w-full py-4 px-6 rounded-xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 transform active:scale-95 ${invalidMarksInfo.hasInvalid
-                                        ? 'bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 active:from-red-800 active:to-red-900 hover:shadow-xl active:shadow-inner'
-                                        : 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 active:from-emerald-800 active:to-emerald-900 hover:shadow-xl active:shadow-inner'
-                                        }`}
-                                    style={{
-                                        minHeight: '56px',
-                                        boxShadow: invalidMarksInfo.hasInvalid
-                                            ? '0 10px 25px -5px rgba(220, 38, 38, 0.4), 0 4px 6px -1px rgba(220, 38, 38, 0.1)'
-                                            : '0 10px 25px -5px rgba(16, 185, 129, 0.4), 0 4px 6px -1px rgba(16, 185, 129, 0.1)'
-                                    }}
-                                    aria-label="Save all marks (both TA and CE)"
-                                >
-                                    {isSaving ? (
-                                        <>
-                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                            <span>Saving...</span>
-                                        </>
-                                    ) : invalidMarksInfo.hasInvalid ? (
-                                        <>
-                                            <i className="fa-solid fa-exclamation-triangle text-base"></i>
-                                            <span>Fix Invalid Marks</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="fa-solid fa-save text-base"></i>
-                                            <span>Save All Marks</span>
-                                        </>
                                     )}
-                                </button>
-                            </div>
-
-                            {/* Visual feedback indicator */}
-                            {(isSaving || operationLoading.type !== null) && (
-                                <div className="absolute inset-0 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                                    <div className="bg-white rounded-xl p-4 shadow-xl border border-slate-200">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-6 h-6 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin"></div>
-                                            <span className="text-sm font-medium text-slate-700">
-                                                {operationLoading.message || 'Processing...'}
-                                            </span>
-                                        </div>
-                                    </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="bg-white rounded-xl md:rounded-2xl p-8 md:p-12 shadow-sm border border-slate-200 text-center mx-4 md:mx-0">
-                    <i className="fa-solid fa-clipboard-list text-4xl text-slate-400 mb-4"></i>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">No Data Available</h3>
-                    <p className="text-slate-600">
-                        {!selectedSubject
-                            ? 'Please select a subject to begin entering marks'
-                            : 'No students found in the selected class'
-                        }
-                    </p>
-                </div>
+                    ) : (
+                        <div className="bg-white rounded-xl md:rounded-2xl p-8 md:p-12 shadow-sm border border-slate-200 text-center mx-4 md:mx-0">
+                            <i className="fa-solid fa-clipboard-list text-4xl text-slate-400 mb-4"></i>
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">No Data Available</h3>
+                            <p className="text-slate-600">
+                                {!selectedSubject
+                                    ? 'Please select a subject to begin entering marks'
+                                    : 'No students found in the selected class'
+                                }
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Operation Loading Overlay */}
+                    {operationLoading.type && (
+                        <OperationLoadingSkeleton
+                            operation={operationLoading.type}
+                            message={operationLoading.message}
+                        />
+                    )}
+                </>
             )}
 
-            {/* Operation Loading Overlay */}
-            {operationLoading.type && (
-                <OperationLoadingSkeleton
-                    operation={operationLoading.type}
-                    message={operationLoading.message}
-                />
+            {/* Upload Tracker Tab Content */}
+            {activeTab === 'upload-tracker' && (
+                <div className="px-4 md:px-0 mt-8 space-y-6">
+                    {/* Filters */}
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4">
+                            <i className="fa-solid fa-filter mr-2 text-emerald-600"></i>
+                            Filter Subjects
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                    <i className="fa-solid fa-layer-group mr-1 text-slate-500"></i>
+                                    Filter by Class
+                                </label>
+                                <select
+                                    value={trackerClassFilter}
+                                    onChange={(e) => setTrackerClassFilter(e.target.value)}
+                                    className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white"
+                                >
+                                    <option value="all">All Classes</option>
+                                    {CLASSES.map(cls => (
+                                        <option key={cls} value={cls}>{cls}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                    <i className="fa-solid fa-user-tie mr-1 text-slate-500"></i>
+                                    Filter by Faculty
+                                </label>
+                                <select
+                                    value={trackerTeacherFilter}
+                                    onChange={(e) => setTrackerTeacherFilter(e.target.value)}
+                                    className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white"
+                                >
+                                    <option value="all">All Faculty Members</option>
+                                    {Array.from(new Set(subjects.map(s => s.facultyName).filter(Boolean))).map(teacher => (
+                                        <option key={teacher} value={teacher}>{teacher}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                    <i className="fa-solid fa-magnifying-glass mr-1 text-slate-500"></i>
+                                    Search by Subject Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={trackerSubjectSearch}
+                                    onChange={(e) => setTrackerSubjectSearch(e.target.value)}
+                                    placeholder="Type subject name..."
+                                    className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Upload Statistics */}
+                    {(() => {
+                        // Expand general subjects into separate entries per class
+                        const expandedSubjects = subjects.flatMap(subject => {
+                            if (subject.subjectType === 'general' && subject.targetClasses.length > 0) {
+                                // Create a separate entry for each class
+                                return subject.targetClasses.map(className => ({
+                                    ...subject,
+                                    displayClass: className,
+                                    isExpanded: true
+                                }));
+                            } else {
+                                // Elective subjects remain as single entries
+                                return [{
+                                    ...subject,
+                                    displayClass: null,
+                                    isExpanded: false
+                                }];
+                            }
+                        });
+
+                        // Apply filters
+                        const filteredSubjects = expandedSubjects.filter(subject => {
+                            const classMatch = trackerClassFilter === 'all' ||
+                                (subject.isExpanded ? subject.displayClass === trackerClassFilter : subject.targetClasses.includes(trackerClassFilter));
+                            const teacherMatch = trackerTeacherFilter === 'all' || subject.facultyName === trackerTeacherFilter;
+                            const searchMatch = trackerSubjectSearch === '' || subject.name.toLowerCase().includes(trackerSubjectSearch.toLowerCase());
+                            return classMatch && teacherMatch && searchMatch;
+                        });
+
+                        const subjectsWithStatus = filteredSubjects.map(subject => {
+                            // Calculate upload status for this subject
+                            let totalStudents = 0;
+                            let uploadedStudents = 0;
+
+                            if (subject.subjectType === 'general' && subject.isExpanded) {
+                                // For general subjects (now split by class), only count students from the specific class
+                                const className = subject.displayClass!;
+                                const classStudents = students.filter(s => s.className === className);
+                                totalStudents = classStudents.length;
+                                uploadedStudents = classStudents.filter(s =>
+                                    s.marks[subject.id]?.ta > 0 && s.marks[subject.id]?.ce > 0
+                                ).length;
+                            } else {
+                                // For elective subjects, count enrolled students
+                                const enrolledStudentIds = subject.enrolledStudents || [];
+                                totalStudents = enrolledStudentIds.length;
+                                uploadedStudents = students.filter(s =>
+                                    enrolledStudentIds.includes(s.id) &&
+                                    s.marks[subject.id]?.ta > 0 &&
+                                    s.marks[subject.id]?.ce > 0
+                                ).length;
+                            }
+
+                            const percentage = totalStudents > 0 ? Math.round((uploadedStudents / totalStudents) * 100) : 0;
+                            const status = percentage === 100 ? 'complete' : percentage > 0 ? 'in-progress' : 'not-started';
+
+                            return {
+                                ...subject,
+                                totalStudents,
+                                uploadedStudents,
+                                percentage,
+                                status
+                            };
+                        });
+
+                        const completeCount = subjectsWithStatus.filter(s => s.status === 'complete').length;
+                        const inProgressCount = subjectsWithStatus.filter(s => s.status === 'in-progress').length;
+                        const notStartedCount = subjectsWithStatus.filter(s => s.status === 'not-started').length;
+
+                        return (
+                            <>
+                                {/* Summary Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="bg-white rounded-xl p-6 shadow border-2 border-slate-200">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-600">Total Subjects</p>
+                                                <p className="text-3xl font-black text-slate-900 mt-1">{filteredSubjects.length}</p>
+                                            </div>
+                                            <i className="fa-solid fa-book text-3xl text-slate-400"></i>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-emerald-50 rounded-xl p-6 shadow border-2 border-emerald-200">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-bold text-emerald-700">Complete</p>
+                                                <p className="text-3xl font-black text-emerald-900 mt-1">{completeCount}</p>
+                                            </div>
+                                            <i className="fa-solid fa-circle-check text-3xl text-emerald-400"></i>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-amber-50 rounded-xl p-6 shadow border-2 border-amber-200">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-bold text-amber-700">In Progress</p>
+                                                <p className="text-3xl font-black text-amber-900 mt-1">{inProgressCount}</p>
+                                            </div>
+                                            <i className="fa-solid fa-clock text-3xl text-amber-400"></i>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-red-50 rounded-xl p-6 shadow border-2 border-red-200">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-bold text-red-700">Not Started</p>
+                                                <p className="text-3xl font-black text-red-900 mt-1">{notStartedCount}</p>
+                                            </div>
+                                            <i className="fa-solid fa-circle-xmark text-3xl text-red-400"></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Subject Cards */}
+                                <div className="space-y-4">
+                                    <h3 className="text-xl font-black text-slate-900">Subjects Upload Status</h3>
+                                    {subjectsWithStatus.length === 0 ? (
+                                        <div className="bg-white rounded-xl p-12 shadow border border-slate-200 text-center">
+                                            <i className="fa-solid fa-filter text-4xl text-slate-400 mb-4"></i>
+                                            <h4 className="text-lg font-bold text-slate-900 mb-2">No Subjects Found</h4>
+                                            <p className="text-slate-600">Try adjusting your filters</p>
+                                        </div>
+                                    ) : (
+                                        subjectsWithStatus.map(subject => (
+                                            <div key={`${subject.id}-${subject.displayClass || 'grouped'}`} className="bg-white rounded-xl p-6 shadow-lg border-2 border-slate-200 hover:shadow-xl transition-all">
+                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-start gap-3">
+                                                            <i className={`fa-solid fa-book text-2xl mt-1 ${subject.status === 'complete' ? 'text-emerald-600' :
+                                                                subject.status === 'in-progress' ? 'text-amber-600' :
+                                                                    'text-red-600'
+                                                                }`}></i>
+                                                            <div className="flex-1">
+                                                                <h4 className="text-lg font-bold text-slate-900">
+                                                                    {subject.name}
+                                                                    {subject.arabicName && <span className="text-slate-600 ml-2">({subject.arabicName})</span>}
+                                                                </h4>
+                                                                <div className="flex flex-wrap gap-3 mt-2 text-sm">
+                                                                    <span className="text-slate-600">
+                                                                        <i className="fa-solid fa-user-tie mr-1"></i>
+                                                                        {subject.facultyName || 'Not Assigned'}
+                                                                    </span>
+                                                                    <span className="text-slate-600">
+                                                                        <i className="fa-solid fa-layer-group mr-1"></i>
+                                                                        {subject.displayClass || subject.targetClasses.join(', ')}
+                                                                    </span>
+                                                                    <span className={`px-2 py-1 rounded font-bold text-xs ${subject.subjectType === 'general'
+                                                                        ? 'bg-blue-100 text-blue-700'
+                                                                        : 'bg-purple-100 text-purple-700'
+                                                                        }`}>
+                                                                        {subject.subjectType.toUpperCase()}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="md:w-64">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-sm font-bold text-slate-700">
+                                                                {subject.uploadedStudents}/{subject.totalStudents} Students
+                                                            </span>
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-black ${subject.status === 'complete' ? 'bg-emerald-100 text-emerald-700' :
+                                                                subject.status === 'in-progress' ? 'bg-amber-100 text-amber-700' :
+                                                                    'bg-red-100 text-red-700'
+                                                                }`}>
+                                                                {subject.percentage}%
+                                                            </span>
+                                                        </div>
+                                                        <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-500 ${subject.status === 'complete' ? 'bg-emerald-600' :
+                                                                    subject.status === 'in-progress' ? 'bg-amber-600' :
+                                                                        'bg-red-600'
+                                                                    }`}
+                                                                style={{ width: `${subject.percentage}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
             )}
 
         </div>
     );
 };
 
-// Export the component with React.memo for performance optimization
 export default React.memo(FacultyEntry);

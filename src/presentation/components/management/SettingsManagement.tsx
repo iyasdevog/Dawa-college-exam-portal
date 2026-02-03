@@ -112,6 +112,32 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                                 />
                             </label>
                         </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <p className="text-sm text-slate-600 mb-2">Recalculate all student performance levels with updated grading thresholds (95%+ = Outstanding).</p>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will recalculate all student performance levels based on the current grading thresholds (95%+ = Outstanding, etc.). Continue?')) return;
+
+                                    try {
+                                        setIsOperating(true);
+                                        const results = await dataService.recalculateAllStudentPerformanceLevels();
+                                        await onRefresh();
+                                        alert(`Recalculation complete! ${results.updated} students updated.${results.errors.length > 0 ? `\n\nErrors: ${results.errors.length}` : ''}`);
+                                    } catch (error) {
+                                        console.error('Error recalculating performance levels:', error);
+                                        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full py-3 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-calculator"></i>
+                                {isOperating ? 'Recalculating...' : 'Recalculate Student Grades'}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
