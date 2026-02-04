@@ -392,6 +392,7 @@ const FacultyEntry: React.FC = () => {
             isTAFailing: (studentId: string): boolean => {
                 const marks = marksData[studentId];
                 if (!marks || !marks.ta) return false;
+                if (marks.ta === 'A') return true;
                 const ta = parseInt(marks.ta) || 0;
                 const minTA = Math.ceil(subject.maxTA * 0.4);
                 return ta < minTA && ta > 0 && ta <= subject.maxTA;
@@ -399,6 +400,7 @@ const FacultyEntry: React.FC = () => {
             isCEFailing: (studentId: string): boolean => {
                 const marks = marksData[studentId];
                 if (!marks || !marks.ce) return false;
+                if (marks.ce === 'A') return true;
                 const ce = parseInt(marks.ce) || 0;
                 const minCE = Math.ceil(subject.maxCE * 0.5);
                 return ce < minCE && ce > 0 && ce <= subject.maxCE;
@@ -406,13 +408,15 @@ const FacultyEntry: React.FC = () => {
             calculateTotal: (studentId: string): number => {
                 const marks = marksData[studentId];
                 if (!marks) return 0;
-                const ta = parseInt(marks.ta) || 0;
-                const ce = parseInt(marks.ce) || 0;
+                const ta = marks.ta === 'A' ? 0 : (parseInt(marks.ta) || 0);
+                const ce = marks.ce === 'A' ? 0 : (parseInt(marks.ce) || 0);
                 return ta + ce;
             },
             getStatus: (studentId: string): 'Passed' | 'Failed' | 'Pending' => {
                 const marks = marksData[studentId];
                 if (!marks || !marks.ta || !marks.ce) return 'Pending';
+
+                if (marks.ta === 'A' || marks.ce === 'A') return 'Failed';
 
                 const ta = parseInt(marks.ta) || 0;
                 const ce = parseInt(marks.ce) || 0;
@@ -625,14 +629,15 @@ const FacultyEntry: React.FC = () => {
 
     // Debounced marks change handler for better performance
     const handleMarksChange = useCallback((studentId: string, field: 'ta' | 'ce', value: string) => {
-        // Only allow numeric input
-        if (value && !/^\d*$/.test(value)) {
+        // Allow numeric input OR 'A'/'a'
+        const upperValue = value.toUpperCase();
+        if (value && !/^\d*$/.test(value) && upperValue !== 'A') {
             return;
         }
 
         // Get subject data for validation
         const subject = subjects.find(s => s.id === selectedSubject);
-        if (subject && value) {
+        if (subject && value && upperValue !== 'A') {
             const numValue = parseInt(value);
             const maxValue = field === 'ta' ? subject.maxTA : subject.maxCE;
 
@@ -646,7 +651,7 @@ const FacultyEntry: React.FC = () => {
             ...prev,
             [studentId]: {
                 ...prev[studentId],
-                [field]: value
+                [field]: upperValue
             }
         }));
     }, [subjects, selectedSubject]);
@@ -845,8 +850,11 @@ const FacultyEntry: React.FC = () => {
             const savePromises = students.map(async (student) => {
                 const marks = marksData[student.id];
                 if (marks && marks.ta && marks.ce) {
-                    const ta = parseInt(marks.ta);
-                    const ce = parseInt(marks.ce);
+                    const taValue: number | 'A' = marks.ta === 'A' ? 'A' : parseInt(marks.ta);
+                    const ceValue: number | 'A' = marks.ce === 'A' ? 'A' : parseInt(marks.ce);
+
+                    const taNum = marks.ta === 'A' ? 0 : parseInt(marks.ta);
+                    const ceNum = marks.ce === 'A' ? 0 : parseInt(marks.ce);
 
                     // Validate marks against subject limits (double-check)
                     const sub = subjects.find(s => s.id === selectedSubject);
@@ -860,14 +868,14 @@ const FacultyEntry: React.FC = () => {
                     }
 
                     // Special conversion for Max TA 35 (scale from 35 to 70 for storage)
-                    let taToSave = ta;
-                    if (sub?.maxTA === 35) {
-                        taToSave = ta * 2;
+                    let taToSave: number | 'A' = taValue;
+                    if (sub?.maxTA === 35 && taValue !== 'A') {
+                        taToSave = (taValue as number) * 2;
                     }
 
                     try {
                         // Try to save online first
-                        await dataService.updateStudentMarks(student.id, selectedSubject, taToSave, ce);
+                        await dataService.updateStudentMarks(student.id, selectedSubject, taToSave, ceValue);
 
                         // If successful, delete any corresponding draft
                         const draft = getDraft(student.id, selectedSubject);
@@ -1207,6 +1215,15 @@ const FacultyEntry: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Absent Marks Instruction */}
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
+                            <i className="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                            <div className="text-sm text-blue-800">
+                                <p className="font-bold mb-1 underline">Marks Entry Tip:</p>
+                                <p>Enter <span className="font-black text-blue-900 bg-blue-100 px-1.5 py-0.5 rounded">'A'</span> (uppercase or lowercase) for students who were <strong>Absent</strong>. Absent marks are treated as 0 for totals but will mark the student as <strong>Failed</strong>.</p>
+                            </div>
+                        </div>
+
                         {selectedSubjectData && (
                             <div className="mt-4 p-3 md:p-4 bg-slate-50 rounded-xl">
                                 <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 text-sm">
@@ -1486,7 +1503,7 @@ const FacultyEntry: React.FC = () => {
                                                         TA (Max: {selectedSubjectData?.maxTA})
                                                     </label>
                                                     <input
-                                                        type="number"
+                                                        type="text"
                                                         value={studentMarks.ta}
                                                         onChange={(e) => handleMarksChange(student.id, 'ta', e.target.value)}
                                                         className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
@@ -1499,7 +1516,7 @@ const FacultyEntry: React.FC = () => {
                                                         CE (Max: {selectedSubjectData?.maxCE})
                                                     </label>
                                                     <input
-                                                        type="number"
+                                                        type="text"
                                                         value={studentMarks.ce}
                                                         onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
                                                         className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxTA === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}

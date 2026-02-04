@@ -10,8 +10,8 @@ export type PerformanceLevel =
   | 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed'; // Keep old types temporarily for migration
 
 export interface SubjectMarks {
-  ta: number;
-  ce: number;
+  ta: number | 'A';
+  ce: number | 'A';
   total: number;
   status: 'Passed' | 'Failed' | 'Pending';
   isSupplementary?: boolean; // Indicates if this is a supplementary exam

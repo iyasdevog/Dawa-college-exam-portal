@@ -64,6 +64,12 @@ export class DataService {
         }
     }
 
+    // Helper to treat 'A' as 0
+    private getMarkValue(mark: number | 'A' | undefined | null): number {
+        if (mark === 'A') return 0;
+        return typeof mark === 'number' ? mark : 0;
+    }
+
     // Cache management
     private isCacheValid(): boolean {
         return this.cacheTimestamp > 0 && (Date.now() - this.cacheTimestamp) < this.CACHE_DURATION;
@@ -920,7 +926,7 @@ export class DataService {
                     try {
                         // Recalculate grandTotal as sum of all subject totals
                         const grandTotal = Object.values(student.marks)
-                            .reduce((sum, mark) => sum + mark.total, 0);
+                            .reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
 
                         // Calculate average
                         const average = Object.keys(student.marks).length > 0
@@ -1033,18 +1039,21 @@ export class DataService {
                     if (!subject) continue;
 
                     const marks = updatedMarks[subjectId] as any;
-                    const ta = marks.ta || 0;
-                    const ce = marks.ce || 0;
+                    const ta = marks.ta;
+                    const ce = marks.ce;
+
+                    const taVal = this.getMarkValue(ta);
+                    const ceVal = this.getMarkValue(ce);
 
                     const minTA = Math.ceil(subject.maxTA * 0.4);
                     const minCE = Math.ceil(subject.maxCE * 0.5);
-                    const passedTA = ta >= minTA;
-                    const passedCE = ce >= minCE;
+                    const passedTA = ta !== 'A' && taVal >= minTA;
+                    const passedCE = ce !== 'A' && ceVal >= minCE;
 
                     const isFullTA = subject.maxTA === 100;
-                    const taReady = subject.maxTA > 0 ? ta > 0 : true;
+                    const taReady = subject.maxTA > 0 ? (ta !== undefined && ta !== '') : true;
                     // For full TA subjects, CE is always considered ready
-                    const ceReady = isFullTA || subject.maxCE === 0 || (subject.maxCE > 0 && ce > 0);
+                    const ceReady = isFullTA || subject.maxCE === 0 || (subject.maxCE > 0 && ce !== undefined && ce !== '');
 
                     let newStatus: 'Passed' | 'Failed' | 'Pending' = 'Pending';
                     if (taReady && ceReady) {
@@ -1073,7 +1082,7 @@ export class DataService {
         }
     }
 
-    async updateStudentMarks(studentId: string, subjectId: string, ta: number, ce: number): Promise<void> {
+    async updateStudentMarks(studentId: string, subjectId: string, ta: number | 'A', ce: number | 'A'): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1089,7 +1098,10 @@ export class DataService {
 
             const student = studentDoc.data() as StudentRecord;
             const subject = subjectDoc.data() as SubjectConfig;
-            const total = ta + ce;
+
+            const taVal = this.getMarkValue(ta);
+            const ceVal = this.getMarkValue(ce);
+            const total = taVal + ceVal;
 
             // Calculate passing requirements
             // If Max TA is 100, we ignore CE requirements (usually CE is 0 anyway)
@@ -1097,8 +1109,8 @@ export class DataService {
             const minTA = Math.ceil(subject.maxTA * 0.4);
             const minCE = isFullTA ? 0 : Math.ceil(subject.maxCE * 0.5);
 
-            const passedTA = ta >= minTA;
-            const passedCE = isFullTA || ce >= minCE || subject.maxCE === 0;
+            const passedTA = ta !== 'A' && taVal >= minTA;
+            const passedCE = isFullTA || (ce !== 'A' && ceVal >= minCE) || subject.maxCE === 0;
             const status = (passedTA && passedCE) ? 'Passed' : 'Failed';
 
             // Update marks
@@ -1113,7 +1125,7 @@ export class DataService {
             };
 
             // Recalculate totals
-            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
+            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
             const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
             // Determine performance level
@@ -1139,7 +1151,7 @@ export class DataService {
     }
 
     // New method for updating only TA marks
-    async updateStudentTAMarks(studentId: string, subjectId: string, ta: number): Promise<void> {
+    async updateStudentTAMarks(studentId: string, subjectId: string, ta: number | 'A'): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1158,21 +1170,23 @@ export class DataService {
 
             // Get existing marks or create new entry
             const existingMarks = student.marks[subjectId] || { ta: 0, ce: 0, total: 0, status: 'Pending' };
-            const ce = existingMarks.ce || 0;
-            const total = ta + ce;
+            const ce = existingMarks.ce;
+            const taVal = this.getMarkValue(ta);
+            const ceVal = this.getMarkValue(ce);
+            const total = taVal + ceVal;
 
             // Calculate passing requirements
             const minTA = Math.ceil(subject.maxTA * 0.4);
             const minCE = Math.ceil(subject.maxCE * 0.5);
-            const passedTA = ta >= minTA;
-            const passedCE = ce >= minCE;
+            const passedTA = ta !== 'A' && taVal >= minTA;
+            const passedCE = ce !== 'A' && ceVal >= minCE;
 
             // Status transitions from 'Pending' if all required components are entered
             let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
             const isFullTA = subject.maxTA === 100;
-            const taReady = subject.maxTA > 0 ? ta > 0 : true;
-            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are > 0
-            const ceReady = isFullTA || subject.maxCE === 0 || ce > 0;
+            const taReady = subject.maxTA > 0 ? (ta !== undefined && ta !== null) : true;
+            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are present
+            const ceReady = isFullTA || subject.maxCE === 0 || (ce !== undefined && ce !== null);
 
             if (taReady && ceReady) {
                 // If neglecting CE, only TA needs to pass
@@ -1192,7 +1206,7 @@ export class DataService {
             };
 
             // Recalculate totals - Sum all available marks
-            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
+            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
             const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
             // Determine performance level
@@ -1218,7 +1232,7 @@ export class DataService {
     }
 
     // New method for updating only CE marks
-    async updateStudentCEMarks(studentId: string, subjectId: string, ce: number): Promise<void> {
+    async updateStudentCEMarks(studentId: string, subjectId: string, ce: number | 'A'): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1237,21 +1251,23 @@ export class DataService {
 
             // Get existing marks or create new entry
             const existingMarks = student.marks[subjectId] || { ta: 0, ce: 0, total: 0, status: 'Pending' };
-            const ta = existingMarks.ta || 0;
-            const total = ta + ce;
+            const ta = existingMarks.ta;
+            const taVal = this.getMarkValue(ta);
+            const ceVal = this.getMarkValue(ce);
+            const total = taVal + ceVal;
 
             // Calculate passing requirements
             const minTA = Math.ceil(subject.maxTA * 0.4);
             const minCE = Math.ceil(subject.maxCE * 0.5);
-            const passedTA = ta >= minTA;
-            const passedCE = ce >= minCE;
+            const passedTA = ta !== 'A' && taVal >= minTA;
+            const passedCE = ce !== 'A' && ceVal >= minCE;
 
             // Status transitions from 'Pending' if all required components are entered
             let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
             const isFullTA = subject.maxTA === 100;
-            const taReady = subject.maxTA > 0 ? ta > 0 : true;
-            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are > 0
-            const ceReady = isFullTA || subject.maxCE === 0 || ce > 0;
+            const taReady = subject.maxTA > 0 ? (ta !== undefined && ta !== null) : true;
+            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are present
+            const ceReady = isFullTA || subject.maxCE === 0 || (ce !== undefined && ce !== null);
 
             if (taReady && ceReady) {
                 // If neglecting CE, only TA needs to pass
@@ -1271,7 +1287,7 @@ export class DataService {
             };
 
             // Recalculate totals - Sum all available marks
-            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
+            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
             const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
             // Determine performance level
@@ -1416,11 +1432,11 @@ export class DataService {
                     updatedMarks[subjectId] = {
                         ...marks,
                         ta: 0,
-                        total: ce,
+                        total: this.getMarkValue(ce as any),
                         status: 'Pending' // Always pending if one component is missing
                     };
 
-                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + m.total, 0);
+                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + this.getMarkValue(m.total as any), 0);
                     const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
                     const performanceLevel = this.calculatePerformanceLevel(average);
 
@@ -1472,11 +1488,11 @@ export class DataService {
                     updatedMarks[subjectId] = {
                         ...marks,
                         ce: 0,
-                        total: ta,
+                        total: this.getMarkValue(ta as any),
                         status: 'Pending'
                     };
 
-                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + m.total, 0);
+                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + this.getMarkValue(m.total as any), 0);
                     const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
                     const performanceLevel = this.calculatePerformanceLevel(average);
 
