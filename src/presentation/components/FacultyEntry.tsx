@@ -673,6 +673,9 @@ const FacultyEntry: React.FC = () => {
                     [studentId]: { ta: '', ce: '' }
                 }));
 
+                // Delete local draft to prevent it from being re-loaded
+                deleteDraft(studentId, selectedSubject);
+
                 // Reload students to get updated data
                 await loadStudentsByClass();
 
@@ -708,6 +711,8 @@ const FacultyEntry: React.FC = () => {
                 const clearedMarks: Record<string, { ta: string; ce: string }> = {};
                 students.forEach(student => {
                     clearedMarks[student.id] = { ta: '', ce: '' };
+                    // Delete local draft for each student
+                    deleteDraft(student.id, selectedSubject);
                 });
                 setMarksData(clearedMarks);
 
@@ -718,6 +723,98 @@ const FacultyEntry: React.FC = () => {
             } catch (error) {
                 console.error('Error clearing marks:', error);
                 alert(`Error clearing marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            } finally {
+                setOperationLoading({ type: null });
+            }
+        }
+    }, [selectedSubject, subjects, selectedClass, students, loadStudentsByClass]);
+
+    const handleClearTAMarks = useCallback(async () => {
+        if (!selectedSubject) {
+            alert('Please select a subject first');
+            return;
+        }
+
+        const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
+        if (confirm(`Are you sure you want to clear all TA marks for "${selectedSubjectData?.name}" in ${selectedClass} class? This will permanently delete the marks from the database and cannot be undone.`)) {
+            try {
+                setOperationLoading({ type: 'clearing', message: `Clearing all TA marks for ${selectedSubjectData?.name} in ${selectedClass} class...` });
+
+                // Get student IDs
+                const studentIds = students.map(student => student.id);
+
+                // Clear marks from database
+                await dataService.clearSubjectTAMarks(selectedSubject, studentIds);
+
+                // Update UI state
+                setMarksData(prev => {
+                    const newMarks = { ...prev };
+                    students.forEach(student => {
+                        if (newMarks[student.id]) {
+                            newMarks[student.id] = { ...newMarks[student.id], ta: '' };
+                            // Update local draft: keep CE, clear TA
+                            const currentDraft = getDraft(student.id, selectedSubject);
+                            if (currentDraft) {
+                                saveDraft(student.id, selectedSubject, '', currentDraft.ce || '');
+                            }
+                        }
+                    });
+                    return newMarks;
+                });
+
+                // Reload students to get updated data
+                await loadStudentsByClass();
+
+                alert('All TA marks cleared successfully!');
+            } catch (error) {
+                console.error('Error clearing TA marks:', error);
+                alert(`Error clearing TA marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            } finally {
+                setOperationLoading({ type: null });
+            }
+        }
+    }, [selectedSubject, subjects, selectedClass, students, loadStudentsByClass]);
+
+    const handleClearCEMarks = useCallback(async () => {
+        if (!selectedSubject) {
+            alert('Please select a subject first');
+            return;
+        }
+
+        const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
+        if (confirm(`Are you sure you want to clear all CE marks for "${selectedSubjectData?.name}" in ${selectedClass} class? This will permanently delete the marks from the database and cannot be undone.`)) {
+            try {
+                setOperationLoading({ type: 'clearing', message: `Clearing all CE marks for ${selectedSubjectData?.name} in ${selectedClass} class...` });
+
+                // Get student IDs
+                const studentIds = students.map(student => student.id);
+
+                // Clear marks from database
+                await dataService.clearSubjectCEMarks(selectedSubject, studentIds);
+
+                // Update UI state
+                setMarksData(prev => {
+                    const newMarks = { ...prev };
+                    students.forEach(student => {
+                        if (newMarks[student.id]) {
+                            newMarks[student.id] = { ...newMarks[student.id], ce: '' };
+                            // Update local draft: keep TA, clear CE
+                            const currentDraft = getDraft(student.id, selectedSubject);
+                            if (currentDraft) {
+                                saveDraft(student.id, selectedSubject, currentDraft.ta || '', '');
+                            }
+                        }
+                    });
+                    return newMarks;
+                });
+
+                // Reload students to get updated data
+                await loadStudentsByClass();
+
+                alert('All CE marks cleared successfully!');
+            } catch (error) {
+                console.error('Error clearing CE marks:', error);
+                alert(`Error clearing CE marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
             } finally {
                 setOperationLoading({ type: null });
             }
@@ -1639,6 +1736,26 @@ const FacultyEntry: React.FC = () => {
                                             Save CE
                                         </button>
                                         <button
+                                            onClick={handleClearTAMarks}
+                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                            className="px-4 py-3 border-2 border-orange-200 text-orange-700 rounded-xl font-bold hover:bg-orange-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+                                            style={{ minHeight: '44px' }}
+                                            aria-label="Clear TA marks for all students"
+                                        >
+                                            <i className="fa-solid fa-eraser text-sm"></i>
+                                            Clear TA
+                                        </button>
+                                        <button
+                                            onClick={handleClearCEMarks}
+                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                            className="px-4 py-3 border-2 border-red-200 text-red-700 rounded-xl font-bold hover:bg-red-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+                                            style={{ minHeight: '44px' }}
+                                            aria-label="Clear CE marks for all students"
+                                        >
+                                            <i className="fa-solid fa-eraser text-sm"></i>
+                                            Clear CE
+                                        </button>
+                                        <button
                                             onClick={handleClearAll}
                                             disabled={isSaving || operationLoading.type !== null}
                                             className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md active:shadow-inner"
@@ -1734,6 +1851,26 @@ const FacultyEntry: React.FC = () => {
                                                 <span className="text-xs">Save CE</span>
                                             </button>
                                             <button
+                                                onClick={handleClearTAMarks}
+                                                disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                                className="py-2 px-3 border border-orange-200 text-orange-600 bg-orange-50/50 rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 transform active:scale-95"
+                                                style={{ minHeight: '44px' }}
+                                                aria-label="Clear TA"
+                                            >
+                                                <i className="fa-solid fa-eraser text-xs"></i>
+                                                <span className="text-[10px]">Clear TA</span>
+                                            </button>
+                                            <button
+                                                onClick={handleClearCEMarks}
+                                                disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                                className="py-2 px-3 border border-red-200 text-red-600 bg-red-50/50 rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 transform active:scale-95"
+                                                style={{ minHeight: '44px' }}
+                                                aria-label="Clear CE"
+                                            >
+                                                <i className="fa-solid fa-eraser text-xs"></i>
+                                                <span className="text-[10px]">Clear CE</span>
+                                            </button>
+                                            <button
                                                 onClick={handleClearAll}
                                                 disabled={isSaving || operationLoading.type !== null}
                                                 className="py-2 px-3 border border-slate-300 text-slate-600 bg-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 transform active:scale-95"
@@ -1741,7 +1878,7 @@ const FacultyEntry: React.FC = () => {
                                                 aria-label="Clear all"
                                             >
                                                 <i className="fa-solid fa-trash-can text-xs"></i>
-                                                <span className="text-xs">Clear</span>
+                                                <span className="text-[10px]">Clear All</span>
                                             </button>
                                         </div>
 

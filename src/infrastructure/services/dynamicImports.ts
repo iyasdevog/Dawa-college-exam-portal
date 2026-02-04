@@ -9,10 +9,9 @@ export interface ExcelLibrary {
         book_new(): any;
         aoa_to_sheet(data: any[][]): any;
         book_append_sheet(workbook: any, worksheet: any, name: string): void;
-        writeFile(workbook: any, filename: string): void;
-        read(data: any, options?: any): any;
         sheet_to_json(worksheet: any, options?: any): any[];
     };
+    read(data: any, options?: any): any;
     writeFile(workbook: any, filename: string): void;
 }
 

@@ -168,6 +168,7 @@ export class DataService {
         try {
             const docRef = await addDoc(collection(this.db, this.studentsCollection), student);
             console.log('Student added with ID:', docRef.id);
+            this.invalidateCache();
             return docRef.id;
         } catch (error) {
             console.error('Error adding student:', error);
@@ -180,6 +181,7 @@ export class DataService {
             const docRef = doc(this.db, this.studentsCollection, id);
             await updateDoc(docRef, updates);
             console.log('Student updated:', id);
+            this.invalidateCache();
         } catch (error) {
             console.error('Error updating student:', error);
             throw error;
@@ -206,6 +208,7 @@ export class DataService {
             console.log('Student document found, proceeding with deletion...');
             await deleteDoc(docRef);
             console.log('Student deleted successfully:', id);
+            this.invalidateCache();
         } catch (error) {
             console.error('Error deleting student:', error);
             if (error instanceof Error) {
@@ -332,6 +335,7 @@ export class DataService {
                 await updateDoc(doc(this.db, this.subjectsCollection, subjectId), {
                     enrolledStudents
                 });
+                this.invalidateCache();
             }
 
             console.log('Student enrolled in subject:', studentId, subjectId);
@@ -355,6 +359,7 @@ export class DataService {
             await updateDoc(doc(this.db, this.subjectsCollection, subjectId), {
                 enrolledStudents: updatedEnrolledStudents
             });
+            this.invalidateCache();
 
             console.log('Student unenrolled from subject:', studentId, subjectId);
         } catch (error) {
@@ -474,6 +479,7 @@ export class DataService {
                 status: 'Completed'
             });
 
+            this.invalidateCache();
             console.log('Supplementary exam marks updated:', supplementaryExamId);
         } catch (error) {
             console.error('Error updating supplementary exam marks:', error);
@@ -1124,6 +1130,7 @@ export class DataService {
             // Recalculate class rankings
             await this.calculateClassRankings(student.className);
 
+            this.invalidateCache();
             console.log('Student marks updated:', studentId);
         } catch (error) {
             console.error('Error updating student marks:', error);
@@ -1202,6 +1209,7 @@ export class DataService {
             // Recalculate class rankings to keep totals up-to-date
             await this.calculateClassRankings(student.className);
 
+            this.invalidateCache();
             console.log('Student TA marks updated:', studentId, 'TA:', ta);
         } catch (error) {
             console.error('Error updating student TA marks:', error);
@@ -1280,6 +1288,7 @@ export class DataService {
             // Recalculate class rankings to keep totals up-to-date
             await this.calculateClassRankings(student.className);
 
+            this.invalidateCache();
             console.log('Student CE marks updated:', studentId, 'CE:', ce);
         } catch (error) {
             console.error('Error updating student CE marks:', error);
@@ -1340,6 +1349,7 @@ export class DataService {
                 await this.calculateClassRankings(className);
             }
 
+            this.invalidateCache();
             console.log('Subject marks cleared successfully for', studentIds.length, 'students');
         } catch (error) {
             console.error('Error clearing subject marks:', error);
@@ -1380,9 +1390,122 @@ export class DataService {
             // Recalculate class rankings
             await this.calculateClassRankings(student.className);
 
+            this.invalidateCache();
             console.log('Student subject marks cleared successfully:', studentId, subjectId);
         } catch (error) {
             console.error('Error clearing student subject marks:', error);
+            throw error;
+        }
+    }
+
+    async clearSubjectTAMarks(subjectId: string, studentIds: string[]): Promise<void> {
+        try {
+            console.log('Clearing TA marks for subject:', subjectId, 'for', studentIds.length, 'students');
+
+            const updatePromises = studentIds.map(async (studentId) => {
+                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
+                if (!studentDoc.exists()) return;
+
+                const student = studentDoc.data() as StudentRecord;
+                const updatedMarks = { ...student.marks };
+
+                if (updatedMarks[subjectId]) {
+                    // Reset TA to 0 and calculate new total/status
+                    const marks = updatedMarks[subjectId];
+                    const ce = marks.ce || 0;
+                    updatedMarks[subjectId] = {
+                        ...marks,
+                        ta: 0,
+                        total: ce,
+                        status: 'Pending' // Always pending if one component is missing
+                    };
+
+                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + m.total, 0);
+                    const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
+                    const performanceLevel = this.calculatePerformanceLevel(average);
+
+                    await updateDoc(doc(this.db, this.studentsCollection, studentId), {
+                        marks: updatedMarks,
+                        grandTotal,
+                        average: Math.round(average * 100) / 100,
+                        performanceLevel
+                    });
+                }
+            });
+
+            await Promise.all(updatePromises);
+
+            const affectedClasses = new Set<string>();
+            for (const studentId of studentIds) {
+                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
+                if (studentDoc.exists()) {
+                    affectedClasses.add((studentDoc.data() as StudentRecord).className);
+                }
+            }
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className);
+            }
+
+            this.invalidateCache();
+            console.log('Subject TA marks cleared successfully');
+        } catch (error) {
+            console.error('Error clearing subject TA marks:', error);
+            throw error;
+        }
+    }
+
+    async clearSubjectCEMarks(subjectId: string, studentIds: string[]): Promise<void> {
+        try {
+            console.log('Clearing CE marks for subject:', subjectId, 'for', studentIds.length, 'students');
+
+            const updatePromises = studentIds.map(async (studentId) => {
+                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
+                if (!studentDoc.exists()) return;
+
+                const student = studentDoc.data() as StudentRecord;
+                const updatedMarks = { ...student.marks };
+
+                if (updatedMarks[subjectId]) {
+                    // Reset CE to 0 and calculate new total/status
+                    const marks = updatedMarks[subjectId];
+                    const ta = marks.ta || 0;
+                    updatedMarks[subjectId] = {
+                        ...marks,
+                        ce: 0,
+                        total: ta,
+                        status: 'Pending'
+                    };
+
+                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + m.total, 0);
+                    const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
+                    const performanceLevel = this.calculatePerformanceLevel(average);
+
+                    await updateDoc(doc(this.db, this.studentsCollection, studentId), {
+                        marks: updatedMarks,
+                        grandTotal,
+                        average: Math.round(average * 100) / 100,
+                        performanceLevel
+                    });
+                }
+            });
+
+            await Promise.all(updatePromises);
+
+            const affectedClasses = new Set<string>();
+            for (const studentId of studentIds) {
+                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
+                if (studentDoc.exists()) {
+                    affectedClasses.add((studentDoc.data() as StudentRecord).className);
+                }
+            }
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className);
+            }
+
+            this.invalidateCache();
+            console.log('Subject CE marks cleared successfully');
+        } catch (error) {
+            console.error('Error clearing subject CE marks:', error);
             throw error;
         }
     }
