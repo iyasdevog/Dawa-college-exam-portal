@@ -12,7 +12,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { useOfflineCapability } from '../hooks/useOfflineCapability';
 import OfflineStatusIndicator from './OfflineStatusIndicator';
-import { normalizeName } from '../../infrastructure/services/formatUtils';
+import { normalizeName, shortenSubjectName } from '../../infrastructure/services/formatUtils';
 
 
 
@@ -559,7 +559,7 @@ const FacultyEntry: React.FC = () => {
                 // Special conversion for Max TA 35 (scale from 70 back to 35 for display)
                 let displayTA = existingMarks?.ta?.toString() || '';
                 const subject = subjects.find(s => s.id === selectedSubject);
-                if (subject?.maxTA === 35 && existingMarks?.ta) {
+                if (subject?.maxTA === 35 && existingMarks?.ta && existingMarks.ta !== 'A') {
                     // Start conversion logic
                     const taVal = typeof existingMarks.ta === 'string' ? parseInt(existingMarks.ta) : existingMarks.ta;
                     // Only scale if the stored value is likely doubled (e.g., > 35 or just standard assumption)
@@ -859,10 +859,10 @@ const FacultyEntry: React.FC = () => {
                     // Validate marks against subject limits (double-check)
                     const sub = subjects.find(s => s.id === selectedSubject);
                     if (sub) {
-                        if (ta > sub.maxTA) {
+                        if (taNum > sub.maxTA) {
                             throw new Error(`TA marks for ${student.name} exceed maximum (${sub.maxTA})`);
                         }
-                        if (ce > sub.maxCE) {
+                        if (ceNum > sub.maxCE) {
                             throw new Error(`CE marks for ${student.name} exceed maximum (${sub.maxCE})`);
                         }
                     }

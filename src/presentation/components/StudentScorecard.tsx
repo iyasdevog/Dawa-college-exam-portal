@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
+import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
 
 const StudentScorecard: React.FC = () => {
     const [selectedClass, setSelectedClass] = useState('S1');
@@ -289,7 +290,7 @@ const StudentScorecard: React.FC = () => {
                                                     <tr key={subject.id} className="hover:bg-slate-50/50 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid" role="row">
                                                         <td className="px-8 py-6 print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
                                                             <p className="font-black text-slate-800 text-lg tracking-tight print:text-xs print:text-black print:leading-tight">
-                                                                {subject.name}
+                                                                {shortenSubjectName(subject.name)}
                                                             </p>
                                                             {subject.arabicName && (
                                                                 <p className="arabic-text text-xl text-emerald-600 leading-none mt-1 print:text-xs print:text-black print:leading-tight">

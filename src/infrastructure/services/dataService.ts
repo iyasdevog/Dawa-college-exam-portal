@@ -67,7 +67,10 @@ export class DataService {
     // Helper to treat 'A' as 0
     private getMarkValue(mark: number | 'A' | undefined | null): number {
         if (mark === 'A') return 0;
-        return typeof mark === 'number' ? mark : 0;
+        if (typeof mark === 'number') {
+            return isNaN(mark) ? 0 : mark;
+        }
+        return 0;
     }
 
     // Cache management
@@ -911,8 +914,15 @@ export class DataService {
         try {
             console.log('Starting recalculation of all student totals and averages...');
 
-            // Get all students
-            const allStudents = await this.getAllStudents();
+            // Get all students and subjects
+            const [allStudents, allSubjects] = await Promise.all([
+                this.getAllStudents(),
+                this.getAllSubjects()
+            ]);
+
+            const generalSubjects = allSubjects.filter(s => s.subjectType !== 'elective');
+            const electiveSubjects = allSubjects.filter(s => s.subjectType === 'elective');
+
             console.log(`Found ${allStudents.length} students to recalculate`);
 
             // Process in batches of 500 (Firestore limit)
@@ -924,14 +934,29 @@ export class DataService {
 
                 for (const student of currentBatch) {
                     try {
-                        // Recalculate grandTotal as sum of all subject totals
-                        const grandTotal = Object.values(student.marks)
-                            .reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
+                        const marksEntries = Object.entries(student.marks);
+                        if (marksEntries.length === 0) continue;
 
-                        // Calculate average
-                        const average = Object.keys(student.marks).length > 0
-                            ? grandTotal / Object.keys(student.marks).length
-                            : 0;
+                        // Identify which general subjects have marks
+                        const generalMarksCount = generalSubjects.filter(s =>
+                            student.marks[s.id] !== undefined
+                        ).length;
+
+                        // Identify if any elective marks exist
+                        const electiveMarks = electiveSubjects.filter(s =>
+                            student.marks[s.id] !== undefined
+                        );
+                        const hasElectiveMark = electiveMarks.length > 0;
+
+                        // Recalculate grandTotal
+                        const grandTotal = marksEntries.reduce((sum, [_, mark]) =>
+                            sum + this.getMarkValue(mark.total as any), 0);
+
+                        // Denominator: General subjects + 1 (if any elective marks exist)
+                        const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+                        let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+                        if (isNaN(average)) average = 0;
 
                         // Determine performance level
                         const performanceLevel = this.calculatePerformanceLevel(average);
@@ -944,7 +969,6 @@ export class DataService {
                         });
 
                         results.updated++;
-                        console.log(`Recalculated ${student.name}: grandTotal=${grandTotal}, average=${average.toFixed(2)}%`);
                     } catch (error) {
                         results.errors.push(`${student.name} (${student.adNo}): ${error instanceof Error ? error.message : 'Unknown error'}`);
                     }
@@ -952,18 +976,16 @@ export class DataService {
 
                 if (currentBatch.length > 0) {
                     await batch.commit();
-                    console.log(`Batch ${Math.floor(i / batchSize) + 1} committed (${currentBatch.length} students)`);
                 }
             }
 
             // Recalculate rankings for all classes
-            console.log('Recalculating class rankings...');
             const uniqueClasses = [...new Set(allStudents.map(s => s.className))];
             for (const className of uniqueClasses) {
                 await this.calculateClassRankings(className);
             }
 
-            console.log(`✅ Recalculation completed: ${results.updated} students updated, ${results.errors.length} errors`);
+            this.invalidateCache();
             return results;
         } catch (error) {
             console.error('Error recalculating student totals:', error);
@@ -1125,8 +1147,19 @@ export class DataService {
             };
 
             // Recalculate totals
+            const allSubjects = await this.getAllSubjects();
+            const generalSubjects = allSubjects.filter(s => s.subjectType !== 'elective');
+            const electiveSubjects = allSubjects.filter(s => s.subjectType === 'elective');
+
             const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
-            const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
+
+            // Smarter average calculation: Count general subjects + 1 (if any elective marks exist)
+            const generalMarksCount = generalSubjects.filter(s => updatedMarks[s.id] !== undefined).length;
+            const hasElectiveMark = electiveSubjects.some(s => updatedMarks[s.id] !== undefined);
+            const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+            let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+            if (isNaN(average)) average = 0;
 
             // Determine performance level
             const performanceLevel = this.calculatePerformanceLevel(average);

@@ -124,121 +124,61 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                         </div>
 
                         <div className="border-t border-slate-100 pt-4">
-                            <p className="text-sm text-slate-600 mb-2">Recalculate all student performance levels with updated grading thresholds (95%+ = Outstanding).</p>
-                            <button
-                                onClick={async () => {
-                                    if (!confirm('This will recalculate all student performance levels based on the current grading thresholds (95%+ = Outstanding, etc.). Continue?')) return;
-
-                                    try {
-                                        setIsOperating(true);
-                                        const results = await dataService.recalculateAllStudentPerformanceLevels();
-                                        await onRefresh();
-                                        alert(`Recalculation complete! ${results.updated} students updated.${results.errors.length > 0 ? `\n\nErrors: ${results.errors.length}` : ''}`);
-                                    } catch (error) {
-                                        console.error('Error recalculating performance levels:', error);
-                                        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                    } finally {
-                                        setIsOperating(false);
-                                    }
-                                }}
-                                disabled={isOperating}
-                                className="w-full py-3 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-all flex items-center justify-center gap-2"
-                            >
-                                <i className="fa-solid fa-calculator"></i>
-                                {isOperating ? 'Recalculating...' : 'Recalculate Student Grades'}
-                            </button>
-                        </div>
-
-                        <div className="border-t border-slate-100 pt-4">
                             <p className="text-sm text-slate-600 mb-2">
-                                <strong>Fix Totals & Rankings:</strong> Recalculate total marks (sum of all subjects), averages, and class rankings for all students. Use this if totals or rankings are showing incorrect values.
+                                <strong>System Optimization:</strong> Run a complete database health check and repair. This will:
+                                <ul className="list-disc list-inside mt-1 ml-1 text-xs text-slate-500">
+                                    <li>Standardize all faculty names</li>
+                                    <li>Recalculate all subject pass/fail statuses</li>
+                                    <li>Recalculate student totals, averages, and ranks</li>
+                                    <li>Update performance levels</li>
+                                </ul>
                             </p>
                             <button
                                 onClick={async () => {
-                                    if (!confirm('This will recalculate the total marks and averages for all students by summing their subject marks.\n\nThis fixes incorrect totals/percentages in Class Results.\n\nContinue?')) return;
+                                    if (!confirm('This will run a full database optimization and recalculation. It may take a minute or two.\n\nAre you sure you want to continue?')) return;
 
                                     try {
                                         setIsOperating(true);
-                                        const results = await dataService.recalculateAllStudentTotals();
+
+                                        // Step 1: Normalize Faculty Names
+                                        const facultyRes = await dataService.normalizeAllFacultyNames();
+
+                                        // Step 2: Fix Mark Statuses
+                                        const statusRes = await dataService.recalculateAllMarkStatuses();
+
+                                        // Step 3: Fix Totals & Rankings (includes Performance Levels)
+                                        const totalsRes = await dataService.recalculateAllStudentTotals();
+
                                         await onRefresh();
 
-                                        let message = `✅ Recalculation complete!\n\n${results.updated} students updated successfully.`;
-                                        if (results.errors.length > 0) {
-                                            message += `\n\n⚠️ Errors: ${results.errors.length}\n${results.errors.slice(0, 5).join('\n')}`;
-                                            if (results.errors.length > 5) {
-                                                message += `\n... and ${results.errors.length - 5} more errors`;
-                                            }
+                                        let message = `✅ Optimization Complete!\n\n`;
+                                        message += `- Standardized ${facultyRes.updated} faculty names\n`;
+                                        message += `- Updated ${statusRes.updated} mark statuses\n`;
+                                        message += `- Recalculated ${totalsRes.updated} student records\n`;
+
+                                        const allErrors = [
+                                            ...facultyRes.errors,
+                                            ...statusRes.errors,
+                                            ...totalsRes.errors
+                                        ];
+
+                                        if (allErrors.length > 0) {
+                                            message += `\n⚠️ ${allErrors.length} Errors occurred (check console for details)`;
                                         }
+
                                         alert(message);
                                     } catch (error) {
-                                        console.error('Error recalculating totals:', error);
+                                        console.error('Error optimizing database:', error);
                                         alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
                                     } finally {
                                         setIsOperating(false);
                                     }
                                 }}
                                 disabled={isOperating}
-                                className="w-full py-3 bg-amber-50 text-amber-700 rounded-xl font-bold hover:bg-amber-100 transition-all flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-200"
                             >
-                                <i className="fa-solid fa-wrench"></i>
-                                {isOperating ? 'Recalculating...' : 'Fix Totals & Rankings'}
-                            </button>
-                        </div>
-
-                        <div className="border-t border-slate-100 pt-4">
-                            <p className="text-sm text-slate-600 mb-2">
-                                <strong>Deduplicate Faculty Names:</strong> Standardizes all faculty names in the database to Title Case (e.g., merging "usman hudawi" and "Usman Hudawi" into one good name).
-                            </p>
-                            <button
-                                onClick={async () => {
-                                    if (!confirm('This will analyze all subjects and convert every faculty name to Title Case.\n\nThis merges variations like "usman hudawi" and "Usman Hudawi" into a single consistent name everywhere.\n\nContinue?')) return;
-
-                                    try {
-                                        setIsOperating(true);
-                                        const results = await dataService.normalizeAllFacultyNames();
-                                        await onRefresh();
-
-                                        alert(`✅ Deduplication complete!\n\n${results.updated} subject faculty names were standardized.`);
-                                    } catch (error) {
-                                        console.error('Error deduplicating faculty:', error);
-                                        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                    } finally {
-                                        setIsOperating(false);
-                                    }
-                                }}
-                                disabled={isOperating}
-                                className="w-full py-3 bg-blue-50 text-blue-700 rounded-xl font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
-                            >
-                                <i className="fa-solid fa-users-gear"></i>
-                                {isOperating ? 'Deduplicating...' : 'Deduplicate Faculty Names'}
-                            </button>
-                        </div>
-
-                        <div className="border-t border-slate-100 pt-4">
-                            <p className="text-sm text-slate-600 mb-2">
-                                <strong>Fix Mark Statuses:</strong> Recalculate Passed/Failed/Pending status for all subjects (e.g., fixing 'Pending' status for subjects with 100 max TA).
-                            </p>
-                            <button
-                                onClick={async () => {
-                                    if (!confirm('This will recalculate all student mark statuses (Passed/Failed/Pending) based on the latest rules.\n\nThis fixes "PENDING" status for subjects that should be Passed/Failed.\n\nContinue?')) return;
-
-                                    try {
-                                        setIsOperating(true);
-                                        const results = await dataService.recalculateAllMarkStatuses();
-                                        await onRefresh();
-                                        alert(`✅ Statuses updated for ${results.updated} students.`);
-                                    } catch (error) {
-                                        console.error('Error recalculating statuses:', error);
-                                        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                    } finally {
-                                        setIsOperating(false);
-                                    }
-                                }}
-                                disabled={isOperating}
-                                className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
-                            >
-                                <i className="fa-solid fa-check-double"></i>
-                                {isOperating ? 'Updating...' : 'Fix Mark Statuses'}
+                                <i className={`fa-solid ${isOperating ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
+                                {isOperating ? 'Optimizing Database...' : 'Optimize & Repair Database'}
                             </button>
                         </div>
                     </div>
