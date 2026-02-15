@@ -29,6 +29,10 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
         'information and communication technology excel': 'ICT (Excel)',
         'information and communication technology theory': 'ICT (Theory)',
         'information and communication technology practical': 'ICT (Practical)',
+        'ict excel': 'ICT (Excel)',
+        'ict theory': 'ICT (Theory)',
+        'ict practical': 'ICT (Practical)',
+        'ict': 'ICT',
         'islamic history': 'Islamic Hist.',
         'malayalam': 'Mal.',
         'arabic': 'Ar.',
@@ -61,7 +65,7 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
 
     // Check if name contains any of the keys
     for (const key in mapping) {
-        if (lowerName === key || lowerName.includes(key)) {
+        if (lowerName === key || (key.length > 5 && lowerName.includes(key))) {
             return mapping[key];
         }
     }
@@ -78,5 +82,20 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
  * Normalizes a name for comparison or storage.
  */
 export const normalizeName = (name: string | null | undefined): string => {
-    return toTitleCase(name);
+    if (!name) return '';
+    let normalized = toTitleCase(name);
+
+    // Specifically handle ICT normalization
+    const lower = name.toLowerCase().trim();
+    if (lower === 'information and communication technology') return 'ICT';
+    if (lower === 'information and communication technology excel') return 'ICT (Excel)';
+    if (lower === 'information and communication technology theory') return 'ICT (Theory)';
+    if (lower === 'information and communication technology practical') return 'ICT (Practical)';
+
+    // General "Information and Communication Technology" replacement
+    if (lower.includes('information and communication technology')) {
+        normalized = normalized.replace(/Information And Communication Technology/gi, 'ICT');
+    }
+
+    return normalized;
 };

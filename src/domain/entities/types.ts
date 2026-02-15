@@ -58,3 +58,10 @@ export interface SubjectConfig {
 }
 
 export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management' | 'public';
+
+export interface ReleaseSettings {
+  isReleased: boolean;
+  releaseDate?: string; // ISO string format
+}
+
+export type ClassReleaseSettings = Record<string, ReleaseSettings>;

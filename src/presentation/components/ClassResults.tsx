@@ -1,17 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
+import { User } from '../../domain/entities/User';
 import { CLASSES } from '../../domain/entities/constants';
+import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
 
-const ClassResults: React.FC = () => {
-    const [selectedClass, setSelectedClass] = useState('S1');
+interface ClassResultsProps {
+    forcedClass?: string;
+    hideSelector?: boolean;
+    currentUser?: User | null;
+}
+
+const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, currentUser }) => {
+    // Determine allowed classes based on user role
+    const allowedClasses = useMemo(() => {
+        if (!currentUser || currentUser.role === 'admin') return CLASSES;
+        return CLASSES.filter(cls => currentUser.assignedClasses.includes(cls));
+    }, [currentUser]);
+
+    const [selectedClass, setSelectedClass] = useState(forcedClass || allowedClasses[0] || 'S1');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+    const [viewMode, setViewMode] = useState<'table' | 'cards'>(hideSelector ? 'cards' : 'table');
 
     // Mobile detection
     const { isMobile, isTablet } = useMobile();
@@ -184,67 +198,69 @@ const ClassResults: React.FC = () => {
             </div>
 
             {/* Class Selection - Hidden on Print */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 print:hidden">
-                <div className={`flex items-center gap-6 ${isMobile ? 'flex-col' : ''}`}>
-                    <div className={isMobile ? 'w-full' : ''}>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
-                        <select
-                            value={selectedClass}
-                            onChange={(e) => setSelectedClass(e.target.value)}
-                            className={`p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium print:hidden ${isMobile ? 'w-full' : ''}`}
-                            style={{ minHeight: '44px' }}
-                            aria-label="Select class to view results"
-                            aria-describedby="class-results-help"
-                        >
-                            {CLASSES.map(cls => (
-                                <option key={cls} value={cls}>{cls}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className={`flex-1 grid gap-4 text-center ${isMobile ? 'grid-cols-2 w-full' : 'grid-cols-2 md:grid-cols-5'}`}>
-                        <div>
-                            <p className={`font-black text-slate-900 ${isMobile ? 'text-xl' : 'text-2xl'}`}>{classStats.totalStudents}</p>
-                            <p className="text-xs font-bold text-slate-600 uppercase">Students</p>
+            {!hideSelector && (
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 print:hidden">
+                    <div className={`flex items-center gap-6 ${isMobile ? 'flex-col' : ''}`}>
+                        <div className={isMobile ? 'w-full' : ''}>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
+                            <select
+                                value={selectedClass}
+                                onChange={(e) => setSelectedClass(e.target.value)}
+                                className={`p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium print:hidden ${isMobile ? 'w-full' : ''}`}
+                                style={{ minHeight: '44px' }}
+                                aria-label="Select class to view results"
+                                aria-describedby="class-results-help"
+                            >
+                                {allowedClasses.map(cls => (
+                                    <option key={cls} value={cls}>{cls}</option>
+                                ))}
+                            </select>
                         </div>
-                        <div>
-                            <p className={`font-black text-emerald-600 ${isMobile ? 'text-xl' : 'text-2xl'}`}>{classStats.averagePercentage}%</p>
-                            <p className="text-xs font-bold text-slate-600 uppercase">Class Avg</p>
+                        <div className={`flex-1 grid gap-4 text-center ${isMobile ? 'grid-cols-2 w-full' : 'grid-cols-2 md:grid-cols-5'}`}>
+                            <div>
+                                <p className={`font-black text-slate-900 ${isMobile ? 'text-xl' : 'text-2xl'}`}>{classStats.totalStudents}</p>
+                                <p className="text-xs font-bold text-slate-600 uppercase">Students</p>
+                            </div>
+                            <div>
+                                <p className={`font-black text-emerald-600 ${isMobile ? 'text-xl' : 'text-2xl'}`}>{classStats.averagePercentage}%</p>
+                                <p className="text-xs font-bold text-slate-600 uppercase">Class Avg</p>
+                            </div>
+                            {!isMobile && (
+                                <>
+                                    <div>
+                                        <p className="text-2xl font-black text-blue-600">{passPercentage}%</p>
+                                        <p className="text-xs font-bold text-slate-600 uppercase">Pass Rate</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-2xl font-black text-amber-600">{classStats.highestMarks}</p>
+                                        <p className="text-xs font-bold text-slate-600 uppercase">Highest</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-2xl font-black text-red-600">{classStats.lowestMarks}</p>
+                                        <p className="text-xs font-bold text-slate-600 uppercase">Lowest</p>
+                                    </div>
+                                </>
+                            )}
                         </div>
-                        {!isMobile && (
-                            <>
+                        {isMobile && (
+                            <div className="grid grid-cols-3 gap-4 text-center w-full mt-4">
                                 <div>
-                                    <p className="text-2xl font-black text-blue-600">{passPercentage}%</p>
+                                    <p className="text-xl font-black text-blue-600">{passPercentage}%</p>
                                     <p className="text-xs font-bold text-slate-600 uppercase">Pass Rate</p>
                                 </div>
                                 <div>
-                                    <p className="text-2xl font-black text-amber-600">{classStats.highestMarks}</p>
+                                    <p className="text-xl font-black text-amber-600">{classStats.highestMarks}</p>
                                     <p className="text-xs font-bold text-slate-600 uppercase">Highest</p>
                                 </div>
                                 <div>
-                                    <p className="text-2xl font-black text-red-600">{classStats.lowestMarks}</p>
+                                    <p className="text-xl font-black text-red-600">{classStats.lowestMarks}</p>
                                     <p className="text-xs font-bold text-slate-600 uppercase">Lowest</p>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
-                    {isMobile && (
-                        <div className="grid grid-cols-3 gap-4 text-center w-full mt-4">
-                            <div>
-                                <p className="text-xl font-black text-blue-600">{passPercentage}%</p>
-                                <p className="text-xs font-bold text-slate-600 uppercase">Pass Rate</p>
-                            </div>
-                            <div>
-                                <p className="text-xl font-black text-amber-600">{classStats.highestMarks}</p>
-                                <p className="text-xs font-bold text-slate-600 uppercase">Highest</p>
-                            </div>
-                            <div>
-                                <p className="text-xl font-black text-red-600">{classStats.lowestMarks}</p>
-                                <p className="text-xs font-bold text-slate-600 uppercase">Lowest</p>
-                            </div>
-                        </div>
-                    )}
                 </div>
-            </div>
+            )}
 
             {/* Enhanced Official Print Header - Visible only on Print */}
             <div className="hidden print:block text-center print:mb-6 print:break-inside-avoid print:keep-with-next">

@@ -8,7 +8,7 @@
 
     /* Default A4 page setup with optimal margins */
     @page {
-        margin: 0.5in 0.75in;
+        margin: 0.25in 0.4in;
         size: A4 portrait;
         orphans: 3;
         widows: 3;
@@ -17,10 +17,10 @@
 
     /* A4 Portrait (Default) - 210mm x 297mm */
     @page :first {
-        margin-top: 0.75in;
-        margin-bottom: 0.5in;
-        margin-left: 0.75in;
-        margin-right: 0.75in;
+        margin-top: 0.4in;
+        margin-bottom: 0.25in;
+        margin-left: 0.4in;
+        margin-right: 0.4in;
     }
 
     /* A4 Landscape orientation */
