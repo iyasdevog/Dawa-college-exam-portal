@@ -323,10 +323,17 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                                         </td>
                                                         <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
                                                             <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`CE marks: ${marks?.ce ?? 'Not assessed'} out of ${subject.maxCE}`}>
-                                                                {marks?.ce ?? '-'}
-                                                                <span className="text-xs text-slate-400 print:text-black">/{subject.maxCE}</span>
+                                                                {subject.maxTA === 100 || subject.maxCE === 0 ? (
+                                                                    <span className="text-xs text-slate-400 uppercase">N/A</span>
+                                                                ) : (
+                                                                    <>
+                                                                        {marks?.ce ?? '-'}
+                                                                        <span className="text-xs text-slate-400 print:text-black">/{subject.maxCE}</span>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </td>
+
                                                         <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding">
                                                             <div className={`font-black text-2xl print:text-xs print:text-black print:leading-tight ${marks?.status === 'Failed' ? 'text-red-500' : 'text-slate-900'
                                                                 }`}>

@@ -57,7 +57,7 @@ export interface SubjectConfig {
   enrolledStudents?: string[]; // Student IDs for elective subjects
 }
 
-export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management' | 'public';
+export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management' | 'public' | 'doura-monitoring';
 
 export interface ReleaseSettings {
   isReleased: boolean;
@@ -65,3 +65,21 @@ export interface ReleaseSettings {
 }
 
 export type ClassReleaseSettings = Record<string, ReleaseSettings>;
+
+export interface DouraSubmission {
+  id: string;
+  studentAdNo: string;
+  studentName: string;
+  className: string;
+  juzStart: number;
+  juzEnd: number;
+  pageStart: number;
+  pageEnd: number;
+  recitationDate: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  submittedAt: string; // ISO string
+  approvedAt?: string; // ISO string
+  teacherName?: string; // Student's selected teacher
+  approvedBy?: string; // Teacher who approved the submission
+  feedback?: string;
+}

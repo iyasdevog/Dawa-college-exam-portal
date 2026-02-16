@@ -93,6 +93,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [trackerSubjectSearch, setTrackerSubjectSearch] = useState<string>('');
     const [trackerStatusFilter, setTrackerStatusFilter] = useState<'all' | 'complete' | 'in-progress' | 'not-started'>('all');
 
+
+
     // Load initial data
     useEffect(() => {
         loadData();
@@ -104,8 +106,12 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             loadAllStudents();
         } else if (activeTab === 'release-settings') {
             loadReleaseSettings();
+        } else if (activeTab === 'doura-monitoring') {
+            // loadMonitoringSubmissions();
         }
     }, [activeTab]);
+
+
 
     // Update class subjects when class or subject type changes
     useEffect(() => {
@@ -429,9 +435,13 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             },
             getStatus: (studentId: string): 'Passed' | 'Failed' | 'Pending' => {
                 const marks = marksData[studentId];
-                if (!marks || !marks.ta || !marks.ce) return 'Pending';
+                const isCENotApplicable = subject.maxTA === 100 || subject.maxCE === 0;
 
-                if (marks.ta === 'A' || marks.ce === 'A') return 'Failed';
+                if (!marks || !marks.ta || (!isCENotApplicable && !marks.ce)) return 'Pending';
+
+
+                if (marks.ta === 'A' || (!isCENotApplicable && marks.ce === 'A')) return 'Failed';
+
 
                 const ta = parseInt(marks.ta) || 0;
                 const ce = parseInt(marks.ce) || 0;
@@ -439,7 +449,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 const minCE = Math.ceil(subject.maxCE * 0.5);
 
                 const passedTA = ta >= minTA;
-                const passedCE = ce >= minCE;
+                const passedCE = isCENotApplicable || ce >= minCE;
 
                 return (passedTA && passedCE) ? 'Passed' : 'Failed';
             }
@@ -495,6 +505,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             console.error('Error loading all students:', error);
         }
     };
+
+
 
     const loadData = async () => {
         try {
@@ -1164,6 +1176,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         <i className="fa-solid fa-calendar-check mr-2"></i>
                         Release Settings
                     </button>
+
                 </div>
             </div>
 
@@ -2011,6 +2024,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 </>
             )}
 
+
+
             {/* Upload Tracker Tab Content */}
             {activeTab === 'upload-tracker' && (
                 <div className="px-4 md:px-0 mt-8 space-y-6">
@@ -2155,7 +2170,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                 classStudents.forEach(s => {
                                     const { hasTA, hasCE } = checkMarkStatus(s, subject.id);
                                     if (hasTA) uploadedTA++;
-                                    if (hasCE || subject.maxCE === 0) uploadedCE++;
+                                    if (hasCE || subject.maxCE === 0 || subject.maxTA === 100) uploadedCE++;
                                 });
                             } else {
                                 // For elective subjects, count enrolled students
@@ -2164,7 +2179,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                 allStudents.filter(s => enrolledStudentIds.includes(s.id)).forEach(s => {
                                     const { hasTA, hasCE } = checkMarkStatus(s, subject.id);
                                     if (hasTA) uploadedTA++;
-                                    if (hasCE || subject.maxCE === 0) uploadedCE++;
+                                    if (hasCE || subject.maxCE === 0 || subject.maxTA === 100) uploadedCE++;
                                 });
                             }
 
@@ -2175,7 +2190,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                             let status: 'complete' | 'in-progress' | 'not-started';
                             if (taPercentage === 100 && cePercentage === 100) {
                                 status = 'complete';
-                            } else if (taPercentage === 0 && (cePercentage === 0 || subject.maxCE === 0)) {
+                            } else if (taPercentage === 0 && (cePercentage === 0 || subject.maxCE === 0 || subject.maxTA === 100)) {
                                 status = 'not-started';
                             } else {
                                 status = 'in-progress';
@@ -2308,7 +2323,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                             </div>
 
                                                             {/* CE Progress */}
-                                                            {subject.maxCE > 0 ? (
+                                                            {subject.maxCE > 0 && subject.maxTA !== 100 ? (
                                                                 <div>
                                                                     <div className="flex items-center justify-between mb-1">
                                                                         <span className="text-[10px] font-black text-slate-500 uppercase">CE Examination</span>
