@@ -72,11 +72,16 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
             setStudents(rankedStudents);
 
-            // Filter subjects for this class
-            const filteredSubjects = subjects.filter(s =>
-                s.targetClasses.includes(selectedClass) ||
-                (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id)))
-            );
+            // Filter subjects for this class - include electives by enrollment OR by marks presence
+            const filteredSubjects = subjects.filter(s => {
+                // General subjects assigned to this class
+                if (s.targetClasses.includes(selectedClass)) return true;
+                // Elective subjects: check enrollment list
+                if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
+                // Elective subjects: also check if any student in this class has marks for this subject
+                if (s.subjectType === 'elective' && classStudents.some(cs => cs.marks[s.id] && (cs.marks[s.id].total > 0 || cs.marks[s.id].ta !== undefined))) return true;
+                return false;
+            });
             setClassSubjects(filteredSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);
@@ -337,7 +342,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                 // Find the elective the student took (if any)
                                 const studentElective = electiveSubjects.find(s => {
                                     const m = student.marks[s.id];
-                                    return m && (m.total > 0 || m.ta !== undefined || m.ce !== undefined);
+                                    return m !== undefined && m !== null;
                                 });
                                 const electiveMark = studentElective ? student.marks[studentElective.id] : null;
 
@@ -428,44 +433,36 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                             })}
                         </div>
                     ) : (
-                        /* Table View with Enhanced Mobile Scrolling */
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:overflow-visible print:shadow-none print:border-none print:a4-content max-w-full">
-                            {isMobile && (
-                                <div className="bg-amber-50 border-b border-amber-200 p-3 text-center print:hidden">
-                                    <p className="text-sm text-amber-800 font-medium">
-                                        <i className="fa-solid fa-arrows-left-right mr-2"></i>
-                                        Scroll horizontally to see all subjects
-                                    </p>
-                                </div>
-                            )}
-                            <div className="overflow-x-auto print:overflow-visible" style={{ maxWidth: '100%' }}>
-                                <table className="w-full border-collapse print:table-compact whitespace-nowrap" role="table" aria-label="Class results table">
-                                    <thead className="print:keep-with-next sticky top-0 z-20 bg-slate-50">
-                                        <tr className="bg-slate-50 print:bg-slate-100 print:break-inside-avoid" role="row">
-                                            <th className={`text-left font-bold text-slate-700 border-b-2 border-slate-300 sticky left-0 bg-slate-50 z-30 ${isMobile ? 'p-2 text-xs w-10' : 'p-3 text-sm w-14'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Rank</th>
-                                            <th className={`text-left font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Adm No</th>
-                                            <th className={`text-left font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Student Name</th>
+                        /* Table View */
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:overflow-visible print:shadow-none print:border-none print:a4-content">
+                            <div className="overflow-x-auto print:overflow-visible">
+                                <table className="w-full border-collapse print:table-compact" role="table" aria-label="Class results table" style={{ minWidth: '700px' }}>
+                                    <thead>
+                                        <tr className="bg-slate-100 print:bg-slate-100 print:break-inside-avoid" role="row">
+                                            <th className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 uppercase tracking-wider ${isMobile ? 'px-2 py-2 text-[10px]' : 'px-3 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col" style={{ width: '50px' }}>Rank</th>
+                                            <th className={`text-left font-bold text-slate-600 border-b-2 border-slate-300 uppercase tracking-wider ${isMobile ? 'px-2 py-2 text-[10px]' : 'px-3 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col" style={{ width: '70px' }}>Adm No</th>
+                                            <th className={`text-left font-bold text-slate-600 border-b-2 border-slate-300 uppercase tracking-wider ${isMobile ? 'px-2 py-2 text-[10px]' : 'px-3 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col" style={{ minWidth: '120px' }}>Student Name</th>
 
                                             {/* General Subjects Headers */}
                                             {classSubjects.filter(s => s.subjectType !== 'elective').map(subject => (
-                                                <th key={subject.id} className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">
-                                                    <div>{shortenSubjectName(subject.name)}</div>
+                                                <th key={subject.id} className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 uppercase tracking-wider ${isMobile ? 'px-1 py-2 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col">
+                                                    {shortenSubjectName(subject.name)}
                                                     {subject.arabicName && !isMobile && (
-                                                        <div className="text-xs text-slate-400 arabic-text print:hidden font-normal">{subject.arabicName}</div>
+                                                        <div className="text-[10px] text-slate-400 font-normal normal-case tracking-normal arabic-text print:hidden">{subject.arabicName}</div>
                                                     )}
                                                 </th>
                                             ))}
 
                                             {/* Single Elective Header */}
                                             {classSubjects.some(s => s.subjectType === 'elective') && (
-                                                <th className={`text-center font-bold text-indigo-700 border-b-2 border-slate-300 bg-indigo-50/30 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">
+                                                <th className={`text-center font-bold text-indigo-600 border-b-2 border-slate-300 bg-indigo-50/50 uppercase tracking-wider ${isMobile ? 'px-1 py-2 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col">
                                                     Elective
                                                 </th>
                                             )}
 
-                                            <th className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Total</th>
-                                            <th className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Average</th>
-                                            <th className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Status</th>
+                                            <th className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 uppercase tracking-wider ${isMobile ? 'px-2 py-2 text-[10px]' : 'px-3 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col">Total</th>
+                                            <th className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 uppercase tracking-wider ${isMobile ? 'px-2 py-2 text-[10px]' : 'px-3 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col">Average</th>
+                                            <th className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 uppercase tracking-wider ${isMobile ? 'px-2 py-2 text-[10px]' : 'px-3 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -473,29 +470,27 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                             // Pre-calculate elective info for this student
                                             const electiveSubjects = classSubjects.filter(s => s.subjectType === 'elective');
 
-                                            // More robust elective detection:
-                                            // 1. Check if student has marks for any elective subject
-                                            // 2. Ensure marks are not just empty structure
+                                            // Find elective by checking if marks exist in student data
                                             const studentElective = electiveSubjects.find(s => {
                                                 const m = student.marks[s.id];
-                                                return m && (m.total > 0 || m.ta !== undefined || m.ce !== undefined);
+                                                // Check if marks object exists and has any meaningful data
+                                                return m !== undefined && m !== null;
                                             });
                                             const electiveMark = studentElective ? student.marks[studentElective.id] : null;
 
                                             return (
-                                                <tr key={student.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-emerald-50/50 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid`} role="row">
-                                                    <td className={`border-b border-slate-100 sticky left-0 bg-inherit z-10 ${isMobile ? 'p-2' : 'p-3'} print:p-1 print:text-xs`} role="cell">
-                                                        <div className={`rounded-full flex items-center justify-center text-white font-black text-xs print:w-4 print:h-4 print:text-xs print:rounded-none ${isMobile ? 'w-6 h-6' : 'w-7 h-7'
-                                                            } ${student.rank === 1 ? 'bg-yellow-500' :
-                                                                student.rank === 2 ? 'bg-slate-400' :
-                                                                    student.rank === 3 ? 'bg-amber-600' :
-                                                                        'bg-slate-300'
-                                                            }`} aria-label={`Rank ${student.rank}`}>
+                                                <tr key={student.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-blue-50/50 transition-colors print:hover:bg-transparent print:break-inside-avoid`} role="row">
+                                                    <td className={`text-center border-b border-slate-100 ${isMobile ? 'px-2 py-2' : 'px-3 py-2'} print:px-1 print:py-0.5 print:text-[10px]`} role="cell">
+                                                        <div className={`inline-flex items-center justify-center rounded-full text-white font-black ${isMobile ? 'w-6 h-6 text-[10px]' : 'w-7 h-7 text-xs'} print:w-4 print:h-4 print:text-[9px] ${student.rank === 1 ? 'bg-yellow-500' :
+                                                            student.rank === 2 ? 'bg-slate-400' :
+                                                                student.rank === 3 ? 'bg-amber-600' :
+                                                                    'bg-slate-300'
+                                                            }`}>
                                                             {student.rank}
                                                         </div>
                                                     </td>
-                                                    <td className={`font-medium text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs`} role="cell">{student.adNo}</td>
-                                                    <td className={`font-medium text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-xs max-w-[120px] truncate' : 'p-3 text-sm'} print:p-1 print:text-xs`} role="cell">
+                                                    <td className={`text-left font-medium text-slate-700 border-b border-slate-100 ${isMobile ? 'px-2 py-2 text-xs' : 'px-3 py-2 text-sm'} print:px-1 print:py-0.5 print:text-[10px]`} role="cell">{student.adNo}</td>
+                                                    <td className={`text-left font-semibold text-slate-900 border-b border-slate-100 ${isMobile ? 'px-2 py-2 text-xs' : 'px-3 py-2 text-sm'} print:px-1 print:py-0.5 print:text-[10px]`} role="cell">
                                                         {student.name}
                                                     </td>
 
@@ -503,20 +498,20 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                     {classSubjects.filter(s => s.subjectType !== 'elective').map(subject => {
                                                         const marks = student.marks[subject.id];
                                                         return (
-                                                            <td key={subject.id} className={`text-center border-b border-slate-100 ${isMobile ? 'p-2' : 'p-3'} print:p-1 print:text-xs`}>
+                                                            <td key={subject.id} className={`text-center border-b border-slate-100 ${isMobile ? 'px-1 py-2' : 'px-2 py-2'} print:px-1 print:py-0.5 print:text-[10px]`}>
                                                                 {marks ? (
                                                                     <div>
-                                                                        <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-xs ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>
+                                                                        <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-[10px] ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>
                                                                             {marks.total}
                                                                         </div>
                                                                         {!isMobile && (
-                                                                            <div className="text-xs text-slate-400 print:hidden">
-                                                                                {marks.ta}+{subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce}
+                                                                            <div className="text-[10px] text-slate-400 print:hidden">
+                                                                                {marks.ta === 'A' ? 'A' : marks.ta}+{subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : (marks.ce === 'A' ? 'A' : marks.ce)}
                                                                             </div>
                                                                         )}
                                                                     </div>
                                                                 ) : (
-                                                                    <span className="text-slate-300">-</span>
+                                                                    <span className="text-slate-300 text-sm">-</span>
                                                                 )}
                                                             </td>
                                                         );
@@ -524,36 +519,35 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
                                                     {/* Single Elective Column Data */}
                                                     {classSubjects.some(s => s.subjectType === 'elective') && (
-                                                        <td className={`text-center border-b border-slate-100 bg-indigo-50/10 ${isMobile ? 'p-2' : 'p-3'} print:p-1 print:text-xs`}>
+                                                        <td className={`text-center border-b border-slate-100 bg-indigo-50/20 ${isMobile ? 'px-1 py-2' : 'px-2 py-2'} print:px-1 print:py-0.5 print:text-[10px]`}>
                                                             {electiveMark ? (
                                                                 <div>
-                                                                    <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-xs ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>
+                                                                    <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-[10px] ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>
                                                                         {electiveMark.total}
                                                                     </div>
-                                                                    <div className={`text-[10px] text-indigo-600 font-medium truncate max-w-[80px] mx-auto ${isMobile ? '' : ''}`}>
+                                                                    <div className="text-[10px] text-indigo-500 font-medium truncate max-w-[80px] mx-auto">
                                                                         {shortenSubjectName(studentElective?.name)}
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-slate-300">-</span>
+                                                                <span className="text-slate-300 text-sm">-</span>
                                                             )}
                                                         </td>
                                                     )}
 
-                                                    <td className={`text-center font-black text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-base' : 'p-3 text-lg'} print:p-1 print:text-xs`}>
+                                                    <td className={`text-center font-black text-slate-900 border-b border-slate-100 ${isMobile ? 'px-2 py-2 text-base' : 'px-3 py-2 text-lg'} print:px-1 print:py-0.5 print:text-[10px]`}>
                                                         {student.grandTotal}
                                                     </td>
-                                                    <td className={`text-center font-bold text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-sm' : 'p-3'} print:p-1 print:text-xs`}>
+                                                    <td className={`text-center font-bold text-slate-700 border-b border-slate-100 ${isMobile ? 'px-2 py-2 text-sm' : 'px-3 py-2 text-sm'} print:px-1 print:py-0.5 print:text-[10px]`}>
                                                         {student.average.toFixed(1)}%
                                                     </td>
-                                                    <td className={`text-center border-b border-slate-100 ${isMobile ? 'p-2' : 'p-3'} print:p-1`}>
-                                                        <span className={`px-2 py-0.5 rounded-full font-bold uppercase tracking-wider print:px-0 print:py-0 print:text-xs ${isMobile ? 'text-[10px]' : 'text-xs'
-                                                            } ${student.performanceLevel.includes('Outstanding') ? 'bg-purple-100 text-purple-700' :
-                                                                student.performanceLevel.includes('Excellent') ? 'bg-emerald-100 text-emerald-700' :
-                                                                    student.performanceLevel.includes('Very Good') ? 'bg-blue-100 text-blue-700' :
-                                                                        student.performanceLevel.includes('Good') ? 'bg-teal-100 text-teal-700' :
-                                                                            student.performanceLevel.includes('Average') ? 'bg-amber-100 text-amber-700' :
-                                                                                'bg-red-100 text-red-700'
+                                                    <td className={`text-center border-b border-slate-100 ${isMobile ? 'px-1 py-2' : 'px-2 py-2'} print:px-1 print:py-0.5`}>
+                                                        <span className={`inline-block px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${isMobile ? 'text-[9px]' : 'text-[10px]'} print:text-[8px] print:px-0 ${student.performanceLevel.includes('Outstanding') ? 'bg-purple-100 text-purple-700' :
+                                                            student.performanceLevel.includes('Excellent') ? 'bg-emerald-100 text-emerald-700' :
+                                                                student.performanceLevel.includes('Very Good') ? 'bg-blue-100 text-blue-700' :
+                                                                    student.performanceLevel.includes('Good') ? 'bg-teal-100 text-teal-700' :
+                                                                        student.performanceLevel.includes('Average') ? 'bg-amber-100 text-amber-700' :
+                                                                            'bg-red-100 text-red-700'
                                                             }`}>
                                                             {student.performanceLevel}
                                                         </span>
