@@ -15,7 +15,7 @@ import {
     Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, DouraSubmission } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 import { normalizeName } from './formatUtils';
@@ -38,12 +38,16 @@ export class DataService {
     private subjectsCollection = 'subjects';
     private supplementaryExamsCollection = 'supplementaryExams';
     private settingsCollection = 'settings';
+    private douraCollection = 'doura_submissions';
 
     // Cache for performance optimization
     private studentsCache: StudentRecord[] | null = null;
     private subjectsCache: SubjectConfig[] | null = null;
+    private douraCache: DouraSubmission[] | null = null;
     private cacheTimestamp: number = 0;
+    private douraCacheTimestamp: number = 0;
     private readonly CACHE_DURATION = 30000; // 30 seconds cache
+    private readonly DOURA_CACHE_DURATION = 10000; // 10 seconds for doura
 
     // Helper method to get database instance
     private get db() {
@@ -80,16 +84,30 @@ export class DataService {
         return this.cacheTimestamp > 0 && (Date.now() - this.cacheTimestamp) < this.CACHE_DURATION;
     }
 
+    private isDouraCacheValid(): boolean {
+        return this.douraCacheTimestamp > 0 && (Date.now() - this.douraCacheTimestamp) < this.DOURA_CACHE_DURATION;
+    }
+
     private invalidateCache(): void {
         this.studentsCache = null;
         this.subjectsCache = null;
         this.cacheTimestamp = 0;
     }
 
+    private invalidateDouraCache(): void {
+        this.douraCache = null;
+        this.douraCacheTimestamp = 0;
+    }
+
     private updateCache(students?: StudentRecord[], subjects?: SubjectConfig[]): void {
         if (students) this.studentsCache = students;
         if (subjects) this.subjectsCache = subjects;
         this.cacheTimestamp = Date.now();
+    }
+
+    private updateDouraCache(submissions: DouraSubmission[]): void {
+        this.douraCache = submissions;
+        this.douraCacheTimestamp = Date.now();
     }
 
     // Release Settings operations
@@ -278,13 +296,23 @@ export class DataService {
 
     // Subject operations
     async getAllSubjects(): Promise<SubjectConfig[]> {
+        // Return cached data if valid
+        if (this.isCacheValid() && this.subjectsCache) {
+            return this.subjectsCache;
+        }
+
         try {
             const querySnapshot = await getDocs(collection(this.db, this.subjectsCollection));
 
-            return querySnapshot.docs.map(doc => ({
+            const subjects = querySnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             } as SubjectConfig));
+
+            // Update cache
+            this.updateCache(undefined, subjects);
+
+            return subjects;
         } catch (error) {
             console.error('Error fetching subjects:', error);
             return [];
@@ -293,14 +321,8 @@ export class DataService {
 
     async getSubjectsByClass(className: string): Promise<SubjectConfig[]> {
         try {
-            const querySnapshot = await getDocs(collection(this.db, this.subjectsCollection));
-
-            return querySnapshot.docs
-                .map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                } as SubjectConfig))
-                .filter(subject => subject.targetClasses.includes(className));
+            const allSubjects = await this.getAllSubjects();
+            return allSubjects.filter(subject => subject.targetClasses.includes(className));
         } catch (error) {
             console.error('Error fetching subjects by class:', error);
             return [];
@@ -363,6 +385,7 @@ export class DataService {
             console.log('Subject document found, proceeding with deletion...');
             await deleteDoc(docRef);
             console.log('Subject deleted successfully:', id);
+            this.invalidateCache();
         } catch (error) {
             console.error('Error deleting subject:', error);
             if (error instanceof Error) {
@@ -881,6 +904,7 @@ export class DataService {
 
             await batch.commit();
             console.log('All subject data cleared successfully');
+            this.invalidateCache();
         } catch (error) {
             console.error('Error clearing subject data:', error);
             throw error;
@@ -1944,9 +1968,134 @@ export class DataService {
 
             console.log(`Marks import completed: ${results.success} successful, ${results.errors.length} errors`);
             return results;
+
         } catch (error) {
             console.error('Error importing marks from Excel:', error);
             throw error;
+        }
+    }
+
+    // Doura Status operations
+    async submitDouraStatus(submission: Omit<DouraSubmission, 'id'>): Promise<string> {
+        try {
+            const docRef = await addDoc(collection(this.db, this.douraCollection), {
+                ...submission,
+                status: 'Pending',
+                submittedAt: new Date().toISOString()
+            });
+            this.invalidateDouraCache();
+            return docRef.id;
+        } catch (error) {
+            console.error('Error submitting Doura status:', error);
+            throw error;
+        }
+    }
+
+    async getDouraSubmissionsByAdNo(adNo: string): Promise<DouraSubmission[]> {
+        try {
+            const q = query(
+                collection(this.db, this.douraCollection),
+                where('studentAdNo', '==', adNo),
+                orderBy('submittedAt', 'desc')
+            );
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as DouraSubmission));
+        } catch (error) {
+            console.error('Error fetching student Doura status:', error);
+            return [];
+        }
+    }
+
+    async getAllDouraSubmissions(className?: string, status?: 'Pending' | 'Approved' | 'Rejected'): Promise<DouraSubmission[]> {
+        // Return cached data if valid and no specific filters that we don't want to double-filter
+        if (this.isDouraCacheValid() && this.douraCache) {
+            let submissions = [...this.douraCache];
+            if (className && className !== 'all') {
+                submissions = submissions.filter(s => s.className === className);
+            }
+            if (status && (status as string) !== 'all') {
+                submissions = submissions.filter(s => s.status === status);
+            }
+            return submissions;
+        }
+
+        try {
+            // Fetch all submissions ordered by date
+            const q = query(collection(this.db, this.douraCollection), orderBy('submittedAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+
+            const submissions = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as DouraSubmission));
+
+            // Update cache with all submissions
+            this.updateDouraCache(submissions);
+
+            // Apply filters client-side
+            let filtered = [...submissions];
+            if (className && className !== 'all') {
+                filtered = filtered.filter(s => s.className === className);
+            }
+
+            if (status && (status as string) !== 'all') {
+                filtered = filtered.filter(s => s.status === status);
+            }
+
+            return filtered;
+        } catch (error) {
+            console.error('Error fetching Doura submissions:', error);
+            return [];
+        }
+    }
+
+    async deleteDouraSubmission(id: string): Promise<void> {
+        try {
+            await deleteDoc(doc(this.db, this.douraCollection, id));
+            this.invalidateDouraCache();
+        } catch (error) {
+            console.error('Error deleting Doura submission:', error);
+            throw error;
+        }
+    }
+
+    async updateDouraSubmission(id: string, updates: Partial<DouraSubmission>): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.douraCollection, id);
+            await updateDoc(docRef, {
+                ...updates,
+                approvedAt: updates.status === 'Approved' ? new Date().toISOString() : null
+            });
+            this.invalidateDouraCache();
+        } catch (error) {
+            console.error('Error updating Doura submission:', error);
+            throw error;
+        }
+    }
+
+    async getTopReciters(className: string): Promise<{ name: string; juzCount: number }[]> {
+        try {
+            // Use the cached getAllDouraSubmissions method to ensure sync with deletions/updates
+            const submissions = await this.getAllDouraSubmissions(className, 'Approved');
+
+            // Aggregate by student name
+            const aggregation: Record<string, number> = {};
+            submissions.forEach(sub => {
+                const count = Math.max(0, sub.juzEnd - sub.juzStart + 1);
+                aggregation[sub.studentName] = (aggregation[sub.studentName] || 0) + count;
+            });
+
+            // Convert to array and sort
+            return Object.entries(aggregation)
+                .map(([name, juzCount]) => ({ name, juzCount }))
+                .sort((a, b) => b.juzCount - a.juzCount)
+                .slice(0, 10);
+        } catch (error) {
+            console.error('Error fetching top reciters:', error);
+            return [];
         }
     }
 }

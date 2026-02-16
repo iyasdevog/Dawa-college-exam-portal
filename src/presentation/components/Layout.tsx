@@ -22,6 +22,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
+    { id: 'doura-monitoring', icon: 'fa-book-quran', label: 'Doura Monitoring' },
     ...(currentUser?.role === 'admin' ? [{ id: 'management', icon: 'fa-sliders', label: 'Management' }] : []),
   ];
 
@@ -32,6 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
       'class-report': 'Class Report',
       'student-card': 'Score Cards',
       'management': 'Management',
+      'doura-monitoring': 'Doura Monitoring',
       'public': 'Public Portal'
     };
     return titles[view] || view.replace('-', ' ');

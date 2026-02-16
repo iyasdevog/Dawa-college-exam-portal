@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import { mobileStorage, preventIOSZoom } from '../../infrastructure/services/mobileUtils';
 import ClassResults from './ClassResults';
+import { DouraSubmission } from '../../domain/entities/types';
 
 interface PublicPortalProps {
     onLoginClick: () => void;
@@ -18,7 +19,35 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSearching, setIsSearching] = useState(false);
-    const [viewMode, setViewMode] = useState<'scorecard' | 'class-rank'>('scorecard');
+    const [viewMode, setViewMode] = useState<'scorecard' | 'class-rank' | 'doura-tracker'>('scorecard');
+    const [isResultsReleased, setIsResultsReleased] = useState(true);
+
+    // Doura Status State
+    const [douraSubmissions, setDouraSubmissions] = useState<DouraSubmission[]>([]);
+    const [recitationDate, setRecitationDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [juzStart, setJuzStart] = useState<number>(1);
+    const [juzEnd, setJuzEnd] = useState<number>(1);
+    const [pageStart, setPageStart] = useState<number>(2);
+    const [pageEnd, setPageEnd] = useState<number>(21);
+    const [isSubmittingDoura, setIsSubmittingDoura] = useState(false);
+    const [isLoadingDoura, setIsLoadingDoura] = useState(false);
+    const [topReciters, setTopReciters] = useState<{ name: string; juzCount: number }[]>([]);
+    const [selectedTeacher, setSelectedTeacher] = useState<string>('');
+
+    // Extract unique faculty names from Doura-related subjects
+    const douraTeachers = useMemo(() => {
+        const teachers = subjects
+            .filter(s => s.name.toLowerCase().includes('doura') && s.facultyName)
+            .map(s => s.facultyName as string);
+        return Array.from(new Set(teachers)).sort();
+    }, [subjects]);
+
+    // Set default teacher if list changes
+    useEffect(() => {
+        if (douraTeachers.length > 0 && !selectedTeacher) {
+            setSelectedTeacher(douraTeachers[0]);
+        }
+    }, [douraTeachers]);
 
     // Mobile detection and responsive state
     const {
@@ -53,8 +82,32 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
         initializeData();
     }, []);
 
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const loadDouraHistory = useCallback(async (adNo: string) => {
+        try {
+            setIsLoadingDoura(true);
+            const status = await dataService.getDouraSubmissionsByAdNo(adNo);
+            setDouraSubmissions(status);
+        } catch (error) {
+            console.error('Error loading Doura status:', error);
+        } finally {
+            setIsLoadingDoura(false);
+        }
+    }, []);
+
+    // Alias for transition compatibility
+    const loadStudentDouraStatus = loadDouraHistory;
+
+    const loadTopReciters = useCallback(async () => {
+        try {
+            const top = await dataService.getTopReciters(searchClass);
+            setTopReciters(top);
+        } catch (error) {
+            console.error('Error loading top reciters:', error);
+        }
+    }, [searchClass]);
+
+    const handleSearch = useCallback(async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         if (!searchAdNo.trim()) return;
 
         try {
@@ -63,31 +116,94 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
             // Check if results are released for this class
             const isReleased = await dataService.isScorecardReleased(searchClass);
-            if (!isReleased) {
-                alert(`Results for class ${searchClass} are not yet released. Please check back later.`);
-                setIsSearching(false);
-                return;
-            }
+            setIsResultsReleased(isReleased);
 
             const student = await dataService.getStudentByAdNo(searchAdNo.trim());
 
-            if (student && student.className !== searchClass) {
-                alert(`Student with Admission Number ${searchAdNo} not found in class ${searchClass}.`);
-                setResult(null);
-            } else {
+            if (student) {
                 setResult(student);
-                setViewMode('scorecard');
+                setHasSearched(true);
+                // Load Doura history if it's Doura view
+                if (viewMode === 'doura-tracker') {
+                    await loadStudentDouraStatus(student.adNo);
+                }
+            } else {
+                setResult(null);
+                setHasSearched(true);
+                alert('No student found with this Admission Number.');
             }
-            setHasSearched(true);
-
         } catch (error) {
-            console.error('Error searching for student:', error);
-            setResult(null);
-            setHasSearched(true);
+            console.error('Search error:', error);
+            alert('An error occurred while searching. Please try again.');
         } finally {
             setIsSearching(false);
         }
+    }, [searchAdNo, searchClass, viewMode, loadStudentDouraStatus]);
+
+    const handleDouraSubmit = useCallback(async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!result) return;
+
+        try {
+            setIsSubmittingDoura(true);
+            await dataService.submitDouraStatus({
+                studentAdNo: result.adNo,
+                studentName: result.name,
+                className: result.className,
+                juzStart,
+                juzEnd,
+                pageStart,
+                pageEnd,
+                recitationDate,
+                teacherName: selectedTeacher,
+                status: 'Pending',
+                submittedAt: new Date().toISOString()
+            });
+
+            // Refresh history
+            await loadStudentDouraStatus(result.adNo);
+
+            // Re-fetch top reciters to update leadership board
+            await loadTopReciters();
+
+            alert(`Doura progress submitted for approval.`);
+        } catch (error) {
+            console.error('Error submitting Doura status:', error);
+            alert('Failed to submit status. Please try again.');
+        } finally {
+            setIsSubmittingDoura(false);
+        }
+    }, [result, selectedTeacher, juzStart, juzEnd, pageStart, pageEnd, recitationDate, loadStudentDouraStatus, loadTopReciters]);
+
+    // Helper to get standard page range for a Juz (15-line Madinah Mushaf)
+    const getJuzPageRange = (juz: number) => {
+        if (juz <= 0) return { start: 0, end: 0 };
+        if (juz === 30) return { start: 582, end: 604 };
+        const start = (juz - 1) * 20 + 2;
+        const end = juz * 20 + 1;
+        return { start, end };
     };
+
+    // Auto-calculate totalJuz and sync pages when Juz changes
+    useEffect(() => {
+        // Suggest page range based on Juz range
+        const startRange = getJuzPageRange(juzStart);
+        const endRange = getJuzPageRange(juzEnd);
+
+        // Only update if not manually overridden or if initializing
+        // For simplicity, we auto-update pages whenever Juz range changes
+        setPageStart(startRange.start);
+        setPageEnd(endRange.end);
+    }, [juzStart, juzEnd]);
+
+    // Cleanup unneeded useEffect
+
+    useEffect(() => {
+        if (result && viewMode === 'doura-tracker') {
+            loadDouraHistory(result.adNo);
+            loadTopReciters();
+        }
+    }, [result, viewMode, loadDouraHistory, loadTopReciters]);
 
     const handlePrint = () => {
         window.print();
@@ -486,19 +602,49 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                 <i className="fa-solid fa-file-invoice"></i>
                                 {isMobile ? 'Scorecard' : 'My Scorecard'}
                             </button>
+
+                            {isResultsReleased && (
+                                <button
+                                    onClick={() => setViewMode('class-rank')}
+                                    className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'class-rank'
+                                        ? 'bg-emerald-600 text-white shadow-lg'
+                                        : 'text-slate-300 hover:text-white hover:bg-white/5'
+                                        }`}
+                                >
+                                    <i className="fa-solid fa-ranking-star"></i>
+                                    {isMobile ? 'Rankings' : 'Class Rankings'}
+                                </button>
+                            )}
+
                             <button
-                                onClick={() => setViewMode('class-rank')}
-                                className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'class-rank'
+                                onClick={() => setViewMode('doura-tracker')}
+                                className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'doura-tracker'
                                     ? 'bg-emerald-600 text-white shadow-lg'
                                     : 'text-slate-300 hover:text-white hover:bg-white/5'
                                     }`}
                             >
-                                <i className="fa-solid fa-ranking-star"></i>
-                                {isMobile ? 'Rankings' : 'Class Rankings'}
+                                <i className="fa-solid fa-book-quran"></i>
+                                {isMobile ? 'Doura' : 'Doura Tracker'}
                             </button>
                         </div>
 
-                        {viewMode === 'scorecard' ? (
+                        {viewMode === 'scorecard' && !isResultsReleased ? (
+                            <div className="bg-white rounded-[3rem] p-12 text-center shadow-xl border border-slate-200 animate-in fade-in zoom-in duration-500">
+                                <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <i className="fa-solid fa-clock-rotate-left text-4xl text-amber-500"></i>
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-800 mb-2">Results Not Released</h3>
+                                <p className="text-slate-500 max-w-md mx-auto mb-8">
+                                    The official results for <span className="font-bold text-slate-700">{result.className}</span> have not been published yet.
+                                    Please check back later or contact the examination office.
+                                </p>
+                                <div className="bg-slate-50 rounded-2xl p-6 max-w-sm mx-auto border border-slate-100">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Student Verified</p>
+                                    <p className="text-lg font-black text-slate-900">{result.name}</p>
+                                    <p className="text-emerald-600 font-bold text-sm">Ad No: {result.adNo}</p>
+                                </div>
+                            </div>
+                        ) : viewMode === 'scorecard' ? (
                             <>
                                 {/* Enhanced Official Print Header - Visible only on Print */}
                                 <div className="hidden print:block text-center print:mb-6 print:break-inside-avoid print:keep-with-next">
@@ -862,17 +1008,424 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     </div>
                                 </div>
                             </>
-                        ) : (
+                        ) : viewMode === 'class-rank' ? (
                             <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl border border-slate-200">
                                 <ClassResults forcedClass={result.className} hideSelector={true} />
                             </div>
+                        ) : (
+                            <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+                                {/* Doura Header Stats */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                                    {/* Khatham Counter Card */}
+                                    <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-3xl p-8 shadow-xl shadow-emerald-500/20 relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+                                        <div className="relative z-10">
+                                            <p className="text-emerald-100 font-black uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                                                <i className="fa-solid fa-trophy"></i> Khatham Count
+                                            </p>
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                                                    <span className="text-4xl font-black text-white">
+                                                        {Math.floor(douraSubmissions.filter(s => s.status === 'Approved').reduce((acc, s) => acc + Math.max(0, s.juzEnd - s.juzStart + 1), 0) / 30)}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-2xl font-black text-white">Completed</p>
+                                                    <p className="text-emerald-100/60 font-bold text-sm">Total Quran Completions</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Current Cycle Progress Card */}
+                                    <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 shadow-xl text-center group">
+                                        <p className="text-amber-400 font-black uppercase tracking-widest text-xs mb-4 flex items-center justify-center gap-2">
+                                            <i className="fa-solid fa-rotate"></i> Current Cycle
+                                        </p>
+                                        <div className="flex flex-col items-center">
+                                            <div className="relative w-20 h-20 mb-3">
+                                                <svg className="w-full h-full transform -rotate-90">
+                                                    <circle cx="40" cy="40" r="36" stroke="rgba(255,255,255,0.1)" strokeWidth="8" fill="none" />
+                                                    <circle
+                                                        cx="40" cy="40" r="36"
+                                                        stroke="currentColor"
+                                                        strokeWidth="8"
+                                                        fill="none"
+                                                        className="text-amber-500"
+                                                        strokeDasharray={2 * Math.PI * 36}
+                                                        strokeDashoffset={2 * Math.PI * 36 * (1 - (douraSubmissions.filter(s => s.status === 'Approved').reduce((acc, s) => acc + Math.max(0, s.juzEnd - s.juzStart + 1), 0) % 30) / 30)}
+                                                    />
+                                                </svg>
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <span className="text-2xl font-black text-white">
+                                                        {douraSubmissions.filter(s => s.status === 'Approved').reduce((acc, s) => acc + Math.max(0, s.juzEnd - s.juzStart + 1), 0) % 30}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <p className="text-white/40 font-bold text-sm tracking-widest uppercase">/ 30 JUZ'</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Pending & Rejected Stats Card */}
+                                    <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 shadow-xl flex flex-col justify-center">
+                                        <div className="flex items-center justify-around">
+                                            <div className="text-center">
+                                                <p className="text-blue-400 font-black uppercase tracking-widest text-[10px] mb-1">Pending</p>
+                                                <p className="text-3xl font-black text-white">
+                                                    {douraSubmissions.filter(s => s.status === 'Pending').reduce((acc, s) => acc + Math.max(0, s.juzEnd - s.juzStart + 1), 0)}
+                                                </p>
+                                            </div>
+                                            <div className="w-px h-12 bg-white/10"></div>
+                                            <div className="text-center">
+                                                <p className="text-red-400 font-black uppercase tracking-widest text-[10px] mb-1">Rejected</p>
+                                                <p className="text-3xl font-black text-white">
+                                                    {douraSubmissions.filter(s => s.status === 'Rejected').reduce((acc, s) => acc + Math.max(0, s.juzEnd - s.juzStart + 1), 0)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                                    {/* Main Content Area: Submission and Grid */}
+                                    <div className="lg:col-span-8 space-y-8">
+                                        {/* Redesigned Submission Form */}
+                                        <div className="bg-white rounded-[2rem] p-8 shadow-2xl border-2 border-slate-200/50 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -mr-16 -mt-16"></div>
+                                            <div className="relative z-10 mb-8">
+                                                <h2 className="text-3xl font-black text-slate-900 tracking-tight">Daily Recitation</h2>
+                                                <p className="text-slate-500 font-medium">Log your progress and wait for teacher approval</p>
+                                            </div>
+
+                                            <form onSubmit={handleDouraSubmit} className="space-y-8">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Recitation Date</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="date"
+                                                                value={recitationDate}
+                                                                onChange={(e) => setRecitationDate(e.target.value)}
+                                                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-bold text-slate-900 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                                                            />
+                                                            <i className="fa-solid fa-calendar absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"></i>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Recitation Teacher</label>
+                                                        <div className="relative">
+                                                            <select
+                                                                value={selectedTeacher}
+                                                                onChange={(e) => setSelectedTeacher(e.target.value)}
+                                                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-bold text-slate-900 appearance-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                                                                required
+                                                            >
+                                                                <option value="" disabled>Select Teacher</option>
+                                                                {douraTeachers.map(teacher => (
+                                                                    <option key={teacher} value={teacher}>{teacher}</option>
+                                                                ))}
+                                                                {douraTeachers.length === 0 && <option value="N/A">General (No teachers found)</option>}
+                                                            </select>
+                                                            <i className="fa-solid fa-user-tie absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"></i>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <i className="fa-solid fa-book-quran text-emerald-500 text-sm"></i>
+                                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Juz' Range</label>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-1">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Start</span>
+                                                                <select
+                                                                    value={juzStart}
+                                                                    onChange={(e) => setJuzStart(parseInt(e.target.value))}
+                                                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-bold text-slate-900 appearance-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                                                                >
+                                                                    {Array.from({ length: 30 }, (_, i) => i + 1).map(num => (
+                                                                        <option key={num} value={num}>{num}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">End</span>
+                                                                <select
+                                                                    value={juzEnd}
+                                                                    onChange={(e) => setJuzEnd(parseInt(e.target.value))}
+                                                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-bold text-slate-900 appearance-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                                                                >
+                                                                    {Array.from({ length: 30 }, (_, i) => i + 1).map(num => (
+                                                                        <option key={num} value={num}>{num}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <i className="fa-solid fa-file-lines text-blue-500 text-sm"></i>
+                                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Page Range</label>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-1">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">Start</span>
+                                                                <input
+                                                                    type="number"
+                                                                    value={pageStart}
+                                                                    onChange={(e) => setPageStart(parseInt(e.target.value) || 0)}
+                                                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-bold text-slate-900 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                                                                    min="1"
+                                                                    max="604"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">End</span>
+                                                                <input
+                                                                    type="number"
+                                                                    value={pageEnd}
+                                                                    onChange={(e) => setPageEnd(parseInt(e.target.value) || 0)}
+                                                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-bold text-slate-900 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                                                                    min="1"
+                                                                    max="604"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                                                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Summary</p>
+                                                        <div className="flex items-center gap-4">
+                                                            <div>
+                                                                <span className="text-xl font-black text-emerald-600">{Math.max(0, juzEnd - juzStart + 1)}</span>
+                                                                <span className="text-[10px] font-bold text-slate-400 ml-1">JUZ'</span>
+                                                            </div>
+                                                            <div className="w-px h-6 bg-slate-200"></div>
+                                                            <div>
+                                                                <span className="text-xl font-black text-blue-600">{Math.max(0, pageEnd - pageStart + 1)}</span>
+                                                                <span className="text-[10px] font-bold text-slate-400 ml-1">PAGES</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isSubmittingDoura}
+                                                        className="lg:col-span-2 group h-[64px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:from-slate-300 disabled:to-slate-400 text-white rounded-[1.25rem] font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
+                                                    >
+                                                        {isSubmittingDoura ? (
+                                                            <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                        ) : (
+                                                            <>
+                                                                <span>Submit for Approval</span>
+                                                                <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+
+                                        {/* Progress Grid */}
+                                        <div className="bg-white rounded-[2rem] p-8 shadow-2xl border-2 border-slate-200/50">
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                                                <div>
+                                                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Quran Progress Grid</h3>
+                                                    <p className="text-slate-500 font-medium text-sm">Visualizing your path to completion</p>
+                                                </div>
+                                                <div className="flex flex-wrap gap-4 text-[10px] font-black uppercase tracking-widest">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-3 h-3 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/20"></div>
+                                                        <span className="text-slate-600">Approved</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-3 h-3 bg-amber-500 rounded-full shadow-lg shadow-amber-500/20"></div>
+                                                        <span className="text-slate-600">Pending</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-3 h-3 bg-red-500 rounded-full shadow-lg shadow-red-500/20"></div>
+                                                        <span className="text-slate-600">Rejected</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-10 gap-3">
+                                                {Array.from({ length: 30 }, (_, i) => i + 1).map(num => {
+                                                    const submission = douraSubmissions.find(s =>
+                                                        num >= s.juzStart && num <= s.juzEnd
+                                                    );
+                                                    const isApproved = submission?.status === 'Approved';
+                                                    const isPending = submission?.status === 'Pending';
+                                                    const isRejected = submission?.status === 'Rejected';
+
+                                                    return (
+                                                        <div
+                                                            key={num}
+                                                            className={`
+                                                                    relative aspect-square flex flex-col items-center justify-center rounded-2xl font-black text-lg transition-all duration-300 transform hover:scale-110 cursor-default group
+                                                                    ${isApproved ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' :
+                                                                    isPending ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' :
+                                                                        isRejected ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' :
+                                                                            'bg-slate-100 text-slate-300 border-2 border-slate-50'
+                                                                }
+                                                                `}
+                                                        >
+                                                            <span className="text-[10px] absolute top-2 uppercase tracking-tighter opacity-40">Juz</span>
+                                                            {num}
+                                                            {isApproved && <i className="fa-solid fa-check absolute bottom-2 text-[8px] animate-in zoom-in"></i>}
+
+                                                            {/* Hover Tooltip */}
+                                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none">
+                                                                {isApproved ? 'Approved' : isPending ? 'Pending Approval' : isRejected ? 'Rejected' : 'Not Started'}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Sidebar Area: Leaderboard and History */}
+                                    <div className="lg:col-span-4 space-y-8">
+                                        {/* Top Reciters Leaderboard */}
+                                        <div className="bg-white rounded-[2rem] p-8 shadow-2xl border-2 border-emerald-100 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full -mr-12 -mt-12"></div>
+                                            <div className="relative z-10 mb-6 flex items-center justify-between">
+                                                <div>
+                                                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Top Reciters</h3>
+                                                    <p className="text-emerald-600 font-bold text-xs">Class: {result.className}</p>
+                                                </div>
+                                                <i className="fa-solid fa-crown text-amber-500 text-2xl animate-bounce"></i>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                {topReciters.length === 0 ? (
+                                                    <div className="py-8 text-center text-slate-400 italic text-sm">
+                                                        No records yet
+                                                    </div>
+                                                ) : (
+                                                    topReciters.map((reciter, idx) => (
+                                                        <div key={reciter.name} className="flex items-center gap-4 group">
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm
+                                                                    ${idx === 0 ? 'bg-amber-100 text-amber-600' :
+                                                                    idx === 1 ? 'bg-slate-100 text-slate-600' :
+                                                                        idx === 2 ? 'bg-orange-100 text-orange-600' :
+                                                                            'bg-slate-50 text-slate-400'}
+                                                                `}>
+                                                                {idx + 1}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-black text-slate-900 truncate group-hover:text-emerald-600 transition-colors uppercase tracking-tight text-xs">{reciter.name}</p>
+                                                                <div className="w-full bg-slate-100 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                                                                    <div
+                                                                        className="bg-emerald-500 h-full rounded-full transition-all duration-1000"
+                                                                        style={{ width: `${Math.min((reciter.juzCount / 30) * 100, 100)}%` }}
+                                                                    ></div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="text-lg font-black text-slate-900">{reciter.juzCount}</span>
+                                                                <span className="text-[10px] font-black text-slate-400 block -mt-1 tracking-tighter">JUZ'</span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* History Sidebar */}
+                                        <div className="bg-slate-900 rounded-[2rem] p-8 shadow-2xl overflow-hidden relative">
+                                            <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16"></div>
+                                            <div className="relative z-10 mb-8 border-b border-white/10 pb-4">
+                                                <h3 className="text-xl font-black text-white tracking-tight">Recent Activity</h3>
+                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Submission History</p>
+                                            </div>
+
+                                            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar relative z-10">
+                                                {isLoadingDoura ? (
+                                                    <div className="py-8 text-center">
+                                                        <div className="w-8 h-8 border-4 border-white/10 border-t-emerald-500 rounded-full animate-spin mx-auto"></div>
+                                                    </div>
+                                                ) : douraSubmissions.length === 0 ? (
+                                                    <div className="py-12 text-center text-slate-500">
+                                                        <i className="fa-solid fa-clock-rotate-left text-3xl mb-3 opacity-20"></i>
+                                                        <p className="font-bold text-sm italic">No history found</p>
+                                                    </div>
+                                                ) : (
+                                                    douraSubmissions.map((sub) => (
+                                                        <div key={sub.id} className="group bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-4 transition-all duration-300">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <span className="bg-white/10 px-3 py-1 rounded-lg text-xs font-black text-white shadow-sm ring-1 ring-white/20">
+                                                                    Juz' {sub.juzStart === sub.juzEnd ? sub.juzStart : `${sub.juzStart}-${sub.juzEnd}`}
+                                                                </span>
+                                                                <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${sub.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                                    sub.status === 'Pending' ? 'bg-amber-500/20 text-amber-400' :
+                                                                        'bg-red-500/20 text-red-400'
+                                                                    }`}>
+                                                                    {sub.status}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="space-y-2 mb-3">
+                                                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                                                    <i className="fa-solid fa-calendar-day text-emerald-500/50"></i>
+                                                                    Recited: {new Date(sub.recitationDate).toLocaleDateString()}
+                                                                </div>
+                                                                <div className="flex items-center gap-4 text-[10px] font-black text-slate-200">
+                                                                    <span className="bg-emerald-500/10 text-emerald-400 px-2 rounded-md">{Math.max(0, sub.juzEnd - sub.juzStart + 1)} JUZ'</span>
+                                                                    <span className="bg-blue-500/10 text-blue-400 px-2 rounded-md">{Math.max(0, sub.pageEnd - sub.pageStart + 1)} PGS</span>
+                                                                </div>
+                                                                {sub.teacherName && (
+                                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                                                        <i className="fa-solid fa-user-check text-emerald-500/50"></i>
+                                                                        Teacher: <span className="text-slate-200">{sub.teacherName}</span>
+                                                                    </div>
+                                                                )}
+                                                                {sub.approvedBy && sub.status === 'Approved' && (
+                                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-400/80">
+                                                                        <i className="fa-solid fa-shield-check"></i>
+                                                                        Approved by: <span className="font-black underline decoration-emerald-500/30">{sub.approvedBy}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {sub.feedback && (
+                                                                <div className="bg-white/5 rounded-xl p-3 border-l-4 border-emerald-500 mb-3">
+                                                                    <p className="text-[10px] text-slate-300 line-clamp-2 italic">“{sub.feedback}”</p>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex items-center justify-end text-[8px] font-black text-slate-500 italic uppercase">
+                                                                {new Date(sub.submittedAt).toLocaleDateString('en-IN', {
+                                                                    day: '2-digit',
+                                                                    month: 'short',
+                                                                    year: 'numeric'
+                                                                })} • {new Date(sub.submittedAt).toLocaleTimeString('en-IN', {
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
-                )}
-            </main>
+                )
+                }
+            </main >
 
             {/* Footer - Hidden on Print */}
-            <footer className="bg-slate-900/50 backdrop-blur-md py-12 px-8 text-center border-t border-white/10 print:hidden">
+            < footer className="bg-slate-900/50 backdrop-blur-md py-12 px-8 text-center border-t border-white/10 print:hidden" >
                 <div className="flex items-center justify-center gap-3 mb-4 opacity-60">
                     <i className="fa-solid fa-graduation-cap text-xl text-emerald-400"></i>
                     <span className="text-white font-black tracking-widest text-sm">AIC EXAM PORTAL</span>
@@ -880,8 +1433,8 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em]">
                     &copy; 2026 AIC Da'wa College | Secure Academic Excellence System
                 </p>
-            </footer>
-        </div>
+            </footer >
+        </div >
     );
 };
 

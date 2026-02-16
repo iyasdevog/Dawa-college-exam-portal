@@ -387,8 +387,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                     {marks.total}
                                                                 </p>
                                                                 <p className="text-xs text-slate-500">
-                                                                    {marks.ta}+{marks.ce}
+                                                                    {marks.ta}+(subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce)
                                                                 </p>
+
                                                             </div>
                                                         ) : (
                                                             <span className="text-slate-400">-</span>
@@ -502,8 +503,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                         </div>
                                                                         {!isMobile && (
                                                                             <div className="text-xs text-slate-500 print:hidden">
-                                                                                {marks.ta}+{marks.ce}
+                                                                                {marks.ta}+(subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce)
                                                                             </div>
+
                                                                         )}
                                                                     </div>
                                                                 ) : (

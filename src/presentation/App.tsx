@@ -13,6 +13,7 @@ const FacultyEntry = lazy(() => import('./components/FacultyEntry'));
 const ClassResults = lazy(() => import('./components/ClassResults'));
 const StudentScorecard = lazy(() => import('./components/StudentScorecard'));
 const Management = lazy(() => import('./components/Management'));
+const DouraMonitoring = lazy(() => import('./components/DouraMonitoring'));
 const PublicPortal = lazy(() => import('./components/PublicPortal'));
 
 // Loading fallback components
@@ -174,6 +175,15 @@ const App: React.FC = () => {
           <FeatureErrorBoundary featureName="Student Scorecard" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
               <StudentScorecard currentUser={currentUser} />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
+
+      case 'doura-monitoring':
+        return (
+          <FeatureErrorBoundary featureName="Doura Monitoring" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <DouraMonitoring currentUser={currentUser} />
             </Suspense>
           </FeatureErrorBoundary>
         );
