@@ -5,6 +5,7 @@ import {
     getDoc,
     addDoc,
     updateDoc,
+    setDoc,
     deleteDoc,
     query,
     where,
@@ -14,7 +15,7 @@ import {
     Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 import { normalizeName } from './formatUtils';
@@ -36,6 +37,7 @@ export class DataService {
     private studentsCollection = 'students';
     private subjectsCollection = 'subjects';
     private supplementaryExamsCollection = 'supplementaryExams';
+    private settingsCollection = 'settings';
 
     // Cache for performance optimization
     private studentsCache: StudentRecord[] | null = null;
@@ -88,6 +90,52 @@ export class DataService {
         if (students) this.studentsCache = students;
         if (subjects) this.subjectsCache = subjects;
         this.cacheTimestamp = Date.now();
+    }
+
+    // Release Settings operations
+    async getReleaseSettings(): Promise<ClassReleaseSettings> {
+        try {
+            const docRef = doc(this.db, this.settingsCollection, 'scorecard_release');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                return docSnap.data() as ClassReleaseSettings;
+            }
+            return {};
+        } catch (error) {
+            console.error('Error getting release settings:', error);
+            return {};
+        }
+    }
+
+    async updateReleaseSettings(settings: ClassReleaseSettings): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.settingsCollection, 'scorecard_release');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                await updateDoc(docRef, settings as any);
+            } else {
+                await setDoc(docRef, settings);
+            }
+        } catch (error) {
+            console.error('Error updating release settings:', error);
+            throw error;
+        }
+    }
+
+    async isScorecardReleased(className: string): Promise<boolean> {
+        try {
+            const settings = await this.getReleaseSettings();
+            const classSettings = settings[className];
+            if (!classSettings) return false;
+            if (classSettings.isReleased) return true;
+            if (classSettings.releaseDate) {
+                return new Date(classSettings.releaseDate) <= new Date();
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking release status:', error);
+            return false;
+        }
     }
 
     // Student operations with caching

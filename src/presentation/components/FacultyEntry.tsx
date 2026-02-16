@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
+import { User } from '../../domain/entities/User';
 import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import {
@@ -16,9 +17,20 @@ import { normalizeName, shortenSubjectName } from '../../infrastructure/services
 
 
 
-const FacultyEntry: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'marks-entry' | 'upload-tracker'>('marks-entry');
-    const [selectedClass, setSelectedClass] = useState('S1');
+interface FacultyEntryProps {
+    currentUser: User | null;
+}
+
+const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
+    // Determine allowed classes based on user role
+    const allowedClasses = useMemo(() => {
+        if (!currentUser || currentUser.role === 'admin') return CLASSES;
+        return CLASSES.filter(cls => currentUser.assignedClasses.includes(cls));
+    }, [currentUser]);
+
+    const [activeTab, setActiveTab] = useState<'marks-entry' | 'upload-tracker' | 'release-settings'>('marks-entry');
+    const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
+    const [selectedClass, setSelectedClass] = useState(allowedClasses[0] || CLASSES[0]);
     const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
     const [selectedSubject, setSelectedSubject] = useState('');
     const [students, setStudents] = useState<StudentRecord[]>([]);
@@ -79,6 +91,7 @@ const FacultyEntry: React.FC = () => {
     const [trackerClassFilter, setTrackerClassFilter] = useState<string>('all');
     const [trackerTeacherFilter, setTrackerTeacherFilter] = useState<string>('all');
     const [trackerSubjectSearch, setTrackerSubjectSearch] = useState<string>('');
+    const [trackerStatusFilter, setTrackerStatusFilter] = useState<'all' | 'complete' | 'in-progress' | 'not-started'>('all');
 
     // Load initial data
     useEffect(() => {
@@ -89,6 +102,8 @@ const FacultyEntry: React.FC = () => {
     useEffect(() => {
         if (activeTab === 'upload-tracker') {
             loadAllStudents();
+        } else if (activeTab === 'release-settings') {
+            loadReleaseSettings();
         }
     }, [activeTab]);
 
@@ -444,6 +459,33 @@ const FacultyEntry: React.FC = () => {
             count: invalidStudents.length
         };
     }, [students, validationHelpers]);
+
+    const loadReleaseSettings = async () => {
+        try {
+            const settings = await dataService.getReleaseSettings();
+            setReleaseSettings(settings);
+        } catch (error) {
+            console.error('Error loading release settings:', error);
+        }
+    };
+
+    const handleUpdateReleaseSetting = async (className: string, field: 'isReleased' | 'releaseDate', value: any) => {
+        try {
+            const currentSetting = releaseSettings[className] || { isReleased: false };
+            const updatedSettings = {
+                ...releaseSettings,
+                [className]: {
+                    ...currentSetting,
+                    [field]: value
+                }
+            };
+            setReleaseSettings(updatedSettings);
+            await dataService.updateReleaseSettings(updatedSettings);
+        } catch (error) {
+            console.error('Error updating release setting:', error);
+            alert('Failed to update release setting');
+        }
+    };
 
     const loadAllStudents = async () => {
         try {
@@ -1112,6 +1154,16 @@ const FacultyEntry: React.FC = () => {
                         <i className="fa-solid fa-chart-bar mr-2"></i>
                         Upload Tracker
                     </button>
+                    <button
+                        onClick={() => setActiveTab('release-settings')}
+                        className={`px-6 py-3 font-bold text-sm md:text-base transition-all duration-200 border-b-4 ${activeTab === 'release-settings'
+                            ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
+                            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                            }`}
+                    >
+                        <i className="fa-solid fa-calendar-check mr-2"></i>
+                        Release Settings
+                    </button>
                 </div>
             </div>
 
@@ -1138,7 +1190,7 @@ const FacultyEntry: React.FC = () => {
                                         aria-label="Select class for marks entry"
                                         aria-describedby="class-help"
                                     >
-                                        {CLASSES.map(cls => (
+                                        {allowedClasses.map(cls => (
                                             <option key={cls} value={cls}>{cls}</option>
                                         ))}
                                     </select>
@@ -1180,7 +1232,7 @@ const FacultyEntry: React.FC = () => {
                                     <option value="">Select Subject</option>
                                     {classSubjects.map(subject => (
                                         <option key={subject.id} value={subject.id}>
-                                            {subject.name} {subject.arabicName && `(${subject.arabicName})`}
+                                            {shortenSubjectName(subject.name)} {subject.arabicName && `(${subject.arabicName})`}
                                         </option>
                                     ))}
                                 </select>
@@ -1275,7 +1327,7 @@ const FacultyEntry: React.FC = () => {
                                     <div className="flex items-center justify-between mb-6">
                                         <div className="flex items-center gap-3">
                                             <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                                                {selectedSubjectData?.name}
+                                                {shortenSubjectName(selectedSubjectData?.name)}
                                             </h2>
                                             {/* Mobile Offline Status Indicator */}
                                             <OfflineStatusIndicator
@@ -1980,7 +2032,7 @@ const FacultyEntry: React.FC = () => {
                                     className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white"
                                 >
                                     <option value="all">All Classes</option>
-                                    {CLASSES.map(cls => (
+                                    {allowedClasses.map(cls => (
                                         <option key={cls} value={cls}>{cls}</option>
                                     ))}
                                 </select>
@@ -2031,6 +2083,23 @@ const FacultyEntry: React.FC = () => {
                                     className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500"
                                 />
                             </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                    <i className="fa-solid fa-check-double mr-1 text-slate-500"></i>
+                                    Status Filter
+                                </label>
+                                <select
+                                    value={trackerStatusFilter}
+                                    onChange={(e) => setTrackerStatusFilter(e.target.value as any)}
+                                    className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/40 focus:border-emerald-500 bg-white"
+                                >
+                                    <option value="all">All Status</option>
+                                    <option value="complete">Complete (100%)</option>
+                                    <option value="in-progress">In Progress</option>
+                                    <option value="not-started">Not Started (0%)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -2056,7 +2125,7 @@ const FacultyEntry: React.FC = () => {
                         });
 
                         // Apply filters
-                        const filteredSubjects = expandedSubjects.filter(subject => {
+                        const filteredByFilters = expandedSubjects.filter(subject => {
                             const classMatch = trackerClassFilter === 'all' ||
                                 (subject.isExpanded ? subject.displayClass === trackerClassFilter : subject.targetClasses.includes(trackerClassFilter));
                             const teacherMatch = trackerTeacherFilter === 'all' || subject.facultyName === trackerTeacherFilter;
@@ -2064,38 +2133,67 @@ const FacultyEntry: React.FC = () => {
                             return classMatch && teacherMatch && searchMatch;
                         });
 
-                        const subjectsWithStatus = filteredSubjects.map(subject => {
+                        const subjectsWithStatus = filteredByFilters.map(subject => {
                             // Calculate upload status for this subject
                             let totalStudents = 0;
-                            let uploadedStudents = 0;
+                            let uploadedTA = 0;
+                            let uploadedCE = 0;
+
+                            const checkMarkStatus = (student: StudentRecord, subjectId: string) => {
+                                const marks = student.marks && student.marks[subjectId];
+                                return {
+                                    hasTA: !!(marks && (marks.ta !== undefined && marks.ta !== null && marks.ta !== ('' as any))),
+                                    hasCE: !!(marks && (marks.ce !== undefined && marks.ce !== null && marks.ce !== ('' as any)))
+                                };
+                            };
 
                             if (subject.subjectType === 'general' && subject.isExpanded) {
                                 // For general subjects (now split by class), only count students from the specific class
                                 const className = subject.displayClass!;
                                 const classStudents = allStudents.filter(s => s.className === className);
                                 totalStudents = classStudents.length;
-                                uploadedStudents = classStudents.filter(s =>
-                                    s.marks && s.marks[subject.id]
-                                ).length;
+                                classStudents.forEach(s => {
+                                    const { hasTA, hasCE } = checkMarkStatus(s, subject.id);
+                                    if (hasTA) uploadedTA++;
+                                    if (hasCE || subject.maxCE === 0) uploadedCE++;
+                                });
                             } else {
                                 // For elective subjects, count enrolled students
                                 const enrolledStudentIds = subject.enrolledStudents || [];
                                 totalStudents = enrolledStudentIds.length;
-                                uploadedStudents = allStudents.filter(s =>
-                                    enrolledStudentIds.includes(s.id) && s.marks && s.marks[subject.id]
-                                ).length;
+                                allStudents.filter(s => enrolledStudentIds.includes(s.id)).forEach(s => {
+                                    const { hasTA, hasCE } = checkMarkStatus(s, subject.id);
+                                    if (hasTA) uploadedTA++;
+                                    if (hasCE || subject.maxCE === 0) uploadedCE++;
+                                });
                             }
 
-                            const percentage = totalStudents > 0 ? Math.round((uploadedStudents / totalStudents) * 100) : 0;
-                            const status = percentage === 100 ? 'complete' : percentage > 0 ? 'in-progress' : 'not-started';
+                            const taPercentage = totalStudents > 0 ? Math.round((uploadedTA / totalStudents) * 100) : 0;
+                            const cePercentage = totalStudents > 0 ? Math.round((uploadedCE / totalStudents) * 100) : 100;
+
+                            // Overall status
+                            let status: 'complete' | 'in-progress' | 'not-started';
+                            if (taPercentage === 100 && cePercentage === 100) {
+                                status = 'complete';
+                            } else if (taPercentage === 0 && (cePercentage === 0 || subject.maxCE === 0)) {
+                                status = 'not-started';
+                            } else {
+                                status = 'in-progress';
+                            }
 
                             return {
                                 ...subject,
                                 totalStudents,
-                                uploadedStudents,
-                                percentage,
+                                uploadedTA,
+                                uploadedCE,
+                                taPercentage,
+                                cePercentage,
                                 status
                             };
+                        }).filter(subject => {
+                            // Apply status filter
+                            if (trackerStatusFilter === 'all') return true;
+                            return subject.status === trackerStatusFilter;
                         });
 
                         const completeCount = subjectsWithStatus.filter(s => s.status === 'complete').length;
@@ -2110,7 +2208,7 @@ const FacultyEntry: React.FC = () => {
                                         <div className="flex items-center justify-between">
                                             <div>
                                                 <p className="text-sm font-bold text-slate-600">Total Subjects</p>
-                                                <p className="text-3xl font-black text-slate-900 mt-1">{filteredSubjects.length}</p>
+                                                <p className="text-3xl font-black text-slate-900 mt-1">{filteredByFilters.length}</p>
                                             </div>
                                             <i className="fa-solid fa-book text-3xl text-slate-400"></i>
                                         </div>
@@ -2191,26 +2289,46 @@ const FacultyEntry: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="md:w-64">
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <span className="text-sm font-bold text-slate-700">
-                                                                {subject.uploadedStudents}/{subject.totalStudents} Students
-                                                            </span>
-                                                            <span className={`px-3 py-1 rounded-full text-xs font-black ${subject.status === 'complete' ? 'bg-emerald-100 text-emerald-700' :
-                                                                subject.status === 'in-progress' ? 'bg-amber-100 text-amber-700' :
-                                                                    'bg-red-100 text-red-700'
-                                                                }`}>
-                                                                {subject.percentage}%
-                                                            </span>
-                                                        </div>
-                                                        <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
-                                                            <div
-                                                                className={`h-full rounded-full transition-all duration-500 ${subject.status === 'complete' ? 'bg-emerald-600' :
-                                                                    subject.status === 'in-progress' ? 'bg-amber-600' :
-                                                                        'bg-red-600'
-                                                                    }`}
-                                                                style={{ width: `${subject.percentage}%` }}
-                                                            ></div>
+                                                    <div className="md:w-80">
+                                                        <div className="space-y-3">
+                                                            {/* TA Progress */}
+                                                            <div>
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className="text-[10px] font-black text-slate-500 uppercase">TA Assessment</span>
+                                                                    <span className={`text-[10px] font-black ${subject.taPercentage === 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                                                                        {subject.uploadedTA}/{subject.totalStudents} ({subject.taPercentage}%)
+                                                                    </span>
+                                                                </div>
+                                                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full rounded-full transition-all duration-500 ${subject.taPercentage === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                                                        style={{ width: `${subject.taPercentage}%` }}
+                                                                    ></div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* CE Progress */}
+                                                            {subject.maxCE > 0 ? (
+                                                                <div>
+                                                                    <div className="flex items-center justify-between mb-1">
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase">CE Examination</span>
+                                                                        <span className={`text-[10px] font-black ${subject.cePercentage === 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                                                                            {subject.uploadedCE}/{subject.totalStudents} ({subject.cePercentage}%)
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full rounded-full transition-all duration-500 ${subject.cePercentage === 100 ? 'bg-emerald-500' : 'bg-purple-500'}`}
+                                                                            style={{ width: `${subject.cePercentage}%` }}
+                                                                        ></div>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 italic">
+                                                                    <i className="fa-solid fa-info-circle"></i>
+                                                                    CE Not Applicable
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2224,6 +2342,68 @@ const FacultyEntry: React.FC = () => {
                 </div>
             )}
 
+            {/* Release Settings Tab Content */}
+            {activeTab === 'release-settings' && (
+                <div className="px-4 md:px-0 mt-8 space-y-6">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-200">
+                        <h3 className="text-xl font-black text-slate-900 mb-6">
+                            <i className="fa-solid fa-calendar-check mr-2 text-emerald-600"></i>
+                            Scorecard Release Schedule
+                        </h3>
+                        <p className="text-slate-600 mb-8 text-sm">
+                            Control when student scorecards become visible in the Public Portal. You can release them immediately or schedule a future date.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {allowedClasses.map(cls => {
+                                const settings = releaseSettings[cls] || { isReleased: false };
+                                return (
+                                    <div key={cls} className="bg-slate-50 rounded-xl p-5 border border-slate-200 hover:border-emerald-300 transition-all">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h4 className="text-lg font-bold text-slate-900">{cls} Class</h4>
+                                            <div className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${settings.isReleased ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                {settings.isReleased ? 'Released' : 'Hidden'}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-bold text-slate-700">Release Status</span>
+                                                <button
+                                                    onClick={() => handleUpdateReleaseSetting(cls, 'isReleased', !settings.isReleased)}
+                                                    className={`w-12 h-6 rounded-full transition-all duration-300 relative ${settings.isReleased ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                                >
+                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${settings.isReleased ? 'left-7' : 'left-1'}`}></div>
+                                                </button>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                                    Release Date & Time
+                                                </label>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={settings.releaseDate ? settings.releaseDate.substring(0, 16) : ''}
+                                                    onChange={(e) => handleUpdateReleaseSetting(cls, 'releaseDate', e.target.value)}
+                                                    className="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white"
+                                                    disabled={settings.isReleased}
+                                                />
+                                            </div>
+
+                                            {settings.releaseDate && !settings.isReleased && (
+                                                <div className="text-[10px] font-medium text-blue-600 flex items-center gap-1">
+                                                    <i className="fa-solid fa-clock"></i>
+                                                    Scheduled for {new Date(settings.releaseDate).toLocaleString()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

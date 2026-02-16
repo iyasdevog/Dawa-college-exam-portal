@@ -2,7 +2,8 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ApplicationErrorBoundary, FeatureErrorBoundary } from './components/ErrorBoundary';
 import { MobileProvider } from './viewmodels/MobileContext';
-import { ViewType } from '../domain/entities/types';
+import { ViewType, StudentRecord } from '../domain/entities/types';
+import { User } from '../domain/entities/User';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
 
 // Lazy load components for code splitting
@@ -38,6 +39,7 @@ const App: React.FC = () => {
   const [mode, setMode] = useState<'public' | 'admin'>('public');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeView, setActiveView] = useState<ViewType>('dashboard');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCloudActive, setIsCloudActive] = useState(true);
 
@@ -97,6 +99,25 @@ const App: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (username === 'admin' && password === '1234') {
+      const adminUser = User.create({
+        id: 'admin-001',
+        username: 'admin',
+        role: 'admin',
+        name: 'System Administrator',
+        assignedClasses: [] // Admin has access to all
+      });
+      setCurrentUser(adminUser);
+      setIsLoggedIn(true);
+      setMode('admin');
+    } else if (username === 'faculty1' && password === 'faculty1') {
+      const facultyUser = User.create({
+        id: 'faculty-001',
+        username: 'faculty1',
+        role: 'faculty',
+        name: 'Faculty One',
+        assignedClasses: ['S1', 'S2'] // Example restriction
+      });
+      setCurrentUser(facultyUser);
       setIsLoggedIn(true);
       setMode('admin');
     } else {
@@ -106,6 +127,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setCurrentUser(null);
     setMode('public');
     setUsername('');
     setPassword('');
@@ -135,7 +157,7 @@ const App: React.FC = () => {
         return (
           <FeatureErrorBoundary featureName="Faculty Entry" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
-              <FacultyEntry />
+              <FacultyEntry currentUser={currentUser} />
             </Suspense>
           </FeatureErrorBoundary>
         );
@@ -143,7 +165,7 @@ const App: React.FC = () => {
         return (
           <FeatureErrorBoundary featureName="Class Results" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
-              <ClassResults />
+              <ClassResults currentUser={currentUser} />
             </Suspense>
           </FeatureErrorBoundary>
         );
@@ -151,12 +173,16 @@ const App: React.FC = () => {
         return (
           <FeatureErrorBoundary featureName="Student Scorecard" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
-              <StudentScorecard />
+              <StudentScorecard currentUser={currentUser} />
             </Suspense>
           </FeatureErrorBoundary>
         );
 
       case 'management':
+        if (currentUser?.role !== 'admin') {
+          setActiveView('dashboard');
+          return null;
+        }
         return (
           <FeatureErrorBoundary featureName="Management" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
@@ -222,7 +248,7 @@ const App: React.FC = () => {
       <MobileProvider>
         <FeatureErrorBoundary featureName="Layout" errorReporter={errorReporter}>
           <Suspense fallback={<ComponentLoadingFallback componentName="Admin Interface" />}>
-            <Layout activeView={activeView} setView={setActiveView} onLogout={handleLogout} isCloudActive={isCloudActive}>
+            <Layout activeView={activeView} setView={setActiveView} onLogout={handleLogout} isCloudActive={isCloudActive} currentUser={currentUser}>
               {renderAdminContent()}
             </Layout>
           </Suspense>

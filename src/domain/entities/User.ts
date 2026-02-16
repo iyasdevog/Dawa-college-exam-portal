@@ -9,7 +9,8 @@ export class User {
         public readonly email?: string,
         public readonly isActive: boolean = true,
         public readonly lastLogin?: Date,
-        public readonly permissions: string[] = []
+        public readonly permissions: string[] = [],
+        public readonly assignedClasses: string[] = []
     ) { }
 
     static create(data: {
@@ -21,6 +22,7 @@ export class User {
         isActive?: boolean;
         lastLogin?: Date;
         permissions?: string[];
+        assignedClasses?: string[];
     }): User {
         return new User(
             data.id,
@@ -30,7 +32,8 @@ export class User {
             data.email,
             data.isActive ?? true,
             data.lastLogin,
-            data.permissions || []
+            data.permissions || [],
+            data.assignedClasses || []
         );
     }
 
@@ -59,7 +62,8 @@ export class User {
             this.email,
             this.isActive,
             new Date(),
-            this.permissions
+            this.permissions,
+            this.assignedClasses
         );
     }
 

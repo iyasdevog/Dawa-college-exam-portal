@@ -1,6 +1,7 @@
 import React from 'react';
 import { ViewType } from '../../domain/entities/types';
 import HamburgerMenu from './HamburgerMenu';
+import { User } from '../../domain/entities/User';
 import { useMobile, useMobileNavigation } from '../hooks/useMobile';
 
 interface LayoutProps {
@@ -9,9 +10,10 @@ interface LayoutProps {
   setView: (view: ViewType) => void;
   onLogout: () => void;
   isCloudActive?: boolean;
+  currentUser?: User | null;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout, isCloudActive = true }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout, isCloudActive = true, currentUser }) => {
   const { isMobile, isTablet } = useMobile();
   const { isMobileMenuOpen } = useMobileNavigation();
 
@@ -20,7 +22,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
-    { id: 'management', icon: 'fa-sliders', label: 'Management' },
+    ...(currentUser?.role === 'admin' ? [{ id: 'management', icon: 'fa-sliders', label: 'Management' }] : []),
   ];
 
   const getViewTitle = (view: ViewType): string => {
@@ -46,7 +48,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
     <header className={`sticky top-0 z-30 bg-white border-b border-slate-200 transition-all duration-300 ease-in-out print:hidden ${isMobile ? 'h-16 px-4' : 'h-20 px-6 md:px-8'} ${isMobileMenuOpen ? 'shadow-lg' : 'shadow-sm'}`}>
       <div className="flex items-center justify-between h-full">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {isMobile && <HamburgerMenu activeView={activeView} setView={setView} onLogout={onLogout} isCloudActive={isCloudActive} />}
+          {isMobile && <HamburgerMenu activeView={activeView} setView={setView} onLogout={onLogout} isCloudActive={isCloudActive} currentUser={currentUser} />}
           <h1 className={`font-black text-slate-900 tracking-tight truncate ${isMobile ? 'text-lg' : 'text-xl md:text-2xl'}`}>{getViewTitle(activeView)}</h1>
           <div className={`${isMobile ? 'ml-auto' : 'ml-4'} min-w-[44px] min-h-[44px] flex items-center justify-center`}>
             <CloudStatusIndicator />

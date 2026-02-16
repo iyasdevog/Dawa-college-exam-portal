@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
+import { User } from '../../domain/entities/User';
 import { CLASSES } from '../../domain/entities/constants';
+import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
 
-const StudentScorecard: React.FC = () => {
-    const [selectedClass, setSelectedClass] = useState('S1');
+interface StudentScorecardProps {
+    currentUser?: User | null;
+}
+
+const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
+    // Determine allowed classes based on user role
+    const allowedClasses = useMemo(() => {
+        if (!currentUser || currentUser.role === 'admin') return CLASSES;
+        return CLASSES.filter(cls => currentUser.assignedClasses.includes(cls));
+    }, [currentUser]);
+
+    const [selectedClass, setSelectedClass] = useState(allowedClasses[0] || 'S1');
     const [selectedStudent, setSelectedStudent] = useState('');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [classStudents, setClassStudents] = useState<StudentRecord[]>([]);
@@ -117,7 +129,7 @@ const StudentScorecard: React.FC = () => {
                             aria-label="Select class to view scorecards"
                             aria-describedby="class-selection-help"
                         >
-                            {CLASSES.map(cls => (
+                            {allowedClasses.map(cls => (
                                 <option key={cls} value={cls}>{cls}</option>
                             ))}
                         </select>
@@ -159,29 +171,29 @@ const StudentScorecard: React.FC = () => {
                     <div className="hidden print:block text-center print:mb-6 print:break-inside-avoid print:keep-with-next">
                         <div className="border-b-4 border-black print:pb-4 print:mb-4 print:a4-content">
                             {/* College Logo/Emblem Area */}
-                            <div className="print:mb-3">
+                            <div className="print:mb-1">
                                 <img
-                                    src="/logo-black.png"
+                                    src="/icon-512x512.png"
                                     alt="AIC Da'wa College Logo"
-                                    className="h-24 mx-auto object-contain print:mb-2"
+                                    className="h-16 mx-auto object-contain print:mb-1"
                                 />
                             </div>
 
                             {/* Official College Header */}
-                            <h1 className="print:text-2xl font-black text-black print:mb-2 print:leading-tight tracking-wider">
+                            <h1 className="print:text-lg font-black text-black print:mb-1 print:leading-tight tracking-wider">
                                 AIC DA'WA COLLEGE
                             </h1>
-                            <div className="print:text-xs text-black print:mb-3 print:leading-tight">
+                            <div className="print:text-[10px] text-black print:mb-2 print:leading-tight">
                                 Virippadam, Akkod, Vazhakkad, Kerala 673640
                             </div>
 
                             {/* Document Title */}
-                            <h2 className="print:text-lg font-bold text-black print:mb-2 print:leading-tight uppercase tracking-widest">
+                            <h2 className="print:text-sm font-bold text-black print:mb-1 print:leading-tight uppercase tracking-widest">
                                 OFFICIAL STUDENT SCORECARD
                             </h2>
 
                             {/* Academic Session and Generation Info */}
-                            <div className="grid grid-cols-3 gap-4 print:text-xs text-black print:leading-tight">
+                            <div className="grid grid-cols-3 gap-2 print:text-[10px] text-black print:leading-tight">
                                 <div className="text-left">
                                     <div className="font-bold">Academic Session:</div>
                                     <div>2026-27</div>
@@ -208,7 +220,7 @@ const StudentScorecard: React.FC = () => {
 
                     <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-0 print:rounded-none print:bg-white print:a4-content">
                         {/* Header */}
-                        <div className="bg-gradient-to-r from-slate-900 to-emerald-800 p-12 text-white print:bg-white print:text-black print:p-2 print:border-b-2 print:border-black print:break-inside-avoid print:keep-together print:contrast-high">
+                        <div className="bg-gradient-to-r from-slate-900 to-emerald-800 p-12 text-white print:bg-white print:text-black print:p-1 print:border-b-2 print:border-black print:break-inside-avoid print:keep-together print:contrast-high">
                             <div className="flex justify-between items-start flex-wrap gap-8 print:gap-2">
                                 <div>
                                     <h3 className="text-4xl font-black tracking-tighter mb-2 print:text-sm print:text-black print:mb-1 print:leading-tight print:hierarchy-primary">{selectedStudentData.name}</h3>
@@ -225,10 +237,10 @@ const StudentScorecard: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <span className="text-[9px] uppercase font-black tracking-[0.3em] text-white/60 mb-2 block print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">
+                                    <span className="text-[9px] uppercase font-black tracking-[0.3em] text-white/60 mb-2 block print:text-black print:text-[8px] print:mb-0 print:leading-tight print:hierarchy-tertiary">
                                         Class Rank
                                     </span>
-                                    <span className="text-5xl font-black text-emerald-300 print:text-lg print:text-black print:leading-tight print:hierarchy-primary">
+                                    <span className="text-5xl font-black text-emerald-300 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">
                                         #{selectedStudentData.rank}
                                     </span>
                                 </div>
@@ -236,9 +248,9 @@ const StudentScorecard: React.FC = () => {
                         </div>
 
                         {/* Performance Summary */}
-                        <div className="p-12 print:p-2 print:break-inside-avoid print:keep-together">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12 print:grid-cols-4 print:gap-2 print:mb-3 print:break-inside-avoid">
-                                <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
+                        <div className="p-12 print:p-1 print:break-inside-avoid print:keep-together">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12 print:grid-cols-4 print:gap-1 print:mb-2 print:break-inside-avoid">
+                                <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-0.5 print:rounded-none print:border-black print:bg-white print:contrast-medium">
                                     <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Total Marks</p>
                                     <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{selectedStudentData.grandTotal}</p>
                                 </div>
@@ -329,16 +341,16 @@ const StudentScorecard: React.FC = () => {
                                                         <td className="px-6 py-6 text-center font-mono text-slate-400 print:px-1 print:py-1 print:text-xs print:text-black print:border-r print:border-black print:leading-tight print:table-cell-padding">
                                                             {maxTotal}
                                                         </td>
-                                                        <td className="px-6 py-6 text-center print:px-1 print:py-1 print:table-cell-padding">
+                                                        <td className="px-6 py-6 text-center print:px-0.5 print:py-0.5 print:table-cell-padding">
                                                             {marks ? (
-                                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider print:px-0 print:py-0 print:rounded-none print:text-xs print:leading-tight ${marks.status === 'Passed'
+                                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider print:px-0 print:py-0 print:rounded-none print:text-[10px] print:leading-tight ${marks.status === 'Passed'
                                                                     ? 'bg-emerald-100 text-emerald-700 print:status-passed'
                                                                     : 'bg-red-100 text-red-700 print:status-failed'
                                                                     }`}>
                                                                     {marks.status}
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-slate-400 text-xs print:text-black print:text-xs print:leading-tight print:hierarchy-body">Not Assessed</span>
+                                                                <span className="text-slate-400 text-xs print:text-black print:text-[10px] print:leading-tight print:hierarchy-body">Not Assessed</span>
                                                             )}
                                                         </td>
                                                     </tr>
@@ -412,12 +424,12 @@ const StudentScorecard: React.FC = () => {
                             )}
 
                             {/* Enhanced Authentication Footer for Print Only */}
-                            <div className="hidden print:block print:mt-6 print:pt-4 border-t-2 border-black print:break-inside-avoid print:keep-with-previous print:keep-together">
-                                <div className="grid grid-cols-3 gap-4 print:text-xs text-black">
+                            <div className="hidden print:block print:mt-4 print:pt-2 border-t-2 border-black print:break-inside-avoid print:keep-with-previous print:keep-together">
+                                <div className="grid grid-cols-3 gap-2 print:text-[9px] text-black">
                                     {/* Generation Details */}
                                     <div>
-                                        <div className="font-bold uppercase tracking-wider print:mb-1">Document Details</div>
-                                        <div className="space-y-1">
+                                        <div className="font-bold uppercase tracking-wider print:mb-0.5">Document Details</div>
+                                        <div className="space-y-0.5">
                                             <div><span className="font-semibold">Generated On:</span></div>
                                             <div>{new Date().toLocaleDateString('en-IN', {
                                                 weekday: 'long',
@@ -426,7 +438,7 @@ const StudentScorecard: React.FC = () => {
                                                 day: 'numeric'
                                             })}</div>
                                             <div>{new Date().toLocaleTimeString('en-IN')}</div>
-                                            <div className="print:mt-2">
+                                            <div className="print:mt-1">
                                                 <span className="font-semibold">Document ID:</span><br />
                                                 <span className="font-mono">AIC-SC-{selectedStudentData.adNo}-{Date.now().toString().slice(-8)}</span>
                                             </div>
@@ -435,13 +447,13 @@ const StudentScorecard: React.FC = () => {
 
                                     {/* Official Signatures */}
                                     <div className="text-center">
-                                        <div className="space-y-4">
+                                        <div className="space-y-2">
                                             <div>
-                                                <div className="border-b border-black w-32 mx-auto print:mb-2"></div>
+                                                <div className="border-b border-black w-24 mx-auto print:mb-1"></div>
                                                 <div className="font-bold uppercase tracking-wider">Class Teacher</div>
                                             </div>
                                             <div>
-                                                <div className="border-b border-black w-32 mx-auto print:mb-2"></div>
+                                                <div className="border-b border-black w-24 mx-auto print:mb-1"></div>
                                                 <div className="font-bold uppercase tracking-wider">Controller of Examinations</div>
                                             </div>
                                         </div>
@@ -449,15 +461,15 @@ const StudentScorecard: React.FC = () => {
 
                                     {/* Verification & Seal */}
                                     <div className="text-right">
-                                        <div className="font-bold uppercase tracking-wider print:mb-2">Official Seal</div>
-                                        <div className="w-20 h-20 border-2 border-black rounded-full mx-auto print:mb-2 flex items-center justify-center">
-                                            <span className="text-xs font-bold">SEAL</span>
+                                        <div className="font-bold uppercase tracking-wider print:mb-1">Official Seal</div>
+                                        <div className="w-16 h-16 border-2 border-black rounded-full mx-auto print:mb-1 flex items-center justify-center">
+                                            <span className="text-[10px] font-bold">SEAL</span>
                                         </div>
-                                        <div className="print:text-xs">
+                                        <div className="print:text-[9px]">
                                             <div className="font-semibold">Verification Code:</div>
                                             <div className="font-mono">{btoa(selectedStudentData.adNo + Date.now()).slice(0, 8).toUpperCase()}</div>
                                         </div>
-                                        <div className="print:mt-2 print:text-xs">
+                                        <div className="print:mt-1 print:text-[9px]">
                                             <div className="font-semibold">Valid Until:</div>
                                             <div>{new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN')}</div>
                                         </div>
@@ -465,12 +477,12 @@ const StudentScorecard: React.FC = () => {
                                 </div>
 
                                 {/* Footer Note */}
-                                <div className="print:mt-4 print:pt-2 border-t border-black text-center print:text-xs text-black print:break-inside-avoid">
+                                <div className="print:mt-2 print:pt-1 border-t border-black text-center print:text-[8px] text-black print:break-inside-avoid">
                                     <div className="font-semibold">
                                         This is an official document generated by AIC Da'wa College Examination System
                                     </div>
-                                    <div className="print:mt-1">
-                                        For verification, contact: examinations@aicdawacollege.edu.in | Phone: +91-483-2734567
+                                    <div className="print:mt-0.5">
+                                        For verification: examinations@aicdawacollege.edu.in | Phone: +91-483-2734567
                                     </div>
                                 </div>
                             </div>

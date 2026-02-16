@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { ViewType } from '../../domain/entities/types';
+import { User } from '../../domain/entities/User';
 import { useMobileNavigation, useTouchInteraction } from '../hooks/useMobile';
 import { keyboardNavigation, screenReaderAnnouncer, ariaHelpers } from '../utils/accessibility';
 
@@ -8,6 +9,7 @@ interface HamburgerMenuProps {
     setView: (view: ViewType) => void;
     onLogout: () => void;
     isCloudActive?: boolean;
+    currentUser?: User | null;
 }
 
 interface NavigationItem {
@@ -21,7 +23,8 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     activeView,
     setView,
     onLogout,
-    isCloudActive = true
+    isCloudActive = true,
+    currentUser
 }) => {
     const {
         isMobileMenuOpen,
@@ -37,7 +40,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         { id: 'entry', icon: 'fa-edit', label: 'Marks Entry', description: 'Enter and manage student marks' },
         { id: 'class-report', icon: 'fa-table', label: 'Class Report', description: 'Generate class performance reports' },
         { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards', description: 'View individual student scorecards' },
-        { id: 'management', icon: 'fa-sliders', label: 'Management', description: 'System administration and settings' },
+        ...(currentUser?.role === 'admin' ? [{ id: 'management', icon: 'fa-sliders', label: 'Management', description: 'System administration and settings' } as NavigationItem] : []),
     ];
 
     // Handle navigation item click

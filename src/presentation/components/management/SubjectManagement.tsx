@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SubjectConfig, StudentRecord } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
-import { normalizeName } from '../../../infrastructure/services/formatUtils';
+import { normalizeName, shortenSubjectName } from '../../../infrastructure/services/formatUtils';
 
 interface SubjectManagementProps {
     subjects: SubjectConfig[];
@@ -88,7 +88,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const handleSaveSubject = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const normalizedName = toSentenceCase(subjectForm.name.trim());
+            const normalizedName = normalizeName(subjectForm.name);
 
             // Validation: Check for existing subjects for selected classes
             const conflictingClasses: string[] = [];
@@ -501,7 +501,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 <tbody className="divide-y divide-slate-100">
                                     {flattenedSubjectList.map((subject, index) => (
                                         <tr key={`${subject.id}-${Array.isArray(subject.specificClass) ? 'all' : subject.specificClass}-${index}`} className="bg-white hover:bg-slate-50 transition-colors">
-                                            <td className="p-4 font-bold text-slate-800">{subject.name}</td>
+                                            <td className="p-4 font-bold text-slate-800">{shortenSubjectName(subject.name)}</td>
                                             <td className="p-4 text-slate-600">{subject.facultyName || '-'}</td>
                                             <td className="p-4 text-center">
                                                 <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
@@ -557,7 +557,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                     {facultySubjects.map((subject, idx) => (
                                         <div key={`${subject.id}-${subject.specificClass}-${idx}`} className="border rounded-lg p-3 hover:bg-slate-50 transition-colors">
                                             <div className="flex justify-between items-start mb-2">
-                                                <h4 className="font-bold text-emerald-800">{subject.name}</h4>
+                                                <h4 className="font-bold text-emerald-800">{shortenSubjectName(subject.name)}</h4>
                                                 <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${subject.subjectType === 'elective' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                                                     {subject.subjectType || 'General'}
                                                 </span>
