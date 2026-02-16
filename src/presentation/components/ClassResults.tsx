@@ -335,9 +335,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                 const electiveSubjects = classSubjects.filter(s => s.subjectType === 'elective');
 
                                 // Find the elective the student took (if any)
-                                const studentElective = electiveSubjects.find(s =>
-                                    student.marks[s.id] && (student.marks[s.id].total > 0 || student.marks[s.id].ta !== undefined)
-                                );
+                                const studentElective = electiveSubjects.find(s => {
+                                    const m = student.marks[s.id];
+                                    return m && (m.total > 0 || m.ta !== undefined || m.ce !== undefined);
+                                });
                                 const electiveMark = studentElective ? student.marks[studentElective.id] : null;
 
                                 return (
@@ -428,7 +429,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                         </div>
                     ) : (
                         /* Table View with Enhanced Mobile Scrolling */
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:overflow-visible print:shadow-none print:border-none print:a4-content">
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:overflow-visible print:shadow-none print:border-none print:a4-content max-w-full">
                             {isMobile && (
                                 <div className="bg-amber-50 border-b border-amber-200 p-3 text-center print:hidden">
                                     <p className="text-sm text-amber-800 font-medium">
@@ -437,82 +438,85 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                     </p>
                                 </div>
                             )}
-                            <div className="overflow-x-auto mobile-table-scroll print:overflow-visible">
-                                <table className="w-full border-collapse print:table-compact whitespace-nowrap" role="table" aria-label="Class results table" style={{ minWidth: 'max-content' }}>
-                                    <thead className="print:keep-with-next">
+                            <div className="overflow-x-auto print:overflow-visible" style={{ maxWidth: '100%' }}>
+                                <table className="w-full border-collapse print:table-compact whitespace-nowrap" role="table" aria-label="Class results table">
+                                    <thead className="print:keep-with-next sticky top-0 z-20 bg-slate-50">
                                         <tr className="bg-slate-50 print:bg-slate-100 print:break-inside-avoid" role="row">
-                                            <th className={`text-left font-bold text-slate-700 border-b border-slate-200 sticky left-0 bg-slate-50 z-10 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">Rank</th>
-                                            <th className={`text-left font-bold text-slate-700 border-b border-slate-200 sticky ${isMobile ? 'left-12' : 'left-16'} bg-slate-50 z-10 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">Adm No</th>
-                                            <th className={`text-left font-bold text-slate-700 border-b border-slate-200 sticky ${isMobile ? 'left-24' : 'left-32'} bg-slate-50 z-10 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">Student Name</th>
+                                            <th className={`text-left font-bold text-slate-700 border-b-2 border-slate-300 sticky left-0 bg-slate-50 z-30 ${isMobile ? 'p-2 text-xs w-10' : 'p-3 text-sm w-14'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Rank</th>
+                                            <th className={`text-left font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Adm No</th>
+                                            <th className={`text-left font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Student Name</th>
 
                                             {/* General Subjects Headers */}
                                             {classSubjects.filter(s => s.subjectType !== 'elective').map(subject => (
-                                                <th key={subject.id} className={`text-center font-bold text-slate-700 border-b border-slate-200 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">
-                                                    <div className="print:hidden">{shortenSubjectName(subject.name)}</div>
-                                                    <div className="hidden print:block">{shortenSubjectName(subject.name)}</div>
+                                                <th key={subject.id} className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">
+                                                    <div>{shortenSubjectName(subject.name)}</div>
                                                     {subject.arabicName && !isMobile && (
-                                                        <div className="text-xs text-slate-500 arabic-text print:hidden">{subject.arabicName}</div>
+                                                        <div className="text-xs text-slate-400 arabic-text print:hidden font-normal">{subject.arabicName}</div>
                                                     )}
                                                 </th>
                                             ))}
 
                                             {/* Single Elective Header */}
                                             {classSubjects.some(s => s.subjectType === 'elective') && (
-                                                <th className={`text-center font-bold text-indigo-700 border-b border-slate-200 bg-indigo-50/30 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">
+                                                <th className={`text-center font-bold text-indigo-700 border-b-2 border-slate-300 bg-indigo-50/30 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">
                                                     Elective
                                                 </th>
                                             )}
 
-                                            <th className={`text-center font-bold text-slate-700 border-b border-slate-200 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">Total</th>
-                                            <th className={`text-center font-bold text-slate-700 border-b border-slate-200 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">Average</th>
-                                            <th className={`text-center font-bold text-slate-700 border-b border-slate-200 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="columnheader" scope="col">Status</th>
+                                            <th className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Total</th>
+                                            <th className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Average</th>
+                                            <th className={`text-center font-bold text-slate-700 border-b-2 border-slate-300 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs print:leading-tight`} role="columnheader" scope="col">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {students.map((student, index) => {
                                             // Pre-calculate elective info for this student
                                             const electiveSubjects = classSubjects.filter(s => s.subjectType === 'elective');
-                                            const studentElective = electiveSubjects.find(s =>
-                                                student.marks[s.id] && (student.marks[s.id].total > 0 || student.marks[s.id].ta !== undefined)
-                                            );
+
+                                            // More robust elective detection:
+                                            // 1. Check if student has marks for any elective subject
+                                            // 2. Ensure marks are not just empty structure
+                                            const studentElective = electiveSubjects.find(s => {
+                                                const m = student.marks[s.id];
+                                                return m && (m.total > 0 || m.ta !== undefined || m.ce !== undefined);
+                                            });
                                             const electiveMark = studentElective ? student.marks[studentElective.id] : null;
 
                                             return (
-                                                <tr key={student.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-slate-100 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid`} role="row">
-                                                    <td className={`border-b border-slate-100 sticky left-0 bg-inherit z-10 ${isMobile ? 'p-2' : 'p-4'} print:p-1 print:text-xs print:table-cell-padding`} role="cell">
-                                                        <div className={`rounded-full flex items-center justify-center text-white font-black text-sm print:w-4 print:h-4 print:text-xs print:leading-tight print:rounded-none ${isMobile ? 'w-6 h-6 text-xs' : 'w-8 h-8'
-                                                            } ${student.rank === 1 ? 'bg-yellow-500 print:rank-gold' :
-                                                                student.rank === 2 ? 'bg-slate-400 print:rank-silver' :
-                                                                    student.rank === 3 ? 'bg-amber-600 print:rank-bronze' :
-                                                                        'bg-slate-300 print:rank-default'
+                                                <tr key={student.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-emerald-50/50 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid`} role="row">
+                                                    <td className={`border-b border-slate-100 sticky left-0 bg-inherit z-10 ${isMobile ? 'p-2' : 'p-3'} print:p-1 print:text-xs`} role="cell">
+                                                        <div className={`rounded-full flex items-center justify-center text-white font-black text-xs print:w-4 print:h-4 print:text-xs print:rounded-none ${isMobile ? 'w-6 h-6' : 'w-7 h-7'
+                                                            } ${student.rank === 1 ? 'bg-yellow-500' :
+                                                                student.rank === 2 ? 'bg-slate-400' :
+                                                                    student.rank === 3 ? 'bg-amber-600' :
+                                                                        'bg-slate-300'
                                                             }`} aria-label={`Rank ${student.rank}`}>
                                                             {student.rank}
                                                         </div>
                                                     </td>
-                                                    <td className={`font-medium text-slate-900 border-b border-slate-100 sticky ${isMobile ? 'left-12' : 'left-16'} bg-inherit z-10 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="cell">{student.adNo}</td>
-                                                    <td className={`font-medium text-slate-900 border-b border-slate-100 sticky ${isMobile ? 'left-24' : 'left-32'} bg-inherit z-10 ${isMobile ? 'p-2 text-xs' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`} role="cell">
-                                                        {isMobile && student.name.length > 15 ? student.name.substring(0, 15) + '...' : student.name}
+                                                    <td className={`font-medium text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} print:p-1 print:text-xs`} role="cell">{student.adNo}</td>
+                                                    <td className={`font-medium text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-xs max-w-[120px] truncate' : 'p-3 text-sm'} print:p-1 print:text-xs`} role="cell">
+                                                        {student.name}
                                                     </td>
 
                                                     {/* General Subjects Data */}
                                                     {classSubjects.filter(s => s.subjectType !== 'elective').map(subject => {
                                                         const marks = student.marks[subject.id];
                                                         return (
-                                                            <td key={subject.id} className={`text-center border-b border-slate-100 ${isMobile ? 'p-2' : 'p-4'} print:p-1 print:text-xs print:table-cell-padding`}>
+                                                            <td key={subject.id} className={`text-center border-b border-slate-100 ${isMobile ? 'p-2' : 'p-3'} print:p-1 print:text-xs`}>
                                                                 {marks ? (
                                                                     <div>
-                                                                        <div className={`font-bold ${isMobile ? 'text-sm' : 'text-lg'} print:text-xs print:leading-tight print:hierarchy-secondary ${marks.status === 'Failed' ? 'text-red-600 print:performance-failed' : 'text-slate-900 print:hierarchy-primary'}`}>
+                                                                        <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-xs ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>
                                                                             {marks.total}
                                                                         </div>
                                                                         {!isMobile && (
-                                                                            <div className="text-xs text-slate-500 print:hidden">
+                                                                            <div className="text-xs text-slate-400 print:hidden">
                                                                                 {marks.ta}+{subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce}
                                                                             </div>
-
                                                                         )}
                                                                     </div>
                                                                 ) : (
-                                                                    <span className="text-slate-400">-</span>
+                                                                    <span className="text-slate-300">-</span>
                                                                 )}
                                                             </td>
                                                         );
@@ -520,41 +524,36 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
                                                     {/* Single Elective Column Data */}
                                                     {classSubjects.some(s => s.subjectType === 'elective') && (
-                                                        <td className={`text-center border-b border-slate-100 bg-indigo-50/10 ${isMobile ? 'p-2' : 'p-4'} print:p-1 print:text-xs print:table-cell-padding`}>
+                                                        <td className={`text-center border-b border-slate-100 bg-indigo-50/10 ${isMobile ? 'p-2' : 'p-3'} print:p-1 print:text-xs`}>
                                                             {electiveMark ? (
                                                                 <div>
-                                                                    <div className={`font-bold ${isMobile ? 'text-sm' : 'text-lg'} print:text-xs print:leading-tight print:hierarchy-secondary ${electiveMark.status === 'Failed' ? 'text-red-600 print:performance-failed' : 'text-slate-900 print:hierarchy-primary'}`}>
+                                                                    <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-xs ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>
                                                                         {electiveMark.total}
                                                                     </div>
-                                                                    <div className="text-[10px] text-indigo-600 font-medium truncate max-w-[80px] mx-auto hidden print:block">
+                                                                    <div className={`text-[10px] text-indigo-600 font-medium truncate max-w-[80px] mx-auto ${isMobile ? '' : ''}`}>
                                                                         {shortenSubjectName(studentElective?.name)}
                                                                     </div>
-                                                                    {!isMobile && (
-                                                                        <div className="text-xs text-indigo-600 print:hidden">
-                                                                            {shortenSubjectName(studentElective?.name)}
-                                                                        </div>
-                                                                    )}
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-slate-400">-</span>
+                                                                <span className="text-slate-300">-</span>
                                                             )}
                                                         </td>
                                                     )}
 
-                                                    <td className={`text-center font-black text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-lg' : 'p-4 text-xl'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`}>
+                                                    <td className={`text-center font-black text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-base' : 'p-3 text-lg'} print:p-1 print:text-xs`}>
                                                         {student.grandTotal}
                                                     </td>
-                                                    <td className={`text-center font-bold text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-sm' : 'p-4'} print:p-1 print:text-xs print:leading-tight print:table-cell-padding`}>
+                                                    <td className={`text-center font-bold text-slate-900 border-b border-slate-100 ${isMobile ? 'p-2 text-sm' : 'p-3'} print:p-1 print:text-xs`}>
                                                         {student.average.toFixed(1)}%
                                                     </td>
-                                                    <td className={`text-center border-b border-slate-100 ${isMobile ? 'p-2' : 'p-4'} print:p-1 print:table-cell-padding`}>
-                                                        <span className={`px-3 py-1 rounded-full font-bold uppercase tracking-wider print:px-0 print:py-0 print:text-xs print:leading-tight ${isMobile ? 'text-xs px-2' : 'text-xs'
-                                                            } ${student.performanceLevel.includes('Outstanding') ? 'bg-purple-100 text-purple-700 print:text-black' :
-                                                                student.performanceLevel.includes('Excellent') ? 'bg-emerald-100 text-emerald-700 print:text-black' :
-                                                                    student.performanceLevel.includes('Very Good') ? 'bg-blue-100 text-blue-700 print:text-black' :
-                                                                        student.performanceLevel.includes('Good') ? 'bg-teal-100 text-teal-700 print:text-black' :
-                                                                            student.performanceLevel.includes('Average') ? 'bg-amber-100 text-amber-700 print:text-black' :
-                                                                                'bg-red-100 text-red-700 print:text-black'
+                                                    <td className={`text-center border-b border-slate-100 ${isMobile ? 'p-2' : 'p-3'} print:p-1`}>
+                                                        <span className={`px-2 py-0.5 rounded-full font-bold uppercase tracking-wider print:px-0 print:py-0 print:text-xs ${isMobile ? 'text-[10px]' : 'text-xs'
+                                                            } ${student.performanceLevel.includes('Outstanding') ? 'bg-purple-100 text-purple-700' :
+                                                                student.performanceLevel.includes('Excellent') ? 'bg-emerald-100 text-emerald-700' :
+                                                                    student.performanceLevel.includes('Very Good') ? 'bg-blue-100 text-blue-700' :
+                                                                        student.performanceLevel.includes('Good') ? 'bg-teal-100 text-teal-700' :
+                                                                            student.performanceLevel.includes('Average') ? 'bg-amber-100 text-amber-700' :
+                                                                                'bg-red-100 text-red-700'
                                                             }`}>
                                                             {student.performanceLevel}
                                                         </span>

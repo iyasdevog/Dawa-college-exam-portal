@@ -102,7 +102,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   );
 
   return (
-    <div className={`flex min-h-screen bg-slate-50 print:block print:bg-white ${isMobile ? 'flex-col' : 'flex-row'}`}>
+    <div className={`flex min-h-screen bg-slate-50 print:block print:bg-white w-full max-w-[100vw] overflow-x-hidden ${isMobile ? 'flex-col' : 'flex-row'}`}>
       {!isMobile && <DesktopSidebar />}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <MobileHeader />

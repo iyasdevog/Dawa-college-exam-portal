@@ -29,14 +29,18 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
         'information and communication technology excel': 'ICT (Excel)',
         'information and communication technology theory': 'ICT (Theory)',
         'information and communication technology practical': 'ICT (Practical)',
+        'information technology': 'ICT',
         'ict excel': 'ICT (Excel)',
         'ict theory': 'ICT (Theory)',
         'ict practical': 'ICT (Practical)',
         'ict': 'ICT',
+        'it': 'ICT',
         'islamic history': 'Islamic Hist.',
         'malayalam': 'Mal.',
         'arabic': 'Ar.',
-        'english': 'Eng.',
+        'english': 'English',
+        'eng': 'English',
+        'eng.': 'English',
         'mathematics': 'Maths',
         'social science': 'Social Sci.',
         'natural science': 'Natural Sci.',
@@ -46,6 +50,7 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
         'moral science': 'Moral Sci.',
         'physical education': 'P.E.',
         'environmental science': 'EVS',
+        'soft and life skills': 'Life Skills',
         'foundation of education': 'Edu. Found.',
         'teaching practice': 'TP',
         'practice teaching': 'PT',
@@ -63,16 +68,21 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
         'pedagogy of physical science': 'Ped. Phys. Sci.'
     };
 
-    // Check if name contains any of the keys
+    // Check exact match first, then partial match for long keys
     for (const key in mapping) {
         if (lowerName === key || (key.length > 5 && lowerName.includes(key))) {
             return mapping[key];
         }
     }
 
+    // Also catch partial: "information technology" anywhere in the name
+    if (lowerName.includes('information technology')) {
+        return 'ICT';
+    }
+
     // Default truncation for very long names not in mapping
-    if (name.length > 25) {
-        return name.substring(0, 22) + '...';
+    if (name.length > 20) {
+        return name.substring(0, 17) + '...';
     }
 
     return name;
