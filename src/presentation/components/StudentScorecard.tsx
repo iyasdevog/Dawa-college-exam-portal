@@ -62,7 +62,10 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             }
 
             // Filter subjects for this class
-            const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
+            const filteredSubjects = subjects.filter(s =>
+                s.targetClasses.includes(selectedClass) ||
+                (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id)))
+            );
             setClassSubjects(filteredSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);

@@ -73,7 +73,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             setStudents(rankedStudents);
 
             // Filter subjects for this class
-            const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
+            const filteredSubjects = subjects.filter(s =>
+                s.targetClasses.includes(selectedClass) ||
+                (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id)))
+            );
             setClassSubjects(filteredSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);
@@ -387,7 +390,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                     {marks.total}
                                                                 </p>
                                                                 <p className="text-xs text-slate-500">
-                                                                    {marks.ta}+(subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce)
+                                                                    {marks.ta}+{subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce}
                                                                 </p>
 
                                                             </div>
@@ -503,7 +506,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                         </div>
                                                                         {!isMobile && (
                                                                             <div className="text-xs text-slate-500 print:hidden">
-                                                                                {marks.ta}+(subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce)
+                                                                                {marks.ta}+{subject.maxTA === 100 || subject.maxCE === 0 ? 'N/A' : marks.ce}
                                                                             </div>
 
                                                                         )}
