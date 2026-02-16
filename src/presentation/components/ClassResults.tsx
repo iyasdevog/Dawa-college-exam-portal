@@ -143,7 +143,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     }
 
     return (
-        <div className="space-y-8 print:space-y-4">
+        <div className="space-y-8 print:space-y-4 page-class-results">
 
 
             {/* Header - Hidden on Print */}
@@ -428,16 +428,16 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                         </div>
                     ) : (
                         /* Table View with Enhanced Mobile Scrolling */
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:shadow-none print:border print:border-slate-300 print:a4-content print:table-keep-together">
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:overflow-visible print:shadow-none print:border-none print:a4-content">
                             {isMobile && (
-                                <div className="bg-amber-50 border-b border-amber-200 p-3 text-center">
+                                <div className="bg-amber-50 border-b border-amber-200 p-3 text-center print:hidden">
                                     <p className="text-sm text-amber-800 font-medium">
                                         <i className="fa-solid fa-arrows-left-right mr-2"></i>
                                         Scroll horizontally to see all subjects
                                     </p>
                                 </div>
                             )}
-                            <div className="overflow-x-auto mobile-table-scroll">
+                            <div className="overflow-x-auto mobile-table-scroll print:overflow-visible">
                                 <table className="w-full border-collapse print:table-compact whitespace-nowrap" role="table" aria-label="Class results table" style={{ minWidth: 'max-content' }}>
                                     <thead className="print:keep-with-next">
                                         <tr className="bg-slate-50 print:bg-slate-100 print:break-inside-avoid" role="row">

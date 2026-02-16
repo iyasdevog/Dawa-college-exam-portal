@@ -2345,3 +2345,14 @@
         transition-duration: 0.01ms !important;
     }
 }
+
+/* Custom Print Utilities */
+.print\:overflow-visible {
+    overflow: visible !important;
+}
+
+.page-class-results {
+    page: class-results;
+    width: 100% !important;
+    max-width: none !important;
+}
