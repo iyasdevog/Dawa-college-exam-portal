@@ -185,7 +185,7 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
                 ayaEnd: ayaEnd === '' ? 0 : Number(ayaEnd),
                 recitationDate,
                 teacherName: selectedTeacher || 'Self',
-                status: submissionType === 'Self' ? 'Approved' : 'Pending',
+                status: (submissionType === 'Self' && selectedTeacher === 'Self-Reading') ? 'Approved' : 'Pending',
                 submittedAt: new Date().toISOString(),
                 type: submissionType,
                 taskId: selectedTaskId
