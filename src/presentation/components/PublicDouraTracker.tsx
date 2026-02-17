@@ -71,8 +71,6 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
             setDouraTasks(tasks.filter(t => t.status === 'Active'));
             setKhatamProgress(progress);
 
-            setKhatamProgress(progress);
-
             // Smart Pre-fill Check
             // Sort history to ensure we get the latest
             const sortedHistory = [...history].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
@@ -104,6 +102,34 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
                     const prevAyaEnd = lastApproved.ayaEnd || 0;
                     setAyaStart(prevAyaEnd + 1);
                     setAyaEnd(prevAyaEnd + 10);
+                }
+            } else if (progress && progress.currentKhatamJuz && progress.currentKhatamJuz.length > 0) {
+                // Fallback: If no history but Khatam Progress exists (e.g. legacy data)
+                // Find the maximum completed Juz
+                const maxJuz = Math.max(...progress.currentKhatamJuz);
+
+                if (maxJuz === 30) {
+                    // Completed 30 Juz, start fresh
+                    setJuzStart(1);
+                    setJuzEnd(1);
+                    setPageStart(1);
+                    setPageEnd(10);
+                    setAyaStart(1);
+                    setAyaEnd(1);
+                } else {
+                    // Start next Juz
+                    const nextJuz = maxJuz + 1;
+                    setJuzStart(nextJuz);
+                    setJuzEnd(nextJuz);
+
+                    // Estimate page start for next Juz
+                    // Assuming 20 pages per Juz
+                    const startPage = (nextJuz - 1) * 20 + 2;
+                    setPageStart(startPage);
+                    setPageEnd(startPage + 9);
+
+                    setAyaStart(1);
+                    setAyaEnd(1);
                 }
             } else {
                 // Reset to defaults for new starters
