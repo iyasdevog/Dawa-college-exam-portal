@@ -2142,6 +2142,36 @@ export class DataService {
         }
     }
 
+    async deleteAllStudentDouraSubmissions(adNo: string): Promise<number> {
+        try {
+            const q = query(collection(this.db, this.douraCollection), where('studentAdNo', '==', adNo));
+            const snapshot = await getDocs(q);
+            const batch = writeBatch(this.db);
+            let count = 0;
+
+            snapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+                count++;
+            });
+
+            await batch.commit();
+
+            // Also reset Khatam Progress for this student
+            await setDoc(doc(this.db, this.khatamCollection, adNo), {
+                studentAdNo: adNo,
+                currentKhatamJuz: [],
+                khatamCount: 0,
+                lastUpdated: new Date().toISOString()
+            });
+
+            this.invalidateDouraCache();
+            return count;
+        } catch (error) {
+            console.error('Error deleting all student Doura submissions:', error);
+            throw error;
+        }
+    }
+
     private sanitizeObject(obj: any) {
         return Object.entries(obj).reduce((acc, [key, value]) => {
             if (value !== undefined) acc[key] = value;

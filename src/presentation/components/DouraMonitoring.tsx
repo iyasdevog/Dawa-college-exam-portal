@@ -20,8 +20,14 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
     const [monitoringLoading, setMonitoringLoading] = useState(false);
     const [tasksLoading, setTasksLoading] = useState(false);
     const [monitoringFilterClass, setMonitoringFilterClass] = useState<string>('all');
-    const [monitoringFilterStatus, setMonitoringFilterStatus] = useState<'Pending' | 'Approved' | 'all'>('Pending');
+    const [monitoringFilterStatus, setMonitoringFilterStatus] = useState<'all' | 'Pending' | 'Approved'>('all');
     const [monitoringFilterType, setMonitoringFilterType] = useState<'all' | 'Task' | 'Self'>('all');
+
+    // Data Management State
+    const [isDataModalOpen, setIsDataModalOpen] = useState(false);
+    const [dataMgmtClass, setDataMgmtClass] = useState<string>('');
+    const [dataMgmtStudent, setDataMgmtStudent] = useState<string>('');
+    const [isDeletingData, setIsDeletingData] = useState(false);
     const [operationLoading, setOperationLoading] = useState<{
         type: 'saving' | 'clearing' | 'loading-students' | 'validating' | null;
         message?: string;
@@ -98,6 +104,11 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
         }
     }, [monitoringFilterClass]);
 
+    const loadDouraData = useCallback(async () => {
+        await loadMonitoringSubmissions();
+        await loadDouraTasks();
+    }, [loadMonitoringSubmissions, loadDouraTasks]);
+
     useEffect(() => {
         if (activeTab === 'monitoring') {
             loadMonitoringSubmissions();
@@ -158,7 +169,7 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
         setIsTaskModalOpen(false);
     }, []);
 
-    const submitCreateTask = async () => {
+    const handleSubmitTask = async () => {
         if (!taskForm.title) {
             alert('Please enter a task title');
             return;
@@ -234,27 +245,46 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
         }
     }, [loadDouraTasks]);
 
-    const handleDeleteDouraSubmission = useCallback((id: string, name: string) => {
-        setConfirmModal({
-            isOpen: true,
-            title: 'Delete Submission',
-            message: `Are you sure you want to permanently delete the submission for ${name}?`,
-            type: 'danger',
-            onConfirm: async () => {
-                try {
-                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                    setOperationLoading({ type: 'saving', message: 'Deleting submission...' });
-                    await dataService.deleteDouraSubmission(id);
-                    await loadMonitoringSubmissions();
-                } catch (error) {
-                    console.error('Error deleting submission:', error);
-                    alert('Failed to delete submission.');
-                } finally {
-                    setOperationLoading({ type: null });
-                }
+    const handleDeleteDouraSubmission = async (id: string, studentName: string) => {
+        if (confirm(`Are you sure you want to delete this submission for ${studentName}?`)) {
+            try {
+                setOperationLoading({ type: 'clearing', message: 'Deleting submission...' });
+                await dataService.deleteDouraSubmission(id);
+                // Refresh data
+                loadDouraData();
+            } catch (error) {
+                console.error(error);
+                alert('Failed to delete submission');
+            } finally {
+                setOperationLoading({ type: null, message: '' });
             }
-        });
-    }, [loadMonitoringSubmissions]);
+        }
+    };
+
+    const handleDeleteAllData = async () => {
+        if (!dataMgmtStudent) return;
+
+        if (confirm(`DANGER: Are you sure you want to DELETE ALL Doura data for student ${dataMgmtStudent}? This action cannot be undone.`)) {
+            // Second confirmation for safety
+            const confirmation = prompt(`Type "DELETE" to confirm clearing all data for ${dataMgmtStudent}`);
+            if (confirmation !== 'DELETE') return;
+
+            try {
+                setIsDeletingData(true);
+                const count = await dataService.deleteAllStudentDouraSubmissions(dataMgmtStudent);
+                alert(`Successfully deleted ${count} submissions and reset Khatam progress.`);
+                setIsDataModalOpen(false);
+                setDataMgmtStudent('');
+                setDataMgmtClass('');
+                loadDouraData();
+            } catch (error) {
+                console.error(error);
+                alert('Failed to delete data. Please try again.');
+            } finally {
+                setIsDeletingData(false);
+            }
+        }
+    };
 
     return (
         <div className="space-y-4 md:space-y-8">
@@ -306,13 +336,22 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
                     <div className="space-y-6">
                         <div className="flex justify-between items-center">
                             <h3 className="text-xl font-black text-slate-900">Assigned Tasks</h3>
-                            <button
-                                onClick={handleCreateTask}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                            >
-                                <i className="fa-solid fa-plus"></i>
-                                New Assignment
-                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setIsDataModalOpen(true)}
+                                    className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl font-bold transition-all border border-red-200 active:scale-95 flex items-center gap-2"
+                                >
+                                    <i className="fa-solid fa-trash-can"></i>
+                                    Data Cleanup
+                                </button>
+                                <button
+                                    onClick={handleCreateTask}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                                >
+                                    <i className="fa-solid fa-plus"></i>
+                                    New Assignment
+                                </button>
+                            </div>
                         </div>
 
                         {tasksLoading ? (
@@ -686,7 +725,7 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
                             Cancel
                         </button>
                         <button
-                            onClick={submitCreateTask}
+                            onClick={handleSubmitTask}
                             className="flex-2 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
                         >
                             Create Assignment
