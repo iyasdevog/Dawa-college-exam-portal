@@ -79,20 +79,32 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
             const lastApproved = sortedHistory.find(s => s.status === 'Approved');
 
             if (lastApproved) {
-                // Determine new logical start point (Previous End + 1)
-                const prevPageEnd = lastApproved.pageEnd || 0;
-                const nextPageStart = prevPageEnd + 1;
-                const nextJuzStart = getJuzFromPage(nextPageStart);
+                // Check for Khatam Completion (Juz 30 reached and finished)
+                // Assuming standard 604 pages, if pageEnd > 600 and juzEnd == 30, it's a Khatam
+                if (lastApproved.juzEnd === 30 && (lastApproved.pageEnd || 0) >= 600) {
+                    // Reset for new Khatam
+                    setJuzStart(1);
+                    setJuzEnd(1);
+                    setPageStart(1);
+                    setPageEnd(10);
+                    setAyaStart(1);
+                    setAyaEnd(1);
+                } else {
+                    // Normal Progression: Start = Previous End + 1
+                    const prevPageEnd = lastApproved.pageEnd || 0;
+                    const nextPageStart = prevPageEnd + 1;
+                    const nextJuzStart = getJuzFromPage(nextPageStart);
 
-                setJuzStart(nextJuzStart);
-                setJuzEnd(nextJuzStart); // Default end to same
+                    setJuzStart(nextJuzStart);
+                    setJuzEnd(nextJuzStart);
 
-                setPageStart(nextPageStart);
-                setPageEnd(nextPageStart + 10); // Predictive end
+                    setPageStart(nextPageStart);
+                    setPageEnd(nextPageStart + 10);
 
-                const prevAyaEnd = lastApproved.ayaEnd || 0;
-                setAyaStart(prevAyaEnd + 1);
-                setAyaEnd(prevAyaEnd + 10);
+                    const prevAyaEnd = lastApproved.ayaEnd || 0;
+                    setAyaStart(prevAyaEnd + 1);
+                    setAyaEnd(prevAyaEnd + 10);
+                }
             } else {
                 // Reset to defaults for new starters
                 setJuzStart(1);
@@ -185,7 +197,7 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
                 ayaEnd: ayaEnd === '' ? 0 : Number(ayaEnd),
                 recitationDate,
                 teacherName: selectedTeacher || 'Self',
-                status: (submissionType === 'Self' && selectedTeacher === 'Self-Reading') ? 'Approved' : 'Pending',
+                status: submissionType === 'Self' ? 'Approved' : 'Pending',
                 submittedAt: new Date().toISOString(),
                 type: submissionType,
                 taskId: selectedTaskId
