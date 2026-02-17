@@ -2044,14 +2044,15 @@ export class DataService {
         try {
             const q = query(
                 collection(this.db, this.douraCollection),
-                where('studentAdNo', '==', adNo),
-                orderBy('submittedAt', 'desc')
+                where('studentAdNo', '==', adNo)
             );
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as DouraSubmission));
+            return querySnapshot.docs
+                .map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as DouraSubmission))
+                .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
         } catch (error) {
             console.error('Error fetching student Doura status:', error);
             return [];

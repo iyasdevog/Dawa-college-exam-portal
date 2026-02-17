@@ -668,10 +668,80 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
             )}
 
             {douraSubTab === 'history' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 py-12 text-center bg-white rounded-[2rem] border-2 border-slate-100">
-                    <i className="fa-solid fa-clock-rotate-left text-5xl text-slate-100 mb-4"></i>
-                    <h4 className="text-xl font-black text-slate-300">History Tracking</h4>
-                    <p className="text-slate-400">View your detailed submission history in the sidebar or check here for expanded view.</p>
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                    <div className="bg-white rounded-[2rem] p-8 shadow-xl border-2 border-slate-100">
+                        <div className="flex items-center gap-4 mb-8">
+                            <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center">
+                                <i className="fa-solid fa-clock-rotate-left text-xl text-slate-400"></i>
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Submission History</h3>
+                                <p className="text-slate-500 font-medium text-sm">Comprehensive record of all your recitations</p>
+                            </div>
+                        </div>
+
+                        {douraSubmissions.length === 0 ? (
+                            <div className="text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                <p className="text-slate-400 font-bold">No submission history found</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b-2 border-slate-100">
+                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Type</th>
+                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Juz Range</th>
+                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Pages</th>
+                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Teacher</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {douraSubmissions.map(sub => (
+                                            <tr key={sub.id} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-6 py-4 font-bold text-slate-700">
+                                                    {new Date(sub.submittedAt).toLocaleDateString()}
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${sub.type === 'Task' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                                                        }`}>
+                                                        {sub.type || 'Self'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="font-black text-slate-900 text-lg">
+                                                        {sub.juzStart === sub.juzEnd ? sub.juzStart : `${sub.juzStart}-${sub.juzEnd}`}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="text-xs font-bold text-slate-500">
+                                                        {sub.pageStart}-{sub.pageEnd}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${sub.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                                        }`}>
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${sub.status === 'Approved' ? 'bg-emerald-500' : 'bg-amber-500'
+                                                            }`}></div>
+                                                        {sub.status}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm font-bold text-slate-600">
+                                                    {sub.teacherName || '-'}
+                                                    {sub.approvedBy && (
+                                                        <div className="text-[10px] text-emerald-600 font-normal mt-0.5">
+                                                            by {sub.approvedBy}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
