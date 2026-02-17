@@ -65,71 +65,72 @@ export const AccessibleModal: React.FC<AccessibleModalProps> = ({
         }
     }, [closeOnOverlayClick, onClose]);
 
+    // Track if modal was already open to prevent focus hijacking on re-renders
+    const wasOpenRef = useRef(false);
+
     // Set up modal when opened
     useEffect(() => {
         if (isOpen) {
-            // Save current focus
-            if (returnFocus) {
+            // Save current focus only on initial open
+            if (!wasOpenRef.current && returnFocus) {
                 previousFocusRef.current = focusManagement.saveFocus();
             }
 
             // Prevent body scroll
             document.body.style.overflow = 'hidden';
-
-            // Add modal to body class for styling
             document.body.classList.add('modal-open');
 
             // Set up keyboard event listeners
             document.addEventListener('keydown', handleEscape);
 
-            // Announce modal opening to screen readers
-            screenReaderAnnouncer.announce(`Dialog opened: ${title}`, 'polite');
+            if (!wasOpenRef.current) {
+                // Announce modal opening to screen readers
+                screenReaderAnnouncer.announce(`Dialog opened: ${title}`, 'polite');
 
-            // Set up focus trap after modal is rendered
-            setTimeout(() => {
-                if (modalRef.current) {
-                    disableFocusTrapRef.current = keyboardNavigation.enableFocusTrap(modalRef.current);
+                // Set up focus trap and initial focus after modal is rendered
+                setTimeout(() => {
+                    if (modalRef.current) {
+                        disableFocusTrapRef.current = keyboardNavigation.enableFocusTrap(modalRef.current);
 
-                    // Set initial focus
-                    if (initialFocus === 'first') {
-                        keyboardNavigation.focusFirst(modalRef.current);
-                    } else if (initialFocus === 'close' && closeButtonRef.current) {
-                        closeButtonRef.current.focus();
+                        // Set initial focus
+                        if (initialFocus === 'first') {
+                            keyboardNavigation.focusFirst(modalRef.current);
+                        } else if (initialFocus === 'close' && closeButtonRef.current) {
+                            closeButtonRef.current.focus();
+                        }
                     }
-                }
-            }, 100);
+                }, 100);
+            }
 
+            wasOpenRef.current = true;
         } else {
             // Clean up when modal closes
-            document.body.style.overflow = '';
-            document.body.classList.remove('modal-open');
-            document.removeEventListener('keydown', handleEscape);
+            if (wasOpenRef.current) {
+                document.body.style.overflow = '';
+                document.body.classList.remove('modal-open');
+                document.removeEventListener('keydown', handleEscape);
 
-            // Disable focus trap
-            if (disableFocusTrapRef.current) {
-                disableFocusTrapRef.current();
-                disableFocusTrapRef.current = null;
+                // Disable focus trap
+                if (disableFocusTrapRef.current) {
+                    disableFocusTrapRef.current();
+                    disableFocusTrapRef.current = null;
+                }
+
+                // Restore focus
+                if (returnFocus && previousFocusRef.current) {
+                    focusManagement.restoreFocus(previousFocusRef.current);
+                    previousFocusRef.current = null;
+                }
+
+                // Announce modal closing
+                screenReaderAnnouncer.announce('Dialog closed', 'polite');
             }
-
-            // Restore focus
-            if (returnFocus && previousFocusRef.current) {
-                focusManagement.restoreFocus(previousFocusRef.current);
-                previousFocusRef.current = null;
-            }
-
-            // Announce modal closing
-            screenReaderAnnouncer.announce('Dialog closed', 'polite');
+            wasOpenRef.current = false;
         }
 
-        // Cleanup function
+        // Cleanup function for intermediate changes
         return () => {
-            document.body.style.overflow = '';
-            document.body.classList.remove('modal-open');
             document.removeEventListener('keydown', handleEscape);
-
-            if (disableFocusTrapRef.current) {
-                disableFocusTrapRef.current();
-            }
         };
     }, [isOpen, handleEscape, title, initialFocus, returnFocus]);
 
@@ -216,7 +217,9 @@ export const AccessibleModal: React.FC<AccessibleModalProps> = ({
                             className="ml-4 flex-shrink-0"
                             aria-label={`Close ${title} dialog`}
                             icon="fa-solid fa-times"
-                        />
+                        >
+                            {null}
+                        </MobileButton>
                     )}
                 </div>
 

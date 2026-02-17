@@ -626,4 +626,4 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     );
 };
 
-export default ClassResults;
+export default React.memo(ClassResults);

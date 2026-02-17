@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { debounce, throttle, mobileStorage } from '../../infrastructure/services/mobileUtils';
-import * as XLSX from 'xlsx';
+import { loadExcelLibrary } from '../../infrastructure/services/dynamicImports';
 
 interface DashboardProps {
     onNavigateToManagement: () => void;
@@ -212,36 +212,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                 message: 'Computing performance metrics and rankings...'
             }));
 
-            // Simulate calculation time for better UX
-            await new Promise(resolve => setTimeout(resolve, 500));
-
             setStudents(studentsData);
             setSubjects(subjectsData);
 
-            // Stage 5: Preparing charts
-            setLoadingState(prev => ({
-                ...prev,
-                stage: 'preparing-charts',
-                progress: 90,
-                message: 'Generating charts and visualizations...'
-            }));
-
-            // Final stage completion
-            await new Promise(resolve => setTimeout(resolve, 300));
-
+            // Complete loading immediately — no artificial delays
             setLoadingState(prev => ({
                 ...prev,
                 progress: 100,
+                isLoading: false,
                 message: 'Dashboard ready!'
             }));
-
-            // Complete loading
-            setTimeout(() => {
-                setLoadingState(prev => ({
-                    ...prev,
-                    isLoading: false
-                }));
-            }, 200);
 
         } catch (error) {
             console.error('Error loading dashboard data:', error);
@@ -253,17 +233,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         }
     };
 
-    // Filter students by selected class
-    const filteredStudents = selectedClass === 'All'
-        ? students
-        : students.filter(s => s.className === selectedClass);
+    // Filter students by selected class — memoized to avoid recomputation
+    const filteredStudents = useMemo(() =>
+        selectedClass === 'All' ? students : students.filter(s => s.className === selectedClass),
+        [students, selectedClass]
+    );
 
-    // Calculate statistics
+    // Calculate statistics — memoized
     const totalStudents = students.length;
     const totalSubjects = subjects.length;
-    const averagePercentage = students.length > 0
-        ? Math.round(students.reduce((sum, s) => sum + s.average, 0) / students.length)
-        : 0;
+    const averagePercentage = useMemo(() =>
+        students.length > 0
+            ? Math.round(students.reduce((sum, s) => sum + s.average, 0) / students.length)
+            : 0,
+        [students]
+    );
 
     // Create mobile-optimized statistics cards
     const statisticsCards: StatCard[] = [
@@ -490,6 +474,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         });
 
         try {
+            // Dynamically load XLSX library on-demand (saves ~450KB from initial bundle)
+            const XLSX = await loadExcelLibrary();
+
             // Create workbook with multiple sheets optimized for mobile viewing
             const wb = XLSX.utils.book_new();
 
@@ -794,17 +781,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         });
     };
 
-    // Grade distribution
-    const gradeStats = {
+    // Grade distribution — memoized to avoid filtering on every render
+    const gradeStats = useMemo(() => ({
         Excellent: students.filter(s => s.performanceLevel === 'Excellent').length,
         Good: students.filter(s => s.performanceLevel === 'Good').length,
         Average: students.filter(s => s.performanceLevel === 'Average').length,
         'Needs Improvement': students.filter(s => s.performanceLevel === 'Needs Improvement').length,
         Failed: students.filter(s => s.performanceLevel === 'Failed').length,
-    };
+    }), [students]);
 
-    // Class-wise statistics
-    const classStats = CLASSES.map(className => {
+    // Class-wise statistics — memoized
+    const classStats = useMemo(() => CLASSES.map(className => {
         const classStudents = students.filter(s => s.className === className);
         const classAverage = classStudents.length > 0
             ? Math.round(classStudents.reduce((sum, s) => sum + s.average, 0) / classStudents.length)
@@ -816,12 +803,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             average: classAverage,
             topStudent: classStudents.find(s => s.rank === 1)
         };
-    });
+    }), [students]);
 
-    // Top performers
-    const topPerformers = [...students]
+    // Top performers — memoized
+    const topPerformers = useMemo(() => [...students]
         .sort((a, b) => b.grandTotal - a.grandTotal)
-        .slice(0, 5);
+        .slice(0, 5), [students]);
 
     if (loadingState.isLoading) {
         // Show progressive loading for mobile, complete skeleton for desktop
@@ -1764,4 +1751,4 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     );
 };
 
-export default Dashboard;
+export default React.memo(Dashboard);

@@ -1,4 +1,4 @@
-import React, { forwardRef, useState, useRef, useEffect } from 'react';
+import React, { forwardRef, useState, useRef, useEffect, useMemo } from 'react';
 import { useMobile } from '../hooks/useMobile';
 import { getMobileInputProps, getTouchTargetSize } from '../utils/mobileOptimization';
 
@@ -55,8 +55,8 @@ export const MobileFormInput = forwardRef<HTMLInputElement, MobileFormInputProps
         }
     };
 
-    // Generate unique ID if not provided
-    const inputId = id || `mobile-input-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate unique ID if not provided - using useMemo to ensure it's stable across renders
+    const inputId = useMemo(() => id || `mobile-input-${Math.random().toString(36).substr(2, 9)}`, [id]);
 
     // Update hasValue state
     useEffect(() => {

@@ -120,8 +120,8 @@ const Management: React.FC = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-3 px-6 py-4 font-bold transition-all ${activeTab === tab.id
-                      ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-600'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-600'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                 >
                   <i className={`fa-solid ${tab.icon}`}></i>

@@ -15,7 +15,7 @@ import {
     Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, DouraSubmission } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, DouraSubmission, DouraTask, KhatamProgress } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 import { normalizeName } from './formatUtils';
@@ -39,6 +39,8 @@ export class DataService {
     private supplementaryExamsCollection = 'supplementaryExams';
     private settingsCollection = 'settings';
     private douraCollection = 'doura_submissions';
+    private douraTasksCollection = 'doura_tasks';
+    private khatamCollection = 'khatam_progress';
 
     // Cache for performance optimization
     private studentsCache: StudentRecord[] | null = null;
@@ -137,6 +139,34 @@ export class DataService {
         } catch (error) {
             console.error('Error updating release settings:', error);
             throw error;
+        }
+    }
+
+    async getFacultyParticipantCodes(): Promise<Record<string, string>> {
+        try {
+            const docRef = doc(this.db, this.settingsCollection, 'faculty_participant_codes');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                return docSnap.data() as Record<string, string>;
+            }
+            return {};
+        } catch (error) {
+            console.error('Error getting faculty codes:', error);
+            return {};
+        }
+    }
+
+    async saveFacultyParticipantCode(facultyName: string, code: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.settingsCollection, 'faculty_participant_codes');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                await updateDoc(docRef, { [facultyName]: code });
+            } else {
+                await setDoc(docRef, { [facultyName]: code });
+            }
+        } catch (error) {
+            console.error('Error saving faculty code:', error);
         }
     }
 
@@ -1978,11 +2008,30 @@ export class DataService {
     // Doura Status operations
     async submitDouraStatus(submission: Omit<DouraSubmission, 'id'>): Promise<string> {
         try {
-            const docRef = await addDoc(collection(this.db, this.douraCollection), {
+            const isSelf = submission.type === 'Self';
+            const status = isSelf ? 'Approved' : 'Pending';
+            const approvedAt = isSelf ? new Date().toISOString() : undefined;
+
+            const sanitizedSubmission = this.sanitizeObject({
                 ...submission,
-                status: 'Pending',
+                status,
+                approvedAt
+            });
+
+            const docRef = await addDoc(collection(this.db, this.douraCollection), {
+                ...sanitizedSubmission,
                 submittedAt: new Date().toISOString()
             });
+
+            // If auto-approved, update progress
+            if (isSelf) {
+                const juzRange = [];
+                for (let i = submission.juzStart; i <= submission.juzEnd; i++) {
+                    juzRange.push(i);
+                }
+                await this.updateKhatamProgress(submission.studentAdNo, juzRange);
+            }
+
             this.invalidateDouraCache();
             return docRef.id;
         } catch (error) {
@@ -2052,6 +2101,37 @@ export class DataService {
         }
     }
 
+    async getParticipantRecord(idOrAdNo: string): Promise<{ type: 'student' | 'teacher', record: any } | null> {
+        // 1. Check if it's a student AdNo
+        const student = await this.getStudentByAdNo(idOrAdNo);
+        if (student) return { type: 'student', record: student };
+
+        // 2. Check if it's a faculty code
+        const codes = await this.getFacultyParticipantCodes();
+        // codes is name -> code
+        const facultyEntry = Object.entries(codes).find(([name, code]) => code === idOrAdNo);
+        if (facultyEntry) {
+            const [name] = facultyEntry;
+            return {
+                type: 'teacher',
+                record: {
+                    id: `FAC-${idOrAdNo}`,
+                    adNo: idOrAdNo,
+                    name: name,
+                    className: 'Faculty',
+                    semester: 'Odd',
+                    marks: {},
+                    grandTotal: 0,
+                    average: 0,
+                    rank: 0,
+                    performanceLevel: 'Excellent' as any
+                }
+            };
+        }
+
+        return null;
+    }
+
     async deleteDouraSubmission(id: string): Promise<void> {
         try {
             await deleteDoc(doc(this.db, this.douraCollection, id));
@@ -2062,11 +2142,34 @@ export class DataService {
         }
     }
 
+    private sanitizeObject(obj: any) {
+        return Object.entries(obj).reduce((acc, [key, value]) => {
+            if (value !== undefined) acc[key] = value;
+            return acc;
+        }, {} as any);
+    }
+
     async updateDouraSubmission(id: string, updates: Partial<DouraSubmission>): Promise<void> {
         try {
             const docRef = doc(this.db, this.douraCollection, id);
+
+            // If approving, we need to know the student and the juz range
+            if (updates.status === 'Approved') {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const submission = docSnap.data() as DouraSubmission;
+                    const juzRange = [];
+                    for (let i = submission.juzStart; i <= submission.juzEnd; i++) {
+                        juzRange.push(i);
+                    }
+                    await this.updateKhatamProgress(submission.studentAdNo, juzRange);
+                }
+            }
+
+            const sanitizedUpdates = this.sanitizeObject(updates);
+
             await updateDoc(docRef, {
-                ...updates,
+                ...sanitizedUpdates,
                 approvedAt: updates.status === 'Approved' ? new Date().toISOString() : null
             });
             this.invalidateDouraCache();
@@ -2096,6 +2199,112 @@ export class DataService {
         } catch (error) {
             console.error('Error fetching top reciters:', error);
             return [];
+        }
+    }
+
+    // Doura Task methods
+    async getDouraTasks(className?: string, studentAdNo?: string): Promise<DouraTask[]> {
+        try {
+            // Fetch all tasks and filter in memory to avoid complex Firestore index requirements
+            const q = query(collection(this.db, this.douraTasksCollection), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            let tasks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DouraTask));
+
+            // Apply filters in memory
+            if (className && className !== 'all') {
+                tasks = tasks.filter(t => t.targetClass === className || t.targetClass === 'all');
+            }
+
+            if (studentAdNo) {
+                tasks = tasks.filter(t => !t.targetStudentAdNo || t.targetStudentAdNo === studentAdNo);
+            }
+
+            return tasks;
+        } catch (error) {
+            console.error('Error fetching Doura tasks:', error);
+            return [];
+        }
+    }
+
+    async createDouraTask(task: Omit<DouraTask, 'id'>): Promise<string> {
+        try {
+            const sanitizedTask = this.sanitizeObject(task);
+            const docRef = await addDoc(collection(this.db, this.douraTasksCollection), sanitizedTask);
+            return docRef.id;
+        } catch (error) {
+            console.error('Error creating Doura task:', error);
+            throw error;
+        }
+    }
+
+    async updateDouraTask(id: string, updates: Partial<DouraTask>): Promise<void> {
+        try {
+            const sanitizedUpdates = this.sanitizeObject(updates);
+            await updateDoc(doc(this.db, this.douraTasksCollection, id), sanitizedUpdates);
+        } catch (error) {
+            console.error('Error updating Doura task:', error);
+            throw error;
+        }
+    }
+
+    async deleteDouraTask(id: string): Promise<void> {
+        try {
+            await deleteDoc(doc(this.db, this.douraTasksCollection, id));
+        } catch (error) {
+            console.error('Error deleting Doura task:', error);
+            throw error;
+        }
+    }
+
+    // Khatam Progress methods
+    async getKhatamProgress(adNo: string): Promise<KhatamProgress | null> {
+        try {
+            const q = query(collection(this.db, this.khatamCollection), where('studentAdNo', '==', adNo));
+            const querySnapshot = await getDocs(q);
+            if (querySnapshot.empty) return null;
+            const doc = querySnapshot.docs[0];
+            return { id: doc.id, ...doc.data() } as KhatamProgress;
+        } catch (error) {
+            console.error('Error fetching Khatam progress:', error);
+            return null;
+        }
+    }
+
+    async updateKhatamProgress(adNo: string, completedJuz: number[]): Promise<void> {
+        try {
+            const existing = await this.getKhatamProgress(adNo);
+            if (existing) {
+                const newJuz = Array.from(new Set([...existing.currentKhatamJuz, ...completedJuz]));
+                let khatamCount = existing.khatamCount;
+                let finalJuz = newJuz;
+
+                if (newJuz.length >= 30) {
+                    khatamCount += 1;
+                    finalJuz = []; // Reset for next Khatam
+                }
+
+                await updateDoc(doc(this.db, this.khatamCollection, existing.id), {
+                    currentKhatamJuz: finalJuz,
+                    khatamCount,
+                    lastCompletedDate: newJuz.length >= 30 ? new Date().toISOString() : existing.lastCompletedDate
+                });
+            } else {
+                let khatamCount = 0;
+                let finalJuz = completedJuz;
+                if (completedJuz.length >= 30) {
+                    khatamCount = 1;
+                    finalJuz = [];
+                }
+                await addDoc(collection(this.db, this.khatamCollection), {
+                    studentAdNo: adNo,
+                    currentKhatamJuz: finalJuz,
+                    khatamCount,
+                    lastCompletedDate: khatamCount > 0 ? new Date().toISOString() : null
+                });
+            }
+        } catch (error) {
+            console.error('Error updating Khatam progress:', error);
+            throw error;
         }
     }
 }

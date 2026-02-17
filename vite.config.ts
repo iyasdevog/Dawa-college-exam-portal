@@ -84,16 +84,15 @@ export default defineConfig(({ mode }) => {
             return 'assets/[name]-[hash].[ext]';
           }
         },
-        // External dependencies that should not be bundled
-        external: (id) => {
-          // Keep all dependencies bundled for better performance in this case
-          return false;
-        },
         // Advanced tree shaking configuration
         treeshake: {
-          moduleSideEffects: false,
+          // Preserve module side effects for Firebase (it relies on them for initialization)
+          moduleSideEffects: (id) => {
+            if (id.includes('firebase')) return true;
+            if (id.includes('node_modules')) return false;
+            return true; // preserve app code side effects
+          },
           propertyReadSideEffects: false,
-          tryCatchDeoptimization: false,
           unknownGlobalSideEffects: false
         }
       },
@@ -112,18 +111,13 @@ export default defineConfig(({ mode }) => {
       cssMinify: isProduction,
       // Production-specific optimizations
       ...(isProduction && {
-        // Remove all console statements except errors and warnings
-        terserOptions: {
-          compress: {
-            drop_console: true,
-            drop_debugger: true,
-            pure_funcs: ['console.log', 'console.info', 'console.debug']
-          }
-        },
-        // Optimize for production
         reportCompressedSize: true,
-        // Enable advanced minification
-        minify: 'terser'
+        // esbuild-native console/debugger removal (terserOptions was ignored under esbuild)
+        esbuild: {
+          drop: ['console', 'debugger'],
+          // Keep error/warn for production debugging
+          pure: ['console.log', 'console.info', 'console.debug']
+        }
       })
     },
     // Optimize dependencies

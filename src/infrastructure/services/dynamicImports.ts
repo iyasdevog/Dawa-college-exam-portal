@@ -12,6 +12,7 @@ export interface ExcelLibrary {
         sheet_to_json(worksheet: any, options?: any): any[];
     };
     read(data: any, options?: any): any;
+    write(workbook: any, options?: any): any;
     writeFile(workbook: any, filename: string): void;
 }
 
