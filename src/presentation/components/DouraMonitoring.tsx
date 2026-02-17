@@ -27,6 +27,7 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
     const [isDataModalOpen, setIsDataModalOpen] = useState(false);
     const [dataMgmtClass, setDataMgmtClass] = useState<string>('');
     const [dataMgmtStudent, setDataMgmtStudent] = useState<string>('');
+    const [cleanupStudents, setCleanupStudents] = useState<StudentRecord[]>([]);
     const [isDeletingData, setIsDeletingData] = useState(false);
     const [operationLoading, setOperationLoading] = useState<{
         type: 'saving' | 'clearing' | 'loading-students' | 'validating' | null;
@@ -731,6 +732,77 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
                             Create Assignment
                         </button>
                     </div>
+                </div>
+            </AccessibleModal>
+
+            {/* Data Cleanup Modal */}
+            <AccessibleModal
+                isOpen={isDataModalOpen}
+                onClose={() => setIsDataModalOpen(false)}
+                title="Data Cleanup"
+                description="Permanently remove student records"
+                size="sm"
+            >
+                <div className="space-y-6">
+                    <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3">
+                        <i className="fa-solid fa-triangle-exclamation text-red-500 mt-1"></i>
+                        <p className="text-sm text-red-800 font-medium">
+                            This action will permanently delete ALL Doura submissions and reset Khatam progress for the selected student. This cannot be undone.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
+                        <select
+                            value={dataMgmtClass}
+                            onChange={async (e) => {
+                                const newClass = e.target.value;
+                                setDataMgmtClass(newClass);
+                                setDataMgmtStudent('');
+                                if (newClass) {
+                                    setOperationLoading({ type: 'loading-students', message: 'Loading students...' });
+                                    try {
+                                        const students = await dataService.getStudentsByClass(newClass);
+                                        setCleanupStudents(students.sort((a, b) => a.name.localeCompare(b.name)));
+                                    } finally {
+                                        setOperationLoading({ type: null });
+                                    }
+                                } else {
+                                    setCleanupStudents([]);
+                                }
+                            }}
+                            className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
+                        >
+                            <option value="">Choose Class...</option>
+                            {CLASSES.map(cls => (
+                                <option key={cls} value={cls}>{cls}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {dataMgmtClass && (
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Select Student</label>
+                            <select
+                                value={dataMgmtStudent}
+                                onChange={(e) => setDataMgmtStudent(e.target.value)}
+                                className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
+                            >
+                                <option value="">Choose Student...</option>
+                                {cleanupStudents.map(student => (
+                                    <option key={student.adNo} value={student.adNo}>{student.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleDeleteAllData}
+                        disabled={!dataMgmtStudent || isDeletingData}
+                        className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-red-500/20 active:scale-95 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isDeletingData ? 'Deleting...' : 'Delete All Data'}
+                    </button>
                 </div>
             </AccessibleModal>
 
