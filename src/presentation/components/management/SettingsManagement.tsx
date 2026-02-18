@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { dataService } from '../../../infrastructure/services/dataService';
+import { CLASSES } from '../../../domain/entities/constants';
+import { StudentRecord } from '../../../domain/entities/types';
 
 interface SettingsManagementProps {
     onRefresh: () => Promise<void>;
@@ -11,6 +13,11 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
     const [isDangerZoneUnlocked, setIsDangerZoneUnlocked] = useState(false);
     const [unlockPassword, setUnlockPassword] = useState('');
     const DANGER_PASSWORD = 'pleasecareful';
+
+    // Doura Cleanup State
+    const [cleanupClass, setCleanupClass] = useState('');
+    const [cleanupStudent, setCleanupStudent] = useState('');
+    const [cleanupStudentsList, setCleanupStudentsList] = useState<StudentRecord[]>([]);
 
     const verifyPassword = () => {
         const input = prompt('Please enter the security password to confirm this action:');
@@ -348,6 +355,90 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                             <i className="fa-solid fa-layer-group"></i>
                             Reset Custom Classes
                         </button>
+
+                        {/* Doura Data Cleanup Section */}
+                        <div className="col-span-1 md:col-span-2 bg-white p-4 rounded-xl border-2 border-red-100 mt-4">
+                            <h4 className="font-bold text-red-800 mb-4 flex items-center gap-2">
+                                <i className="fa-solid fa-eraser"></i>
+                                Specific Student Doura Cleanup
+                            </h4>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
+                                        <select
+                                            value={cleanupClass}
+                                            onChange={async (e) => {
+                                                const newClass = e.target.value;
+                                                setCleanupClass(newClass);
+                                                setCleanupStudent('');
+                                                if (newClass) {
+                                                    setIsOperating(true);
+                                                    try {
+                                                        const students = await dataService.getStudentsByClass(newClass);
+                                                        setCleanupStudentsList(students.sort((a, b) => a.name.localeCompare(b.name)));
+                                                    } finally {
+                                                        setIsOperating(false);
+                                                    }
+                                                } else {
+                                                    setCleanupStudentsList([]);
+                                                }
+                                            }}
+                                            className="w-full p-2 border-2 border-slate-300 rounded-lg focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
+                                            disabled={isOperating}
+                                        >
+                                            <option value="">Choose Class...</option>
+                                            {CLASSES.map(cls => (
+                                                <option key={cls} value={cls}>{cls}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Student</label>
+                                        <select
+                                            value={cleanupStudent}
+                                            onChange={(e) => setCleanupStudent(e.target.value)}
+                                            className="w-full p-2 border-2 border-slate-300 rounded-lg focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
+                                            disabled={!cleanupClass || isOperating}
+                                        >
+                                            <option value="">Choose Student...</option>
+                                            {cleanupStudentsList.map(student => (
+                                                <option key={student.adNo} value={student.adNo}>{student.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={async () => {
+                                        if (!cleanupStudent) return;
+                                        if (!verifyPassword()) return;
+                                        const confirmInput = window.prompt("Type 'DELETE' to confirm permanent deletion of all Doura data for this student:");
+                                        if (confirmInput === 'DELETE') {
+                                            try {
+                                                setIsOperating(true);
+                                                await dataService.deleteAllStudentDouraSubmissions(cleanupStudent);
+                                                setCleanupClass('');
+                                                setCleanupStudent('');
+                                                setCleanupStudentsList([]);
+                                                alert('Student Doura data deleted successfully.');
+                                            } catch (error) {
+                                                console.error('Delete failed', error);
+                                                alert('Failed to delete data');
+                                            } finally {
+                                                setIsOperating(false);
+                                            }
+                                        }
+                                    }}
+                                    disabled={!cleanupStudent || isOperating}
+                                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold uppercase tracking-widest shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isOperating ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-trash-can"></i>}
+                                    Delete Student Doura Data
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

@@ -93,12 +93,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [trackerSubjectSearch, setTrackerSubjectSearch] = useState<string>('');
     const [trackerStatusFilter, setTrackerStatusFilter] = useState<'all' | 'complete' | 'in-progress' | 'not-started'>('all');
 
-    // Data Cleanup State (for Doura)
-    const [isCleanupModalOpen, setIsCleanupModalOpen] = useState(false);
-    const [cleanupClass, setCleanupClass] = useState('');
-    const [cleanupStudent, setCleanupStudent] = useState('');
-    const [cleanupStudentsList, setCleanupStudentsList] = useState<StudentRecord[]>([]);
-
 
 
     // Load initial data
@@ -2423,135 +2417,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         </div>
                     </div>
 
-                    {/* Doura Data Management Section */}
-                    <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-200 mt-8">
-                        <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                            <i className="fa-solid fa-database text-red-600"></i>
-                            Data Management Zone
-                        </h3>
-
-                        <div className="bg-red-50 rounded-xl p-6 border border-red-200">
-                            <div className="flex items-start md:items-center justify-between flex-col md:flex-row gap-4">
-                                <div>
-                                    <h4 className="text-lg font-bold text-red-900">Doura Submission Cleanup</h4>
-                                    <p className="text-red-700/80 text-sm mt-1 max-w-2xl">
-                                        Permanently delete all Doura submissions and reset Khatam progress for a specific student.
-                                        Use this to clear test data or reset a student's record completely.
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => setIsCleanupModalOpen(true)}
-                                    className="px-6 py-3 bg-white border-2 border-red-200 text-red-700 font-bold rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm"
-                                >
-                                    <i className="fa-solid fa-trash-can mr-2"></i>
-                                    Clean Student Data
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             )}
-
-            {/* Data Cleanup Modal */}
-            {isCleanupModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <div>
-                                <h3 className="text-lg font-black text-slate-900">Data Cleanup</h3>
-                                <p className="text-slate-500 text-sm font-medium">Permanently remove records</p>
-                            </div>
-                            <button
-                                onClick={() => setIsCleanupModalOpen(false)}
-                                className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-all"
-                            >
-                                <i className="fa-solid fa-xmark"></i>
-                            </button>
-                        </div>
-
-                        <div className="p-6 space-y-6">
-                            <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3">
-                                <i className="fa-solid fa-triangle-exclamation text-red-500 mt-1"></i>
-                                <p className="text-sm text-red-800 font-medium">
-                                    Action is irreversible. All Doura submissions for the selected student will be permanently deleted.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
-                                <select
-                                    value={cleanupClass}
-                                    onChange={async (e) => {
-                                        const newClass = e.target.value;
-                                        setCleanupClass(newClass);
-                                        setCleanupStudent('');
-                                        if (newClass) {
-                                            setOperationLoading({ type: 'loading-students', message: 'Loading students...' });
-                                            try {
-                                                const students = await dataService.getStudentsByClass(newClass);
-                                                setCleanupStudentsList(students.sort((a, b) => a.name.localeCompare(b.name)));
-                                            } finally {
-                                                setOperationLoading({ type: null });
-                                            }
-                                        } else {
-                                            setCleanupStudentsList([]);
-                                        }
-                                    }}
-                                    className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
-                                >
-                                    <option value="">Choose Class...</option>
-                                    {CLASSES.map(cls => (
-                                        <option key={cls} value={cls}>{cls}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {cleanupClass && (
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-2">Select Student</label>
-                                    <select
-                                        value={cleanupStudent}
-                                        onChange={(e) => setCleanupStudent(e.target.value)}
-                                        className="w-full p-3 border-2 border-slate-300 rounded-xl focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
-                                    >
-                                        <option value="">Choose Student...</option>
-                                        {cleanupStudentsList.map(student => (
-                                            <option key={student.adNo} value={student.adNo}>{student.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            <button
-                                onClick={async () => {
-                                    if (!cleanupStudent) return;
-                                    const confirm = window.prompt("Type 'DELETE' to confirm permanent deletion of all Doura data for this student:");
-                                    if (confirm === 'DELETE') {
-                                        setOperationLoading({ type: 'clearing', message: 'Deleting all data...' });
-                                        try {
-                                            await dataService.deleteAllStudentDouraSubmissions(cleanupStudent);
-                                            setIsCleanupModalOpen(false);
-                                            setCleanupClass('');
-                                            setCleanupStudent('');
-                                            // Optional: Show success toast
-                                        } catch (error) {
-                                            console.error('Delete failed', error);
-                                            alert('Failed to delete data');
-                                        } finally {
-                                            setOperationLoading({ type: null });
-                                        }
-                                    }
-                                }}
-                                disabled={!cleanupStudent || operationLoading.type === 'clearing'}
-                                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-red-500/20 active:scale-95 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {operationLoading.type === 'clearing' ? 'Deleting...' : 'Delete All Data'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+        </div >
     );
 };
 

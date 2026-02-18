@@ -11,6 +11,7 @@ export const DouraReports: React.FC<DouraReportsProps> = ({ className }) => {
     const [allSubmissions, setAllSubmissions] = useState<DouraSubmission[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'class' | 'student'>('class');
+    const [reportType, setReportType] = useState<'all' | 'task' | 'self'>('all');
     const [selectedClass, setSelectedClass] = useState<string>('all');
 
     useEffect(() => {
@@ -37,7 +38,11 @@ export const DouraReports: React.FC<DouraReportsProps> = ({ className }) => {
             stats[cls] = { totalJuz: 0, totalPages: 0, studentCount: new Set(), submissionCount: 0 };
         });
 
-        allSubmissions.forEach(sub => {
+        allSubmissions.filter(sub => {
+            if (reportType === 'all') return true;
+            if (reportType === 'task') return sub.type === 'Task';
+            return sub.type === 'Self';
+        }).forEach(sub => {
             if (!stats[sub.className]) {
                 stats[sub.className] = { totalJuz: 0, totalPages: 0, studentCount: new Set(), submissionCount: 0 };
             }
@@ -58,12 +63,16 @@ export const DouraReports: React.FC<DouraReportsProps> = ({ className }) => {
             submissionCount: data.submissionCount,
             averageJuzPerStudent: data.studentCount.size > 0 ? (data.totalJuz / data.studentCount.size).toFixed(1) : '0'
         })).sort((a, b) => b.totalJuz - a.totalJuz); // Sort by total juz descending
-    }, [allSubmissions]);
+    }, [allSubmissions, reportType]);
 
     const studentStats = useMemo(() => {
         const stats: Record<string, { name: string; className: string; totalJuz: number; totalPages: number; lastSubmission: string }> = {};
 
-        allSubmissions.forEach(sub => {
+        allSubmissions.filter(sub => {
+            if (reportType === 'all') return true;
+            if (reportType === 'task') return sub.type === 'Task';
+            return sub.type === 'Self';
+        }).forEach(sub => {
             const key = sub.studentAdNo;
             if (!stats[key]) {
                 stats[key] = {
@@ -91,7 +100,7 @@ export const DouraReports: React.FC<DouraReportsProps> = ({ className }) => {
         }
 
         return result.sort((a, b) => b.totalJuz - a.totalJuz);
-    }, [allSubmissions, selectedClass]);
+    }, [allSubmissions, selectedClass, reportType]);
 
     if (loading) {
         return (
@@ -105,21 +114,48 @@ export const DouraReports: React.FC<DouraReportsProps> = ({ className }) => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Tabs */}
-            <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
-                <button
-                    onClick={() => setActiveTab('class')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'class' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                >
-                    Class Performance
-                </button>
-                <button
-                    onClick={() => setActiveTab('student')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'student' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                >
-                    Student Progress
-                </button>
+            {/* Tabs & Filters */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex p-1 bg-slate-100 rounded-lg w-fit">
+                    <button
+                        onClick={() => setActiveTab('class')}
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'class' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                    >
+                        Class Performance
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('student')}
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'student' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                    >
+                        Student Progress
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Report Type:</span>
+                    <div className="flex p-1 bg-slate-100 rounded-lg">
+                        <button
+                            onClick={() => setReportType('all')}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${reportType === 'all' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            All
+                        </button>
+                        <button
+                            onClick={() => setReportType('task')}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${reportType === 'task' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Assigned Tasks
+                        </button>
+                        <button
+                            onClick={() => setReportType('self')}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${reportType === 'self' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Self Reading
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* Content */}

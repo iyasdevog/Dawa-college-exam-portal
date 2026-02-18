@@ -40,6 +40,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         { id: 'entry', icon: 'fa-edit', label: 'Marks Entry', description: 'Enter and manage student marks' },
         { id: 'class-report', icon: 'fa-table', label: 'Class Report', description: 'Generate class performance reports' },
         { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards', description: 'View individual student scorecards' },
+        { id: 'doura-monitoring', icon: 'fa-book-quran', label: 'Doura Monitoring', description: 'Monitor Doura progress and reports' },
         ...(currentUser?.role === 'admin' ? [{ id: 'management', icon: 'fa-sliders', label: 'Management', description: 'System administration and settings' } as NavigationItem] : []),
     ];
 
