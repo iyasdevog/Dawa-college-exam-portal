@@ -1233,65 +1233,39 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             }
 
             {/* Performance Distribution with Mobile-Optimized Charts */}
-            {
-                isMobile ? (
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-900 mb-4">Grade Distribution</h3>
-                        <div className="space-y-2">
-                            {Object.entries(gradeStats).map(([grade, count]) => (
-                                <div key={grade} className="flex justify-between">
-                                    <span className="text-slate-600">{grade}</span>
-                                    <span className="font-bold text-slate-900">{count}</span>
-                                </div>
-                            ))}
+            <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-slate-200">
+                <h2
+                    className="text-slate-900 mb-4 font-black"
+                    style={getTypographyStyle('heading-medium')}
+                >
+                    Grade Distribution
+                </h2>
+                <div className="flex flex-wrap gap-4 justify-center">
+                    {Object.entries(gradeStats).map(([level, count]) => (
+                        <div key={level} className="text-center">
+                            <div
+                                className={`mx-auto rounded-full flex items-center justify-center text-white font-black mb-1 ${level.includes('Outstanding') ? 'bg-purple-500' :
+                                    level.includes('Excellent') ? 'bg-emerald-500' :
+                                        level.includes('Very Good') ? 'bg-blue-500' :
+                                            level.includes('Good') ? 'bg-teal-500' :
+                                                level.includes('Average') ? 'bg-amber-500' :
+                                                    'bg-red-500'
+                                    }`}
+                                style={{
+                                    width: isMobile ? '52px' : '64px',
+                                    height: isMobile ? '52px' : '64px',
+                                    fontSize: isMobile ? '1.1rem' : '1.125rem',
+                                }}
+                            >
+                                {count}
+                            </div>
+                            <p className="font-bold text-slate-600 uppercase tracking-wider text-[10px] md:text-[11px]">
+                                {level.split(' ')[0]}
+                            </p>
                         </div>
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                        <h2
-                            className="text-slate-900 mb-6 font-black"
-                            style={getTypographyStyle(isMobile ? 'heading-large' : 'heading-medium')}
-                        >
-                            Grade Distribution
-                        </h2>
-                        <div className={`grid gap-4 ${isMobile
-                            ? 'grid-cols-2 gap-y-6'
-                            : 'grid-cols-2 md:grid-cols-5'
-                            }`}>
-                            {Object.entries(gradeStats).map(([level, count]) => (
-                                <div key={level} className="text-center">
-                                    <div
-                                        className={`mx-auto rounded-full flex items-center justify-center text-white font-black mb-2 ${level.includes('Outstanding') ? 'bg-purple-500' :
-                                            level.includes('Excellent') ? 'bg-emerald-500' :
-                                                level.includes('Very Good') ? 'bg-blue-500' :
-                                                    level.includes('Good') ? 'bg-teal-500' :
-                                                        level.includes('Average') ? 'bg-amber-500' :
-                                                            'bg-red-500'
-                                            }`}
-                                        style={{
-                                            width: isMobile ? '56px' : '64px',
-                                            height: isMobile ? '56px' : '64px',
-                                            fontSize: isMobile ? '1.25rem' : '1.125rem',
-                                            ...getTouchTargetStyle('large')
-                                        }}
-                                    >
-                                        {count}
-                                    </div>
-                                    <p
-                                        className="font-bold text-slate-600 uppercase tracking-wider"
-                                        style={{
-                                            ...getTypographyStyle('caption'),
-                                            fontSize: isMobile ? '0.75rem' : '0.625rem'
-                                        }}
-                                    >
-                                        {level.split(' ')[0]}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )
-            }
+                    ))}
+                </div>
+            </div>
 
             {/* Class Overview */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">

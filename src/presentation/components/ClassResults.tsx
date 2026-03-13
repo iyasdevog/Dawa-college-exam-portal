@@ -32,18 +32,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     const { isMobile, isTablet } = useMobile();
 
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
-    const [isAuthorized, setIsAuthorized] = useState(false);
-    const [authPassword, setAuthPassword] = useState('');
 
-    const handleAuthorize = (e: React.FormEvent) => {
-        e.preventDefault();
-        const correctPassword = import.meta.env.VITE_DB_UNLOCK_PASSWORD || 'pleasecareful';
-        if (authPassword === correctPassword) {
-            setIsAuthorized(true);
-        } else {
-            alert('Incorrect password');
-        }
-    };
 
     useEffect(() => {
         loadData();
@@ -180,34 +169,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         );
     }
 
-    if (!isAuthorized) {
-        return (
-            <div className="bg-white rounded-3xl p-12 shadow-xl border-2 border-slate-100 max-w-md mx-auto mt-12 text-center">
-                <div className="w-20 h-20 bg-slate-100 text-slate-900 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
-                    <i className="fa-solid fa-lock text-4xl"></i>
-                </div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Restricted Access</h2>
-                <p className="text-slate-500 text-sm font-medium mb-8">Admin password required to view the graduation tabulation / class report.</p>
-                
-                <form onSubmit={handleAuthorize} className="space-y-4">
-                    <input
-                        type="password"
-                        placeholder="Enter Admin Password"
-                        value={authPassword}
-                        onChange={(e) => setAuthPassword(e.target.value)}
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all font-bold text-center"
-                        autoFocus
-                    />
-                    <button
-                        type="submit"
-                        className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg hover:bg-slate-800 transition-all active:scale-95"
-                    >
-                        Explore Results
-                    </button>
-                </form>
-            </div>
-        );
-    }
+
 
     return (
         <div className="space-y-8 print:space-y-4 page-class-results">
@@ -217,114 +179,82 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             <div className="overflow-x-auto pb-8 print:overflow-visible results-scroll-container">
                 <div className="inline-block min-w-full align-middle print:block">
                     {/* Header - Hidden on Print, Sticky Top & Horizontally Pinned */}
-                    <div className={`flex items-center justify-between print:hidden mb-6 sticky top-0 left-0 right-0 z-[120] bg-white p-3 rounded-b-xl border-b border-slate-200 shadow-sm ${isMobile ? 'flex-col gap-4' : ''}`}>
-                        <div className={`sticky left-0 ${isMobile ? 'text-center' : ''}`}>
-                            <h1 className={`font-black text-slate-900 tracking-tight ${isMobile ? 'text-2xl' : 'text-3xl'}`}>Class Results</h1>
-                            <p className={`text-slate-600 mt-1 ${isMobile ? 'text-sm' : 'text-xs uppercase font-bold tracking-wider'}`}>Academic Report</p>
+                    <div className={`flex items-center justify-between print:hidden mb-6 sticky top-0 left-0 right-0 z-[120] bg-white p-3 rounded-b-xl border-b border-slate-200 shadow-sm`}>
+                        <div className="flex-1 min-w-0">
+                            <h1 className={`font-black text-slate-900 tracking-tight truncate ${isMobile ? 'text-xl' : 'text-3xl'}`}>Class Results</h1>
+                            <p className={`text-slate-600 mt-0.5 ${isMobile ? 'text-xs' : 'text-xs uppercase font-bold tracking-wider'}`}>Academic Report</p>
                         </div>
-                        <div className={`flex gap-3 print:hidden sticky right-0 ${isMobile ? 'w-full flex-col' : ''}`}>
+                        <div className="flex gap-2 print:hidden ml-2 flex-shrink-0">
                             {isMobile && (
-                                <div className="flex gap-2">
+                                <>
                                     <button
                                         onClick={() => setViewMode('table')}
-                                        className={`flex-1 px-3 py-2 rounded-lg font-bold transition-all ${viewMode === 'table' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}
-                                        style={{ minHeight: '44px' }}
+                                        title="Table View"
+                                        className={`w-10 h-10 rounded-lg font-bold transition-all flex items-center justify-center ${viewMode === 'table' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}
                                     >
-                                        <i className="fa-solid fa-table mr-2"></i>
-                                        Table
+                                        <i className="fa-solid fa-table text-sm"></i>
                                     </button>
                                     <button
                                         onClick={() => setViewMode('cards')}
-                                        className={`flex-1 px-3 py-2 rounded-lg font-bold transition-all ${viewMode === 'cards' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}
-                                        style={{ minHeight: '44px' }}
+                                        title="Card View"
+                                        className={`w-10 h-10 rounded-lg font-bold transition-all flex items-center justify-center ${viewMode === 'cards' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}
                                     >
-                                        <i className="fa-solid fa-id-card mr-2"></i>
-                                        Cards
+                                        <i className="fa-solid fa-id-card text-sm"></i>
                                     </button>
-                                </div>
+                                </>
                             )}
                             <button
                                 onClick={handleExport}
-                                className={`px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2 print:hidden whitespace-nowrap ${isMobile ? 'justify-center' : ''}`}
-                                style={{ minHeight: '44px' }}
+                                title="Export CSV"
+                                className={`${isMobile ? 'w-10 h-10 rounded-lg' : 'px-4 py-2 rounded-xl gap-2'} bg-blue-600 text-white font-bold hover:bg-blue-700 transition-all flex items-center justify-center print:hidden whitespace-nowrap`}
                                 aria-label="Export as CSV"
                             >
-                                <i className="fa-solid fa-download"></i>
-                                Export
+                                <i className="fa-solid fa-download text-sm"></i>
+                                {!isMobile && <span>Export</span>}
                             </button>
                             <button
                                 onClick={handlePrint}
-                                className={`px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 print:hidden whitespace-nowrap ${isMobile ? 'justify-center' : ''}`}
-                                style={{ minHeight: '44px' }}
+                                title="Print Report"
+                                className={`${isMobile ? 'w-10 h-10 rounded-lg' : 'px-4 py-2 rounded-xl gap-2'} bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-all flex items-center justify-center print:hidden whitespace-nowrap`}
                                 aria-label="Print Report"
                             >
-                                <i className="fa-solid fa-print"></i>
-                                Print
+                                <i className="fa-solid fa-print text-sm"></i>
+                                {!isMobile && <span>Print</span>}
                             </button>
                         </div>
                     </div>
 
                     {/* Class Selection & Stats Bar - Sticky Horizontally only */}
                     {!hideSelector && (
-                        <div className="sticky left-0 z-30 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 print:hidden mb-8 w-full transition-all duration-300">
-                            <div className={`flex items-center gap-6 ${isMobile ? 'flex-col' : ''}`}>
-                                <div className={isMobile ? 'w-full' : ''}>
-                                    <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
-                                    <select
-                                        value={selectedClass}
-                                        onChange={(e) => setSelectedClass(e.target.value)}
-                                        className={`p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium print:hidden ${isMobile ? 'w-full' : ''}`}
-                                        style={{ minHeight: '44px' }}
-                                        aria-label="Select class to view results"
-                                        aria-describedby="class-results-help"
-                                    >
-                                        {allowedClasses.map(cls => (
-                                            <option key={cls} value={cls}>{cls}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className={`flex-1 grid gap-4 text-center ${isMobile ? 'grid-cols-2 w-full' : 'grid-cols-2 md:grid-cols-5'}`}>
-                                    <div>
-                                        <p className={`font-black text-slate-900 ${isMobile ? 'text-xl' : 'text-2xl'}`}>{classStats.totalStudents}</p>
-                                        <p className="text-xs font-bold text-slate-600 uppercase">Students</p>
+                        <div className="sticky left-0 z-30 bg-white rounded-2xl p-3 md:p-6 shadow-sm border border-slate-200 print:hidden mb-4 md:mb-8 w-full transition-all duration-300">
+                            <div className="flex items-center gap-3 mb-3">
+                                <label className="text-sm font-bold text-slate-700 whitespace-nowrap">Select Class</label>
+                                <select
+                                    value={selectedClass}
+                                    onChange={(e) => setSelectedClass(e.target.value)}
+                                    className="flex-1 p-2 md:p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium print:hidden text-sm"
+                                    style={{ minHeight: '40px' }}
+                                    aria-label="Select class to view results"
+                                >
+                                    {allowedClasses.map(cls => (
+                                        <option key={cls} value={cls}>{cls}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {/* All 5 stats always visible in a single scrollable row */}
+                            <div className="flex gap-4 overflow-x-auto pb-1 no-scrollbar">
+                                {[
+                                    { value: classStats.totalStudents, label: 'Students', color: 'text-slate-900' },
+                                    { value: `${classStats.averagePercentage}%`, label: 'Class Avg', color: 'text-emerald-600' },
+                                    { value: `${passPercentage}%`, label: 'Pass Rate', color: 'text-blue-600' },
+                                    { value: classStats.highestMarks, label: 'Highest', color: 'text-amber-600' },
+                                    { value: classStats.lowestMarks, label: 'Lowest', color: 'text-red-600' },
+                                ].map(stat => (
+                                    <div key={stat.label} className="flex-shrink-0 text-center bg-slate-50 rounded-xl px-4 py-2 min-w-[72px]">
+                                        <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{stat.label}</p>
                                     </div>
-                                    <div>
-                                        <p className={`font-black text-emerald-600 ${isMobile ? 'text-xl' : 'text-2xl'}`}>{classStats.averagePercentage}%</p>
-                                        <p className="text-xs font-bold text-slate-600 uppercase">Class Avg</p>
-                                    </div>
-                                    {!isMobile && (
-                                        <>
-                                            <div>
-                                                <p className="text-2xl font-black text-blue-600">{passPercentage}%</p>
-                                                <p className="text-xs font-bold text-slate-600 uppercase">Pass Rate</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-2xl font-black text-amber-600">{classStats.highestMarks}</p>
-                                                <p className="text-xs font-bold text-slate-600 uppercase">Highest</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-2xl font-black text-red-600">{classStats.lowestMarks}</p>
-                                                <p className="text-xs font-bold text-slate-600 uppercase">Lowest</p>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                {isMobile && (
-                                    <div className="grid grid-cols-3 gap-4 text-center w-full mt-4">
-                                        <div>
-                                            <p className="text-xl font-black text-blue-600">{passPercentage}%</p>
-                                            <p className="text-xs font-bold text-slate-600 uppercase">Pass Rate</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xl font-black text-amber-600">{classStats.highestMarks}</p>
-                                            <p className="text-xs font-bold text-slate-600 uppercase">Highest</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xl font-black text-red-600">{classStats.lowestMarks}</p>
-                                            <p className="text-xs font-bold text-slate-600 uppercase">Lowest</p>
-                                        </div>
-                                    </div>
-                                )}
+                                ))}
                             </div>
                         </div>
                     )}
