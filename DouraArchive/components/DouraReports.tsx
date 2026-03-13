@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { DouraSubmission } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface DouraReportsProps {
     className?: string;
@@ -13,14 +14,15 @@ export const DouraReports: React.FC<DouraReportsProps> = ({ className }) => {
     const [activeTab, setActiveTab] = useState<'class' | 'student'>('class');
     const [reportType, setReportType] = useState<'all' | 'task' | 'self'>('all');
     const [selectedClass, setSelectedClass] = useState<string>('all');
+    const { activeTerm } = useTerm();
 
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // Fetch all approved submissions for reports
-                const data = await dataService.getAllDouraSubmissions(undefined, 'Approved');
-                setAllSubmissions(data);
+                // Fetch all approved submissions for reports in the active term
+                const data = await dataService.getAllDouraSubmissions(undefined, 'Approved', activeTerm);
+                setAllSubmissions(data || []);
             } catch (error) {
                 console.error('Error loading report data:', error);
             } finally {
@@ -28,7 +30,7 @@ export const DouraReports: React.FC<DouraReportsProps> = ({ className }) => {
             }
         };
         loadData();
-    }, []);
+    }, [activeTerm]);
 
     // Aggregate Data
     const classStats = useMemo(() => {

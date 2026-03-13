@@ -20,13 +20,13 @@ export function useOfflineCapability() {
     const saveDraft = useCallback(async (
         studentId: string,
         subjectId: string,
-        ta: string,
-        ce: string
+        int: string,
+        ext: string
     ) => {
         // Simple localStorage backup
         try {
             const key = `draft_${studentId}_${subjectId}`;
-            localStorage.setItem(key, JSON.stringify({ ta, ce, timestamp: Date.now() }));
+            localStorage.setItem(key, JSON.stringify({ int, ext, timestamp: Date.now() }));
             return key;
         } catch (e) {
             console.error("Failed to save draft locally", e);

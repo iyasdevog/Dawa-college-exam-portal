@@ -2,12 +2,41 @@ import { Student, PerformanceLevel, SubjectMarks } from '../entities/Student';
 import { Subject } from '../entities/Subject';
 
 export class GradingService {
-    calculatePerformanceLevel(average: number): PerformanceLevel {
-        if (average >= 80) return 'Excellent';
-        if (average >= 70) return 'Good';
-        if (average >= 60) return 'Average';
-        if (average >= 40) return 'Needs Improvement';
-        return 'Failed';
+    calculatePerformanceLevel(marks: Record<string, SubjectMarks>, subjects: Subject[]): PerformanceLevel {
+        const marksEntries = Object.entries(marks);
+        if (marksEntries.length === 0) return 'F (Failed)';
+
+        let minPercentage = 100;
+        let hasMarks = false;
+        let hasFailedSubject = false;
+
+        for (const [subjectId, mark] of marksEntries) {
+            const subject = subjects.find(s => s.id === subjectId);
+            if (!subject) continue;
+
+            const totalMax = subject.getMaxTotal();
+            if (totalMax === 0) continue;
+
+            hasMarks = true;
+            if (mark.status === 'Failed') {
+                hasFailedSubject = true;
+            }
+
+            const percentage = (mark.total / totalMax) * 100;
+            if (percentage < minPercentage) {
+                minPercentage = percentage;
+            }
+        }
+
+        if (hasFailedSubject || minPercentage < 40) return 'F (Failed)';
+        if (!hasMarks) return 'C (Average)';
+
+        if (minPercentage >= 95) return 'O (Outstanding)';
+        if (minPercentage >= 85) return 'A+ (Excellent)';
+        if (minPercentage >= 75) return 'A (Very Good)';
+        if (minPercentage >= 65) return 'B+ (Good)';
+        if (minPercentage >= 55) return 'B (Good)';
+        return 'C (Average)';
     }
 
     calculateSubjectMarks(ta: number, ce: number, subject: Subject): SubjectMarks {
@@ -66,8 +95,8 @@ export class GradingService {
 
     getPassingGrade(subject: Subject): { minTA: number; minCE: number; minTotal: number } {
         return {
-            minTA: subject.getMinimumTARequired(),
-            minCE: subject.getMinimumCERequired(),
+            minTA: subject.getMinimumINTRequired(),
+            minCE: subject.getMinimumEXTRequired(),
             minTotal: subject.passingTotal
         };
     }
@@ -120,11 +149,13 @@ export class GradingService {
                 highestScore: 0,
                 lowestScore: 0,
                 performanceLevels: {
-                    'Excellent': 0,
-                    'Good': 0,
-                    'Average': 0,
-                    'Needs Improvement': 0,
-                    'Failed': 0
+                    'O (Outstanding)': 0,
+                    'A+ (Excellent)': 0,
+                    'A (Very Good)': 0,
+                    'B+ (Good)': 0,
+                    'B (Good)': 0,
+                    'C (Average)': 0,
+                    'F (Failed)': 0
                 }
             };
         }
@@ -135,11 +166,13 @@ export class GradingService {
         const averageScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
 
         const performanceLevels: Record<PerformanceLevel, number> = {
-            'Excellent': 0,
-            'Good': 0,
-            'Average': 0,
-            'Needs Improvement': 0,
-            'Failed': 0
+            'O (Outstanding)': 0,
+            'A+ (Excellent)': 0,
+            'A (Very Good)': 0,
+            'B+ (Good)': 0,
+            'B (Good)': 0,
+            'C (Average)': 0,
+            'F (Failed)': 0
         };
 
         students.forEach(student => {

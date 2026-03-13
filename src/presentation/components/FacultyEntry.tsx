@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, ClassReleaseSettings, SupplementaryExam } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
 import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
@@ -14,6 +14,7 @@ import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { useOfflineCapability } from '../hooks/useOfflineCapability';
 import OfflineStatusIndicator from './OfflineStatusIndicator';
 import { normalizeName, shortenSubjectName } from '../../infrastructure/services/formatUtils';
+import { useTerm } from '../viewmodels/TermContext';
 
 
 
@@ -28,11 +29,16 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         return CLASSES.filter(cls => currentUser.assignedClasses.includes(cls));
     }, [currentUser]);
 
+    const { activeTerm } = useTerm();
+
     const [activeTab, setActiveTab] = useState<'marks-entry' | 'upload-tracker' | 'release-settings'>('marks-entry');
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
     const [selectedClass, setSelectedClass] = useState(allowedClasses[0] || CLASSES[0]);
     const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
+    const [entryMode, setEntryMode] = useState<'regular' | 'supplementary'>('regular');
     const [selectedSubject, setSelectedSubject] = useState('');
+    const [suppExams, setSuppExams] = useState<(SupplementaryExam & { studentName?: string; studentAdNo?: string; subjectName?: string })[]>([]);
+    const [suppMarksData, setSuppMarksData] = useState<Record<string, { int: string; ext: string }>>({});
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [allStudents, setAllStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
@@ -41,7 +47,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const { getTouchProps } = useTouchInteraction();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [marksData, setMarksData] = useState<Record<string, { ta: string; ce: string }>>({});
+    const [marksData, setMarksData] = useState<Record<string, { int: string; ext: string }>>({});
     const [showSupplementaryOnly, setShowSupplementaryOnly] = useState(false);
     const [supplementaryStudents, setSupplementaryStudents] = useState<{ student: any, supplementaryExam: any }[]>([]);
     const [currentStudentIndex, setCurrentStudentIndex] = useState(0);
@@ -134,14 +140,14 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     }, [selectedClass, subjects, subjectType]);
 
-    // Load students when class or subject changes
+    // Load students when class, subject, or active term changes
     useEffect(() => {
         if (selectedClass) {
             loadStudentsByClass();
         }
-    }, [selectedClass, selectedSubject]);
+    }, [selectedClass, selectedSubject, activeTerm]);
 
-    // Reset current student index and clear marks data only when class or subject changes, not upon every student data refresh
+    // Reset current student index and clear marks data only when class, subject, or term changes
     useEffect(() => {
         setCurrentStudentIndex(0);
         // Set switching flag to prevent draft operations during transition
@@ -158,7 +164,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         return () => {
             clearTimeout(timer);
         };
-    }, [selectedClass, selectedSubject]);
+    }, [selectedClass, selectedSubject, activeTerm]);
 
     // Load drafts when students or subject changes
     useEffect(() => {
@@ -237,11 +243,11 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
             for (const student of students) {
                 const draft = getDraft(student.id, selectedSubject);
-                if (draft && (!marksData[student.id]?.ta && !marksData[student.id]?.ce)) {
+                if (draft && (!marksData[student.id]?.int && !marksData[student.id]?.ext)) {
                     // Only load draft if no current data exists
                     updatedMarksData[student.id] = {
-                        ta: draft.ta || '',
-                        ce: draft.ce || ''
+                        int: draft.int || '',
+                        ext: draft.ext || ''
                     };
                     hasUpdates = true;
                 }
@@ -274,12 +280,12 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         try {
             for (const student of students) {
                 const marks = marksData[student.id];
-                if (marks && (marks.ta || marks.ce)) {
+                if (marks && (marks.int || marks.ext)) {
                     await saveDraft(
                         student.id,
                         selectedSubject,
-                        marks.ta || '',
-                        marks.ce || ''
+                        marks.int || '',
+                        marks.ext || ''
                     );
                 }
             }
@@ -379,7 +385,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
     // Memoized completion statistics calculation
     const completionStats = useMemo(() => {
-        const completedCount = Object.values(marksData).filter((m: any) => m.ta && m.ce).length;
+        const completedCount = Object.values(marksData).filter((m: any) => m.int && m.ext).length;
         const totalCount = students.length;
         const completionPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
@@ -397,60 +403,60 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         if (!subject) return null;
 
         return {
-            isTAExceedingMax: (studentId: string): boolean => {
+            isINTExceedingMax: (studentId: string): boolean => {
                 const marks = marksData[studentId];
-                if (!marks || !marks.ta) return false;
-                const ta = parseInt(marks.ta) || 0;
-                return ta > subject.maxTA;
+                if (!marks || !marks.int) return false;
+                const int = parseInt(marks.int) || 0;
+                return int > subject.maxINT;
             },
-            isCEExceedingMax: (studentId: string): boolean => {
+            isEXTExceedingMax: (studentId: string): boolean => {
                 const marks = marksData[studentId];
-                if (!marks || !marks.ce) return false;
-                const ce = parseInt(marks.ce) || 0;
-                return ce > subject.maxCE;
+                if (!marks || !marks.ext) return false;
+                const ext = parseInt(marks.ext) || 0;
+                return ext > subject.maxEXT;
             },
-            isTAFailing: (studentId: string): boolean => {
+            isINTFailing: (studentId: string): boolean => {
                 const marks = marksData[studentId];
-                if (!marks || !marks.ta) return false;
-                if (marks.ta === 'A') return true;
-                const ta = parseInt(marks.ta) || 0;
-                const minTA = Math.ceil(subject.maxTA * 0.4);
-                return ta < minTA && ta > 0 && ta <= subject.maxTA;
+                if (!marks || !marks.int) return false;
+                if (marks.int === 'A') return true;
+                const int = parseInt(marks.int) || 0;
+                const minINT = Math.ceil(subject.maxINT * 0.4);
+                return int < minINT && int > 0 && int <= subject.maxINT;
             },
-            isCEFailing: (studentId: string): boolean => {
+            isEXTFailing: (studentId: string): boolean => {
                 const marks = marksData[studentId];
-                if (!marks || !marks.ce) return false;
-                if (marks.ce === 'A') return true;
-                const ce = parseInt(marks.ce) || 0;
-                const minCE = Math.ceil(subject.maxCE * 0.5);
-                return ce < minCE && ce > 0 && ce <= subject.maxCE;
+                if (!marks || !marks.ext) return false;
+                if (marks.ext === 'A') return true;
+                const ext = parseInt(marks.ext) || 0;
+                const minEXT = Math.ceil(subject.maxEXT * 0.5);
+                return ext < minEXT && ext > 0 && ext <= subject.maxEXT;
             },
             calculateTotal: (studentId: string): number => {
                 const marks = marksData[studentId];
                 if (!marks) return 0;
-                const ta = marks.ta === 'A' ? 0 : (parseInt(marks.ta) || 0);
-                const ce = marks.ce === 'A' ? 0 : (parseInt(marks.ce) || 0);
-                return ta + ce;
+                const int = marks.int === 'A' ? 0 : (parseInt(marks.int) || 0);
+                const ext = marks.ext === 'A' ? 0 : (parseInt(marks.ext) || 0);
+                return int + ext;
             },
             getStatus: (studentId: string): 'Passed' | 'Failed' | 'Pending' => {
                 const marks = marksData[studentId];
-                const isCENotApplicable = subject.maxTA === 100 || subject.maxCE === 0;
+                const isEXTNotApplicable = subject.maxINT === 100 || subject.maxEXT === 0;
 
-                if (!marks || !marks.ta || (!isCENotApplicable && !marks.ce)) return 'Pending';
-
-
-                if (marks.ta === 'A' || (!isCENotApplicable && marks.ce === 'A')) return 'Failed';
+                if (!marks || !marks.int || (!isEXTNotApplicable && !marks.ext)) return 'Pending';
 
 
-                const ta = parseInt(marks.ta) || 0;
-                const ce = parseInt(marks.ce) || 0;
-                const minTA = Math.ceil(subject.maxTA * 0.4);
-                const minCE = Math.ceil(subject.maxCE * 0.5);
+                if (marks.int === 'A' || (!isEXTNotApplicable && marks.ext === 'A')) return 'Failed';
 
-                const passedTA = ta >= minTA;
-                const passedCE = isCENotApplicable || ce >= minCE;
 
-                return (passedTA && passedCE) ? 'Passed' : 'Failed';
+                const int = parseInt(marks.int) || 0;
+                const ext = parseInt(marks.ext) || 0;
+                const minINT = Math.ceil(subject.maxINT * 0.4);
+                const minEXT = Math.ceil(subject.maxEXT * 0.5);
+
+                const passedINT = int >= minINT;
+                const passedEXT = isEXTNotApplicable || ext >= minEXT;
+
+                return (passedINT && passedEXT) ? 'Passed' : 'Failed';
             }
         };
     }, [marksData, subjects, selectedSubject]);
@@ -460,7 +466,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         if (!validationHelpers) return { hasInvalid: false, count: 0 };
 
         const invalidStudents = students.filter(student =>
-            validationHelpers.isTAExceedingMax(student.id) || validationHelpers.isCEExceedingMax(student.id)
+            validationHelpers.isINTExceedingMax(student.id) || validationHelpers.isEXTExceedingMax(student.id)
         );
 
         return {
@@ -478,7 +484,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     };
 
-    const handleUpdateReleaseSetting = async (className: string, field: 'isReleased' | 'releaseDate', value: any) => {
+    const handleUpdateReleaseSetting = async (className: string, field: keyof ClassReleaseSettings[string], value: any) => {
         try {
             const currentSetting = releaseSettings[className] || { isReleased: false };
             const updatedSettings = {
@@ -562,6 +568,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 console.log('Selected Class:', selectedClass);
                 console.log('Subject Type:', subjectType);
                 console.log('Show Supplementary Only:', showSupplementaryOnly);
+                console.log('Active Term:', activeTerm);
 
                 if (showSupplementaryOnly) {
                     // Load supplementary exam students for this subject
@@ -576,7 +583,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                     // Get enrolled students for the selected subject
                     console.log('Getting enrolled students for subject...');
 
-                    // The dataService.getEnrolledStudentsForSubject already handles differentiation 
+                    // The dataService.getEnrolledStudentsForSubject already handles differentiation
                     // between general and elective subjects internally.
                     // For General subjects: it fetches all students in target classes
                     // For Elective subjects: it fetches only enrolled students
@@ -604,25 +611,27 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
             setStudents(studentsToShow);
 
-            // Initialize marks data with existing marks
-            const initialMarks: Record<string, { ta: string; ce: string }> = {};
+            // Initialize marks data with existing marks from the ACTIVE TERM's academicHistory
+            const initialMarks: Record<string, { int: string; ext: string }> = {};
             studentsToShow.forEach(student => {
-                const existingMarks = student.marks[selectedSubject];
+                // Prefer marks from the active term's history; fall back to root marks for legacy data
+                const termHistory = student.academicHistory?.[activeTerm];
+                const existingMarks = termHistory?.marks[selectedSubject] ?? student.marks?.[selectedSubject];
 
-                // Special conversion for Max TA 35 (scale from 70 back to 35 for display)
-                let displayTA = existingMarks?.ta?.toString() || '';
+                // Special conversion for Max INT 35 (scale from 70 back to 35 for display)
+                let displayINT = existingMarks?.int?.toString() || '';
                 const subject = subjects.find(s => s.id === selectedSubject);
-                if (subject?.maxTA === 35 && existingMarks?.ta && existingMarks.ta !== 'A') {
+                if (subject?.maxINT === 35 && existingMarks?.int && existingMarks.int !== 'A') {
                     // Start conversion logic
-                    const taVal = typeof existingMarks.ta === 'string' ? parseInt(existingMarks.ta) : existingMarks.ta;
+                    const intVal = typeof existingMarks.int === 'string' ? parseInt(existingMarks.int) : existingMarks.int;
                     // Only scale if the stored value is likely doubled (e.g., > 35 or just standard assumption)
-                    // Safest is to always divide by 2 if maxTA is 35, assuming DB marks are out of 70
-                    displayTA = (taVal / 2).toString();
+                    // Safest is to always divide by 2 if maxINT is 35, assuming DB marks are out of 70
+                    displayINT = (intVal / 2).toString();
                 }
 
                 initialMarks[student.id] = {
-                    ta: displayTA,
-                    ce: existingMarks?.ce?.toString() || ''
+                    int: displayINT,
+                    ext: existingMarks?.ext?.toString() || ''
                 };
             });
 
@@ -635,7 +644,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             setMarksData(initialMarks);
             // Mark the subject as correctly loaded to allow auto-saving/draft loading
             loadedSubjectIdRef.current = selectedSubject;
-            console.log('loadStudentsByClass: Successfully loaded marks for subject:', selectedSubject);
+            console.log('loadStudentsByClass: Successfully loaded marks for subject:', selectedSubject, 'term:', activeTerm);
 
         } catch (error) {
             console.error('Error loading students:', error);
@@ -644,32 +653,126 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     };
 
+    const loadSupplementaryExams = async () => {
+        try {
+            setOperationLoading({ type: 'loading-students', message: 'Fetching supplementary exams...' });
+            const exams = await dataService.getAllSupplementaryExams();
+            // Filter only pending exams
+            const pendingExams = exams.filter(e => e.status === 'Pending');
+            setSuppExams(pendingExams);
+            
+            // initialize SuppMarksData
+            const initial: Record<string, { int: string; ext: string }> = {};
+            pendingExams.forEach(e => {
+                 initial[e.id] = { int: '', ext: '' };
+            });
+            setSuppMarksData(initial);
+        } catch(error) {
+            console.error('Error loading supp exams:', error);
+        } finally {
+            setOperationLoading({ type: null });
+        }
+    };
+
+    const getPreviousMarks = (exam: SupplementaryExam & { studentAdNo?: string, studentName?: string, subjectName?: string }) => {
+        const student = allStudents.find(s => s.id === exam.studentId);
+        if (!student || !student.academicHistory) return { int: 'N/A', ext: 'N/A' };
+        
+        // Find the marks from the student's original term
+        const termKey = `${exam.originalYear}-${exam.originalYear + 1}-${exam.originalSemester}`;
+        const marks = student.academicHistory[termKey]?.marks?.[exam.subjectId];
+        
+        return marks ? { int: marks.int || 'N/A', ext: marks.ext || 'N/A' } : { int: 'N/A', ext: 'N/A' };
+    };
+
+    const handleSaveSuppMarks = async () => {
+        try {
+            setOperationLoading({ type: 'saving', message: 'Saving supplementary marks...' });
+            
+            const savePromises = suppExams.map(async (exam) => {
+                const marks = suppMarksData[exam.id];
+                if (!marks) return;
+                
+                // Only save if there's actually a mark entered
+                if (!marks.int && !marks.ext) return;
+
+                const parseMark = (markStr: string): number | 'A' => {
+                    const trimmed = markStr.trim().toUpperCase();
+                    if (trimmed === 'A') return 'A';
+                    const num = parseInt(trimmed, 10);
+                    return isNaN(num) ? 0 : num;
+                };
+
+                const intVal = marks.int ? parseMark(marks.int) : 0;
+                const extVal = marks.ext ? parseMark(marks.ext) : 0;
+                const totalNum = (intVal === 'A' ? 0 : intVal) + (extVal === 'A' ? 0 : extVal);
+                
+                // Calculate Status
+                let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+                const subject = subjects.find(s => s.id === exam.subjectId);
+                if (subject) {
+                   const minINT = Math.ceil(subject.maxINT * 0.4);
+                   const minEXT = Math.ceil(subject.maxEXT * 0.5);
+                   const passedINT = intVal !== 'A' && typeof intVal === 'number' && intVal >= minINT;
+                   const passedEXT = extVal !== 'A' && typeof extVal === 'number' && extVal >= minEXT;
+                   status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
+                }
+
+                await dataService.updateSupplementaryExamMarks(exam.id, {
+                    int: intVal,
+                    ext: extVal,
+                    total: totalNum,
+                    status,
+                    isSupplementary: true
+                });
+            });
+
+            await Promise.all(savePromises);
+
+            alert('Supplementary marks saved successfully!');
+            // Reload the exams to refresh the pending list
+            await loadSupplementaryExams();
+        } catch (error) {
+            console.error('Error saving supplementary marks:', error);
+            alert('Failed to save supplementary marks. Please try again.');
+        } finally {
+            setOperationLoading({ type: null });
+        }
+    };
+
+    useEffect(() => {
+        if (entryMode === 'supplementary') {
+            loadSupplementaryExams();
+        }
+    }, [entryMode]);
+
     // Memoized keyboard navigation handler
-    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, studentId: string, field: 'ta' | 'ce') => {
+
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, studentId: string, field: 'int' | 'ext') => {
         if (e.key === 'Enter') {
             e.preventDefault();
 
             // Find current student index
             const currentStudentIndex = students.findIndex(s => s.id === studentId);
 
-            if (field === 'ta') {
-                // Move to CE field of same student
-                const ceInput = document.querySelector(`input[data-student="${studentId}"][data-field="ce"]`) as HTMLInputElement;
-                if (ceInput) {
-                    ceInput.focus();
-                    ceInput.select();
+            if (field === 'int') {
+                // Move to EXT field of same student
+                const extInput = document.querySelector(`input[data-student="${studentId}"][data-field="ext"]`) as HTMLInputElement;
+                if (extInput) {
+                    extInput.focus();
+                    extInput.select();
                 }
-            } else if (field === 'ce') {
-                // Move to TA field of next student, or save if last student
+            } else if (field === 'ext') {
+                // Move to INT field of next student, or save if last student
                 if (currentStudentIndex < students.length - 1) {
                     const nextStudentId = students[currentStudentIndex + 1].id;
-                    const nextTAInput = document.querySelector(`input[data-student="${nextStudentId}"][data-field="ta"]`) as HTMLInputElement;
-                    if (nextTAInput) {
+                    const nextINTInput = document.querySelector(`input[data-student="${nextStudentId}"][data-field="int"]`) as HTMLInputElement;
+                    if (nextINTInput) {
                         // Update navigation state and scroll to next student
                         setCurrentStudentIndex(currentStudentIndex + 1);
                         setTimeout(() => {
-                            nextTAInput.focus();
-                            nextTAInput.select();
+                            nextINTInput.focus();
+                            nextINTInput.select();
                         }, 100);
                     }
                 } else {
@@ -681,7 +784,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     }, [students]);
 
     // Debounced marks change handler for better performance
-    const handleMarksChange = useCallback((studentId: string, field: 'ta' | 'ce', value: string) => {
+    const handleMarksChange = useCallback((studentId: string, field: 'int' | 'ext', value: string) => {
         // Allow numeric input OR 'A'/'a'
         const upperValue = value.toUpperCase();
         if (value && !/^\d*$/.test(value) && upperValue !== 'A') {
@@ -692,7 +795,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         const subject = subjects.find(s => s.id === selectedSubject);
         if (subject && value && upperValue !== 'A') {
             const numValue = parseInt(value);
-            const maxValue = field === 'ta' ? subject.maxTA : subject.maxCE;
+            const maxValue = field === 'int' ? subject.maxINT : subject.maxEXT;
 
             // Don't allow values greater than max
             if (numValue > maxValue) {
@@ -728,7 +831,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 // Clear UI state for this student
                 setMarksData(prev => ({
                     ...prev,
-                    [studentId]: { ta: '', ce: '' }
+                    [studentId]: { int: '', ext: '' }
                 }));
 
                 // Delete local draft to prevent it from being re-loaded
@@ -766,9 +869,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 await dataService.clearSubjectMarks(selectedSubject, studentIds);
 
                 // Clear UI state
-                const clearedMarks: Record<string, { ta: string; ce: string }> = {};
+                const clearedMarks: Record<string, { int: string; ext: string }> = {};
                 students.forEach(student => {
-                    clearedMarks[student.id] = { ta: '', ce: '' };
+                    clearedMarks[student.id] = { int: '', ext: '' };
                     // Delete local draft for each student
                     deleteDraft(student.id, selectedSubject);
                 });
@@ -787,33 +890,33 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     }, [selectedSubject, subjects, selectedClass, students, loadStudentsByClass]);
 
-    const handleClearTAMarks = useCallback(async () => {
+    const handleClearINTMarks = useCallback(async () => {
         if (!selectedSubject) {
             alert('Please select a subject first');
             return;
         }
 
         const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
-        if (confirm(`Are you sure you want to clear all TA marks for "${selectedSubjectData?.name}" in ${selectedClass} class? This will permanently delete the marks from the database and cannot be undone.`)) {
+        if (confirm(`Are you sure you want to clear all INT marks for "${selectedSubjectData?.name}" in ${selectedClass} class? This will permanently delete the marks from the database and cannot be undone.`)) {
             try {
-                setOperationLoading({ type: 'clearing', message: `Clearing all TA marks for ${selectedSubjectData?.name} in ${selectedClass} class...` });
+                setOperationLoading({ type: 'clearing', message: `Clearing all INT marks for ${selectedSubjectData?.name} in ${selectedClass} class...` });
 
                 // Get student IDs
                 const studentIds = students.map(student => student.id);
 
                 // Clear marks from database
-                await dataService.clearSubjectTAMarks(selectedSubject, studentIds);
+                await dataService.clearSubjectINTMarks(selectedSubject, studentIds);
 
                 // Update UI state
                 setMarksData(prev => {
                     const newMarks = { ...prev };
                     students.forEach(student => {
                         if (newMarks[student.id]) {
-                            newMarks[student.id] = { ...newMarks[student.id], ta: '' };
-                            // Update local draft: keep CE, clear TA
+                            newMarks[student.id] = { ...newMarks[student.id], int: '' };
+                            // Update local draft: keep EXT, clear INT
                             const currentDraft = getDraft(student.id, selectedSubject);
                             if (currentDraft) {
-                                saveDraft(student.id, selectedSubject, '', currentDraft.ce || '');
+                                saveDraft(student.id, selectedSubject, '', currentDraft.ext || '');
                             }
                         }
                     });
@@ -823,43 +926,43 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 // Reload students to get updated data
                 await loadStudentsByClass();
 
-                alert('All TA marks cleared successfully!');
+                alert('All INT marks cleared successfully!');
             } catch (error) {
-                console.error('Error clearing TA marks:', error);
-                alert(`Error clearing TA marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                console.error('Error clearing INT marks:', error);
+                alert(`Error clearing INT marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
             } finally {
                 setOperationLoading({ type: null });
             }
         }
     }, [selectedSubject, subjects, selectedClass, students, loadStudentsByClass]);
 
-    const handleClearCEMarks = useCallback(async () => {
+    const handleClearEXTMarks = useCallback(async () => {
         if (!selectedSubject) {
             alert('Please select a subject first');
             return;
         }
 
         const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
-        if (confirm(`Are you sure you want to clear all CE marks for "${selectedSubjectData?.name}" in ${selectedClass} class? This will permanently delete the marks from the database and cannot be undone.`)) {
+        if (confirm(`Are you sure you want to clear all EXT marks for "${selectedSubjectData?.name}" in ${selectedClass} class? This will permanently delete the marks from the database and cannot be undone.`)) {
             try {
-                setOperationLoading({ type: 'clearing', message: `Clearing all CE marks for ${selectedSubjectData?.name} in ${selectedClass} class...` });
+                setOperationLoading({ type: 'clearing', message: `Clearing all EXT marks for ${selectedSubjectData?.name} in ${selectedClass} class...` });
 
                 // Get student IDs
                 const studentIds = students.map(student => student.id);
 
                 // Clear marks from database
-                await dataService.clearSubjectCEMarks(selectedSubject, studentIds);
+                await dataService.clearSubjectEXTMarks(selectedSubject, studentIds);
 
                 // Update UI state
                 setMarksData(prev => {
                     const newMarks = { ...prev };
                     students.forEach(student => {
                         if (newMarks[student.id]) {
-                            newMarks[student.id] = { ...newMarks[student.id], ce: '' };
-                            // Update local draft: keep TA, clear CE
+                            newMarks[student.id] = { ...newMarks[student.id], ext: '' };
+                            // Update local draft: keep INT, clear EXT
                             const currentDraft = getDraft(student.id, selectedSubject);
                             if (currentDraft) {
-                                saveDraft(student.id, selectedSubject, currentDraft.ta || '', '');
+                                saveDraft(student.id, selectedSubject, currentDraft.int || '', '');
                             }
                         }
                     });
@@ -869,10 +972,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 // Reload students to get updated data
                 await loadStudentsByClass();
 
-                alert('All CE marks cleared successfully!');
+                alert('All EXT marks cleared successfully!');
             } catch (error) {
-                console.error('Error clearing CE marks:', error);
-                alert(`Error clearing CE marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                console.error('Error clearing EXT marks:', error);
+                alert(`Error clearing EXT marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
             } finally {
                 setOperationLoading({ type: null });
             }
@@ -902,33 +1005,33 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             // Save marks for each student
             const savePromises = students.map(async (student) => {
                 const marks = marksData[student.id];
-                if (marks && marks.ta && marks.ce) {
-                    const taValue: number | 'A' = marks.ta === 'A' ? 'A' : parseInt(marks.ta);
-                    const ceValue: number | 'A' = marks.ce === 'A' ? 'A' : parseInt(marks.ce);
+                if (marks && marks.int && marks.ext) {
+                    const intValue: number | 'A' = marks.int === 'A' ? 'A' : parseInt(marks.int);
+                    const extValue: number | 'A' = marks.ext === 'A' ? 'A' : parseInt(marks.ext);
 
-                    const taNum = marks.ta === 'A' ? 0 : parseInt(marks.ta);
-                    const ceNum = marks.ce === 'A' ? 0 : parseInt(marks.ce);
+                    const intNum = marks.int === 'A' ? 0 : parseInt(marks.int);
+                    const extNum = marks.ext === 'A' ? 0 : parseInt(marks.ext);
 
                     // Validate marks against subject limits (double-check)
                     const sub = subjects.find(s => s.id === selectedSubject);
                     if (sub) {
-                        if (taNum > sub.maxTA) {
-                            throw new Error(`TA marks for ${student.name} exceed maximum (${sub.maxTA})`);
+                        if (intNum > sub.maxINT) {
+                            throw new Error(`INT marks for ${student.name} exceed maximum (${sub.maxINT})`);
                         }
-                        if (ceNum > sub.maxCE) {
-                            throw new Error(`CE marks for ${student.name} exceed maximum (${sub.maxCE})`);
+                        if (extNum > sub.maxEXT) {
+                            throw new Error(`EXT marks for ${student.name} exceed maximum (${sub.maxEXT})`);
                         }
                     }
 
-                    // Special conversion for Max TA 35 (scale from 35 to 70 for storage)
-                    let taToSave: number | 'A' = taValue;
-                    if (sub?.maxTA === 35 && taValue !== 'A') {
-                        taToSave = (taValue as number) * 2;
+                    // Special conversion for Max INT 35 (scale from 35 to 70 for storage)
+                    let intToSave: number | 'A' = intValue;
+                    if (sub?.maxINT === 35 && intValue !== 'A') {
+                        intToSave = (intValue as number) * 2;
                     }
 
                     try {
                         // Try to save online first
-                        await dataService.updateStudentMarks(student.id, selectedSubject, taToSave, ceValue);
+                        await dataService.updateStudentMarks(student.id, selectedSubject, intToSave, extValue);
 
                         // If successful, delete any corresponding draft
                         const draft = getDraft(student.id, selectedSubject);
@@ -942,8 +1045,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         await saveDraft(
                             student.id,
                             selectedSubject,
-                            marks.ta,
-                            marks.ce
+                            marks.int,
+                            marks.ext
                         );
                     }
                 }
@@ -970,62 +1073,62 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     }, [selectedSubject, invalidMarksInfo, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft, deleteDraft]);
 
-    // New handler for saving only TA marks
-    const handleSaveTAMarks = useCallback(async () => {
+    // New handler for saving only INT marks
+    const handleSaveINTMarks = useCallback(async () => {
         if (!selectedSubject) {
             alert('Please select a subject');
             return;
         }
 
         try {
-            setOperationLoading({ type: 'saving', message: 'Saving TA marks to database...' });
+            setOperationLoading({ type: 'saving', message: 'Saving INT marks to database...' });
 
-            // Save TA marks for students who have TA entered
+            // Save INT marks for students who have INT entered
             const savePromises = students.map(async (student) => {
                 const marks = marksData[student.id];
-                if (marks && marks.ta) {
-                    const ta = parseInt(marks.ta);
+                if (marks && marks.int) {
+                    const int = parseInt(marks.int);
 
-                    // Validate TA marks against subject limits
+                    // Validate INT marks against subject limits
                     const sub = subjects.find(s => s.id === selectedSubject);
-                    if (sub && ta > sub.maxTA) {
-                        throw new Error(`TA marks for ${student.name} exceed maximum (${sub.maxTA})`);
+                    if (sub && int > sub.maxINT) {
+                        throw new Error(`INT marks for ${student.name} exceed maximum (${sub.maxINT})`);
                     }
 
-                    // Special conversion for Max TA 35 (scale from 35 to 70 for storage)
-                    let taToSave = ta;
-                    if (sub?.maxTA === 35) {
-                        taToSave = ta * 2;
+                    // Special conversion for Max INT 35 (scale from 35 to 70 for storage)
+                    let intToSave = int;
+                    if (sub?.maxINT === 35) {
+                        intToSave = int * 2;
                     }
 
                     try {
                         // Try to save online first
-                        await dataService.updateStudentTAMarks(student.id, selectedSubject, taToSave);
+                        await dataService.updateStudentINTMarks(student.id, selectedSubject, intToSave);
 
-                        // Update draft with TA marks (if successful, we probably want to clear draft, but preserving draft logic for now as 'sync').
+                        // Update draft with INT marks (if successful, we probably want to clear draft, but preserving draft logic for now as 'sync').
                         // Actually, if saved online, we should remove draft? The original logic was updating draft.
                         // Let's stick to cleaning up drafts if online save succeeds.
                         const draft = getDraft(student.id, selectedSubject);
                         if (draft) {
-                            // If we only saved TA, but there is CE in draft, we might want to keep CE?
+                            // If we only saved INT, but there is EXT in draft, we might want to keep EXT?
                             // For simplicity, we'll just save a new draft if useOfflineCapability doesn't support partial updates easily
                             // Or assuming saving online means we are good.
-                            // The original logic updated draft with "marks.ce || ''".
+                            // The original logic updated draft with "marks.ext || ''".
                         }
 
                         // If successful, delete any corresponding draft ONLY if we are fully synced?
-                        // If we are just saving TA, maybe we shouldn't delete the whole draft if CE is dirty?
+                        // If we are just saving INT, maybe we shouldn't delete the whole draft if EXT is dirty?
                         // But for "simplify", let's assume valid save = good.
 
                     } catch (error) {
-                        console.warn('Online TA save failed, saving offline:', error);
+                        console.warn('Online INT save failed, saving offline:', error);
 
                         // If online save fails, save offline draft
                         await saveDraft(
                             student.id,
                             selectedSubject,
-                            marks.ta,
-                            marks.ce || ''
+                            marks.int,
+                            marks.ext || ''
                         );
                     }
                 }
@@ -1042,58 +1145,58 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             }
 
             // Show appropriate success message
-            const studentsWithTA = students.filter(s => marksData[s.id]?.ta).length;
+            const studentsWithINT = students.filter(s => marksData[s.id]?.int).length;
             if (isOnline) {
-                alert(`TA marks saved successfully for ${studentsWithTA} students!`);
+                alert(`INT marks saved successfully for ${studentsWithINT} students!`);
             } else {
-                alert(`TA marks saved offline as drafts for ${studentsWithTA} students!`);
+                alert(`INT marks saved offline as drafts for ${studentsWithINT} students!`);
             }
         } catch (error) {
-            console.error('Error saving TA marks:', error);
-            alert(`Error saving TA marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error('Error saving INT marks:', error);
+            alert(`Error saving INT marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setOperationLoading({ type: null });
         }
     }, [selectedSubject, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft]);
 
-    // New handler for saving only CE marks
-    const handleSaveCEMarks = useCallback(async () => {
+    // New handler for saving only EXT marks
+    const handleSaveEXTMarks = useCallback(async () => {
         if (!selectedSubject) {
             alert('Please select a subject');
             return;
         }
 
         try {
-            setOperationLoading({ type: 'saving', message: 'Saving CE marks to database...' });
+            setOperationLoading({ type: 'saving', message: 'Saving EXT marks to database...' });
 
-            // Save CE marks for students who have CE entered
+            // Save EXT marks for students who have EXT entered
             const savePromises = students.map(async (student) => {
                 const marks = marksData[student.id];
-                if (marks && marks.ce) {
-                    const ce = parseInt(marks.ce);
+                if (marks && marks.ext) {
+                    const ext = parseInt(marks.ext);
 
-                    // Validate CE marks against subject limits
+                    // Validate EXT marks against subject limits
                     const subject = subjects.find(s => s.id === selectedSubject);
-                    if (subject && ce > subject.maxCE) {
-                        throw new Error(`CE marks for ${student.name} exceed maximum (${subject.maxCE})`);
+                    if (subject && ext > subject.maxEXT) {
+                        throw new Error(`EXT marks for ${student.name} exceed maximum (${subject.maxEXT})`);
                     }
 
                     try {
                         // Try to save online first
-                        await dataService.updateStudentCEMarks(student.id, selectedSubject, ce);
+                        await dataService.updateStudentEXTMarks(student.id, selectedSubject, ext);
 
-                        // Update draft with CE marks - keep draft if CE saved but TA not?
+                        // Update draft with EXT marks - keep draft if EXT saved but INT not?
                         // For simplicity, just update draft if offline fails.
 
                     } catch (error) {
-                        console.warn('Online CE save failed, saving offline:', error);
+                        console.warn('Online EXT save failed, saving offline:', error);
 
-                        // If online save fails, save offline draft
+                        // If online EXT save fails, save offline draft
                         await saveDraft(
                             student.id,
                             selectedSubject,
-                            marks.ta || '',
-                            marks.ce
+                            marks.int || '',
+                            marks.ext
                         );
                     }
                 }
@@ -1110,33 +1213,30 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             }
 
             // Show appropriate success message
-            const studentsWithCE = students.filter(s => marksData[s.id]?.ce).length;
+            const studentsWithEXT = students.filter(s => marksData[s.id]?.ext).length;
             if (isOnline) {
-                alert(`CE marks saved successfully for ${studentsWithCE} students!`);
+                alert(`EXT marks saved successfully for ${studentsWithEXT} students!`);
             } else {
-                alert(`CE marks saved offline as drafts for ${studentsWithCE} students!`);
+                alert(`EXT marks saved offline as drafts for ${studentsWithEXT} students!`);
             }
         } catch (error) {
-            console.error('Error saving CE marks:', error);
-            alert(`Error saving CE marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error('Error saving EXT marks:', error);
+            alert(`Error saving EXT marks: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setOperationLoading({ type: null });
         }
     }, [selectedSubject, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft]);
 
     const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
-
+    // Check if component mounted
     if (isLoading) {
         return (
-            <>
-                <ProgressiveLoadingSkeleton
-                    stage={loadingStage}
-                    progress={loadingProgress}
-                />
-            </>
+            <ProgressiveLoadingSkeleton
+                stage={loadingStage}
+                progress={loadingProgress}
+            />
         );
     }
-
     return (
         <div className="space-y-4 md:space-y-8">
             <div className="px-4 md:px-0">
@@ -1182,11 +1282,29 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             {/* Marks Entry Tab Content */}
             {activeTab === 'marks-entry' && (
                 <>
-                    {/* Mobile-Optimized Selection Controls */}
-                    <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-xl border-2 border-slate-200 mx-6 md:mx-0 print:hidden" style={{
-                        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-                    }}>
+                    <div className="flex gap-2 mb-6 border-b border-slate-200">
+                        <button
+                            onClick={() => setEntryMode('regular')}
+                            className={`px-6 py-2 rounded-t-lg font-bold text-sm transition-all ${entryMode === 'regular' ? 'bg-orange-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        >
+                            Regular Entry
+                        </button>
+                        <button
+                            onClick={() => setEntryMode('supplementary')}
+                            className={`px-6 py-2 rounded-t-lg font-bold text-sm transition-all ${entryMode === 'supplementary' ? 'bg-orange-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        >
+                            Supplementary Mode
+                        </button>
+                    </div>
+
+                    {entryMode === 'regular' ? (
+                        <>
+                            {/* Mobile-Optimized Selection Controls */}
+                            <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-xl border-2 border-slate-200 mx-6 md:mx-0 print:hidden" style={{
+                                background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                            }}>
+
 
                         <div className={`space-y-4 md:space-y-0 md:grid ${subjectType === 'elective' ? 'md:grid-cols-2' : 'md:grid-cols-3'} md:gap-6`}>
 
@@ -1293,17 +1411,17 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                 <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 text-sm">
                                     <div className="space-y-2">
                                         <div>
-                                            <span className="font-bold text-slate-700">Max TA:</span>
-                                            <span className="ml-2 text-slate-600">{selectedSubjectData.maxTA}</span>
+                                            <span className="font-bold text-slate-700">Max INT:</span>
+                                            <span className="ml-2 text-slate-600">{selectedSubjectData.maxINT}</span>
                                             <span className="ml-2 text-red-600 font-medium">
-                                                (Min: {Math.ceil(selectedSubjectData.maxTA * 0.4)})
+                                                (Min: {Math.ceil(selectedSubjectData.maxINT * 0.4)})
                                             </span>
                                         </div>
                                         <div>
-                                            <span className="font-bold text-slate-700">Max CE:</span>
-                                            <span className="ml-2 text-slate-600">{selectedSubjectData.maxCE}</span>
+                                            <span className="font-bold text-slate-700">Max EXT:</span>
+                                            <span className="ml-2 text-slate-600">{selectedSubjectData.maxEXT}</span>
                                             <span className="ml-2 text-red-600 font-medium">
-                                                (Min: {Math.ceil(selectedSubjectData.maxCE * 0.5)})
+                                                (Min: {Math.ceil(selectedSubjectData.maxEXT * 0.5)})
                                             </span>
                                         </div>
                                     </div>
@@ -1313,7 +1431,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             <span className="ml-2 text-slate-600">{selectedSubjectData.facultyName}</span>
                                         </div>
                                         <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded">
-                                            <strong>Passing Rule:</strong> Students must achieve both TA minimum (40%) AND CE minimum (50%) to pass
+                                            <strong>Passing Rule:</strong> Students must achieve both INT minimum (40%) AND EXT minimum (50%) to pass
                                         </div>
                                     </div>
                                 </div>
@@ -1406,7 +1524,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                 {filteredStudents.length > 0 ? (
                                                     filteredStudents.map((student, index) => {
                                                         const originalIndex = students.findIndex(s => s.id === student.id);
-                                                        const isCompleted = marksData[student.id]?.ta && marksData[student.id]?.ce;
+                                                        const isCompleted = marksData[student.id]?.int && marksData[student.id]?.ext;
                                                         const isCurrent = originalIndex === currentStudentIndex;
 
                                                         return (
@@ -1505,7 +1623,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                                                     {/* Completion Status Indicator */}
                                                     <div className="flex items-center justify-center gap-2 mb-2">
-                                                        {marksData[students[currentStudentIndex]?.id]?.ta && marksData[students[currentStudentIndex]?.id]?.ce ? (
+                                                        {marksData[students[currentStudentIndex]?.id]?.int && marksData[students[currentStudentIndex]?.id]?.ext ? (
                                                             <div className="flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
                                                                 <i className="fa-solid fa-check-circle"></i>
                                                                 <span>Completed</span>
@@ -1543,7 +1661,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                 {/* Render visible students with pagination */}
                                 {paginatedStudents.map((student, index) => {
                                     const isCurrent = index === currentStudentIndex;
-                                    const studentMarks = marksData[student.id] || { ta: '', ce: '' };
+                                    const studentMarks = marksData[student.id] || { int: '', ext: '' };
 
                                     return (
                                         <div
@@ -1564,32 +1682,32 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
                                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                                        TA (Max: {selectedSubjectData?.maxTA})
+                                                        INT (Max: {selectedSubjectData?.maxINT})
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={studentMarks.ta}
-                                                        onChange={(e) => handleMarksChange(student.id, 'ta', e.target.value)}
+                                                        value={studentMarks.int}
+                                                        onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
                                                         className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                                                        max={selectedSubjectData?.maxTA}
+                                                        max={selectedSubjectData?.maxINT}
                                                         min="0"
                                                     />
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                                        CE (Max: {selectedSubjectData?.maxCE})
+                                                        EXT (Max: {selectedSubjectData?.maxEXT})
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        value={studentMarks.ce}
-                                                        onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
-                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxTA === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
-                                                        max={selectedSubjectData?.maxCE}
+                                                        value={studentMarks.ext}
+                                                        onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)}
+                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxINT === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
+                                                        max={selectedSubjectData?.maxEXT}
                                                         min="0"
-                                                        disabled={selectedSubjectData?.maxTA === 100}
+                                                        disabled={selectedSubjectData?.maxINT === 100}
                                                         data-student={student.id}
-                                                        data-field="ce"
-                                                        placeholder={selectedSubjectData?.maxTA === 100 ? "N/A" : ""}
+                                                        data-field="ext"
+                                                        placeholder={selectedSubjectData?.maxINT === 100 ? "N/A" : ""}
                                                     />
                                                 </div>
                                             </div>
@@ -1640,10 +1758,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                 <th className="text-left p-4 font-bold text-slate-700">Adm No</th>
                                                 <th className="text-left p-4 font-bold text-slate-700">Student Name</th>
                                                 <th className="text-center p-4 font-bold text-slate-700">
-                                                    TA ({selectedSubjectData?.maxTA})
+                                                    INT ({selectedSubjectData?.maxINT})
                                                 </th>
                                                 <th className="text-center p-4 font-bold text-slate-700">
-                                                    CE ({selectedSubjectData?.maxCE})
+                                                    EXT ({selectedSubjectData?.maxEXT})
                                                 </th>
                                                 <th className="text-center p-4 font-bold text-slate-700">Total</th>
                                                 <th className="text-center p-4 font-bold text-slate-700">Status</th>
@@ -1654,10 +1772,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             {students.map((student, index) => {
                                                 const total = validationHelpers?.calculateTotal(student.id) || 0;
                                                 const status = validationHelpers?.getStatus(student.id) || 'Pending';
-                                                const isTAExceeding = validationHelpers?.isTAExceedingMax(student.id) || false;
-                                                const isCEExceeding = validationHelpers?.isCEExceedingMax(student.id) || false;
-                                                const isTAFailing = validationHelpers?.isTAFailing(student.id) || false;
-                                                const isCEFailing = validationHelpers?.isCEFailing(student.id) || false;
+                                                const isINTExceeding = validationHelpers?.isINTExceedingMax(student.id) || false;
+                                                const isEXTExceeding = validationHelpers?.isEXTExceedingMax(student.id) || false;
+                                                const isINTFailing = validationHelpers?.isINTFailing(student.id) || false;
+                                                const isEXTFailing = validationHelpers?.isEXTFailing(student.id) || false;
 
                                                 return (
                                                     <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
@@ -1674,15 +1792,15 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 spellCheck="false"
                                                                 enterKeyHint="next"
                                                                 data-student={student.id}
-                                                                data-field="ta"
-                                                                value={marksData[student.id]?.ta || ''}
-                                                                onChange={(e) => handleMarksChange(student.id, 'ta', e.target.value)}
-                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'ta')}
-                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isTAExceeding
+                                                                data-field="int"
+                                                                value={marksData[student.id]?.int || ''}
+                                                                onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
+                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'int')}
+                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isINTExceeding
                                                                     ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
-                                                                    : isTAFailing
+                                                                    : isINTFailing
                                                                         ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                        : marksData[student.id]?.ta && !isTAFailing && !isTAExceeding
+                                                                        : marksData[student.id]?.int && !isINTFailing && !isINTExceeding
                                                                             ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
                                                                             : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
                                                                     }`}
@@ -1691,19 +1809,19 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 maxLength={3}
                                                                 style={{ minHeight: '48px' }}
                                                             />
-                                                            {isTAExceeding && (
+                                                            {isINTExceeding && (
                                                                 <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-triangle mr-1"></i>
-                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxTA}
+                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxINT}
                                                                 </div>
                                                             )}
-                                                            {!isTAExceeding && isTAFailing && (
+                                                            {!isINTExceeding && isINTFailing && (
                                                                 <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-circle mr-1"></i>
-                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxTA || 0) * 0.4)}
+                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxINT || 0) * 0.4)}
                                                                 </div>
                                                             )}
-                                                            {marksData[student.id]?.ta && !isTAFailing && !isTAExceeding && (
+                                                            {marksData[student.id]?.int && !isINTFailing && !isINTExceeding && (
                                                                 <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
                                                                     <i className="fa-solid fa-check-circle mr-1"></i>
                                                                     Valid
@@ -1721,15 +1839,15 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 spellCheck="false"
                                                                 enterKeyHint="done"
                                                                 data-student={student.id}
-                                                                data-field="ce"
-                                                                value={marksData[student.id]?.ce || ''}
-                                                                onChange={(e) => handleMarksChange(student.id, 'ce', e.target.value)}
-                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'ce')}
-                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isCEExceeding
+                                                                data-field="ext"
+                                                                value={marksData[student.id]?.ext || ''}
+                                                                onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)}
+                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')}
+                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isEXTExceeding
                                                                     ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
-                                                                    : isCEFailing
+                                                                    : isEXTFailing
                                                                         ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                        : marksData[student.id]?.ce && !isCEFailing && !isCEExceeding
+                                                                        : marksData[student.id]?.ext && !isEXTFailing && !isEXTExceeding
                                                                             ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
                                                                             : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
                                                                     }`}
@@ -1738,19 +1856,19 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 maxLength={3}
                                                                 style={{ minHeight: '48px' }}
                                                             />
-                                                            {isCEExceeding && (
+                                                            {isEXTExceeding && (
                                                                 <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-triangle mr-1"></i>
-                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxCE}
+                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxEXT}
                                                                 </div>
                                                             )}
-                                                            {!isCEExceeding && isCEFailing && (
+                                                            {!isEXTExceeding && isEXTFailing && (
                                                                 <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-circle mr-1"></i>
-                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxCE || 0) * 0.5)}
+                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxEXT || 0) * 0.5)}
                                                                 </div>
                                                             )}
-                                                            {marksData[student.id]?.ce && !isCEFailing && !isCEExceeding && (
+                                                            {marksData[student.id]?.ext && !isEXTFailing && !isEXTExceeding && (
                                                                 <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
                                                                     <i className="fa-solid fa-check-circle mr-1"></i>
                                                                     Valid
@@ -1758,7 +1876,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                             )}
                                                         </td>
                                                         <td className="p-4 text-center font-bold text-slate-900">
-                                                            {marksData[student.id]?.ta && marksData[student.id]?.ce ? total : '-'}
+                                                            {marksData[student.id]?.int && marksData[student.id]?.ext ? total : '-'}
                                                         </td>
                                                         <td className="p-4 text-center">
                                                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${status === 'Passed' ? 'bg-emerald-100 text-emerald-700' :
@@ -1769,14 +1887,40 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                             </span>
                                                         </td>
                                                         <td className="p-4 text-center">
-                                                            <button
-                                                                onClick={() => handleClearStudentMarks(student.id, student.name)}
-                                                                disabled={isSaving || operationLoading.type !== null || (!marksData[student.id]?.ta && !marksData[student.id]?.ce)}
-                                                                className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 hover:shadow-sm"
-                                                                title={`Clear marks for ${student.name}`}
-                                                            >
-                                                                <i className="fa-solid fa-trash text-xs"></i>
-                                                            </button>
+                                                            {/* Desktop Actions */}
+                                                            <div className="hidden md:flex flex-col gap-1">
+                                                                <div className="flex gap-1">
+                                                                    <button
+                                                                        onClick={handleSaveINTMarks}
+                                                                        disabled={isSaving || operationLoading.type !== null || !marksData[student.id]?.int}
+                                                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 group"
+                                                                        aria-label="Save INT marks"
+                                                                    >
+                                                                        <i className="fa-solid fa-cloud-arrow-up text-xs group-hover:scale-110 transition-transform"></i>
+                                                                        <span className="text-xs">Save INT</span>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={handleSaveEXTMarks}
+                                                                        disabled={isSaving || operationLoading.type !== null || !marksData[student.id]?.ext}
+                                                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-sky-50 text-sky-700 rounded-lg hover:bg-sky-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 group"
+                                                                        aria-label="Save EXT marks"
+                                                                    >
+                                                                        <i className="fa-solid fa-cloud-arrow-up text-xs group-hover:scale-110 transition-transform"></i>
+                                                                        <span className="text-xs">Save EXT</span>
+                                                                    </button>
+                                                                </div>
+                                                                <div className="flex gap-1">
+                                                                    <button
+                                                                        onClick={() => handleClearStudentMarks(student.id, student.name)}
+                                                                        disabled={isSaving || operationLoading.type !== null || (!marksData[student.id]?.int && !marksData[student.id]?.ext)}
+                                                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 group border border-red-100"
+                                                                        title={`Clear marks for ${student.name}`}
+                                                                    >
+                                                                        <i className="fa-solid fa-trash text-xs"></i>
+                                                                        <span className="text-[10px]">Clear All</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );
@@ -1797,44 +1941,44 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                                     <div className="flex gap-3">
                                         <button
-                                            onClick={handleSaveTAMarks}
+                                            onClick={handleSaveINTMarks}
                                             disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                             className="px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
                                             style={{ minHeight: '44px' }}
-                                            aria-label="Save TA marks only"
+                                            aria-label="Save INT marks only"
                                         >
                                             <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                            Save TA
+                                            Save INT
                                         </button>
                                         <button
-                                            onClick={handleSaveCEMarks}
+                                            onClick={handleSaveEXTMarks}
                                             disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                             className="px-4 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
                                             style={{ minHeight: '44px' }}
-                                            aria-label="Save CE marks only"
+                                            aria-label="Save EXT marks only"
                                         >
                                             <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                            Save CE
+                                            Save EXT
                                         </button>
                                         <button
-                                            onClick={handleClearTAMarks}
+                                            onClick={handleClearINTMarks}
                                             disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                             className="px-4 py-3 border-2 border-orange-200 text-orange-700 rounded-xl font-bold hover:bg-orange-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
                                             style={{ minHeight: '44px' }}
-                                            aria-label="Clear TA marks for all students"
+                                            aria-label="Clear INT marks for all students"
                                         >
                                             <i className="fa-solid fa-eraser text-sm"></i>
-                                            Clear TA
+                                            Clear INT
                                         </button>
                                         <button
-                                            onClick={handleClearCEMarks}
+                                            onClick={handleClearEXTMarks}
                                             disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                             className="px-4 py-3 border-2 border-red-200 text-red-700 rounded-xl font-bold hover:bg-red-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
                                             style={{ minHeight: '44px' }}
-                                            aria-label="Clear CE marks for all students"
+                                            aria-label="Clear EXT marks for all students"
                                         >
                                             <i className="fa-solid fa-eraser text-sm"></i>
-                                            Clear CE
+                                            Clear EXT
                                         </button>
                                         <button
                                             onClick={handleClearAll}
@@ -1853,7 +1997,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                 : 'bg-emerald-600 text-white hover:bg-emerald-700'
                                                 }`}
                                             style={{ minHeight: '44px' }}
-                                            aria-label="Save all marks (both TA and CE)"
+                                            aria-label="Save all marks (both INT and EXT)"
                                         >
                                             {isSaving ? (
                                                 <>
@@ -1912,44 +2056,44 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                     <div className="space-y-2">
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={handleSaveTAMarks}
+                                                onClick={handleSaveINTMarks}
                                                 disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                                 className="flex-1 py-2 px-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transform active:scale-95 shadow-md"
                                                 style={{ minHeight: '44px' }}
-                                                aria-label="Save TA marks"
+                                                aria-label="Save INT marks"
                                             >
                                                 <i className="fa-solid fa-clipboard-check text-xs"></i>
-                                                <span className="text-xs">Save TA</span>
+                                                <span className="text-xs">Save INT</span>
                                             </button>
                                             <button
-                                                onClick={handleSaveCEMarks}
+                                                onClick={handleSaveEXTMarks}
                                                 disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                                 className="flex-1 py-2 px-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transform active:scale-95 shadow-md"
                                                 style={{ minHeight: '44px' }}
-                                                aria-label="Save CE marks"
+                                                aria-label="Save EXT marks"
                                             >
                                                 <i className="fa-solid fa-clipboard-check text-xs"></i>
-                                                <span className="text-xs">Save CE</span>
+                                                <span className="text-xs">Save EXT</span>
                                             </button>
                                             <button
-                                                onClick={handleClearTAMarks}
+                                                onClick={handleClearINTMarks}
                                                 disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                                 className="py-2 px-3 border border-orange-200 text-orange-600 bg-orange-50/50 rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 transform active:scale-95"
                                                 style={{ minHeight: '44px' }}
-                                                aria-label="Clear TA"
+                                                aria-label="Clear INT"
                                             >
                                                 <i className="fa-solid fa-eraser text-xs"></i>
-                                                <span className="text-[10px]">Clear TA</span>
+                                                <span className="text-[10px]">Clear INT</span>
                                             </button>
                                             <button
-                                                onClick={handleClearCEMarks}
+                                                onClick={handleClearEXTMarks}
                                                 disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                                 className="py-2 px-3 border border-red-200 text-red-600 bg-red-50/50 rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 transform active:scale-95"
                                                 style={{ minHeight: '44px' }}
-                                                aria-label="Clear CE"
+                                                aria-label="Clear EXT"
                                             >
                                                 <i className="fa-solid fa-eraser text-xs"></i>
-                                                <span className="text-[10px]">Clear CE</span>
+                                                <span className="text-[10px]">Clear EXT</span>
                                             </button>
                                             <button
                                                 onClick={handleClearAll}
@@ -2010,6 +2154,110 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                     : 'No students found in the selected class'
                                 }
                             </p>
+                        </div>
+                    )}
+                    </>
+                ) : null}
+
+                    {/* Supplementary Entry View */}
+                    {entryMode === 'supplementary' && (
+                        <div className="space-y-6 mx-4 md:mx-0">
+                            <div className="bg-white rounded-xl md:rounded-2xl p-6 shadow-sm border border-slate-200">
+                                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 mb-4">
+                                    <i className="fa-solid fa-file-signature text-orange-600"></i>
+                                    Pending Supplementary Exams
+                                </h3>
+                                
+                                {suppExams.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <i className="fa-solid fa-check-circle text-4xl text-emerald-400 mb-4"></i>
+                                        <p className="text-slate-600">No pending supplementary exams found.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        {suppExams.map(exam => {
+                                            const prevMarks = getPreviousMarks(exam);
+                                            const subject = subjects.find(s => s.id === exam.subjectId);
+                                            const maxINT = subject?.maxINT || 70;
+                                            const maxEXT = subject?.maxEXT || 30;
+                                            const minINT = Math.ceil(maxINT * 0.4);
+                                            const minEXT = Math.ceil(maxEXT * 0.5);
+
+                                            const prevIntVal = typeof prevMarks.int === 'string' && prevMarks.int !== 'A' && prevMarks.int !== 'N/A' ? parseInt(prevMarks.int) : 0;
+                                            const prevExtVal = typeof prevMarks.ext === 'string' && prevMarks.ext !== 'A' && prevMarks.ext !== 'N/A' ? parseInt(prevMarks.ext) : 0;
+                                            
+                                            // Determine if previous marks were failing
+                                            const intFailed = prevMarks.int === 'A' || prevIntVal < minINT;
+                                            const extFailed = prevMarks.ext === 'A' || prevExtVal < minEXT;
+
+                                            return (
+                                                <div key={exam.id} className="bg-slate-50 border-2 border-slate-200 rounded-xl p-5">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div>
+                                                            <div className="font-bold text-lg text-slate-800">{exam.studentName}</div>
+                                                            <div className="text-sm text-slate-500">Ad No: {exam.studentAdNo}</div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="font-bold text-slate-700">{exam.subjectName}</div>
+                                                            <div className="text-xs text-slate-500">{exam.originalSemester} {exam.originalYear}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                        {/* Previous Marks */}
+                                                        <div className="bg-slate-100 p-4 rounded-lg">
+                                                            <div className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Previous Marks</div>
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`p-2 rounded flex-1 text-center font-bold ${intFailed ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                                                                    INT: {prevMarks.int}
+                                                                </div>
+                                                                <div className={`p-2 rounded flex-1 text-center font-bold ${extFailed ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                                                                    EXT: {prevMarks.ext}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* New Marks */}
+                                                        <div className="bg-orange-50 bg-opacity-50 border border-orange-100 p-4 rounded-lg shadow-sm">
+                                                            <div className="text-xs font-bold text-orange-600 mb-2 uppercase tracking-wider">Enter Supplementary Marks</div>
+                                                            <div className="flex gap-4">
+                                                                <div className="flex-1">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder={`INT (Max ${maxINT})`}
+                                                                        value={suppMarksData[exam.id]?.int || ''}
+                                                                        onChange={(e) => setSuppMarksData(prev => ({ ...prev, [exam.id]: { ...prev[exam.id], int: e.target.value.toUpperCase() } }))}
+                                                                        className="w-full text-center p-2 rounded border-2 border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none font-bold"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder={`EXT (Max ${maxEXT})`}
+                                                                        value={suppMarksData[exam.id]?.ext || ''}
+                                                                        onChange={(e) => setSuppMarksData(prev => ({ ...prev, [exam.id]: { ...prev[exam.id], ext: e.target.value.toUpperCase() } }))}
+                                                                        className="w-full text-center p-2 rounded border-2 border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none font-bold"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        <div className="pt-6 border-t border-slate-200 flex justify-end">
+                                            <button
+                                                onClick={handleSaveSuppMarks}
+                                                disabled={operationLoading.type !== null}
+                                                className="px-8 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-200 transition-all active:scale-95 disabled:opacity-50"
+                                            >
+                                                <i className="fa-solid fa-save mr-2"></i> Save Supplementary Marks
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -2150,14 +2398,14 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         const subjectsWithStatus = filteredByFilters.map(subject => {
                             // Calculate upload status for this subject
                             let totalStudents = 0;
-                            let uploadedTA = 0;
-                            let uploadedCE = 0;
+                            let uploadedINT = 0;
+                            let uploadedEXT = 0;
 
                             const checkMarkStatus = (student: StudentRecord, subjectId: string) => {
                                 const marks = student.marks && student.marks[subjectId];
                                 return {
-                                    hasTA: !!(marks && (marks.ta !== undefined && marks.ta !== null && marks.ta !== ('' as any))),
-                                    hasCE: !!(marks && (marks.ce !== undefined && marks.ce !== null && marks.ce !== ('' as any)))
+                                    hasINT: !!(marks && (marks.int !== undefined && marks.int !== null && marks.int !== ('' as any))),
+                                    hasEXT: !!(marks && (marks.ext !== undefined && marks.ext !== null && marks.ext !== ('' as any)))
                                 };
                             };
 
@@ -2167,29 +2415,29 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                 const classStudents = allStudents.filter(s => s.className === className);
                                 totalStudents = classStudents.length;
                                 classStudents.forEach(s => {
-                                    const { hasTA, hasCE } = checkMarkStatus(s, subject.id);
-                                    if (hasTA) uploadedTA++;
-                                    if (hasCE || subject.maxCE === 0 || subject.maxTA === 100) uploadedCE++;
+                                    const { hasINT, hasEXT } = checkMarkStatus(s, subject.id);
+                                    if (hasINT) uploadedINT++;
+                                    if (hasEXT || subject.maxEXT === 0 || subject.maxINT === 100) uploadedEXT++;
                                 });
                             } else {
                                 // For elective subjects, count enrolled students
                                 const enrolledStudentIds = subject.enrolledStudents || [];
                                 totalStudents = enrolledStudentIds.length;
                                 allStudents.filter(s => enrolledStudentIds.includes(s.id)).forEach(s => {
-                                    const { hasTA, hasCE } = checkMarkStatus(s, subject.id);
-                                    if (hasTA) uploadedTA++;
-                                    if (hasCE || subject.maxCE === 0 || subject.maxTA === 100) uploadedCE++;
+                                    const { hasINT, hasEXT } = checkMarkStatus(s, subject.id);
+                                    if (hasINT) uploadedINT++;
+                                    if (hasEXT || subject.maxEXT === 0 || subject.maxINT === 100) uploadedEXT++;
                                 });
                             }
 
-                            const taPercentage = totalStudents > 0 ? Math.round((uploadedTA / totalStudents) * 100) : 0;
-                            const cePercentage = totalStudents > 0 ? Math.round((uploadedCE / totalStudents) * 100) : 100;
+                            const intPercentage = totalStudents > 0 ? Math.round((uploadedINT / totalStudents) * 100) : 0;
+                            const extPercentage = totalStudents > 0 ? Math.round((uploadedEXT / totalStudents) * 100) : 100;
 
                             // Overall status
                             let status: 'complete' | 'in-progress' | 'not-started';
-                            if (taPercentage === 100 && cePercentage === 100) {
+                            if (intPercentage === 100 && extPercentage === 100) {
                                 status = 'complete';
-                            } else if (taPercentage === 0 && (cePercentage === 0 || subject.maxCE === 0 || subject.maxTA === 100)) {
+                            } else if (intPercentage === 0 && (extPercentage === 0 || subject.maxEXT === 0 || subject.maxINT === 100)) {
                                 status = 'not-started';
                             } else {
                                 status = 'in-progress';
@@ -2198,10 +2446,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                             return {
                                 ...subject,
                                 totalStudents,
-                                uploadedTA,
-                                uploadedCE,
-                                taPercentage,
-                                cePercentage,
+                                uploadedINT,
+                                uploadedEXT,
+                                intPercentage,
+                                extPercentage,
                                 status
                             };
                         }).filter(subject => {
@@ -2305,42 +2553,42 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                                                     <div className="md:w-80">
                                                         <div className="space-y-3">
-                                                            {/* TA Progress */}
+                                                            {/* INT Progress */}
                                                             <div>
                                                                 <div className="flex items-center justify-between mb-1">
-                                                                    <span className="text-[10px] font-black text-slate-500 uppercase">TA Assessment</span>
-                                                                    <span className={`text-[10px] font-black ${subject.taPercentage === 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
-                                                                        {subject.uploadedTA}/{subject.totalStudents} ({subject.taPercentage}%)
+                                                                    <span className="text-[10px] font-black text-slate-500 uppercase">INT Assessment</span>
+                                                                    <span className={`text-[10px] font-black ${subject.intPercentage === 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                                                                        {subject.uploadedINT}/{subject.totalStudents} ({subject.intPercentage}%)
                                                                     </span>
                                                                 </div>
                                                                 <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                                                                     <div
-                                                                        className={`h-full rounded-full transition-all duration-500 ${subject.taPercentage === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
-                                                                        style={{ width: `${subject.taPercentage}%` }}
+                                                                        className={`h-full rounded-full transition-all duration-500 ${subject.intPercentage === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                                                        style={{ width: `${subject.intPercentage}%` }}
                                                                     ></div>
                                                                 </div>
                                                             </div>
 
-                                                            {/* CE Progress */}
-                                                            {subject.maxCE > 0 && subject.maxTA !== 100 ? (
+                                                            {/* EXT Progress */}
+                                                            {subject.maxEXT > 0 && subject.maxINT !== 100 ? (
                                                                 <div>
                                                                     <div className="flex items-center justify-between mb-1">
-                                                                        <span className="text-[10px] font-black text-slate-500 uppercase">CE Examination</span>
-                                                                        <span className={`text-[10px] font-black ${subject.cePercentage === 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
-                                                                            {subject.uploadedCE}/{subject.totalStudents} ({subject.cePercentage}%)
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase">EXT Examination</span>
+                                                                        <span className={`text-[10px] font-black ${subject.extPercentage === 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                                                                            {subject.uploadedEXT}/{subject.totalStudents} ({subject.extPercentage}%)
                                                                         </span>
                                                                     </div>
                                                                     <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                                                                         <div
-                                                                            className={`h-full rounded-full transition-all duration-500 ${subject.cePercentage === 100 ? 'bg-emerald-500' : 'bg-purple-500'}`}
-                                                                            style={{ width: `${subject.cePercentage}%` }}
+                                                                            className={`h-full rounded-full transition-all duration-500 ${subject.extPercentage === 100 ? 'bg-emerald-500' : 'bg-purple-500'}`}
+                                                                            style={{ width: `${subject.extPercentage}%` }}
                                                                         ></div>
                                                                     </div>
                                                                 </div>
                                                             ) : (
                                                                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 italic">
                                                                     <i className="fa-solid fa-info-circle"></i>
-                                                                    CE Not Applicable
+                                                                    EXT Not Applicable
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2410,6 +2658,38 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                     Scheduled for {new Date(settings.releaseDate).toLocaleString()}
                                                 </div>
                                             )}
+
+                                            <div className="pt-4 mt-2 border-t border-slate-200 space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm font-bold text-orange-700">Supp. Release Status</span>
+                                                    <button
+                                                        onClick={() => handleUpdateReleaseSetting(cls, 'isSupplementaryReleased', !settings.isSupplementaryReleased)}
+                                                        className={`w-12 h-6 rounded-full transition-all duration-300 relative ${settings.isSupplementaryReleased ? 'bg-orange-500' : 'bg-slate-300'}`}
+                                                    >
+                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${settings.isSupplementaryReleased ? 'left-7' : 'left-1'}`}></div>
+                                                    </button>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="block text-xs font-bold text-orange-600 uppercase tracking-wider">
+                                                        Supp. Release Date
+                                                    </label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={settings.supplementaryReleaseDate ? settings.supplementaryReleaseDate.substring(0, 16) : ''}
+                                                        onChange={(e) => handleUpdateReleaseSetting(cls, 'supplementaryReleaseDate', e.target.value)}
+                                                        className="w-full p-2 text-sm border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-500 bg-orange-50/30"
+                                                        disabled={settings.isSupplementaryReleased}
+                                                    />
+                                                </div>
+
+                                                {settings.supplementaryReleaseDate && !settings.isSupplementaryReleased && (
+                                                    <div className="text-[10px] font-medium text-orange-600 flex items-center gap-1">
+                                                        <i className="fa-solid fa-clock"></i>
+                                                        Scheduled for {new Date(settings.supplementaryReleaseDate).toLocaleString()}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 );

@@ -137,15 +137,15 @@ export class ReportingService {
             const maxTotal = subject.getMaxTotal();
             const percentage = marks ? Math.round((marks.total / maxTotal) * 100) : 0;
 
-            // Calculate grade based on percentage
+            // Calculate grade based on percentage (as requested by user for individual subjects)
             let grade = 'F';
-            if (percentage >= 90) grade = 'A+';
-            else if (percentage >= 80) grade = 'A';
-            else if (percentage >= 70) grade = 'B+';
-            else if (percentage >= 60) grade = 'B';
-            else if (percentage >= 50) grade = 'C+';
+            if (percentage >= 95) grade = 'O';
+            else if (percentage >= 85) grade = 'A+';
+            else if (percentage >= 75) grade = 'A';
+            else if (percentage >= 65) grade = 'B+';
+            else if (percentage >= 55) grade = 'B';
             else if (percentage >= 40) grade = 'C';
-            else if (percentage >= 35) grade = 'D';
+            else grade = 'F';
 
             return {
                 subjectName: subject.name,
@@ -208,11 +208,11 @@ export class ReportingService {
             averageScore: number;
         }>;
         performanceTrends: {
-            excellent: number;
-            good: number;
-            average: number;
-            needsImprovement: number;
-            failed: number;
+            excellent: number; // Mapping O + A+
+            veryGood: number;  // Mapping A
+            good: number;      // Mapping B+ + B
+            average: number;   // Mapping C
+            failed: number;    // Mapping F
         };
     } {
         const classes = [...new Set(students.map(s => s.className))];
@@ -253,11 +253,11 @@ export class ReportingService {
         });
 
         const performanceTrends = {
-            excellent: students.filter(s => s.performanceLevel === 'Excellent').length,
-            good: students.filter(s => s.performanceLevel === 'Good').length,
-            average: students.filter(s => s.performanceLevel === 'Average').length,
-            needsImprovement: students.filter(s => s.performanceLevel === 'Needs Improvement').length,
-            failed: students.filter(s => s.performanceLevel === 'Failed').length
+            excellent: students.filter(s => s.performanceLevel === 'O (Outstanding)' || s.performanceLevel === 'A+ (Excellent)').length,
+            veryGood: students.filter(s => s.performanceLevel === 'A (Very Good)').length,
+            good: students.filter(s => s.performanceLevel === 'B+ (Good)' || s.performanceLevel === 'B (Good)').length,
+            average: students.filter(s => s.performanceLevel === 'C (Average)').length,
+            failed: students.filter(s => s.performanceLevel === 'F (Failed)').length
         };
 
         return {

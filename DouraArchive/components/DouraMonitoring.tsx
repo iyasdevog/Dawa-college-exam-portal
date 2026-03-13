@@ -7,6 +7,7 @@ import { OperationLoadingSkeleton } from './SkeletonLoaders';
 import { DouraReports } from './DouraReports';
 import AccessibleModal from './AccessibleModal';
 import MobileFormInput from './MobileFormInput';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface DouraMonitoringProps {
     currentUser: User | null;
@@ -22,6 +23,7 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
     const [monitoringFilterClass, setMonitoringFilterClass] = useState<string>('all');
     const [monitoringFilterStatus, setMonitoringFilterStatus] = useState<'all' | 'Pending' | 'Approved'>('all');
     const [monitoringFilterType, setMonitoringFilterType] = useState<'all' | 'Task' | 'Self'>('all');
+    const { activeTerm } = useTerm();
 
     // Data Management State
     const [isDataModalOpen, setIsDataModalOpen] = useState(false);
@@ -75,7 +77,8 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
             setMonitoringLoading(true);
             const submissions = await dataService.getAllDouraSubmissions(
                 monitoringFilterClass,
-                monitoringFilterStatus === 'all' ? undefined : monitoringFilterStatus
+                monitoringFilterStatus === 'all' ? undefined : monitoringFilterStatus,
+                activeTerm
             );
             setDouraMonitorSubmissions(submissions);
         } catch (error) {
@@ -83,12 +86,12 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
         } finally {
             setMonitoringLoading(false);
         }
-    }, [monitoringFilterClass, monitoringFilterStatus]);
+    }, [monitoringFilterClass, monitoringFilterStatus, activeTerm]);
 
     const loadDouraTasks = useCallback(async () => {
         try {
             setTasksLoading(true);
-            const tasks = await dataService.getDouraTasks(monitoringFilterClass);
+            const tasks = await dataService.getDouraTasks(monitoringFilterClass, undefined, activeTerm);
             setDouraTasks(tasks);
 
             // Fetch students for the current class to allow individual assignments
@@ -103,7 +106,7 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
         } finally {
             setTasksLoading(false);
         }
-    }, [monitoringFilterClass]);
+    }, [monitoringFilterClass, activeTerm]);
 
     const loadDouraData = useCallback(async () => {
         await loadMonitoringSubmissions();
@@ -116,7 +119,7 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
         } else if (activeTab === 'tasks') {
             loadDouraTasks();
         }
-    }, [monitoringFilterClass, monitoringFilterStatus, loadMonitoringSubmissions, loadDouraTasks, activeTab]);
+    }, [monitoringFilterClass, monitoringFilterStatus, loadMonitoringSubmissions, loadDouraTasks, activeTab, activeTerm]);
 
     const handleUpdateDouraStatus = useCallback((id: string, name: string) => {
         setApprovalForm({
@@ -198,7 +201,8 @@ const DouraMonitoring: React.FC<DouraMonitoringProps> = ({ currentUser }) => {
                 dueDate: taskForm.dueDate,
                 createdAt: new Date().toISOString(),
                 createdBy: currentUser?.name || 'Faculty',
-                status: 'Active'
+                status: 'Active',
+                academicTerm: activeTerm
             });
             await loadDouraTasks();
         } catch (error) {

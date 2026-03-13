@@ -5,9 +5,9 @@ import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import { mobileStorage, preventIOSZoom } from '../../infrastructure/services/mobileUtils';
 import ClassResults from './ClassResults';
+import { TermSelector } from './TermSelector';
 
 const PublicScorecard = React.lazy(() => import('./PublicScorecard'));
-const PublicDouraTracker = React.lazy(() => import('./PublicDouraTracker'));
 
 interface PublicPortalProps {
     onLoginClick: () => void;
@@ -22,7 +22,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSearching, setIsSearching] = useState(false);
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
-    const [viewMode, setViewMode] = useState<'scorecard' | 'class-rank' | 'doura-tracker'>('doura-tracker');
+    const [viewMode, setViewMode] = useState<'scorecard' | 'class-rank'>('scorecard');
 
     // Derived state for release status
     const isResultsReleased = useMemo(() => {
@@ -35,14 +35,26 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
         return false;
     }, [searchClass, releaseSettings]);
 
+    const isSuppReleased = useMemo(() => {
+        const settings = releaseSettings[searchClass];
+        if (!settings) return false;
+        if (settings.isSupplementaryReleased) return true;
+        if (settings.supplementaryReleaseDate) {
+            return new Date(settings.supplementaryReleaseDate) <= new Date();
+        }
+        return false;
+    }, [searchClass, releaseSettings]);
+
+    const canViewScorecard = isResultsReleased || isSuppReleased;
+    const isOnlySupp = !isResultsReleased && isSuppReleased;
+
     // Effect to force Doura view if results differ
+    // Effect to handle view mode on result release
     useEffect(() => {
-        if (!isResultsReleased && viewMode !== 'doura-tracker') {
-            setViewMode('doura-tracker');
-        } else if (isResultsReleased && viewMode === 'doura-tracker' && !hasSearched) {
+        if (canViewScorecard && !hasSearched) {
             setViewMode('scorecard');
         }
-    }, [isResultsReleased, hasSearched]);
+    }, [canViewScorecard, hasSearched]);
 
     // Mobile detection
     const { isMobile, isIOS } = useMobile();
@@ -76,15 +88,22 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             setIsSearching(true);
             setHasSearched(false);
 
-            const participant = await dataService.getParticipantRecord(searchAdNo.trim());
+            const student = await dataService.getStudentByAdNo(searchAdNo.trim());
 
-            if (participant) {
-                setResult(participant.record);
+            if (student) {
+                try {
+                    const suppExams = await dataService.getSupplementaryExamsByStudent(student.id);
+                    student.supplementaryExams = suppExams;
+                } catch (e) {
+                    console.error('Error fetching supplementary exams:', e);
+                }
+                
+                setResult(student);
                 setHasSearched(true);
             } else {
                 setResult(null);
                 setHasSearched(true);
-                alert('No student or teacher found with this ID.');
+                alert('No student found with this Admission Number.');
             }
         } catch (error) {
             console.error('Search error:', error);
@@ -123,6 +142,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                         </p>
                     </div>
                 </div>
+                <div className="flex-1"></div>
                 <button
                     type="button"
                     onClick={onLoginClick}
@@ -133,6 +153,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     {isMobile ? 'Faculty' : 'Faculty Access'}
                 </button>
             </nav>
+
 
             <main className={`flex-1 container mx-auto print:py-0 print:px-0 print:max-w-none ${isMobile ? 'px-4 py-8' : 'px-6 py-12'}`}>
                 {/* Search Header */}
@@ -150,10 +171,16 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
                 {/* Search Form */}
                 <div className={`w-full max-w-2xl mx-auto bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 mb-8 print:hidden mobile-layout-element ${isMobile ? 'p-6' : 'p-8'}`}>
-                    <h3 className={`font-black text-white mb-6 flex items-center gap-3 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-                        <i className="fa-solid fa-search text-emerald-400"></i>
-                        {isMobile ? 'Search Results' : 'Student Result Search'}
-                    </h3>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <h3 className={`font-black text-white flex items-center gap-3 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
+                            <i className="fa-solid fa-search text-emerald-400"></i>
+                            {isMobile ? 'Search Results' : 'Student Result Search'}
+                        </h3>
+                        <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/10">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2 hidden sm:inline">Active Term</span>
+                            <TermSelector variant="dark" className="border-none !bg-transparent" />
+                        </div>
+                    </div>
 
                     <form onSubmit={handleSearch} className="space-y-6">
                         <div className={`${isMobile ? 'flex flex-col space-y-6 mobile-form-adaptive' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}`}>
@@ -312,12 +339,12 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 {hasSearched && result && (
                     <div className="w-full max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700 print:mt-0 print:max-w-full">
                         <div className="flex gap-2 mb-8 bg-white/10 p-1 rounded-2xl border border-white/20 print:hidden">
-                            {isResultsReleased && (
+                            {canViewScorecard && (
                                 <button
                                     onClick={() => setViewMode('scorecard')}
                                     className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'scorecard' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
                                 >
-                                    <i className="fa-solid fa-file-invoice"></i> {isMobile ? 'Scorecard' : 'My Scorecard'}
+                                    <i className="fa-solid fa-file-invoice"></i> {isMobile ? (isOnlySupp ? 'Supp. Result' : 'Scorecard') : (isOnlySupp ? 'Supplementary Result' : 'My Scorecard')}
                                 </button>
                             )}
                             {isResultsReleased && (
@@ -328,15 +355,9 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     <i className="fa-solid fa-ranking-star"></i> {isMobile ? 'Rankings' : 'Class Rankings'}
                                 </button>
                             )}
-                            <button
-                                onClick={() => setViewMode('doura-tracker')}
-                                className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'doura-tracker' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
-                            >
-                                <i className="fa-solid fa-book-quran"></i> {isMobile ? 'Doura' : 'Doura Tracker'}
-                            </button>
                         </div>
 
-                        {viewMode === 'scorecard' && !isResultsReleased ? (
+                        {viewMode === 'scorecard' && !canViewScorecard ? (
                             <div className="bg-white rounded-[3rem] p-12 text-center shadow-xl border border-slate-200 animate-in fade-in zoom-in duration-500">
                                 <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
                                     <i className="fa-solid fa-clock-rotate-left text-4xl text-amber-500"></i>
@@ -354,16 +375,12 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                             </div>
                         ) : viewMode === 'scorecard' ? (
                             <Suspense fallback={<div className="p-12 text-center"><div className="loader-ring"></div></div>}>
-                                <PublicScorecard result={result} subjects={subjects} />
+                                <PublicScorecard result={result} subjects={subjects} isResultsReleased={isResultsReleased} isSuppReleased={isSuppReleased} />
                             </Suspense>
-                        ) : viewMode === 'class-rank' ? (
+                        ) : (
                             <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl border border-slate-200">
                                 <ClassResults forcedClass={result.className} hideSelector={true} />
                             </div>
-                        ) : (
-                            <Suspense fallback={<div className="p-12 text-center"><div className="loader-ring"></div></div>}>
-                                <PublicDouraTracker result={result} subjects={subjects} searchClass={searchClass} />
-                            </Suspense>
                         )}
                     </div>
                 )}
@@ -378,7 +395,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     &copy; 2026 AIC Da'wa College | Secure Academic Excellence System
                 </p>
             </footer>
-        </div>
+        </div >
     );
 };
 

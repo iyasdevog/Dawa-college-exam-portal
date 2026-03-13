@@ -3,8 +3,8 @@ export class Subject {
         public readonly id: string,
         public readonly name: string,
         public readonly arabicName: string | undefined,
-        public readonly maxTA: number,
-        public readonly maxCE: number,
+        public readonly maxINT: number,
+        public readonly maxEXT: number,
         public readonly passingTotal: number,
         public readonly facultyName: string | undefined,
         public readonly targetClasses: string[],
@@ -16,8 +16,8 @@ export class Subject {
         id: string;
         name: string;
         arabicName?: string;
-        maxTA: number;
-        maxCE: number;
+        maxINT: number;
+        maxEXT: number;
         passingTotal: number;
         facultyName?: string;
         targetClasses: string[];
@@ -28,8 +28,8 @@ export class Subject {
             data.id,
             data.name,
             data.arabicName,
-            data.maxTA,
-            data.maxCE,
+            data.maxINT,
+            data.maxEXT,
             data.passingTotal,
             data.facultyName,
             data.targetClasses,
@@ -39,19 +39,19 @@ export class Subject {
     }
 
     getMaxTotal(): number {
-        return this.maxTA + this.maxCE;
+        return this.maxINT + this.maxEXT;
     }
 
-    getMinimumTARequired(): number {
-        return Math.ceil(this.maxTA * 0.4);
+    getMinimumINTRequired(): number {
+        return Math.ceil(this.maxINT * 0.4);
     }
 
-    getMinimumCERequired(): number {
-        return Math.ceil(this.maxCE * 0.5);
+    getMinimumEXTRequired(): number {
+        return Math.ceil(this.maxEXT * 0.5);
     }
 
-    isPassingScore(ta: number, ce: number): boolean {
-        return ta >= this.getMinimumTARequired() && ce >= this.getMinimumCERequired();
+    isPassingScore(int: number, ext: number): boolean {
+        return int >= this.getMinimumINTRequired() && ext >= this.getMinimumEXTRequired();
     }
 
     isApplicableToClass(className: string): boolean {
@@ -75,8 +75,8 @@ export class Subject {
             this.id,
             this.name,
             this.arabicName,
-            this.maxTA,
-            this.maxCE,
+            this.maxINT,
+            this.maxEXT,
             this.passingTotal,
             this.facultyName,
             this.targetClasses,
@@ -90,8 +90,8 @@ export class Subject {
             this.id,
             this.name,
             this.arabicName,
-            this.maxTA,
-            this.maxCE,
+            this.maxINT,
+            this.maxEXT,
             this.passingTotal,
             this.facultyName,
             this.targetClasses,
@@ -106,8 +106,8 @@ export interface SubjectConfig {
     id: string;
     name: string;
     arabicName?: string;
-    maxTA: number;
-    maxCE: number;
+    maxINT: number;
+    maxEXT: number;
     passingTotal: number;
     facultyName?: string;
     targetClasses: string[];

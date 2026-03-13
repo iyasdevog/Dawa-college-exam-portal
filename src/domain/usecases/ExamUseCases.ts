@@ -74,8 +74,8 @@ export class ExamUseCases {
         }
 
         // Validate marks against subject limits
-        if (ta > subject.maxTA || ce > subject.maxCE) {
-            throw new Error(`Marks exceed maximum allowed (TA: ${subject.maxTA}, CE: ${subject.maxCE})`);
+        if (ta > subject.maxINT || ce > subject.maxEXT) {
+            throw new Error(`Marks exceed maximum allowed (TA: ${subject.maxINT}, CE: ${subject.maxEXT})`);
         }
 
         const total = ta + ce;

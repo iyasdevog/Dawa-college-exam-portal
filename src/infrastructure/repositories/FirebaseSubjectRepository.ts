@@ -75,8 +75,8 @@ export class FirebaseSubjectRepository implements ISubjectRepository {
             const subjectData = {
                 name: subject.name,
                 arabicName: subject.arabicName,
-                maxTA: subject.maxTA,
-                maxCE: subject.maxCE,
+                maxINT: subject.maxINT,
+                maxEXT: subject.maxEXT,
                 passingTotal: subject.passingTotal,
                 facultyName: subject.facultyName,
                 targetClasses: subject.targetClasses,

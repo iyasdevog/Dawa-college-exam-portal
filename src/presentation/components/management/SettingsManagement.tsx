@@ -19,6 +19,46 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
     const [cleanupStudent, setCleanupStudent] = useState('');
     const [cleanupStudentsList, setCleanupStudentsList] = useState<StudentRecord[]>([]);
 
+    // Academic Year Management State
+    const [newYear, setNewYear] = useState('');
+    const [availableYears, setAvailableYears] = useState<string[]>([]);
+
+    React.useEffect(() => {
+        const loadSettings = async () => {
+            const settings = await dataService.getGlobalSettings();
+            if (settings.availableYears) {
+                setAvailableYears(settings.availableYears);
+            }
+        };
+        loadSettings();
+    }, []);
+
+    const handleAddYear = async () => {
+        if (!newYear || !/^20\d{2}-20\d{2}$/.test(newYear)) {
+            alert('Please enter a valid academic year format (e.g., 2026-2027)');
+            return;
+        }
+
+        if (availableYears.includes(newYear)) {
+            alert('This academic year already exists.');
+            return;
+        }
+
+        try {
+            setIsOperating(true);
+            await dataService.addAcademicYear(newYear);
+            setAvailableYears(prev => [...prev, newYear].sort().reverse());
+            setNewYear('');
+            await onRefresh();
+            alert(`Academic year ${newYear} added successfully!`);
+        } catch (error) {
+            console.error('Error adding academic year:', error);
+            alert('Failed to add academic year');
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
     const verifyPassword = () => {
         const input = prompt('Please enter the security password to confirm this action:');
         if (input === DANGER_PASSWORD) return true;
@@ -191,6 +231,46 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                     </div>
                 </div>
 
+                {/* Academic Year Management Card */}
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-lg mb-4 text-slate-800">Academic Year Management</h3>
+                    <div className="space-y-4">
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="e.g., 2026-2027"
+                                value={newYear}
+                                onChange={(e) => setNewYear(e.target.value)}
+                                className="flex-1 px-4 py-2 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                            />
+                            <button
+                                onClick={handleAddYear}
+                                disabled={isOperating || !newYear}
+                                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center gap-2"
+                            >
+                                <i className="fa-solid fa-plus"></i>
+                                Add
+                            </button>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            Enter the year range (YYYY-YYYY) to enable it in the academic term selectors.
+                        </p>
+
+                        {availableYears.length > 0 && (
+                            <div className="border-t border-slate-100 pt-4">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Configured Years</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableYears.map(year => (
+                                        <div key={year} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                                            {year}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 {/* Templates Card */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <h3 className="font-bold text-lg mb-4 text-slate-800">Templates & Resources</h3>
@@ -356,89 +436,6 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                             Reset Custom Classes
                         </button>
 
-                        {/* Doura Data Cleanup Section */}
-                        <div className="col-span-1 md:col-span-2 bg-white p-4 rounded-xl border-2 border-red-100 mt-4">
-                            <h4 className="font-bold text-red-800 mb-4 flex items-center gap-2">
-                                <i className="fa-solid fa-eraser"></i>
-                                Specific Student Doura Cleanup
-                            </h4>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
-                                        <select
-                                            value={cleanupClass}
-                                            onChange={async (e) => {
-                                                const newClass = e.target.value;
-                                                setCleanupClass(newClass);
-                                                setCleanupStudent('');
-                                                if (newClass) {
-                                                    setIsOperating(true);
-                                                    try {
-                                                        const students = await dataService.getStudentsByClass(newClass);
-                                                        setCleanupStudentsList(students.sort((a, b) => a.name.localeCompare(b.name)));
-                                                    } finally {
-                                                        setIsOperating(false);
-                                                    }
-                                                } else {
-                                                    setCleanupStudentsList([]);
-                                                }
-                                            }}
-                                            className="w-full p-2 border-2 border-slate-300 rounded-lg focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
-                                            disabled={isOperating}
-                                        >
-                                            <option value="">Choose Class...</option>
-                                            {CLASSES.map(cls => (
-                                                <option key={cls} value={cls}>{cls}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Student</label>
-                                        <select
-                                            value={cleanupStudent}
-                                            onChange={(e) => setCleanupStudent(e.target.value)}
-                                            className="w-full p-2 border-2 border-slate-300 rounded-lg focus:ring-4 focus:ring-red-500/40 focus:border-red-500 bg-white"
-                                            disabled={!cleanupClass || isOperating}
-                                        >
-                                            <option value="">Choose Student...</option>
-                                            {cleanupStudentsList.map(student => (
-                                                <option key={student.adNo} value={student.adNo}>{student.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={async () => {
-                                        if (!cleanupStudent) return;
-                                        if (!verifyPassword()) return;
-                                        const confirmInput = window.prompt("Type 'DELETE' to confirm permanent deletion of all Doura data for this student:");
-                                        if (confirmInput === 'DELETE') {
-                                            try {
-                                                setIsOperating(true);
-                                                await dataService.deleteAllStudentDouraSubmissions(cleanupStudent);
-                                                setCleanupClass('');
-                                                setCleanupStudent('');
-                                                setCleanupStudentsList([]);
-                                                alert('Student Doura data deleted successfully.');
-                                            } catch (error) {
-                                                console.error('Delete failed', error);
-                                                alert('Failed to delete data');
-                                            } finally {
-                                                setIsOperating(false);
-                                            }
-                                        }
-                                    }}
-                                    disabled={!cleanupStudent || isOperating}
-                                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold uppercase tracking-widest shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    {isOperating ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-trash-can"></i>}
-                                    Delete Student Doura Data
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 )}
             </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { StudentRecord, SubjectConfig, DouraSubmission, DouraTask, KhatamProgress } from '../../domain/entities/types';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface PublicDouraTrackerProps {
     result: StudentRecord;
@@ -42,6 +43,7 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
     const [classSelfReciters, setClassSelfReciters] = useState<{ name: string; juzCount: number }[]>([]);
 
     const { isMobile } = useMobile();
+    const { activeTerm } = useTerm();
 
     // Extract unique faculty names from Doura-related subjects
     const douraTeachers = useMemo(() => {
@@ -64,9 +66,11 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
             setIsLoadingDoura(true);
             const [history, tasks, progress] = await Promise.all([
                 dataService.getDouraSubmissionsByAdNo(result.adNo),
-                dataService.getDouraTasks(result.className, result.adNo),
+                dataService.getDouraTasks(result.className, result.adNo, activeTerm),
                 dataService.getKhatamProgress(result.adNo)
             ]);
+            // Filter history by active term for display in history tab if needed
+            // But for pre-fill, we might want global history.
             setDouraSubmissions(history);
             setDouraTasks(tasks.filter(t => t.status === 'Active'));
             setKhatamProgress(progress);
@@ -149,8 +153,8 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
 
     const loadTopReciters = useCallback(async () => {
         try {
-            // Fetch ALL approved submissions for college-wide leaderboard
-            const allSubmissions = await dataService.getAllDouraSubmissions('all', 'Approved');
+            // Fetch ALL approved submissions for college-wide leaderboard in the active term
+            const allSubmissions = await dataService.getAllDouraSubmissions('all', 'Approved', activeTerm);
 
             // 1. College - Task Champions
             const colTaskAgg: Record<string, number> = {};
@@ -197,7 +201,7 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
         } catch (error) {
             console.error('Error loading leaderboards:', error);
         }
-    }, [searchClass]);
+    }, [searchClass, activeTerm]);
 
     useEffect(() => {
         loadDouraDashboardData();
@@ -226,7 +230,8 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
                 status: submissionType === 'Self' ? 'Approved' : 'Pending',
                 submittedAt: new Date().toISOString(),
                 type: submissionType,
-                taskId: selectedTaskId
+                taskId: selectedTaskId,
+                academicTerm: activeTerm
             };
 
             await dataService.submitDouraStatus(submissionData);
@@ -278,7 +283,8 @@ const PublicDouraTracker: React.FC<PublicDouraTrackerProps> = ({ result, subject
                     status: 'Pending',
                     submittedAt: new Date().toISOString(),
                     type: 'Task',
-                    taskId: task.id
+                    taskId: task.id,
+                    academicTerm: activeTerm
                 });
                 await loadDouraDashboardData();
                 await loadTopReciters();

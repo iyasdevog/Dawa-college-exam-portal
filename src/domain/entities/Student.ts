@@ -1,4 +1,5 @@
-export type PerformanceLevel = 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed';
+import { SubjectConfig } from './Subject';
+export type PerformanceLevel = 'O (Outstanding)' | 'A+ (Excellent)' | 'A (Very Good)' | 'B+ (Good)' | 'B (Good)' | 'C (Average)' | 'F (Failed)';
 
 export interface SubjectMarks {
     ta: number;
@@ -21,7 +22,7 @@ export class Student {
         public readonly grandTotal: number = 0,
         public readonly average: number = 0,
         public readonly rank: number = 0,
-        public readonly performanceLevel: PerformanceLevel = 'Needs Improvement'
+        public readonly performanceLevel: PerformanceLevel = 'C (Average)'
     ) { }
 
     static create(data: {
@@ -48,7 +49,7 @@ export class Student {
             data.grandTotal || 0,
             data.average || 0,
             data.rank || 0,
-            data.performanceLevel || 'Needs Improvement'
+            data.performanceLevel || 'C (Average)'
         );
     }
 
@@ -71,17 +72,36 @@ export class Student {
             .map(([subjectId, _]) => subjectId);
     }
 
-    updateMarks(subjectId: string, marks: SubjectMarks): Student {
+    updateMarks(subjectId: string, marks: SubjectMarks, subjects: SubjectConfig[]): Student {
         const updatedMarks = { ...this.marks, [subjectId]: marks };
         const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
         const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
+        // Note: we're reusing the calculation logic from DataService style
+        let minPercentage = 100;
+        let hasMarks = false;
+        let hasFailedSubject = false;
+
+        for (const [sId, m] of Object.entries(updatedMarks)) {
+            const subject = subjects.find(s => s.id === sId);
+            if (!subject) continue;
+            const totalMax = (subject.maxINT || 0) + (subject.maxEXT || 0);
+            if (totalMax === 0) continue;
+            hasMarks = true;
+            if (m.status === 'Failed') hasFailedSubject = true;
+            const percentage = (m.total / totalMax) * 100;
+            if (percentage < minPercentage) minPercentage = percentage;
+        }
+
         let performanceLevel: PerformanceLevel;
-        if (average >= 80) performanceLevel = 'Excellent';
-        else if (average >= 70) performanceLevel = 'Good';
-        else if (average >= 60) performanceLevel = 'Average';
-        else if (average >= 40) performanceLevel = 'Needs Improvement';
-        else performanceLevel = 'Failed';
+        if (hasFailedSubject || minPercentage < 40) performanceLevel = 'F (Failed)';
+        else if (!hasMarks) performanceLevel = 'C (Average)';
+        else if (minPercentage >= 95) performanceLevel = 'O (Outstanding)';
+        else if (minPercentage >= 85) performanceLevel = 'A+ (Excellent)';
+        else if (minPercentage >= 75) performanceLevel = 'A (Very Good)';
+        else if (minPercentage >= 65) performanceLevel = 'B+ (Good)';
+        else if (minPercentage >= 55) performanceLevel = 'B (Good)';
+        else performanceLevel = 'C (Average)';
 
         return new Student(
             this.id,

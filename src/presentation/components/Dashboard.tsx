@@ -783,11 +783,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
 
     // Grade distribution — memoized to avoid filtering on every render
     const gradeStats = useMemo(() => ({
-        Excellent: students.filter(s => s.performanceLevel === 'Excellent').length,
-        Good: students.filter(s => s.performanceLevel === 'Good').length,
-        Average: students.filter(s => s.performanceLevel === 'Average').length,
-        'Needs Improvement': students.filter(s => s.performanceLevel === 'Needs Improvement').length,
-        Failed: students.filter(s => s.performanceLevel === 'Failed').length,
+        'O (Outstanding)': students.filter(s => s.performanceLevel === 'O (Outstanding)').length,
+        'A+ (Excellent)': students.filter(s => s.performanceLevel === 'A+ (Excellent)').length,
+        'A (Very Good)': students.filter(s => s.performanceLevel === 'A (Very Good)').length,
+        'B+ (Good)': students.filter(s => s.performanceLevel === 'B+ (Good)').length,
+        'B (Good)': students.filter(s => s.performanceLevel === 'B (Good)').length,
+        'C (Average)': students.filter(s => s.performanceLevel === 'C (Average)').length,
+        'F (Failed)': students.filter(s => s.performanceLevel === 'F (Failed)').length,
     }), [students]);
 
     // Class-wise statistics — memoized
@@ -1200,10 +1202,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                         {/* Mobile Swipe Hint */}
                         {currentCardIndex === 0 && (
                             <div className="text-center mt-2">
-                                <p className="text-slate-400 text-xs flex items-center justify-center gap-1">
-                                    <i className="fa-solid fa-hand-pointer"></i>
-                                    Swipe left to see more stats
-                                </p>
+                                <h3 className="text-emerald-400 font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <i className="fa-solid fa-check-double"></i>
+                                    EXT Completion
+                                </h3>
                             </div>
                         )}
                     </div>
@@ -1667,6 +1669,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                                 style={getTypographyStyle('body-small')}
                             >
                                 Refresh all data from Firebase
+                            </p>
+                        </button>
+
+                        {/* Temporary Grade Recalculation Tool */}
+                        <button
+                            onClick={async () => {
+                                if (window.confirm("This will recalculate performance levels for ALL students based on the new subject-based grading logic. This may take a while. Proceed?")) {
+                                    setLoadingState({
+                                        isLoading: true,
+                                        stage: 'calculating-stats',
+                                        progress: 0,
+                                        message: 'Recalculating all grades...'
+                                    });
+                                    try {
+                                        await dataService.recalculateAllStudentPerformanceLevels();
+                                        alert("Successfully recalculated all performance levels!");
+                                        loadData();
+                                    } catch (e) {
+                                        alert("Failed to recalculate: " + (e instanceof Error ? e.message : String(e)));
+                                    } finally {
+                                        setLoadingState(prev => ({ ...prev, isLoading: false }));
+                                    }
+                                }
+                            }}
+                            className="p-4 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-all text-left"
+                        >
+                            <div className="flex items-center gap-3 mb-2">
+                                <i className="fa-solid fa-calculator text-red-600"></i>
+                                <span
+                                    className="font-bold text-red-900"
+                                    style={getTypographyStyle('body-medium')}
+                                >
+                                    Recalculate Grades
+                                </span>
+                            </div>
+                            <p
+                                className="text-red-700"
+                                style={getTypographyStyle('body-small')}
+                            >
+                                Apply new grading system to all students
                             </p>
                         </button>
                     </div>

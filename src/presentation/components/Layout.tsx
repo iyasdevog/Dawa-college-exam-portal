@@ -3,6 +3,7 @@ import { ViewType } from '../../domain/entities/types';
 import HamburgerMenu from './HamburgerMenu';
 import { User } from '../../domain/entities/User';
 import { useMobile, useMobileNavigation } from '../hooks/useMobile';
+import { TermSelector } from './TermSelector';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,7 +23,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
-    { id: 'doura-monitoring', icon: 'fa-book-quran', label: 'Doura Monitoring' },
     ...(currentUser?.role === 'admin' ? [{ id: 'management', icon: 'fa-sliders', label: 'Management' }] : []),
   ];
 
@@ -33,7 +33,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
       'class-report': 'Class Report',
       'student-card': 'Score Cards',
       'management': 'Management',
-      'doura-monitoring': 'Doura Monitoring',
       'public': 'Public Portal'
     };
     return titles[view] || view.replace('-', ' ');
@@ -53,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
           {isMobile && <HamburgerMenu activeView={activeView} setView={setView} onLogout={onLogout} isCloudActive={isCloudActive} currentUser={currentUser} />}
           <h1 className={`font-black text-slate-900 tracking-tight truncate ${isMobile ? 'text-lg' : 'text-xl md:text-2xl'}`}>{getViewTitle(activeView)}</h1>
           <div className={`${isMobile ? 'ml-auto' : 'ml-4'} min-w-[44px] min-h-[44px] flex items-center justify-center`}>
-            <CloudStatusIndicator />
+            {isMobile ? <TermSelector className="scale-75 origin-right" /> : <CloudStatusIndicator />}
           </div>
         </div>
         {!isMobile && (
@@ -62,6 +61,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
               <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Faculty Terminal</p>
               <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-widest">Node ID: IDA-2025-01</p>
             </div>
+            {/* Context Selector */}
+            <TermSelector />
             <button className={`p-3 rounded-xl flex items-center justify-center shadow-inner transition-all w-12 h-12 ${isCloudActive ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : 'bg-amber-100 text-amber-600 hover:bg-amber-200'}`}>
               <i className={`fa-solid text-lg ${isCloudActive ? 'fa-cloud' : 'fa-database'}`}></i>
             </button>

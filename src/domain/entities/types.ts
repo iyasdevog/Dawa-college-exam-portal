@@ -10,18 +10,21 @@ export type PerformanceLevel =
   | 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed'; // Keep old types temporarily for migration
 
 export interface SubjectMarks {
-  ta: number | 'A';
-  ce: number | 'A';
+  int: number | 'A';
+  ext: number | 'A';
   total: number;
   status: 'Passed' | 'Failed' | 'Pending';
   isSupplementary?: boolean; // Indicates if this is a supplementary exam
   supplementaryYear?: number; // Year of the supplementary exam
 }
 
+export type SupplementaryExamType = 'PreviousYear' | 'CurrentSemester';
+
 export interface SupplementaryExam {
   id: string;
   studentId: string;
   subjectId: string;
+  examType: SupplementaryExamType; // Distinguishes between repeating past years and current failures
   originalSemester: 'Odd' | 'Even';
   originalYear: number;
   supplementaryYear: number;
@@ -29,27 +32,47 @@ export interface SupplementaryExam {
   marks?: SubjectMarks;
 }
 
-export interface StudentRecord {
-  id: string;
-  adNo: string;
-  name: string;
+export interface TermRecord {
   className: string;
   semester: 'Odd' | 'Even';
   marks: Record<string, SubjectMarks>;
-  supplementaryExams?: SupplementaryExam[]; // Track supplementary exams
   grandTotal: number;
   average: number;
   rank: number;
   performanceLevel: PerformanceLevel;
+}
+
+export interface StudentRecord {
+  id: string;
+  adNo: string;
+  name: string;
+  currentClass: string; // The active class they are in right now
+  academicHistory?: Record<string, TermRecord>; // e.g. "2023-2024-Odd": { ... }
+
+  // Legacy fields for migration
+  className?: string;
+  semester?: 'Odd' | 'Even';
+  marks?: Record<string, SubjectMarks>;
+  supplementaryExams?: SupplementaryExam[]; // Track supplementary exams
+  grandTotal?: number;
+  average?: number;
+  rank?: number;
+  performanceLevel?: PerformanceLevel;
   importRowNumber?: number; // Track original import order
+}
+
+export interface GlobalSettings {
+  currentAcademicYear: string; // e.g., "2025-2026"
+  currentSemester: 'Odd' | 'Even';
+  availableYears?: string[]; // Manually managed list of academic years
 }
 
 export interface SubjectConfig {
   id: string;
   name: string;
   arabicName?: string;
-  maxTA: number;
-  maxCE: number;
+  maxINT: number;
+  maxEXT: number;
   passingTotal: number;
   facultyName?: string;
   targetClasses: string[];
@@ -57,57 +80,13 @@ export interface SubjectConfig {
   enrolledStudents?: string[]; // Student IDs for elective subjects
 }
 
-export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management' | 'public' | 'doura-monitoring';
-
-export interface DouraTask {
-  id: string;
-  title: string;
-  description?: string;
-  targetClass: string;
-  targetStudentAdNo?: string;
-  juzStart: number;
-  juzEnd: number;
-  pageStart: number;
-  pageEnd: number;
-  dueDate: string;
-  createdAt: string;
-  createdBy: string;
-  status: 'Active' | 'Closed';
-}
-
-export interface KhatamProgress {
-  id: string;
-  studentAdNo: string;
-  khatamCount: number;
-  currentKhatamJuz: number[]; // Array of completed Juz numbers (1-30) for the current Khatam
-  lastCompletedDate?: string;
-}
+export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management' | 'public';
 
 export interface ReleaseSettings {
   isReleased: boolean;
   releaseDate?: string; // ISO string format
+  isSupplementaryReleased?: boolean; // For separate supplementary release
+  supplementaryReleaseDate?: string; // ISO string format
 }
 
 export type ClassReleaseSettings = Record<string, ReleaseSettings>;
-
-export interface DouraSubmission {
-  id: string;
-  studentAdNo: string;
-  studentName: string;
-  className: string;
-  juzStart: number;
-  juzEnd: number;
-  pageStart: number;
-  pageEnd: number;
-  ayaStart?: number;
-  ayaEnd?: number;
-  recitationDate: string;
-  status: 'Pending' | 'Approved'; // Simplified: Rejection removed
-  submittedAt: string; // ISO string
-  approvedAt?: string; // ISO string
-  teacherName?: string; // Student's selected teacher
-  approvedBy?: string; // Teacher who approved the submission
-  feedback?: string;
-  taskId?: string; // Optional: linked to a specific task
-  type: 'Task' | 'Self'; // Whether this was for a task or independent
-}

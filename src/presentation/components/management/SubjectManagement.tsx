@@ -21,8 +21,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const [subjectForm, setSubjectForm] = useState({
         name: '',
         arabicName: '',
-        maxTA: 50,
-        maxCE: 30,
+        maxINT: 50,
+        maxEXT: 30,
         passingTotal: 35,
         facultyName: '',
         targetClasses: [] as string[],
@@ -49,8 +49,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         setSubjectForm({
             name: '',
             arabicName: '',
-            maxTA: 50,
-            maxCE: 30,
+            maxINT: 50,
+            maxEXT: 30,
             passingTotal: 35,
             facultyName: '',
             targetClasses: [],
@@ -66,8 +66,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         setSubjectForm({
             name: subject.name,
             arabicName: subject.arabicName || '',
-            maxTA: subject.maxTA,
-            maxCE: subject.maxCE,
+            maxINT: subject.maxINT,
+            maxEXT: subject.maxEXT,
             passingTotal: subject.passingTotal,
             facultyName: subject.facultyName || '',
             targetClasses: subject.targetClasses,
@@ -140,8 +140,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             const subjectData = {
                 name: normalizedName,
                 arabicName: subjectForm.arabicName.trim(),
-                maxTA: subjectForm.maxTA,
-                maxCE: subjectForm.maxCE,
+                maxINT: subjectForm.maxINT,
+                maxEXT: subjectForm.maxEXT,
                 passingTotal: subjectForm.passingTotal,
                 facultyName: normalizedFacultyName,
                 targetClasses: uniqueTargetClasses, // Use filtered classes
@@ -511,7 +511,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                                     <div className="text-[10px] text-slate-400 mt-1 font-medium">{(subject.enrolledStudents || []).length} enrolled</div>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxTA} / {subject.maxCE}</td>
+                                            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxINT} / {subject.maxEXT}</td>
                                             <td className="p-4 text-center">
                                                 {Array.isArray(subject.specificClass) ? (
                                                     <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">
@@ -572,7 +572,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                                 )}
                                             </div>
                                             <div className="text-xs text-slate-400">
-                                                Max TA: {subject.maxTA} | Max CE: {subject.maxCE}
+                                                Max TA: {subject.maxINT} | Max CE: {subject.maxEXT}
                                             </div>
                                         </div>
                                     ))}
@@ -648,13 +648,13 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 <div>
                                     <label className="block text-sm font-bold mb-1">Max TA</label>
                                     <select
-                                        value={subjectForm.maxTA}
+                                        value={subjectForm.maxINT}
                                         onChange={e => {
                                             const newMaxTA = parseInt(e.target.value);
                                             setSubjectForm(prev => ({
                                                 ...prev,
-                                                maxTA: newMaxTA,
-                                                maxCE: newMaxTA === 100 ? 0 : (prev.maxCE === 0 ? 30 : prev.maxCE)
+                                                maxINT: newMaxTA,
+                                                maxEXT: newMaxTA === 100 ? 0 : (prev.maxEXT === 0 ? 30 : prev.maxEXT)
                                             }));
                                         }}
                                         className="w-full p-3 border rounded-xl"
@@ -668,12 +668,12 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 <div>
                                     <label className="block text-sm font-bold mb-1">Max CE</label>
                                     <select
-                                        value={subjectForm.maxCE}
-                                        onChange={e => setSubjectForm(prev => ({ ...prev, maxCE: parseInt(e.target.value) }))}
+                                        value={subjectForm.maxEXT}
+                                        onChange={e => setSubjectForm(prev => ({ ...prev, maxEXT: parseInt(e.target.value) }))}
                                         className="w-full p-3 border rounded-xl disabled:bg-slate-100 disabled:text-slate-400"
-                                        disabled={subjectForm.maxTA === 100}
+                                        disabled={subjectForm.maxINT === 100}
                                     >
-                                        {subjectForm.maxTA === 100 ? (
+                                        {subjectForm.maxINT === 100 ? (
                                             <option value={0}>0 (Not Applicable)</option>
                                         ) : (
                                             <>

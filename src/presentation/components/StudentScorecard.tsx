@@ -5,6 +5,7 @@ import { CLASSES } from '../../domain/entities/constants';
 import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface StudentScorecardProps {
     currentUser?: User | null;
@@ -24,6 +25,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const { activeTerm, currentSemester } = useTerm();
 
     useEffect(() => {
         loadData();
@@ -78,14 +80,26 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
 
     const selectedStudentData = classStudents.find(s => s.id === selectedStudent);
 
+    // Derive data from the active term if available, otherwise fallback if the active term matches the legacy term mapping
+    // But since dataService migrates legacy to academicHistory, we can safely depend on academicHistory
+    const activeTermRecord = selectedStudentData?.academicHistory?.[activeTerm];
+    const displayMarks = activeTermRecord?.marks || {};
+    const displayRank = activeTermRecord?.rank || '-';
+    const displayTotal = activeTermRecord?.grandTotal || 0;
+    const displayAverage = activeTermRecord?.average || 0;
+    const displayPerformance = activeTermRecord?.performanceLevel || 'Not Assessed';
+    const displayClass = activeTermRecord?.className || selectedStudentData?.currentClass || '';
+    const displaySemester = activeTermRecord?.semester || currentSemester;
+
+
     // Calculate additional statistics for the selected student
     const studentStats = selectedStudentData ? {
         totalSubjects: classSubjects.length,
-        completedSubjects: Object.keys(selectedStudentData.marks).length,
-        passedSubjects: Object.values(selectedStudentData.marks).filter((m: any) => m.status === 'Passed').length,
-        failedSubjects: Object.values(selectedStudentData.marks).filter((m: any) => m.status === 'Failed').length,
-        highestScore: Math.max(...Object.values(selectedStudentData.marks).map((m: any) => m.total), 0),
-        lowestScore: Math.min(...Object.values(selectedStudentData.marks).map((m: any) => m.total), 0)
+        completedSubjects: Object.keys(displayMarks).length,
+        passedSubjects: Object.values(displayMarks).filter((m: any) => m.status === 'Passed').length,
+        failedSubjects: Object.values(displayMarks).filter((m: any) => m.status === 'Failed').length,
+        highestScore: Object.values(displayMarks).length > 0 ? Math.max(...Object.values(displayMarks).map((m: any) => m.total), 0) : 0,
+        lowestScore: Object.values(displayMarks).length > 0 ? Math.min(...Object.values(displayMarks).map((m: any) => m.total), 0) : 0
     } : null;
 
     if (isLoading) {
@@ -229,13 +243,13 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                     <h3 className="text-4xl font-black tracking-tighter mb-2 print:text-sm print:text-black print:mb-1 print:leading-tight print:hierarchy-primary">{selectedStudentData.name}</h3>
                                     <div className="flex gap-4 items-center flex-wrap print:gap-1 print:text-xs">
                                         <span className="px-4 py-2 bg-white/20 rounded-lg text-[10px] font-black tracking-widest uppercase print:bg-white print:border print:border-black print:text-black print:px-1 print:py-0 print:text-xs print:leading-tight print:contrast-medium">
-                                            {selectedStudentData.className}
+                                            {displayClass}
                                         </span>
                                         <span className="text-emerald-300 font-bold text-sm print:text-black print:text-xs print:leading-tight print:hierarchy-secondary">
                                             Admission: {selectedStudentData.adNo}
                                         </span>
                                         <span className="text-emerald-300 font-bold text-sm print:text-black print:text-xs print:leading-tight print:hierarchy-secondary">
-                                            Semester: {selectedStudentData.semester}
+                                            Term: {activeTerm}
                                         </span>
                                     </div>
                                 </div>
@@ -244,7 +258,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                         Class Rank
                                     </span>
                                     <span className="text-5xl font-black text-emerald-300 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">
-                                        #{selectedStudentData.rank}
+                                        #{displayRank}
                                     </span>
                                 </div>
                             </div>
@@ -255,22 +269,24 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12 print:grid-cols-4 print:gap-1 print:mb-2 print:break-inside-avoid">
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-0.5 print:rounded-none print:border-black print:bg-white print:contrast-medium">
                                     <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Total Marks</p>
-                                    <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{selectedStudentData.grandTotal}</p>
+                                    <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{displayTotal}</p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
                                     <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Average</p>
-                                    <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{selectedStudentData.average.toFixed(1)}%</p>
+                                    <p className="text-4xl font-black text-slate-900 print:text-sm print:text-black print:leading-tight print:hierarchy-primary">{typeof displayAverage === 'number' ? displayAverage.toFixed(1) : displayAverage}%</p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
                                     <p className="text-[10px] uppercase font-black text-slate-400 mb-2 tracking-widest print:text-black print:text-xs print:mb-0 print:leading-tight print:hierarchy-tertiary">Grade</p>
-                                    <p className={`text-3xl font-black print:text-sm print:leading-tight ${selectedStudentData.performanceLevel === 'F (Failed)' ? 'text-red-500 print:performance-failed' :
-                                        selectedStudentData.performanceLevel.includes('Outstanding') ? 'text-emerald-600 print:performance-excellent' :
-                                            selectedStudentData.performanceLevel.includes('Excellent') ? 'text-emerald-500 print:performance-excellent' :
-                                                selectedStudentData.performanceLevel.includes('Very Good') ? 'text-blue-500 print:performance-good' :
-                                                    selectedStudentData.performanceLevel.includes('Good') ? 'text-teal-500 print:performance-good' :
-                                                        'text-amber-500 print:performance-average'
+                                    <p className={`text-3xl font-black print:text-sm print:leading-tight ${displayPerformance === 'F (Failed)' ? 'text-red-500 print:performance-failed' :
+                                        displayPerformance.includes('O (Outstanding)') ? 'text-emerald-600 print:performance-excellent' :
+                                            displayPerformance.includes('A+ (Excellent)') ? 'text-emerald-500 print:performance-excellent' :
+                                                displayPerformance.includes('A (Very Good)') ? 'text-blue-500 print:performance-good' :
+                                                    displayPerformance.includes('B+ (Good)') ? 'text-teal-500 print:performance-good' :
+                                                        displayPerformance.includes('B (Good)') ? 'text-teal-400 print:performance-good' :
+                                                            displayPerformance === 'C (Average)' ? 'text-amber-500 print:performance-average' :
+                                                                'text-slate-500'
                                         }`}>
-                                        {selectedStudentData.performanceLevel}
+                                        {displayPerformance}
                                     </p>
                                 </div>
                                 <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center print:p-1 print:rounded-none print:border-black print:bg-white print:contrast-medium">
@@ -288,8 +304,8 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                         <thead className="print:keep-with-next">
                                             <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-white print:text-black print:text-xs print:border-b-2 print:border-black print:break-inside-avoid" role="row">
                                                 <th className="px-8 py-6 text-left print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Subject</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">TA</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">CE</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">INT</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">EXT</th>
                                                 <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Total</th>
                                                 <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Max</th>
                                                 <th className="px-6 py-6 text-center print:px-1 print:py-1 print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Status</th>
@@ -297,8 +313,8 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                         </thead>
                                         <tbody className="divide-y divide-slate-50 print:divide-black">
                                             {classSubjects.map(subject => {
-                                                const marks = selectedStudentData.marks[subject.id];
-                                                const maxTotal = subject.maxTA + subject.maxCE;
+                                                const marks = displayMarks[subject.id];
+                                                const maxTotal = subject.maxINT + subject.maxEXT;
                                                 const percentage = marks ? Math.round((marks.total / maxTotal) * 100) : 0;
 
                                                 return (
@@ -319,19 +335,19 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
-                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`TA marks: ${marks?.ta ?? 'Not assessed'} out of ${subject.maxTA}`}>
-                                                                {marks?.ta ?? '-'}
-                                                                <span className="text-xs text-slate-400 print:text-black">/{subject.maxTA}</span>
+                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`INT marks: ${marks?.int ?? 'Not assessed'} out of ${subject.maxINT}`}>
+                                                                {marks?.int ?? '-'}
+                                                                <span className="text-xs text-slate-400 print:text-black">/{subject.maxINT}</span>
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
-                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`CE marks: ${marks?.ce ?? 'Not assessed'} out of ${subject.maxCE}`}>
-                                                                {subject.maxTA === 100 || subject.maxCE === 0 ? (
+                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`EXT marks: ${marks?.ext ?? 'Not assessed'} out of ${subject.maxEXT}`}>
+                                                                {subject.maxINT === 100 || subject.maxEXT === 0 ? (
                                                                     <span className="text-xs text-slate-400 uppercase">N/A</span>
                                                                 ) : (
                                                                     <>
-                                                                        {marks?.ce ?? '-'}
-                                                                        <span className="text-xs text-slate-400 print:text-black">/{subject.maxCE}</span>
+                                                                        {marks?.ext ?? '-'}
+                                                                        <span className="text-xs text-slate-400 print:text-black">/{subject.maxEXT}</span>
                                                                     </>
                                                                 )}
                                                             </div>
@@ -408,18 +424,20 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                         <div className="space-y-3">
                                             <div className="flex justify-between">
                                                 <span className="text-slate-600">Class Position:</span>
-                                                <span className="font-bold text-slate-900">#{selectedStudentData.rank}</span>
+                                                <span className="font-bold text-slate-900">#{displayRank}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-slate-600">Overall Grade:</span>
-                                                <span className={`font-bold ${selectedStudentData.performanceLevel === 'F (Failed)' ? 'text-red-600' :
-                                                    selectedStudentData.performanceLevel.includes('Outstanding') ? 'text-purple-600' :
-                                                        selectedStudentData.performanceLevel.includes('Excellent') ? 'text-emerald-600' :
-                                                            selectedStudentData.performanceLevel.includes('Very Good') ? 'text-blue-600' :
-                                                                selectedStudentData.performanceLevel.includes('Good') ? 'text-teal-600' :
-                                                                    'text-amber-600'
+                                                <span className={`font-bold ${displayPerformance === 'F (Failed)' ? 'text-red-600' :
+                                                    displayPerformance.includes('O (Outstanding)') ? 'text-emerald-600' :
+                                                        displayPerformance.includes('A+ (Excellent)') ? 'text-emerald-500' :
+                                                            displayPerformance.includes('A (Very Good)') ? 'text-blue-600' :
+                                                                displayPerformance.includes('B+ (Good)') ? 'text-teal-600' :
+                                                                    displayPerformance.includes('B (Good)') ? 'text-teal-500' :
+                                                                        displayPerformance === 'C (Average)' ? 'text-amber-600' :
+                                                                            'text-slate-600'
                                                     }`}>
-                                                    {selectedStudentData.performanceLevel}
+                                                    {displayPerformance}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">

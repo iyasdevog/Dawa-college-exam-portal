@@ -15,7 +15,7 @@ import {
     Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, DouraSubmission, DouraTask, KhatamProgress } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 import { normalizeName } from './formatUtils';
@@ -23,14 +23,45 @@ import { normalizeName } from './formatUtils';
 export class DataService {
     // Helper to calculate performance level
     // Helper to calculate performance level
-    private calculatePerformanceLevel(average: number): PerformanceLevel {
-        if (average >= 95) return 'O (Outstanding)';
-        if (average >= 85) return 'A+ (Excellent)';
-        if (average >= 75) return 'A (Very Good)';
-        if (average >= 65) return 'B+ (Good)';
-        if (average >= 55) return 'B (Good)';
-        if (average >= 40) return 'C (Average)';
-        return 'F (Failed)';
+    private calculatePerformanceLevel(marks: Record<string, any>, subjects: SubjectConfig[]): PerformanceLevel {
+        const marksEntries = Object.entries(marks);
+        if (marksEntries.length === 0) return 'F (Failed)';
+
+        let minPercentage = 100;
+        let hasMarks = false;
+        let hasFailedSubject = false;
+
+        for (const [subjectId, mark] of marksEntries) {
+            const subject = subjects.find(s => s.id === subjectId);
+            if (!subject) continue;
+
+            // Skip subjects that shouldn't be counted for grading if necessary
+            // For now, count all subjects that have marks
+            const totalMax = (subject.maxINT || 0) + (subject.maxEXT || 0);
+            if (totalMax === 0) continue;
+
+            hasMarks = true;
+            
+            // If any subject is marked as Failed by the system logic, the overall grade is Failed
+            if (mark.status === 'Failed') {
+                hasFailedSubject = true;
+            }
+
+            const percentage = (this.getMarkValue(mark.total) / totalMax) * 100;
+            if (percentage < minPercentage) {
+                minPercentage = percentage;
+            }
+        }
+
+        if (hasFailedSubject || minPercentage < 40) return 'F (Failed)';
+        if (!hasMarks) return 'C (Average)';
+
+        if (minPercentage >= 95) return 'O (Outstanding)';
+        if (minPercentage >= 85) return 'A+ (Excellent)';
+        if (minPercentage >= 75) return 'A (Very Good)';
+        if (minPercentage >= 65) return 'B+ (Good)';
+        if (minPercentage >= 55) return 'B (Good)';
+        return 'C (Average)';
     }
 
     // Collections
@@ -38,18 +69,15 @@ export class DataService {
     private subjectsCollection = 'subjects';
     private supplementaryExamsCollection = 'supplementaryExams';
     private settingsCollection = 'settings';
-    private douraCollection = 'doura_submissions';
-    private douraTasksCollection = 'doura_tasks';
-    private khatamCollection = 'khatam_progress';
 
     // Cache for performance optimization
     private studentsCache: StudentRecord[] | null = null;
     private subjectsCache: SubjectConfig[] | null = null;
-    private douraCache: DouraSubmission[] | null = null;
     private cacheTimestamp: number = 0;
-    private douraCacheTimestamp: number = 0;
+    private currentGlobalSettings: GlobalSettings | null = null;
+    private readonly DEFAULT_ACADEMIC_YEAR = "2025-2026";
+    private readonly DEFAULT_SEMESTER = "Odd";
     private readonly CACHE_DURATION = 30000; // 30 seconds cache
-    private readonly DOURA_CACHE_DURATION = 10000; // 10 seconds for doura
 
     // Helper method to get database instance
     private get db() {
@@ -81,13 +109,85 @@ export class DataService {
         return 0;
     }
 
+    /**
+     * Normalizes a student record from Firestore.
+     * Maps legacy 'ta' and 'ce' fields in marks to 'int' and 'ext'.
+     */
+    private processStudentRecord(data: any, id: string): StudentRecord {
+        const currentTermKey = this.getCurrentTermKey();
+        let academicHistory = data.academicHistory || {};
+        const currentClass = data.currentClass || data.className || '';
+
+        // Extract marks for the current active term
+        const termData = academicHistory[currentTermKey];
+        const rawMarks = termData?.marks || data.marks || {};
+
+        const normalizedMarks: Record<string, SubjectMarks> = {};
+        Object.entries(rawMarks).forEach(([subjectId, marks]: [string, any]) => {
+            normalizedMarks[subjectId] = {
+                int: marks.int !== undefined ? marks.int : (marks.ta !== undefined ? marks.ta : 0),
+                ext: marks.ext !== undefined ? marks.ext : (marks.ce !== undefined ? marks.ce : 0),
+                total: marks.total || 0,
+                status: marks.status || 'Pending',
+                isSupplementary: marks.isSupplementary,
+                supplementaryYear: marks.supplementaryYear
+            };
+        });
+
+        // Migration to new structure if needed
+        if (!data.academicHistory && Object.keys(normalizedMarks).length > 0) {
+            const legacyTerm = `${this.DEFAULT_ACADEMIC_YEAR}-${this.DEFAULT_SEMESTER}`;
+            academicHistory[legacyTerm] = {
+                className: currentClass,
+                semester: data.semester || 'Odd',
+                marks: normalizedMarks,
+                grandTotal: data.grandTotal || 0,
+                average: data.average || 0,
+                rank: data.rank || 0,
+                performanceLevel: data.performanceLevel || 'C (Average)'
+            };
+        }
+
+        // Always pull the current term's totals if available
+        const currentTotals = academicHistory[currentTermKey] || {
+            grandTotal: data.grandTotal || 0,
+            average: data.average || 0,
+            rank: data.rank || 0,
+            performanceLevel: data.performanceLevel || 'C (Average)'
+        };
+
+        return {
+            ...data,
+            id,
+            currentClass,
+            academicHistory,
+            // Reflect the active term in the root fields for component compatibility
+            className: currentClass,
+            marks: normalizedMarks,
+            semester: currentTermKey.split('-')[2] as 'Odd' | 'Even',
+            grandTotal: currentTotals.grandTotal,
+            average: currentTotals.average,
+            rank: currentTotals.rank,
+            performanceLevel: currentTotals.performanceLevel
+        } as StudentRecord;
+    }
+
+    /**
+     * Normalizes a subject configuration from Firestore.
+     * Maps legacy 'maxTA' and 'maxCE' fields to 'maxINT' and 'maxEXT'.
+     */
+    private processSubjectConfig(data: any, id: string): SubjectConfig {
+        return {
+            ...data,
+            id,
+            maxINT: data.maxINT !== undefined ? data.maxINT : (data.maxTA !== undefined ? data.maxTA : 0),
+            maxEXT: data.maxEXT !== undefined ? data.maxEXT : (data.maxCE !== undefined ? data.maxCE : 0),
+        } as SubjectConfig;
+    }
+
     // Cache management
     private isCacheValid(): boolean {
         return this.cacheTimestamp > 0 && (Date.now() - this.cacheTimestamp) < this.CACHE_DURATION;
-    }
-
-    private isDouraCacheValid(): boolean {
-        return this.douraCacheTimestamp > 0 && (Date.now() - this.douraCacheTimestamp) < this.DOURA_CACHE_DURATION;
     }
 
     private invalidateCache(): void {
@@ -96,23 +196,99 @@ export class DataService {
         this.cacheTimestamp = 0;
     }
 
-    private invalidateDouraCache(): void {
-        this.douraCache = null;
-        this.douraCacheTimestamp = 0;
-    }
-
     private updateCache(students?: StudentRecord[], subjects?: SubjectConfig[]): void {
         if (students) this.studentsCache = students;
         if (subjects) this.subjectsCache = subjects;
         this.cacheTimestamp = Date.now();
     }
 
-    private updateDouraCache(submissions: DouraSubmission[]): void {
-        this.douraCache = submissions;
-        this.douraCacheTimestamp = Date.now();
+    // Release Settings operations
+
+    // Global Settings Operations
+    async getGlobalSettings(): Promise<GlobalSettings> {
+        try {
+            const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                this.currentGlobalSettings = docSnap.data() as GlobalSettings;
+                return this.currentGlobalSettings;
+            }
+            // Return defaults if not set
+            return {
+                currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR,
+                currentSemester: this.DEFAULT_SEMESTER
+            };
+        } catch (error) {
+            console.error('Error getting global settings:', error);
+            return { currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR, currentSemester: this.DEFAULT_SEMESTER };
+        }
     }
 
-    // Release Settings operations
+    async getAvailableAcademicYears(): Promise<string[]> {
+        try {
+            const students = await this.getAllStudents();
+            const years = new Set<string>();
+
+            // Add current default/global year
+            const settings = await this.getGlobalSettings();
+            years.add(settings.currentAcademicYear);
+
+            // Add manually configured years
+            if (settings.availableYears) {
+                settings.availableYears.forEach(y => years.add(y));
+            }
+
+            students.forEach(s => {
+                if (s.academicHistory) {
+                    Object.keys(s.academicHistory).forEach(termKey => {
+                        // Extract year part from "2024-2025-Odd"
+                        const match = termKey.match(/^(\d{4}-\d{4})/);
+                        if (match) years.add(match[1]);
+                    });
+                }
+            });
+
+            return Array.from(years).sort().reverse();
+        } catch (error) {
+            console.error('Error fetching available academic years:', error);
+            return [this.DEFAULT_ACADEMIC_YEAR];
+        }
+    }
+
+
+    async updateGlobalSettings(settings: GlobalSettings): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            await setDoc(docRef, settings, { merge: true });
+            this.currentGlobalSettings = settings;
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error updating global settings:', error);
+            throw error;
+        }
+    }
+
+    async addAcademicYear(year: string): Promise<void> {
+        try {
+            const settings = await this.getGlobalSettings();
+            const availableYears = settings.availableYears || [];
+            if (!availableYears.includes(year)) {
+                await this.updateGlobalSettings({
+                    ...settings,
+                    availableYears: [...availableYears, year]
+                });
+            }
+        } catch (error) {
+            console.error('Error adding academic year:', error);
+            throw error;
+        }
+    }
+
+    getCurrentTermKey(settings?: GlobalSettings): string {
+        const s = settings || this.currentGlobalSettings || { currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR, currentSemester: this.DEFAULT_SEMESTER };
+        return `${s.currentAcademicYear}-${s.currentSemester}`;
+    }
+
     async getReleaseSettings(): Promise<ClassReleaseSettings> {
         try {
             const docRef = doc(this.db, this.settingsCollection, 'scorecard_release');
@@ -199,10 +375,7 @@ export class DataService {
             // Remove orderBy to avoid composite index requirement
             const querySnapshot = await getDocs(collection(this.db, this.studentsCollection));
 
-            const students = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as StudentRecord));
+            const students = querySnapshot.docs.map(doc => this.processStudentRecord(doc.data(), doc.id));
 
             // Sort manually by import row number (priority) or rank
             students.sort((a, b) => {
@@ -259,10 +432,7 @@ export class DataService {
             }
 
             const doc = querySnapshot.docs[0];
-            return {
-                id: doc.id,
-                ...doc.data()
-            } as StudentRecord;
+            return this.processStudentRecord(doc.data(), doc.id);
         } catch (error) {
             console.error('Error fetching student by admission number:', error);
             return null;
@@ -334,10 +504,7 @@ export class DataService {
         try {
             const querySnapshot = await getDocs(collection(this.db, this.subjectsCollection));
 
-            const subjects = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as SubjectConfig));
+            const subjects = querySnapshot.docs.map(doc => this.processSubjectConfig(doc.data(), doc.id));
 
             // Update cache
             this.updateCache(undefined, subjects);
@@ -434,7 +601,7 @@ export class DataService {
                 throw new Error('Subject not found');
             }
 
-            const subject = subjectDoc.data() as SubjectConfig;
+            const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
             if (subject.subjectType !== 'elective') {
                 throw new Error('Cannot enroll students in general subjects');
             }
@@ -462,7 +629,7 @@ export class DataService {
                 throw new Error('Subject not found');
             }
 
-            const subject = subjectDoc.data() as SubjectConfig;
+            const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
             const enrolledStudents = subject.enrolledStudents || [];
             const updatedEnrolledStudents = enrolledStudents.filter(id => id !== studentId);
 
@@ -489,7 +656,7 @@ export class DataService {
                 return [];
             }
 
-            const subject = subjectDoc.data() as SubjectConfig;
+            const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
             console.log('Subject data:', {
                 name: subject.name,
                 subjectType: subject.subjectType,
@@ -641,7 +808,7 @@ export class DataService {
             for (const suppExam of supplementaryExams) {
                 const studentDoc = await getDoc(doc(this.db, this.studentsCollection, suppExam.studentId));
                 if (studentDoc.exists()) {
-                    const student = { id: studentDoc.id, ...studentDoc.data() } as StudentRecord;
+                    const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
                     results.push({ student, supplementaryExam: suppExam });
                 }
             }
@@ -653,16 +820,42 @@ export class DataService {
         }
     }
 
+    async getAllSupplementaryExams(): Promise<(SupplementaryExam & { studentName?: string; studentAdNo?: string; subjectName?: string })[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            const exams = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupplementaryExam));
+
+            // Enrich with student and subject details
+            const [allStudents, allSubjects] = await Promise.all([
+                this.getAllStudents(),
+                this.getAllSubjects()
+            ]);
+            const studentMap = new Map(allStudents.map(s => [s.id, s]));
+            const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
+
+            return exams.map(exam => {
+                const student = studentMap.get(exam.studentId);
+                const subject = subjectMap.get(exam.subjectId);
+                return {
+                    ...exam,
+                    studentName: student?.name,
+                    studentAdNo: student?.adNo,
+                    subjectName: subject?.name
+                };
+            });
+        } catch (error) {
+            console.error('Error fetching all supplementary exams:', error);
+            return [];
+        }
+    }
+
     // Real-time listeners
     subscribeToStudents(callback: (students: StudentRecord[]) => void): Unsubscribe {
         return onSnapshot(
             // Remove orderBy to avoid composite index requirement
             collection(this.db, this.studentsCollection),
             (snapshot) => {
-                const students = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                } as StudentRecord));
+                const students = snapshot.docs.map(doc => this.processStudentRecord(doc.data(), doc.id));
 
                 // Sort manually by import row number (priority) or rank
                 students.sort((a, b) => {
@@ -686,10 +879,7 @@ export class DataService {
         return onSnapshot(
             collection(this.db, this.subjectsCollection),
             (snapshot) => {
-                const subjects = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                } as SubjectConfig));
+                const subjects = snapshot.docs.map(doc => this.processSubjectConfig(doc.data(), doc.id));
                 callback(subjects);
             },
             (error) => {
@@ -806,6 +996,7 @@ export class DataService {
                     adNo: row[headers.indexOf('adNo')],
                     name: row[headers.indexOf('name')],
                     className: row[headers.indexOf('className')],
+                    currentClass: row[headers.indexOf('className')],
                     semester: row[headers.indexOf('semester')] as 'Odd' | 'Even',
                     marks: {},
                     grandTotal: 0,
@@ -842,34 +1033,46 @@ export class DataService {
         return { students, errors };
     }
 
-    async calculateClassRankings(className: string): Promise<void> {
+    async calculateClassRankings(className: string, termKey?: string): Promise<void> {
         try {
+            const activeTerm = termKey || this.getCurrentTermKey();
             const students = await this.getStudentsByClass(className);
 
-            // Sort by grand total (descending) - handle undefined totals
-            const sortedStudents = [...students].sort((a, b) => (b.grandTotal || 0) - (a.grandTotal || 0));
+            // Sort by grand total (descending) for the specific term
+            const sortedStudents = [...students].sort((a, b) => {
+                const totalA = a.academicHistory?.[activeTerm]?.grandTotal || 0;
+                const totalB = b.academicHistory?.[activeTerm]?.grandTotal || 0;
+                return totalB - totalA;
+            });
 
-            // Update ranks with standard competition ranking (1, 1, 3, 4)
             const batch = writeBatch(this.db);
             let currentRank = 1;
 
             for (let i = 0; i < sortedStudents.length; i++) {
                 const student = sortedStudents[i];
+                const total = student.academicHistory?.[activeTerm]?.grandTotal || 0;
 
-                // If not the first student and has same total as previous, give same rank
-                if (i > 0 && student.grandTotal === sortedStudents[i - 1].grandTotal) {
-                    // rank remains same as previous student's rank
+                if (i > 0 && total === (sortedStudents[i - 1].academicHistory?.[activeTerm]?.grandTotal || 0) && total > 0) {
+                    // rank remains same as previous student's rank if totals are equal and > 0
                 } else {
-                    // rank becomes current position (1-based index) - this creates gaps (1, 1, 3)
                     currentRank = i + 1;
                 }
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
-                batch.update(docRef, { rank: currentRank });
+                const updates: any = {
+                    [`academicHistory.${activeTerm}.rank`]: currentRank
+                };
+
+                // Root synchronization if this is the global active term
+                if (activeTerm === this.getCurrentTermKey()) {
+                    updates.rank = currentRank;
+                }
+
+                batch.update(docRef, updates);
             }
 
             await batch.commit();
-            console.log('Class rankings updated for:', className);
+            console.log('Class rankings updated for:', className, 'term:', activeTerm);
         } catch (error) {
             console.error('Error calculating class rankings:', error);
             throw error;
@@ -948,8 +1151,11 @@ export class DataService {
         try {
             console.log('Starting bulk recalculation of student performance levels...');
 
-            // Get all students
-            const allStudents = await this.getAllStudents();
+            // Get all students and subjects
+            const [allStudents, allSubjects] = await Promise.all([
+                this.getAllStudents(),
+                this.getAllSubjects()
+            ]);
             console.log(`Found ${allStudents.length} students to recalculate`);
 
             // Process in batches of 500 (Firestore limit)
@@ -961,8 +1167,8 @@ export class DataService {
 
                 for (const student of currentBatch) {
                     try {
-                        // Recalculate performance level based on current average
-                        const performanceLevel = this.calculatePerformanceLevel(student.average);
+                        // Recalculate performance level based on subject individual marks
+                        const performanceLevel = this.calculatePerformanceLevel(student.marks, allSubjects);
 
                         // Only update if performance level has changed
                         if (student.performanceLevel !== performanceLevel) {
@@ -1061,7 +1267,7 @@ export class DataService {
                         if (isNaN(average)) average = 0;
 
                         // Determine performance level
-                        const performanceLevel = this.calculatePerformanceLevel(average);
+                        const performanceLevel = this.calculatePerformanceLevel(student.marks, allSubjects);
 
                         const docRef = doc(this.db, this.studentsCollection, student.id);
                         batch.update(docRef, {
@@ -1163,26 +1369,26 @@ export class DataService {
                     if (!subject) continue;
 
                     const marks = updatedMarks[subjectId] as any;
-                    const ta = marks.ta;
-                    const ce = marks.ce;
+                    const int = marks.int;
+                    const ext = marks.ext;
 
-                    const taVal = this.getMarkValue(ta);
-                    const ceVal = this.getMarkValue(ce);
+                    const intVal = this.getMarkValue(int);
+                    const extVal = this.getMarkValue(ext);
 
-                    const minTA = Math.ceil(subject.maxTA * 0.4);
-                    const minCE = Math.ceil(subject.maxCE * 0.5);
-                    const passedTA = ta !== 'A' && taVal >= minTA;
-                    const passedCE = ce !== 'A' && ceVal >= minCE;
+                    const minINT = Math.ceil(subject.maxINT * 0.4);
+                    const minEXT = Math.ceil(subject.maxEXT * 0.5);
+                    const passedINT = int !== 'A' && intVal >= minINT;
+                    const passedEXT = ext !== 'A' && extVal >= minEXT;
 
-                    const isFullTA = subject.maxTA === 100;
-                    const taReady = subject.maxTA > 0 ? (ta !== undefined && ta !== '') : true;
-                    // For full TA subjects, CE is always considered ready
-                    const ceReady = isFullTA || subject.maxCE === 0 || (subject.maxCE > 0 && ce !== undefined && ce !== '');
+                    const isFullINT = subject.maxINT === 100;
+                    const intReady = subject.maxINT > 0 ? (int !== undefined && int !== '') : true;
+                    // For full INT subjects, EXT is always considered ready
+                    const extReady = isFullINT || subject.maxEXT === 0 || (subject.maxEXT > 0 && ext !== undefined && ext !== '');
 
                     let newStatus: 'Passed' | 'Failed' | 'Pending' = 'Pending';
-                    if (taReady && ceReady) {
-                        const finalPassedCE = isFullTA || passedCE || subject.maxCE === 0;
-                        newStatus = (passedTA && finalPassedCE) ? 'Passed' : 'Failed';
+                    if (intReady && extReady) {
+                        const finalPassedEXT = isFullINT || passedEXT || subject.maxEXT === 0;
+                        newStatus = (passedINT && finalPassedEXT) ? 'Passed' : 'Failed';
                     }
 
                     if (marks.status !== newStatus) {
@@ -1206,243 +1412,248 @@ export class DataService {
         }
     }
 
-    async updateStudentMarks(studentId: string, subjectId: string, ta: number | 'A', ce: number | 'A'): Promise<void> {
+    async updateStudentMarks(studentId: string, subjectId: string, int: number | 'A', ext: number | 'A'): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
                 getDoc(doc(this.db, this.subjectsCollection, subjectId))
             ]);
 
-            if (!studentDoc.exists()) {
-                throw new Error('Student not found');
-            }
-            if (!subjectDoc.exists()) {
-                throw new Error('Subject not found');
-            }
+            if (!studentDoc.exists()) throw new Error('Student not found');
+            if (!subjectDoc.exists()) throw new Error('Subject not found');
 
-            const student = studentDoc.data() as StudentRecord;
-            const subject = subjectDoc.data() as SubjectConfig;
+            const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
+            const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
+            const activeTerm = this.getCurrentTermKey();
 
-            const taVal = this.getMarkValue(ta);
-            const ceVal = this.getMarkValue(ce);
-            const total = taVal + ceVal;
+            const intVal = this.getMarkValue(int);
+            const extVal = this.getMarkValue(ext);
+            const total = intVal + extVal;
 
-            // Calculate passing requirements
-            // If Max TA is 100, we ignore CE requirements (usually CE is 0 anyway)
-            const isFullTA = subject.maxTA === 100;
-            const minTA = Math.ceil(subject.maxTA * 0.4);
-            const minCE = isFullTA ? 0 : Math.ceil(subject.maxCE * 0.5);
+            const isFullINT = subject.maxINT === 100;
+            const minINT = Math.ceil(subject.maxINT * 0.4);
+            const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.5);
 
-            const passedTA = ta !== 'A' && taVal >= minTA;
-            const passedCE = isFullTA || (ce !== 'A' && ceVal >= minCE) || subject.maxCE === 0;
-            const status = (passedTA && passedCE) ? 'Passed' : 'Failed';
+            const passedINT = int !== 'A' && intVal >= minINT;
+            const passedEXT = isFullINT || (ext !== 'A' && extVal >= minEXT) || subject.maxEXT === 0;
+            const status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
 
-            // Update marks
-            const updatedMarks = {
-                ...student.marks,
-                [subjectId]: {
-                    ta,
-                    ce,
-                    total,
-                    status
-                }
+            // Get existing term record or create fresh one
+            const termRecord = student.academicHistory?.[activeTerm] || {
+                className: student.currentClass,
+                semester: activeTerm.split('-')[2] as 'Odd' | 'Even',
+                marks: {},
+                grandTotal: 0,
+                average: 0,
+                rank: 0,
+                performanceLevel: 'C (Average)'
             };
 
-            // Recalculate totals
+            const updatedTermMarks = {
+                ...termRecord.marks,
+                [subjectId]: { int, ext, total, status }
+            };
+
+            // Recalculate totals for this term
             const allSubjects = await this.getAllSubjects();
             const generalSubjects = allSubjects.filter(s => s.subjectType !== 'elective');
             const electiveSubjects = allSubjects.filter(s => s.subjectType === 'elective');
 
-            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
-
-            // Smarter average calculation: Count general subjects + 1 (if any elective marks exist)
-            const generalMarksCount = generalSubjects.filter(s => updatedMarks[s.id] !== undefined).length;
-            const hasElectiveMark = electiveSubjects.some(s => updatedMarks[s.id] !== undefined);
+            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+            const generalMarksCount = generalSubjects.filter(s => updatedTermMarks[s.id] !== undefined).length;
+            const hasElectiveMark = electiveSubjects.some(s => updatedTermMarks[s.id] !== undefined);
             const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
 
             let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
             if (isNaN(average)) average = 0;
+            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
 
-            // Determine performance level
-            const performanceLevel = this.calculatePerformanceLevel(average);
-
-            // Update student document
-            await updateDoc(doc(this.db, this.studentsCollection, studentId), {
-                marks: updatedMarks,
+            const updatedTermRecord = {
+                ...termRecord,
+                marks: updatedTermMarks,
                 grandTotal,
                 average: Math.round(average * 100) / 100,
                 performanceLevel
-            });
+            };
 
-            // Recalculate class rankings
-            await this.calculateClassRankings(student.className);
+            const updates: any = {
+                [`academicHistory.${activeTerm}`]: updatedTermRecord
+            };
+
+            // Root synchronization for the globally active term
+            if (activeTerm === this.getCurrentTermKey()) {
+                updates.marks = updatedTermMarks;
+                updates.grandTotal = grandTotal;
+                updates.average = updatedTermRecord.average;
+                updates.performanceLevel = performanceLevel;
+            }
+
+            await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+            await this.calculateClassRankings(student.currentClass, activeTerm);
 
             this.invalidateCache();
-            console.log('Student marks updated:', studentId);
+            console.log('Student marks updated for term:', activeTerm, studentId);
         } catch (error) {
             console.error('Error updating student marks:', error);
             throw error;
         }
     }
 
-    // New method for updating only TA marks
-    async updateStudentTAMarks(studentId: string, subjectId: string, ta: number | 'A'): Promise<void> {
+    // New method for updating only INT marks
+    async updateStudentINTMarks(studentId: string, subjectId: string, int: number | 'A'): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
                 getDoc(doc(this.db, this.subjectsCollection, subjectId))
             ]);
 
-            if (!studentDoc.exists()) {
-                throw new Error('Student not found');
-            }
-            if (!subjectDoc.exists()) {
-                throw new Error('Subject not found');
-            }
+            if (!studentDoc.exists()) throw new Error('Student not found');
+            if (!subjectDoc.exists()) throw new Error('Subject not found');
 
-            const student = studentDoc.data() as StudentRecord;
-            const subject = subjectDoc.data() as SubjectConfig;
+            const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
+            const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
+            const activeTerm = this.getCurrentTermKey();
 
-            // Get existing marks or create new entry
-            const existingMarks = student.marks[subjectId] || { ta: 0, ce: 0, total: 0, status: 'Pending' };
-            const ce = existingMarks.ce;
-            const taVal = this.getMarkValue(ta);
-            const ceVal = this.getMarkValue(ce);
-            const total = taVal + ceVal;
-
-            // Calculate passing requirements
-            const minTA = Math.ceil(subject.maxTA * 0.4);
-            const minCE = Math.ceil(subject.maxCE * 0.5);
-            const passedTA = ta !== 'A' && taVal >= minTA;
-            const passedCE = ce !== 'A' && ceVal >= minCE;
-
-            // Status transitions from 'Pending' if all required components are entered
-            let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
-            const isFullTA = subject.maxTA === 100;
-            const taReady = subject.maxTA > 0 ? (ta !== undefined && ta !== null) : true;
-            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are present
-            const ceReady = isFullTA || subject.maxCE === 0 || (ce !== undefined && ce !== null);
-
-            if (taReady && ceReady) {
-                // If neglecting CE, only TA needs to pass
-                const finalPassedCE = isFullTA || passedCE || subject.maxCE === 0;
-                status = (passedTA && finalPassedCE) ? 'Passed' : 'Failed';
-            }
-
-            // Update marks
-            const updatedMarks = {
-                ...student.marks,
-                [subjectId]: {
-                    ta,
-                    ce,
-                    total,
-                    status
-                }
+            // Get existing term record or create fresh one
+            const termRecord = student.academicHistory?.[activeTerm] || {
+                className: student.currentClass,
+                semester: activeTerm.split('-')[2] as 'Odd' | 'Even',
+                marks: {}, grandTotal: 0, average: 0, rank: 0, performanceLevel: 'C (Average)'
             };
 
-            // Recalculate totals - Sum all available marks
-            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
-            const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
+            const existingMarks = termRecord.marks[subjectId] || { int: 0, ext: 0, total: 0, status: 'Pending' };
+            const ext = existingMarks.ext;
+            const intVal = this.getMarkValue(int);
+            const extVal = this.getMarkValue(ext);
+            const total = intVal + extVal;
 
-            // Determine performance level
-            const performanceLevel = this.calculatePerformanceLevel(average);
+            const minINT = Math.ceil(subject.maxINT * 0.4);
+            const minEXT = Math.ceil(subject.maxEXT * 0.5);
+            const passedINT = int !== 'A' && intVal >= minINT;
+            const passedEXT = ext !== 'A' && extVal >= minEXT;
 
-            // Update student document
-            await updateDoc(doc(this.db, this.studentsCollection, studentId), {
-                marks: updatedMarks,
+            let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+            const isFullINT = subject.maxINT === 100;
+            const intReady = (int !== undefined && int !== null);
+            const extReady = isFullINT || subject.maxEXT === 0 || (ext !== undefined && ext !== null);
+
+            if (intReady && extReady) {
+                const finalPassedEXT = isFullINT || passedEXT || subject.maxEXT === 0;
+                status = (passedINT && finalPassedEXT) ? 'Passed' : 'Failed';
+            }
+
+            const updatedTermMarks = {
+                ...termRecord.marks,
+                [subjectId]: { int, ext, total, status }
+            };
+
+            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+            const subjectCount = Object.keys(updatedTermMarks).length;
+            const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+            const allSubjects = await this.getAllSubjects();
+            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+
+            const updatedTermRecord = {
+                ...termRecord,
+                marks: updatedTermMarks,
                 grandTotal,
                 average: Math.round(average * 100) / 100,
                 performanceLevel
-            });
+            };
 
-            // Recalculate class rankings to keep totals up-to-date
-            await this.calculateClassRankings(student.className);
+            const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+            if (activeTerm === this.getCurrentTermKey()) {
+                updates.marks = updatedTermMarks;
+                updates.grandTotal = grandTotal;
+                updates.average = updatedTermRecord.average;
+                updates.performanceLevel = performanceLevel;
+            }
+
+            await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+            await this.calculateClassRankings(student.currentClass, activeTerm);
 
             this.invalidateCache();
-            console.log('Student TA marks updated:', studentId, 'TA:', ta);
         } catch (error) {
-            console.error('Error updating student TA marks:', error);
+            console.error('Error updating student INT marks:', error);
             throw error;
         }
     }
 
-    // New method for updating only CE marks
-    async updateStudentCEMarks(studentId: string, subjectId: string, ce: number | 'A'): Promise<void> {
+    // New method for updating only EXT marks
+    async updateStudentEXTMarks(studentId: string, subjectId: string, ext: number | 'A'): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
                 getDoc(doc(this.db, this.subjectsCollection, subjectId))
             ]);
 
-            if (!studentDoc.exists()) {
-                throw new Error('Student not found');
-            }
-            if (!subjectDoc.exists()) {
-                throw new Error('Subject not found');
-            }
+            if (!studentDoc.exists()) throw new Error('Student not found');
+            if (!subjectDoc.exists()) throw new Error('Subject not found');
 
-            const student = studentDoc.data() as StudentRecord;
-            const subject = subjectDoc.data() as SubjectConfig;
+            const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
+            const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
+            const activeTerm = this.getCurrentTermKey();
 
-            // Get existing marks or create new entry
-            const existingMarks = student.marks[subjectId] || { ta: 0, ce: 0, total: 0, status: 'Pending' };
-            const ta = existingMarks.ta;
-            const taVal = this.getMarkValue(ta);
-            const ceVal = this.getMarkValue(ce);
-            const total = taVal + ceVal;
-
-            // Calculate passing requirements
-            const minTA = Math.ceil(subject.maxTA * 0.4);
-            const minCE = Math.ceil(subject.maxCE * 0.5);
-            const passedTA = ta !== 'A' && taVal >= minTA;
-            const passedCE = ce !== 'A' && ceVal >= minCE;
-
-            // Status transitions from 'Pending' if all required components are entered
-            let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
-            const isFullTA = subject.maxTA === 100;
-            const taReady = subject.maxTA > 0 ? (ta !== undefined && ta !== null) : true;
-            // CE is ready if maxCE is 0, OR if we are neglecting CE (isFullTA), OR if marks are present
-            const ceReady = isFullTA || subject.maxCE === 0 || (ce !== undefined && ce !== null);
-
-            if (taReady && ceReady) {
-                // If neglecting CE, only TA needs to pass
-                const finalPassedCE = isFullTA || passedCE || subject.maxCE === 0;
-                status = (passedTA && finalPassedCE) ? 'Passed' : 'Failed';
-            }
-
-            // Update marks
-            const updatedMarks = {
-                ...student.marks,
-                [subjectId]: {
-                    ta,
-                    ce,
-                    total,
-                    status
-                }
+            const termRecord = student.academicHistory?.[activeTerm] || {
+                className: student.currentClass,
+                semester: activeTerm.split('-')[2] as 'Odd' | 'Even',
+                marks: {}, grandTotal: 0, average: 0, rank: 0, performanceLevel: 'C (Average)'
             };
 
-            // Recalculate totals - Sum all available marks
-            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + this.getMarkValue(mark.total as any), 0);
-            const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
+            const existingMarks = termRecord.marks[subjectId] || { int: 0, ext: 0, total: 0, status: 'Pending' };
+            const int = existingMarks.int;
+            const intVal = this.getMarkValue(int);
+            const extVal = this.getMarkValue(ext);
+            const total = intVal + extVal;
 
-            // Determine performance level
-            const performanceLevel = this.calculatePerformanceLevel(average);
+            const minINT = Math.ceil(subject.maxINT * 0.4);
+            const minEXT = Math.ceil(subject.maxEXT * 0.5);
+            const passedINT = int !== 'A' && intVal >= minINT;
+            const passedEXT = ext !== 'A' && extVal >= minEXT;
 
-            // Update student document
-            await updateDoc(doc(this.db, this.studentsCollection, studentId), {
-                marks: updatedMarks,
+            let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+            const isFullINT = subject.maxINT === 100;
+            const intReady = subject.maxINT > 0 ? (int !== undefined && int !== null) : true;
+            const extReady = isFullINT || subject.maxEXT === 0 || (ext !== undefined && ext !== null);
+
+            if (intReady && extReady) {
+                const finalPassedEXT = isFullINT || passedEXT || subject.maxEXT === 0;
+                status = (passedINT && finalPassedEXT) ? 'Passed' : 'Failed';
+            }
+
+            const updatedTermMarks = {
+                ...termRecord.marks,
+                [subjectId]: { int, ext, total, status }
+            };
+
+            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+            const subjectCount = Object.keys(updatedTermMarks).length;
+            const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+            const allSubjects = await this.getAllSubjects();
+            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+
+            const updatedTermRecord = {
+                ...termRecord,
+                marks: updatedTermMarks,
                 grandTotal,
                 average: Math.round(average * 100) / 100,
                 performanceLevel
-            });
+            };
 
-            // Recalculate class rankings to keep totals up-to-date
-            await this.calculateClassRankings(student.className);
+            const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+            if (activeTerm === this.getCurrentTermKey()) {
+                updates.marks = updatedTermMarks;
+                updates.grandTotal = grandTotal;
+                updates.average = updatedTermRecord.average;
+                updates.performanceLevel = performanceLevel;
+            }
+
+            await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+            await this.calculateClassRankings(student.currentClass, activeTerm);
 
             this.invalidateCache();
-            console.log('Student CE marks updated:', studentId, 'CE:', ce);
         } catch (error) {
-            console.error('Error updating student CE marks:', error);
+            console.error('Error updating student EXT marks:', error);
             throw error;
         }
     }
@@ -1450,58 +1661,46 @@ export class DataService {
     async clearSubjectMarks(subjectId: string, studentIds: string[]): Promise<void> {
         try {
             console.log('Clearing marks for subject:', subjectId, 'for', studentIds.length, 'students');
+            const activeTerm = this.getCurrentTermKey();
 
-            // Process each student
-            const updatePromises = studentIds.map(async (studentId) => {
+            for (const studentId of studentIds) {
                 const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (!studentDoc.exists()) {
-                    console.warn(`Student ${studentId} not found, skipping`);
-                    return;
-                }
+                if (!studentDoc.exists()) continue;
 
-                const student = studentDoc.data() as StudentRecord;
-                const updatedMarks = { ...student.marks };
+                const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
+                const termRecord = student.academicHistory?.[activeTerm];
+                if (!termRecord) continue;
 
-                // Remove marks for this subject
-                delete updatedMarks[subjectId];
+                const updatedTermMarks = { ...termRecord.marks };
+                delete updatedTermMarks[subjectId];
 
-                // Recalculate totals
-                const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
-                const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
+                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+                const subjectCount = Object.keys(updatedTermMarks).length;
+                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+                const allSubjects = await this.getAllSubjects();
+                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
 
-                // Determine performance level
-                const performanceLevel = this.calculatePerformanceLevel(average);
-
-                // Update student document
-                await updateDoc(doc(this.db, this.studentsCollection, studentId), {
-                    marks: updatedMarks,
+                const updatedTermRecord = {
+                    ...termRecord,
+                    marks: updatedTermMarks,
                     grandTotal,
                     average: Math.round(average * 100) / 100,
                     performanceLevel
-                });
+                };
 
-                console.log('Cleared marks for student:', studentId);
-            });
-
-            await Promise.all(updatePromises);
-
-            // Recalculate rankings for all affected classes
-            const affectedClasses = new Set<string>();
-            for (const studentId of studentIds) {
-                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (studentDoc.exists()) {
-                    const student = studentDoc.data() as StudentRecord;
-                    affectedClasses.add(student.className);
+                const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                if (activeTerm === this.getCurrentTermKey()) {
+                    updates.marks = updatedTermMarks;
+                    updates.grandTotal = grandTotal;
+                    updates.average = updatedTermRecord.average;
+                    updates.performanceLevel = performanceLevel;
                 }
-            }
 
-            // Recalculate rankings for each affected class
-            for (const className of affectedClasses) {
-                await this.calculateClassRankings(className);
+                await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+                await this.calculateClassRankings(student.currentClass, activeTerm);
             }
 
             this.invalidateCache();
-            console.log('Subject marks cleared successfully for', studentIds.length, 'students');
         } catch (error) {
             console.error('Error clearing subject marks:', error);
             throw error;
@@ -1510,153 +1709,155 @@ export class DataService {
 
     async clearStudentSubjectMarks(studentId: string, subjectId: string): Promise<void> {
         try {
-            console.log('Clearing marks for student:', studentId, 'subject:', subjectId);
-
             const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-            if (!studentDoc.exists()) {
-                throw new Error('Student not found');
-            }
+            if (!studentDoc.exists()) throw new Error('Student not found');
 
-            const student = studentDoc.data() as StudentRecord;
-            const updatedMarks = { ...student.marks };
+            const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
+            const activeTerm = this.getCurrentTermKey();
+            const termRecord = student.academicHistory?.[activeTerm];
+            if (!termRecord) return;
 
-            // Remove marks for this subject
-            delete updatedMarks[subjectId];
+            const updatedTermMarks = { ...termRecord.marks };
+            delete updatedTermMarks[subjectId];
 
-            // Recalculate totals
-            const grandTotal = Object.values(updatedMarks).reduce((sum, mark) => sum + mark.total, 0);
-            const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
+            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+            const average = Object.keys(updatedTermMarks).length > 0 ? grandTotal / Object.keys(updatedTermMarks).length : 0;
+            const allSubjects = await this.getAllSubjects();
+            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
 
-            // Determine performance level
-            const performanceLevel = this.calculatePerformanceLevel(average);
-
-            // Update student document
-            await updateDoc(doc(this.db, this.studentsCollection, studentId), {
-                marks: updatedMarks,
+            const updatedTermRecord = {
+                ...termRecord,
+                marks: updatedTermMarks,
                 grandTotal,
                 average: Math.round(average * 100) / 100,
                 performanceLevel
-            });
+            };
 
-            // Recalculate class rankings
-            await this.calculateClassRankings(student.className);
+            const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+            if (activeTerm === this.getCurrentTermKey()) {
+                updates.marks = updatedTermMarks;
+                updates.grandTotal = grandTotal;
+                updates.average = updatedTermRecord.average;
+                updates.performanceLevel = performanceLevel;
+            }
 
+            await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+            await this.calculateClassRankings(student.currentClass, activeTerm);
             this.invalidateCache();
-            console.log('Student subject marks cleared successfully:', studentId, subjectId);
         } catch (error) {
             console.error('Error clearing student subject marks:', error);
             throw error;
         }
     }
 
-    async clearSubjectTAMarks(subjectId: string, studentIds: string[]): Promise<void> {
+    async clearSubjectEXTMarks(subjectId: string, studentIds: string[]): Promise<void> {
         try {
-            console.log('Clearing TA marks for subject:', subjectId, 'for', studentIds.length, 'students');
+            console.log('Clearing EXT marks for subject:', subjectId, 'for', studentIds.length, 'students');
+            const activeTerm = this.getCurrentTermKey();
 
-            const updatePromises = studentIds.map(async (studentId) => {
-                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (!studentDoc.exists()) return;
-
-                const student = studentDoc.data() as StudentRecord;
-                const updatedMarks = { ...student.marks };
-
-                if (updatedMarks[subjectId]) {
-                    // Reset TA to 0 and calculate new total/status
-                    const marks = updatedMarks[subjectId];
-                    const ce = marks.ce || 0;
-                    updatedMarks[subjectId] = {
-                        ...marks,
-                        ta: 0,
-                        total: this.getMarkValue(ce as any),
-                        status: 'Pending' // Always pending if one component is missing
-                    };
-
-                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + this.getMarkValue(m.total as any), 0);
-                    const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
-                    const performanceLevel = this.calculatePerformanceLevel(average);
-
-                    await updateDoc(doc(this.db, this.studentsCollection, studentId), {
-                        marks: updatedMarks,
-                        grandTotal,
-                        average: Math.round(average * 100) / 100,
-                        performanceLevel
-                    });
-                }
-            });
-
-            await Promise.all(updatePromises);
-
-            const affectedClasses = new Set<string>();
             for (const studentId of studentIds) {
                 const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (studentDoc.exists()) {
-                    affectedClasses.add((studentDoc.data() as StudentRecord).className);
+                if (!studentDoc.exists()) continue;
+
+                const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
+                const termRecord = student.academicHistory?.[activeTerm];
+                if (!termRecord || !termRecord.marks[subjectId]) continue;
+
+                const updatedTermMarks = { ...termRecord.marks };
+                const marks = updatedTermMarks[subjectId];
+                const int = marks.int || 0;
+
+                updatedTermMarks[subjectId] = {
+                    int,
+                    ext: 0,
+                    total: this.getMarkValue(int as any),
+                    status: 'Pending'
+                };
+
+                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+                const average = Object.keys(updatedTermMarks).length > 0 ? grandTotal / Object.keys(updatedTermMarks).length : 0;
+                const allSubjects = await this.getAllSubjects();
+                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+
+                const updatedTermRecord = {
+                    ...termRecord,
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: Math.round(average * 100) / 100,
+                    performanceLevel
+                };
+
+                const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                if (activeTerm === this.getCurrentTermKey()) {
+                    updates.marks = updatedTermMarks;
+                    updates.grandTotal = grandTotal;
+                    updates.average = updatedTermRecord.average;
+                    updates.performanceLevel = performanceLevel;
                 }
-            }
-            for (const className of affectedClasses) {
-                await this.calculateClassRankings(className);
+
+                await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+                await this.calculateClassRankings(student.currentClass, activeTerm);
             }
 
             this.invalidateCache();
-            console.log('Subject TA marks cleared successfully');
         } catch (error) {
-            console.error('Error clearing subject TA marks:', error);
+            console.error('Error clearing subject EXT marks:', error);
             throw error;
         }
     }
 
-    async clearSubjectCEMarks(subjectId: string, studentIds: string[]): Promise<void> {
+    async clearSubjectINTMarks(subjectId: string, studentIds: string[]): Promise<void> {
         try {
-            console.log('Clearing CE marks for subject:', subjectId, 'for', studentIds.length, 'students');
+            console.log('Clearing INT marks for subject:', subjectId, 'for', studentIds.length, 'students');
+            const activeTerm = this.getCurrentTermKey();
 
-            const updatePromises = studentIds.map(async (studentId) => {
-                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (!studentDoc.exists()) return;
-
-                const student = studentDoc.data() as StudentRecord;
-                const updatedMarks = { ...student.marks };
-
-                if (updatedMarks[subjectId]) {
-                    // Reset CE to 0 and calculate new total/status
-                    const marks = updatedMarks[subjectId];
-                    const ta = marks.ta || 0;
-                    updatedMarks[subjectId] = {
-                        ...marks,
-                        ce: 0,
-                        total: this.getMarkValue(ta as any),
-                        status: 'Pending'
-                    };
-
-                    const grandTotal = Object.values(updatedMarks).reduce((sum, m) => sum + this.getMarkValue(m.total as any), 0);
-                    const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
-                    const performanceLevel = this.calculatePerformanceLevel(average);
-
-                    await updateDoc(doc(this.db, this.studentsCollection, studentId), {
-                        marks: updatedMarks,
-                        grandTotal,
-                        average: Math.round(average * 100) / 100,
-                        performanceLevel
-                    });
-                }
-            });
-
-            await Promise.all(updatePromises);
-
-            const affectedClasses = new Set<string>();
             for (const studentId of studentIds) {
                 const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (studentDoc.exists()) {
-                    affectedClasses.add((studentDoc.data() as StudentRecord).className);
+                if (!studentDoc.exists()) continue;
+
+                const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
+                const termRecord = student.academicHistory?.[activeTerm];
+                if (!termRecord || !termRecord.marks[subjectId]) continue;
+
+                const updatedTermMarks = { ...termRecord.marks };
+                const marks = updatedTermMarks[subjectId];
+                const ext = marks.ext || 0;
+
+                updatedTermMarks[subjectId] = {
+                    int: 0,
+                    ext,
+                    total: this.getMarkValue(ext as any),
+                    status: 'Pending'
+                };
+
+                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+                const average = Object.keys(updatedTermMarks).length > 0 ? grandTotal / Object.keys(updatedTermMarks).length : 0;
+                const allSubjects = await this.getAllSubjects();
+                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+
+                const updatedTermRecord = {
+                    ...termRecord,
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: Math.round(average * 100) / 100,
+                    performanceLevel
+                };
+
+                const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                if (activeTerm === this.getCurrentTermKey()) {
+                    updates.marks = updatedTermMarks;
+                    updates.grandTotal = grandTotal;
+                    updates.average = updatedTermRecord.average;
+                    updates.performanceLevel = performanceLevel;
                 }
-            }
-            for (const className of affectedClasses) {
-                await this.calculateClassRankings(className);
+
+                await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+                await this.calculateClassRankings(student.currentClass, activeTerm);
             }
 
             this.invalidateCache();
-            console.log('Subject CE marks cleared successfully');
         } catch (error) {
-            console.error('Error clearing subject CE marks:', error);
+            console.error('Error clearing subject INT marks:', error);
             throw error;
         }
     }
@@ -1698,8 +1899,8 @@ export class DataService {
                 'Arabic Name': subject.arabicName || '',
                 'Subject Type': subject.subjectType,
                 'Target Classes': subject.targetClasses.join(', '),
-                'Max TA': subject.maxTA,
-                'Max CE': subject.maxCE,
+                'Max INT': subject.maxINT,
+                'Max EXT': subject.maxEXT,
                 'Faculty': subject.facultyName
             }));
             const subjectsWorksheet = (XLSX as any).utils.json_to_sheet(subjectsData);
@@ -1796,6 +1997,7 @@ export class DataService {
                         adNo: String(adNo).trim(),
                         name: String(name).trim(),
                         className: String(className).trim(),
+                        currentClass: String(className).trim(),
                         semester: semester as 'Odd' | 'Even',
                         marks: {},
                         grandTotal: 0,
@@ -1848,13 +2050,13 @@ export class DataService {
             subjects.forEach(subject => {
                 const marks = student.marks[subject.id];
                 if (marks) {
-                    baseRow[`${subject.name} - TA`] = marks.ta;
-                    baseRow[`${subject.name} - CE`] = marks.ce;
+                    baseRow[`${subject.name} - INT`] = marks.int;
+                    baseRow[`${subject.name} - EXT`] = marks.ext;
                     baseRow[`${subject.name} - Total`] = marks.total;
                     baseRow[`${subject.name} - Status`] = marks.status;
                 } else {
-                    baseRow[`${subject.name} - TA`] = '';
-                    baseRow[`${subject.name} - CE`] = '';
+                    baseRow[`${subject.name} - INT`] = '';
+                    baseRow[`${subject.name} - EXT`] = '';
                     baseRow[`${subject.name} - Total`] = '';
                     baseRow[`${subject.name} - Status`] = '';
                 }
@@ -1916,51 +2118,51 @@ export class DataService {
                         continue;
                     }
 
-                    const student = studentDoc.data() as StudentRecord;
+                    const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
                     const updatedMarks = { ...student.marks };
 
                     // Process marks for each subject
                     let hasUpdates = false;
                     for (const [subjectName, subject] of subjectMap) {
-                        const taKey = `${subjectName} - TA`;
-                        const ceKey = `${subjectName} - CE`;
+                        const intKey = `${subjectName} - INT`;
+                        const extKey = `${subjectName} - EXT`;
                         const statusKey = `${subjectName} - Status`;
 
-                        const taProvided = row[taKey] !== undefined && row[taKey] !== '';
-                        const ceProvided = row[ceKey] !== undefined && row[ceKey] !== '';
+                        const intProvided = row[intKey] !== undefined && row[intKey] !== '';
+                        const extProvided = row[extKey] !== undefined && row[extKey] !== '';
 
                         // Only proceed if all required components for this subject are provided
-                        const taOk = subject.maxTA > 0 ? taProvided : true;
-                        const ceOk = subject.maxCE > 0 ? ceProvided : true;
+                        const intOk = subject.maxINT > 0 ? intProvided : true;
+                        const extOk = subject.maxEXT > 0 ? extProvided : true;
 
-                        if (taOk && ceOk && (taProvided || ceProvided)) {
-                            const ta = taProvided ? parseInt(row[taKey]) : 0;
-                            const ce = ceProvided ? parseInt(row[ceKey]) : 0;
+                        if (intOk && extOk && (intProvided || extProvided)) {
+                            const int = intProvided ? parseInt(row[intKey]) : 0;
+                            const ext = extProvided ? parseInt(row[extKey]) : 0;
 
-                            if (isNaN(ta) || isNaN(ce)) {
-                                results.errors.push(`Row ${rowNum}: Invalid marks for ${subjectName} (TA: ${row[taKey]}, CE: ${row[ceKey]})`);
+                            if (isNaN(int) || isNaN(ext)) {
+                                results.errors.push(`Row ${rowNum}: Invalid marks for ${subjectName} (INT: ${row[intKey]}, EXT: ${row[extKey]})`);
                                 continue;
                             }
 
                             // Validate against subject limits
-                            if (ta > subject.maxTA || ce > subject.maxCE) {
-                                results.errors.push(`Row ${rowNum}: Marks exceed maximum for ${subjectName} (TA: ${ta}/${subject.maxTA}, CE: ${ce}/${subject.maxCE})`);
+                            if (int > subject.maxINT || ext > subject.maxEXT) {
+                                results.errors.push(`Row ${rowNum}: Marks exceed maximum for ${subjectName} (INT: ${int}/${subject.maxINT}, EXT: ${ext}/${subject.maxEXT})`);
                                 continue;
                             }
 
                             // Calculate status
-                            const isFullTA = subject.maxTA === 100;
-                            const minTA = Math.ceil(subject.maxTA * 0.4);
-                            const minCE = isFullTA ? 0 : Math.ceil(subject.maxCE * 0.5);
+                            const isFullINT = subject.maxINT === 100;
+                            const minINT = Math.ceil(subject.maxINT * 0.4);
+                            const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.5);
 
-                            const passedTA = ta >= minTA;
-                            const passedCE = isFullTA || ce >= minCE || subject.maxCE === 0;
-                            const status = (passedTA && passedCE) ? 'Passed' : 'Failed';
+                            const passedINT = int >= minINT;
+                            const passedEXT = isFullINT || ext >= minEXT || subject.maxEXT === 0;
+                            const status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
 
                             updatedMarks[subject.id] = {
-                                ta,
-                                ce,
-                                total: ta + ce,
+                                int,
+                                ext,
+                                total: int + ext,
                                 status
                             };
                             hasUpdates = true;
@@ -1973,7 +2175,7 @@ export class DataService {
                         const average = Object.keys(updatedMarks).length > 0 ? grandTotal / Object.keys(updatedMarks).length : 0;
 
                         // Determine performance level
-                        const performanceLevel = this.calculatePerformanceLevel(average);
+                        const performanceLevel = this.calculatePerformanceLevel(updatedMarks, subjects);
 
                         // Update student document
                         await updateDoc(doc(this.db, this.studentsCollection, studentId), {
@@ -2005,338 +2207,11 @@ export class DataService {
         }
     }
 
-    // Doura Status operations
-    async submitDouraStatus(submission: Omit<DouraSubmission, 'id'>): Promise<string> {
-        try {
-            const isSelf = submission.type === 'Self';
-            const status = isSelf ? 'Approved' : 'Pending';
-            const approvedAt = isSelf ? new Date().toISOString() : undefined;
-
-            const sanitizedSubmission = this.sanitizeObject({
-                ...submission,
-                status,
-                approvedAt
-            });
-
-            const docRef = await addDoc(collection(this.db, this.douraCollection), {
-                ...sanitizedSubmission,
-                submittedAt: new Date().toISOString()
-            });
-
-            // If auto-approved, update progress
-            if (isSelf) {
-                const juzRange = [];
-                for (let i = submission.juzStart; i <= submission.juzEnd; i++) {
-                    juzRange.push(i);
-                }
-                await this.updateKhatamProgress(submission.studentAdNo, juzRange);
-            }
-
-            this.invalidateDouraCache();
-            return docRef.id;
-        } catch (error) {
-            console.error('Error submitting Doura status:', error);
-            throw error;
-        }
-    }
-
-    async getDouraSubmissionsByAdNo(adNo: string): Promise<DouraSubmission[]> {
-        try {
-            const q = query(
-                collection(this.db, this.douraCollection),
-                where('studentAdNo', '==', adNo)
-            );
-            const querySnapshot = await getDocs(q);
-            return querySnapshot.docs
-                .map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                } as DouraSubmission))
-                .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-        } catch (error) {
-            console.error('Error fetching student Doura status:', error);
-            return [];
-        }
-    }
-
-    async getAllDouraSubmissions(className?: string, status?: 'Pending' | 'Approved' | 'Rejected'): Promise<DouraSubmission[]> {
-        // Return cached data if valid and no specific filters that we don't want to double-filter
-        if (this.isDouraCacheValid() && this.douraCache) {
-            let submissions = [...this.douraCache];
-            if (className && className !== 'all') {
-                submissions = submissions.filter(s => s.className === className);
-            }
-            if (status && (status as string) !== 'all') {
-                submissions = submissions.filter(s => s.status === status);
-            }
-            return submissions;
-        }
-
-        try {
-            // Fetch all submissions ordered by date
-            const q = query(collection(this.db, this.douraCollection), orderBy('submittedAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-
-            const submissions = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as DouraSubmission));
-
-            // Update cache with all submissions
-            this.updateDouraCache(submissions);
-
-            // Apply filters client-side
-            let filtered = [...submissions];
-            if (className && className !== 'all') {
-                filtered = filtered.filter(s => s.className === className);
-            }
-
-            if (status && (status as string) !== 'all') {
-                filtered = filtered.filter(s => s.status === status);
-            }
-
-            return filtered;
-        } catch (error) {
-            console.error('Error fetching Doura submissions:', error);
-            return [];
-        }
-    }
-
-    async getParticipantRecord(idOrAdNo: string): Promise<{ type: 'student' | 'teacher', record: any } | null> {
-        // 1. Check if it's a student AdNo
-        const student = await this.getStudentByAdNo(idOrAdNo);
-        if (student) return { type: 'student', record: student };
-
-        // 2. Check if it's a faculty code
-        const codes = await this.getFacultyParticipantCodes();
-        // codes is name -> code
-        const facultyEntry = Object.entries(codes).find(([name, code]) => code === idOrAdNo);
-        if (facultyEntry) {
-            const [name] = facultyEntry;
-            return {
-                type: 'teacher',
-                record: {
-                    id: `FAC-${idOrAdNo}`,
-                    adNo: idOrAdNo,
-                    name: name,
-                    className: 'Faculty',
-                    semester: 'Odd',
-                    marks: {},
-                    grandTotal: 0,
-                    average: 0,
-                    rank: 0,
-                    performanceLevel: 'Excellent' as any
-                }
-            };
-        }
-
-        return null;
-    }
-
-    async deleteDouraSubmission(id: string): Promise<void> {
-        try {
-            await deleteDoc(doc(this.db, this.douraCollection, id));
-            this.invalidateDouraCache();
-        } catch (error) {
-            console.error('Error deleting Doura submission:', error);
-            throw error;
-        }
-    }
-
-    async deleteAllStudentDouraSubmissions(adNo: string): Promise<number> {
-        try {
-            const q = query(collection(this.db, this.douraCollection), where('studentAdNo', '==', adNo));
-            const snapshot = await getDocs(q);
-            const batch = writeBatch(this.db);
-            let count = 0;
-
-            snapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref);
-                count++;
-            });
-
-            await batch.commit();
-
-            // Also reset Khatam Progress for this student
-            await setDoc(doc(this.db, this.khatamCollection, adNo), {
-                studentAdNo: adNo,
-                currentKhatamJuz: [],
-                khatamCount: 0,
-                lastUpdated: new Date().toISOString()
-            });
-
-            this.invalidateDouraCache();
-            return count;
-        } catch (error) {
-            console.error('Error deleting all student Doura submissions:', error);
-            throw error;
-        }
-    }
-
     private sanitizeObject(obj: any) {
         return Object.entries(obj).reduce((acc, [key, value]) => {
             if (value !== undefined) acc[key] = value;
             return acc;
         }, {} as any);
-    }
-
-    async updateDouraSubmission(id: string, updates: Partial<DouraSubmission>): Promise<void> {
-        try {
-            const docRef = doc(this.db, this.douraCollection, id);
-
-            // If approving, we need to know the student and the juz range
-            if (updates.status === 'Approved') {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const submission = docSnap.data() as DouraSubmission;
-                    const juzRange = [];
-                    for (let i = submission.juzStart; i <= submission.juzEnd; i++) {
-                        juzRange.push(i);
-                    }
-                    await this.updateKhatamProgress(submission.studentAdNo, juzRange);
-                }
-            }
-
-            const sanitizedUpdates = this.sanitizeObject(updates);
-
-            await updateDoc(docRef, {
-                ...sanitizedUpdates,
-                approvedAt: updates.status === 'Approved' ? new Date().toISOString() : null
-            });
-            this.invalidateDouraCache();
-        } catch (error) {
-            console.error('Error updating Doura submission:', error);
-            throw error;
-        }
-    }
-
-    async getTopReciters(className: string): Promise<{ name: string; juzCount: number }[]> {
-        try {
-            // Use the cached getAllDouraSubmissions method to ensure sync with deletions/updates
-            const submissions = await this.getAllDouraSubmissions(className, 'Approved');
-
-            // Aggregate by student name
-            const aggregation: Record<string, number> = {};
-            submissions.forEach(sub => {
-                const count = Math.max(0, sub.juzEnd - sub.juzStart + 1);
-                aggregation[sub.studentName] = (aggregation[sub.studentName] || 0) + count;
-            });
-
-            // Convert to array and sort
-            return Object.entries(aggregation)
-                .map(([name, juzCount]) => ({ name, juzCount }))
-                .sort((a, b) => b.juzCount - a.juzCount)
-                .slice(0, 10);
-        } catch (error) {
-            console.error('Error fetching top reciters:', error);
-            return [];
-        }
-    }
-
-    // Doura Task methods
-    async getDouraTasks(className?: string, studentAdNo?: string): Promise<DouraTask[]> {
-        try {
-            // Fetch all tasks and filter in memory to avoid complex Firestore index requirements
-            const q = query(collection(this.db, this.douraTasksCollection), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-            let tasks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DouraTask));
-
-            // Apply filters in memory
-            if (className && className !== 'all') {
-                tasks = tasks.filter(t => t.targetClass === className || t.targetClass === 'all');
-            }
-
-            if (studentAdNo) {
-                tasks = tasks.filter(t => !t.targetStudentAdNo || t.targetStudentAdNo === studentAdNo);
-            }
-
-            return tasks;
-        } catch (error) {
-            console.error('Error fetching Doura tasks:', error);
-            return [];
-        }
-    }
-
-    async createDouraTask(task: Omit<DouraTask, 'id'>): Promise<string> {
-        try {
-            const sanitizedTask = this.sanitizeObject(task);
-            const docRef = await addDoc(collection(this.db, this.douraTasksCollection), sanitizedTask);
-            return docRef.id;
-        } catch (error) {
-            console.error('Error creating Doura task:', error);
-            throw error;
-        }
-    }
-
-    async updateDouraTask(id: string, updates: Partial<DouraTask>): Promise<void> {
-        try {
-            const sanitizedUpdates = this.sanitizeObject(updates);
-            await updateDoc(doc(this.db, this.douraTasksCollection, id), sanitizedUpdates);
-        } catch (error) {
-            console.error('Error updating Doura task:', error);
-            throw error;
-        }
-    }
-
-    async deleteDouraTask(id: string): Promise<void> {
-        try {
-            await deleteDoc(doc(this.db, this.douraTasksCollection, id));
-        } catch (error) {
-            console.error('Error deleting Doura task:', error);
-            throw error;
-        }
-    }
-
-    // Khatam Progress methods
-    async getKhatamProgress(adNo: string): Promise<KhatamProgress | null> {
-        try {
-            const q = query(collection(this.db, this.khatamCollection), where('studentAdNo', '==', adNo));
-            const querySnapshot = await getDocs(q);
-            if (querySnapshot.empty) return null;
-            const doc = querySnapshot.docs[0];
-            return { id: doc.id, ...doc.data() } as KhatamProgress;
-        } catch (error) {
-            console.error('Error fetching Khatam progress:', error);
-            return null;
-        }
-    }
-
-    async updateKhatamProgress(adNo: string, completedJuz: number[]): Promise<void> {
-        try {
-            const existing = await this.getKhatamProgress(adNo);
-            if (existing) {
-                const newJuz = Array.from(new Set([...existing.currentKhatamJuz, ...completedJuz]));
-                let khatamCount = existing.khatamCount;
-                let finalJuz = newJuz;
-
-                if (newJuz.length >= 30) {
-                    khatamCount += 1;
-                    finalJuz = []; // Reset for next Khatam
-                }
-
-                await updateDoc(doc(this.db, this.khatamCollection, existing.id), {
-                    currentKhatamJuz: finalJuz,
-                    khatamCount,
-                    lastCompletedDate: newJuz.length >= 30 ? new Date().toISOString() : existing.lastCompletedDate
-                });
-            } else {
-                let khatamCount = 0;
-                let finalJuz = completedJuz;
-                if (completedJuz.length >= 30) {
-                    khatamCount = 1;
-                    finalJuz = [];
-                }
-                await addDoc(collection(this.db, this.khatamCollection), {
-                    studentAdNo: adNo,
-                    currentKhatamJuz: finalJuz,
-                    khatamCount,
-                    lastCompletedDate: khatamCount > 0 ? new Date().toISOString() : null
-                });
-            }
-        } catch (error) {
-            console.error('Error updating Khatam progress:', error);
-            throw error;
-        }
     }
 }
 

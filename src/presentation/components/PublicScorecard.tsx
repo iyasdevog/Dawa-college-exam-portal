@@ -1,21 +1,60 @@
 import React from 'react';
-import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SubjectMarks } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import ClassResults from './ClassResults';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface PublicScorecardProps {
     result: StudentRecord;
     subjects: SubjectConfig[];
+    isResultsReleased?: boolean;
+    isSuppReleased?: boolean;
 }
 
-const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) => {
+const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isResultsReleased = true, isSuppReleased = false }) => {
     const { isMobile } = useMobile();
+    const { activeTerm, currentSemester } = useTerm();
 
     const handlePrint = () => {
         window.print();
     };
 
-    const resultSubjects = result ? subjects.filter(s => s.targetClasses?.includes(result.className)) : [];
+    const activeTermRecord = result?.academicHistory?.[activeTerm];
+    const displayMarks = activeTermRecord?.marks || {};
+    const displayRank = activeTermRecord?.rank || '-';
+    // If only supp is released, totals/average might not make sense, maybe we should hide them or recalculate?
+    // Let's just use the active term's totals for now or show N/A
+    const isOnlySupp = !isResultsReleased && isSuppReleased;
+    const displayTotal = isOnlySupp ? '-' : (activeTermRecord?.grandTotal || 0);
+    const displayAverage = isOnlySupp ? '-' : (activeTermRecord?.average || 0);
+    const displayPerformance = isOnlySupp ? 'Supplementary Phase' : (activeTermRecord?.performanceLevel || 'Not Assessed');
+    const displayClass = activeTermRecord?.className || result?.currentClass || '';
+    const displaySemester = activeTermRecord?.semester || currentSemester;
+
+    let resultSubjects = result ? subjects.filter(s => s.targetClasses?.includes(displayClass)) : [];
+    
+    // Merged marks mapping
+    const finalMarks: Record<string, SubjectMarks> = { ...displayMarks };
+    const suppExams = result?.supplementaryExams || [];
+
+    if (isSuppReleased) {
+        // Merge completed supplementary marks
+        const completedSupps = suppExams.filter(su => su.status === 'Completed' && su.marks);
+        completedSupps.forEach(su => {
+            if (su.marks) {
+                finalMarks[su.subjectId] = {
+                    ...su.marks,
+                    isSupplementary: true
+                };
+            }
+        });
+
+        if (!isResultsReleased) {
+            // ONLY SHOW supplementary subjects
+            const suppSubjectIds = new Set(completedSupps.map(su => su.subjectId));
+            resultSubjects = resultSubjects.filter(s => suppSubjectIds.has(s.id));
+        }
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in zoom-in duration-500">
@@ -104,13 +143,13 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                             </h3>
                             <div className={`flex gap-4 items-center ${isMobile ? 'flex-col items-start gap-3' : 'flex-wrap'}`}>
                                 <span className={`bg-white/20 rounded-lg font-black tracking-widest uppercase ${isMobile ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-[10px]'}`}>
-                                    {result.className}
+                                    {displayClass}
                                 </span>
                                 <span className={`text-emerald-300 font-bold ${isMobile ? 'text-sm' : 'text-sm'}`}>
                                     Admission: {result.adNo}
                                 </span>
                                 <span className={`text-emerald-300 font-bold ${isMobile ? 'text-sm' : 'text-sm'}`}>
-                                    Semester: {result.semester}
+                                    Term: {activeTerm}
                                 </span>
                             </div>
                         </div>
@@ -119,7 +158,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                 Class Rank
                             </span>
                             <span className={`font-black text-emerald-300 print:text-3xl ${isMobile ? 'text-4xl' : 'text-5xl'}`}>
-                                #{result.rank}
+                                #{displayRank}
                             </span>
                         </div>
                     </div>
@@ -133,7 +172,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                 Total Marks
                             </p>
                             <p className={`font-black text-slate-900 print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'}`}>
-                                {result.grandTotal}
+                                {displayTotal}
                             </p>
                         </div>
                         <div className={`bg-slate-50 border border-slate-100 text-center print:p-4 print:rounded-2xl ${isMobile ? 'p-6 rounded-2xl' : 'p-8 rounded-[2rem]'}`}>
@@ -141,21 +180,23 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                 Average
                             </p>
                             <p className={`font-black text-slate-900 print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'}`}>
-                                {result.average.toFixed(1)}%
+                                {typeof displayAverage === 'number' ? displayAverage.toFixed(1) : displayAverage}%
                             </p>
                         </div>
                         <div className={`bg-slate-50 border border-slate-100 text-center print:p-4 print:rounded-2xl ${isMobile ? 'p-6 rounded-2xl' : 'p-8 rounded-[2rem]'}`}>
                             <p className={`uppercase font-black text-slate-400 mb-2 tracking-widest ${isMobile ? 'text-xs' : 'text-[10px]'}`}>
                                 Grade
                             </p>
-                            <p className={`font-black print:text-2xl ${isMobile ? 'text-2xl' : 'text-3xl'} ${result.performanceLevel === 'F (Failed)' ? 'text-red-500' :
-                                result.performanceLevel.includes('Outstanding') ? 'text-emerald-600' :
-                                    result.performanceLevel.includes('Excellent') ? 'text-emerald-500' :
-                                        result.performanceLevel.includes('Very Good') ? 'text-blue-500' :
-                                            result.performanceLevel.includes('Good') ? 'text-teal-500' :
-                                                'text-amber-500'
+                            <p className={`font-black print:text-2xl ${isMobile ? 'text-2xl' : 'text-3xl'} ${displayPerformance === 'F (Failed)' ? 'text-red-500' :
+                                displayPerformance.includes('O (Outstanding)') ? 'text-emerald-600' :
+                                    displayPerformance.includes('A+ (Excellent)') ? 'text-emerald-500' :
+                                        displayPerformance.includes('A (Very Good)') ? 'text-blue-500' :
+                                            displayPerformance.includes('B+ (Good)') ? 'text-teal-500' :
+                                                displayPerformance.includes('B (Good)') ? 'text-teal-400' :
+                                                    displayPerformance === 'C (Average)' ? 'text-amber-500' :
+                                                        'text-slate-500'
                                 }`}>
-                                {result.performanceLevel}
+                                {displayPerformance}
                             </p>
                         </div>
                     </div>
@@ -176,7 +217,8 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                         </div>
                                     </div>
                                     {resultSubjects.map((subject, index) => {
-                                        const marks = result.marks[subject.id];
+                                        const marks = finalMarks[subject.id];
+                                        const maxTotal = (subject.maxINT || 0) + (subject.maxEXT || 0);
                                         return (
                                             <div
                                                 key={subject.id}
@@ -186,12 +228,19 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                                 {/* Subject Header */}
                                                 <div className="flex items-start justify-between mb-4">
                                                     <div className="flex-1">
-                                                        <h5 className="font-black text-slate-800 text-base leading-tight mb-1">
+                                                        <h5 className="font-black text-slate-800 text-base leading-tight mb-1 flex items-center gap-2">
                                                             {subject.name}
+                                                            {marks?.isSupplementary && (
+                                                                <span className="bg-orange-100 text-orange-700 text-[9px] px-2 py-0.5 rounded uppercase tracking-widest font-bold">
+                                                                    Supp
+                                                                </span>
+                                                            )}
                                                         </h5>
-                                                        <p className="arabic-text text-lg text-emerald-600 leading-none">
-                                                            {subject.arabicName}
-                                                        </p>
+                                                        {subject.arabicName && (
+                                                            <p className="arabic-text text-lg text-emerald-600 leading-none">
+                                                                {subject.arabicName}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                     <div className="flex-shrink-0 ml-4">
                                                         {marks && (
@@ -208,15 +257,21 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                                 {/* Marks Grid */}
                                                 <div className="grid grid-cols-3 gap-3">
                                                     <div className="bg-slate-50 rounded-xl p-3 text-center">
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">TA</p>
+                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">INT</p>
                                                         <p className="text-lg font-black text-slate-700">
-                                                            {marks?.ta ?? '-'}
+                                                            {marks?.int ?? '-'}
+                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
                                                         </p>
                                                     </div>
                                                     <div className="bg-slate-50 rounded-xl p-3 text-center">
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">CE</p>
+                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">EXT</p>
                                                         <p className="text-lg font-black text-slate-700">
-                                                            {marks?.ce ?? '-'}
+                                                            {subject.maxEXT === 0 ? 'N/A' : (
+                                                                <>
+                                                                    {marks?.ext ?? '-'}
+                                                                    <span className="text-[10px] text-slate-400 ml-1">/{subject.maxEXT}</span>
+                                                                </>
+                                                            )}
                                                         </p>
                                                     </div>
                                                     <div className={`rounded-xl p-3 text-center ${marks?.status === 'Failed'
@@ -237,7 +292,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                                         <div className="flex items-center justify-between mb-2">
                                                             <span className="text-xs font-medium text-slate-500">Performance</span>
                                                             <span className="text-xs font-bold text-slate-700">
-                                                                {((marks.total / 100) * 100).toFixed(0)}%
+                                                                {Math.round((marks.total / maxTotal) * 100)}%
                                                             </span>
                                                         </div>
                                                         <div className="w-full bg-slate-200 rounded-full h-2">
@@ -247,8 +302,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                                                     : 'bg-emerald-500'
                                                                     }`}
                                                                 style={{
-                                                                    width: `${Math.min((marks.total / 100) * 100, 100)}%`,
-                                                                    // animationDelay: `${index * 200}ms`
+                                                                    width: `${Math.min((marks.total / maxTotal) * 100, 100)}%`,
                                                                 }}
                                                             ></div>
                                                         </div>
@@ -259,45 +313,69 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects }) =
                                     })}
                                 </div>
                             ) : (
-                                /* Desktop Table Layout */
+                                /* Desktop Table Layout - Aligned with StudentScorecard */
                                 <div className="overflow-x-auto rounded-[2rem] border border-slate-100 print:border-slate-200">
                                     <table className="w-full border-collapse">
                                         <thead>
                                             <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-slate-100">
                                                 <th className="px-8 py-6 text-left print:px-4 print:py-3">Subject</th>
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">TA</th>
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">CE</th>
+                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">INT</th>
+                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">EXT</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Total</th>
+                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">Max</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50 print:divide-slate-200">
                                             {resultSubjects.map(subject => {
-                                                const marks = result.marks[subject.id];
+                                                const marks = finalMarks[subject.id];
+                                                const maxTotal = (subject.maxINT || 0) + (subject.maxEXT || 0);
                                                 return (
                                                     <tr key={subject.id} className="hover:bg-slate-50/50 transition-colors">
                                                         <td className="px-8 py-6 print:px-4 print:py-3">
-                                                            <p className="font-black text-slate-800 text-lg tracking-tight print:text-sm">{subject.name}</p>
-                                                            <p className="arabic-text text-xl text-emerald-600 leading-none mt-1 print:text-base">{subject.arabicName}</p>
+                                                            <p className="font-black text-slate-800 text-lg tracking-tight print:text-sm flex items-center gap-2">
+                                                                {subject.name}
+                                                                {marks?.isSupplementary && (
+                                                                    <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded uppercase tracking-widest font-bold">
+                                                                        Supp
+                                                                    </span>
+                                                                )}
+                                                            </p>
+                                                            {subject.arabicName && (
+                                                                <p className="arabic-text text-xl text-emerald-600 leading-none mt-1 print:text-base">{subject.arabicName}</p>
+                                                            )}
                                                         </td>
                                                         <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
-                                                            {marks?.ta ?? '-'}
+                                                            {marks?.int ?? '-'}
+                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
                                                         </td>
                                                         <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
-                                                            {marks?.ce ?? '-'}
+                                                            {subject.maxEXT === 0 ? (
+                                                                <span className="text-[10px] text-slate-300 uppercase">N/A</span>
+                                                            ) : (
+                                                                <>
+                                                                    {marks?.ext ?? '-'}
+                                                                    <span className="text-[10px] text-slate-400 ml-1">/{subject.maxEXT}</span>
+                                                                </>
+                                                            )}
                                                         </td>
                                                         <td className={`px-6 py-6 text-center font-black text-2xl print:px-4 print:py-3 print:text-lg ${marks?.status === 'Failed' ? 'text-red-500' : 'text-slate-900'
                                                             }`}>
                                                             {marks?.total ?? '-'}
                                                         </td>
+                                                        <td className="px-6 py-6 text-center font-mono text-slate-400 print:px-4 print:py-3 print:text-xs">
+                                                            {maxTotal}
+                                                        </td>
                                                         <td className="px-6 py-6 text-center print:px-4 print:py-3">
-                                                            {marks && (
+                                                            {marks ? (
                                                                 <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${marks.status === 'Passed'
                                                                     ? 'bg-emerald-100 text-emerald-700'
                                                                     : 'bg-red-100 text-red-700'
                                                                     }`}>
                                                                     {marks.status}
                                                                 </span>
+                                                            ) : (
+                                                                <span className="text-slate-300 text-[10px] font-black uppercase">Pending</span>
                                                             )}
                                                         </td>
                                                     </tr>

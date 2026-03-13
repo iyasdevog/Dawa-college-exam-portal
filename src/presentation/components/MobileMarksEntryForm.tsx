@@ -49,7 +49,7 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
         ta: {
             rules: [
                 validationPresets.required('TA marks are required'),
-                validationPresets.marks(subject.maxTA, `TA marks must be between 0 and ${subject.maxTA}`)
+                validationPresets.marks(subject.maxINT, `TA marks must be between 0 and ${subject.maxINT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
@@ -58,7 +58,7 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
         ce: {
             rules: [
                 validationPresets.required('CE marks are required'),
-                validationPresets.marks(subject.maxCE, `CE marks must be between 0 and ${subject.maxCE}`)
+                validationPresets.marks(subject.maxEXT, `CE marks must be between 0 and ${subject.maxEXT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
@@ -79,12 +79,12 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     const taValue = parseInt(marks.ta) || 0;
     const ceValue = parseInt(marks.ce) || 0;
     const total = taValue + ceValue;
-    const maxTotal = subject.maxTA + subject.maxCE;
+    const maxTotal = subject.maxINT + subject.maxEXT;
     const percentage = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
 
     // Determine pass/fail status
-    const minTA = Math.ceil(subject.maxTA * 0.4);
-    const minCE = Math.ceil(subject.maxCE * 0.5);
+    const minTA = Math.ceil(subject.maxINT * 0.4);
+    const minCE = Math.ceil(subject.maxEXT * 0.5);
     const passedTA = taValue >= minTA;
     const passedCE = ceValue >= minCE;
     const overallStatus = passedTA && passedCE ? 'Passed' : 'Failed';
@@ -244,12 +244,12 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
             <div className={`grid gap-4 mb-6 ${isMobile && orientation === 'landscape' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {/* TA Marks */}
                 <MobileFormInput
-                    label={`TA Marks (Max: ${subject.maxTA})`}
+                    label={`TA Marks (Max: ${subject.maxINT})`}
                     type="number"
                     value={marks.ta}
                     placeholder="0"
                     min={0}
-                    max={subject.maxTA}
+                    max={subject.maxINT}
                     required
                     error={showValidation ? validationErrors.ta : undefined}
                     validationState={
@@ -271,12 +271,12 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
 
                 {/* CE Marks */}
                 <MobileFormInput
-                    label={`CE Marks (Max: ${subject.maxCE})`}
+                    label={`CE Marks (Max: ${subject.maxEXT})`}
                     type="number"
                     value={marks.ce}
                     placeholder="0"
                     min={0}
-                    max={subject.maxCE}
+                    max={subject.maxEXT}
                     required
                     error={showValidation ? validationErrors.ce : undefined}
                     validationState={
@@ -416,7 +416,7 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
             <div className="sr-only" aria-live="polite">
                 {marks.ta && marks.ce && (
                     <div>
-                        Current marks: TA {marks.ta} out of {subject.maxTA}, CE {marks.ce} out of {subject.maxCE}.
+                        Current marks: TA {marks.ta} out of {subject.maxINT}, CE {marks.ce} out of {subject.maxEXT}.
                         Total: {total} out of {maxTotal}. Status: {overallStatus}.
                     </div>
                 )}

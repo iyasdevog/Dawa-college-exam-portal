@@ -187,6 +187,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                     adNo: studentForm.adNo.trim(),
                     name: studentForm.name.trim(),
                     className: studentForm.className,
+                    currentClass: studentForm.className,
                     semester: studentForm.semester,
                     marks: {},
                     grandTotal: 0,

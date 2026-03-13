@@ -11,19 +11,19 @@ export class SubjectUseCases {
     async createSubject(subjectData: {
         name: string;
         arabicName?: string;
-        maxTA: number;
-        maxCE: number;
+        maxINT: number;
+        maxEXT: number;
         passingTotal: number;
         facultyName?: string;
         targetClasses: string[];
         subjectType: 'general' | 'elective';
     }): Promise<string> {
         // Validate subject data
-        if (subjectData.maxTA <= 0 || subjectData.maxCE <= 0) {
+        if (subjectData.maxINT <= 0 || subjectData.maxEXT <= 0) {
             throw new Error('Maximum marks must be greater than 0');
         }
 
-        if (subjectData.passingTotal > (subjectData.maxTA + subjectData.maxCE)) {
+        if (subjectData.passingTotal > (subjectData.maxINT + subjectData.maxEXT)) {
             throw new Error('Passing total cannot exceed maximum total marks');
         }
 
