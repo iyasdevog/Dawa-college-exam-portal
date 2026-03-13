@@ -1672,45 +1672,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                             </p>
                         </button>
 
-                        {/* Temporary Grade Recalculation Tool */}
-                        <button
-                            onClick={async () => {
-                                if (window.confirm("This will recalculate performance levels for ALL students based on the new subject-based grading logic. This may take a while. Proceed?")) {
-                                    setLoadingState({
-                                        isLoading: true,
-                                        stage: 'calculating-stats',
-                                        progress: 0,
-                                        message: 'Recalculating all grades...'
-                                    });
-                                    try {
-                                        await dataService.recalculateAllStudentPerformanceLevels();
-                                        alert("Successfully recalculated all performance levels!");
-                                        loadData();
-                                    } catch (e) {
-                                        alert("Failed to recalculate: " + (e instanceof Error ? e.message : String(e)));
-                                    } finally {
-                                        setLoadingState(prev => ({ ...prev, isLoading: false }));
-                                    }
-                                }
-                            }}
-                            className="p-4 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-all text-left"
-                        >
-                            <div className="flex items-center gap-3 mb-2">
-                                <i className="fa-solid fa-calculator text-red-600"></i>
-                                <span
-                                    className="font-bold text-red-900"
-                                    style={getTypographyStyle('body-medium')}
-                                >
-                                    Recalculate Grades
-                                </span>
-                            </div>
-                            <p
-                                className="text-red-700"
-                                style={getTypographyStyle('body-small')}
-                            >
-                                Apply new grading system to all students
-                            </p>
-                        </button>
                     </div>
                 )}
             </div >

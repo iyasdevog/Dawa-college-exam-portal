@@ -12,7 +12,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
     const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
     const [isDangerZoneUnlocked, setIsDangerZoneUnlocked] = useState(false);
     const [unlockPassword, setUnlockPassword] = useState('');
-    const DANGER_PASSWORD = 'pleasecareful';
+    const DANGER_PASSWORD = import.meta.env.VITE_DB_UNLOCK_PASSWORD || 'pleasecareful';
 
     // Doura Cleanup State
     const [cleanupClass, setCleanupClass] = useState('');
@@ -196,17 +196,22 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh }) =>
                                         // Step 3: Fix Totals & Rankings (includes Performance Levels)
                                         const totalsRes = await dataService.recalculateAllStudentTotals();
 
+                                        // Step 4: Full Bulk Recalculation (Extra safety for new grading logic)
+                                        const perfRes = await dataService.recalculateAllStudentPerformanceLevels();
+
                                         await onRefresh();
 
                                         let message = `✅ Optimization Complete!\n\n`;
                                         message += `- Standardized ${facultyRes.updated} faculty names\n`;
                                         message += `- Updated ${statusRes.updated} mark statuses\n`;
-                                        message += `- Recalculated ${totalsRes.updated} student records\n`;
+                                        message += `- Recalculated ${totalsRes.updated} student record totals\n`;
+                                        message += `- Applied new grading logic to ${perfRes.updated} students\n`;
 
                                         const allErrors = [
                                             ...facultyRes.errors,
                                             ...statusRes.errors,
-                                            ...totalsRes.errors
+                                            ...totalsRes.errors,
+                                            ...perfRes.errors
                                         ];
 
                                         if (allErrors.length > 0) {

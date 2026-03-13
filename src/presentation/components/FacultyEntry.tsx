@@ -1266,13 +1266,21 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         Upload Tracker
                     </button>
                     <button
-                        onClick={() => setActiveTab('release-settings')}
+                        onClick={() => {
+                            const password = import.meta.env.VITE_DB_UNLOCK_PASSWORD || 'pleasecareful';
+                            const input = prompt('Enter Admin Password to manage result release:');
+                            if (input === password) {
+                                setActiveTab('release-settings');
+                            } else if (input !== null) {
+                                alert('Incorrect password.');
+                            }
+                        }}
                         className={`px-6 py-3 font-bold text-sm md:text-base transition-all duration-200 border-b-4 ${activeTab === 'release-settings'
                             ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
                             : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                             }`}
                     >
-                        <i className="fa-solid fa-calendar-check mr-2"></i>
+                        <i className="fa-solid fa-bullhorn mr-2"></i>
                         Release Settings
                     </button>
 

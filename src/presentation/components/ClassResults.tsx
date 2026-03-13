@@ -32,6 +32,18 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     const { isMobile, isTablet } = useMobile();
 
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
+    const [isAuthorized, setIsAuthorized] = useState(false);
+    const [authPassword, setAuthPassword] = useState('');
+
+    const handleAuthorize = (e: React.FormEvent) => {
+        e.preventDefault();
+        const correctPassword = import.meta.env.VITE_DB_UNLOCK_PASSWORD || 'pleasecareful';
+        if (authPassword === correctPassword) {
+            setIsAuthorized(true);
+        } else {
+            alert('Incorrect password');
+        }
+    };
 
     useEffect(() => {
         loadData();
@@ -164,6 +176,35 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                     <div className="loader-ring mb-4"></div>
                     <p className="text-slate-600">Loading class results...</p>
                 </div>
+            </div>
+        );
+    }
+
+    if (!isAuthorized) {
+        return (
+            <div className="bg-white rounded-3xl p-12 shadow-xl border-2 border-slate-100 max-w-md mx-auto mt-12 text-center">
+                <div className="w-20 h-20 bg-slate-100 text-slate-900 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
+                    <i className="fa-solid fa-lock text-4xl"></i>
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Restricted Access</h2>
+                <p className="text-slate-500 text-sm font-medium mb-8">Admin password required to view the graduation tabulation / class report.</p>
+                
+                <form onSubmit={handleAuthorize} className="space-y-4">
+                    <input
+                        type="password"
+                        placeholder="Enter Admin Password"
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all font-bold text-center"
+                        autoFocus
+                    />
+                    <button
+                        type="submit"
+                        className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg hover:bg-slate-800 transition-all active:scale-95"
+                    >
+                        Explore Results
+                    </button>
+                </form>
             </div>
         );
     }
