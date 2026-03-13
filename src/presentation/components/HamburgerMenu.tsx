@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ViewType } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
 import { useMobileNavigation, useTouchInteraction } from '../hooks/useMobile';
@@ -84,65 +85,12 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         return null;
     }
 
-    return (
+    const menuContent = (
         <>
-            {/* Hamburger Button */}
-            <button
-                {...getTouchProps(toggleMobileMenu)}
-                className={`
-          relative z-50 flex flex-col justify-center items-center
-          w-12 h-12 bg-slate-900 rounded-xl
-          transition-all duration-300 ease-in-out
-          touch-target-min
-          ${isMobileMenuOpen ? 'bg-emerald-600' : 'hover:bg-slate-800'}
-        `}
-                {...ariaHelpers.button(
-                    isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu',
-                    isMobileMenuOpen,
-                    'mobile-navigation'
-                )}
-            >
-                {/* Hamburger Lines */}
-                <div className="relative w-6 h-4 flex flex-col justify-between">
-                    {/* Top Line */}
-                    <span
-                        className={`
-              block h-0.5 w-full bg-white rounded-full
-              transition-all duration-300 ease-in-out origin-center
-              ${isMobileMenuOpen
-                                ? 'rotate-45 translate-y-1.5'
-                                : 'rotate-0 translate-y-0'
-                            }
-            `}
-                    />
-
-                    {/* Middle Line */}
-                    <span
-                        className={`
-              block h-0.5 w-full bg-white rounded-full
-              transition-all duration-300 ease-in-out
-              ${isMobileMenuOpen ? 'opacity-0 scale-0' : 'opacity-100 scale-100'}
-            `}
-                    />
-
-                    {/* Bottom Line */}
-                    <span
-                        className={`
-              block h-0.5 w-full bg-white rounded-full
-              transition-all duration-300 ease-in-out origin-center
-              ${isMobileMenuOpen
-                                ? '-rotate-45 -translate-y-1.5'
-                                : 'rotate-0 translate-y-0'
-                            }
-            `}
-                    />
-                </div>
-            </button>
-
             {/* Overlay */}
             <div
                 className={`
-          fixed inset-0 bg-black/50 backdrop-blur-sm z-40
+          fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000]
           transition-all duration-300 ease-in-out print:hidden
           ${isMobileMenuOpen
                         ? 'opacity-100 visible'
@@ -159,7 +107,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 id="mobile-navigation"
                 className={`
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw]
-          bg-slate-900 text-white z-50
+          bg-slate-900 text-white z-[2001]
           transform transition-transform duration-300 ease-in-out
           overflow-y-auto print:hidden
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -278,6 +226,65 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                     </button>
                 </div>
             </nav>
+        </>
+    );
+
+    return (
+        <>
+            {/* Hamburger Button */}
+            <button
+                {...getTouchProps(toggleMobileMenu)}
+                className={`
+          relative z-50 flex flex-col justify-center items-center
+          w-12 h-12 bg-slate-900 rounded-xl
+          transition-all duration-300 ease-in-out
+          touch-target-min
+          ${isMobileMenuOpen ? 'bg-emerald-600' : 'hover:bg-slate-800'}
+        `}
+                {...ariaHelpers.button(
+                    isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu',
+                    isMobileMenuOpen,
+                    'mobile-navigation'
+                )}
+            >
+                {/* Hamburger Lines */}
+                <div className="relative w-6 h-4 flex flex-col justify-between">
+                    {/* Top Line */}
+                    <span
+                        className={`
+              block h-0.5 w-full bg-white rounded-full
+              transition-all duration-300 ease-in-out origin-center
+              ${isMobileMenuOpen
+                                ? 'rotate-45 translate-y-1.5'
+                                : 'rotate-0 translate-y-0'
+                            }
+            `}
+                    />
+
+                    {/* Middle Line */}
+                    <span
+                        className={`
+              block h-0.5 w-full bg-white rounded-full
+              transition-all duration-300 ease-in-out
+              ${isMobileMenuOpen ? 'opacity-0 scale-0' : 'opacity-100 scale-100'}
+            `}
+                    />
+
+                    {/* Bottom Line */}
+                    <span
+                        className={`
+              block h-0.5 w-full bg-white rounded-full
+              transition-all duration-300 ease-in-out origin-center
+              ${isMobileMenuOpen
+                                ? '-rotate-45 -translate-y-1.5'
+                                : 'rotate-0 translate-y-0'
+                            }
+            `}
+                    />
+                </div>
+            </button>
+
+            {createPortal(menuContent, document.body)}
         </>
     );
 };
