@@ -2013,9 +2013,14 @@ export class DataService {
                     status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
                 }
 
+                const updatedSubjectMarks: any = { ...existingMarks, int: update.int, ext, total, status };
+                if (updatedSubjectMarks.isSupplementary === undefined) {
+                    delete updatedSubjectMarks.isSupplementary;
+                }
+
                 const updatedTermMarks = {
                     ...termRecord.marks,
-                    [update.subjectId]: { int: update.int, ext, total, status }
+                    [update.subjectId]: updatedSubjectMarks
                 } as Record<string, SubjectMarks>;
 
                 const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
@@ -2035,12 +2040,17 @@ export class DataService {
                 };
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
-                const docUpdates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                
+                // Wrap in JSON stringify/parse to safely strip any implicitly undefined fields before sending to Firestore
+                const cleanTermRecord = JSON.parse(JSON.stringify(updatedTermRecord));
+                const cleanTermMarks = JSON.parse(JSON.stringify(updatedTermMarks));
+
+                const docUpdates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 
                 if (activeTerm === this.getCurrentTermKey()) {
-                    docUpdates.marks = updatedTermMarks;
+                    docUpdates.marks = cleanTermMarks;
                     docUpdates.grandTotal = grandTotal;
-                    docUpdates.average = updatedTermRecord.average;
+                    docUpdates.average = cleanTermRecord.average;
                     docUpdates.performanceLevel = performanceLevel;
                 }
 
@@ -2112,9 +2122,14 @@ export class DataService {
                     status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
                 }
 
+                const updatedSubjectMarks: any = { ...existingMarks, int, ext: update.ext, total, status };
+                if (updatedSubjectMarks.isSupplementary === undefined) {
+                    delete updatedSubjectMarks.isSupplementary;
+                }
+
                 const updatedTermMarks = {
                     ...termRecord.marks,
-                    [update.subjectId]: { int, ext: update.ext, total, status }
+                    [update.subjectId]: updatedSubjectMarks
                 } as Record<string, SubjectMarks>;
 
                 const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
@@ -2134,12 +2149,17 @@ export class DataService {
                 };
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
-                const docUpdates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                
+                // Wrap in JSON stringify/parse to safely strip any implicitly undefined fields before sending to Firestore
+                const cleanTermRecord = JSON.parse(JSON.stringify(updatedTermRecord));
+                const cleanTermMarks = JSON.parse(JSON.stringify(updatedTermMarks));
+
+                const docUpdates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 
                 if (activeTerm === this.getCurrentTermKey()) {
-                    docUpdates.marks = updatedTermMarks;
+                    docUpdates.marks = cleanTermMarks;
                     docUpdates.grandTotal = grandTotal;
-                    docUpdates.average = updatedTermRecord.average;
+                    docUpdates.average = cleanTermRecord.average;
                     docUpdates.performanceLevel = performanceLevel;
                 }
 
@@ -2224,12 +2244,17 @@ export class DataService {
                 };
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
-                const docUpdates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+
+                // Wrap in JSON stringify/parse to safely strip any implicitly undefined fields before sending to Firestore
+                const cleanTermRecord = JSON.parse(JSON.stringify(updatedTermRecord));
+                const cleanTermMarks = JSON.parse(JSON.stringify(updatedTermMarks));
+
+                const docUpdates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 
                 if (activeTerm === this.getCurrentTermKey()) {
-                    docUpdates.marks = updatedTermMarks;
+                    docUpdates.marks = cleanTermMarks;
                     docUpdates.grandTotal = grandTotal;
-                    docUpdates.average = updatedTermRecord.average;
+                    docUpdates.average = cleanTermRecord.average;
                     docUpdates.performanceLevel = performanceLevel;
                 }
 
