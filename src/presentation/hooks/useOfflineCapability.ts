@@ -21,11 +21,12 @@ export function useOfflineCapability() {
         studentId: string,
         subjectId: string,
         int: string,
-        ext: string
+        ext: string,
+        termKey: string = 'unknown'
     ) => {
         // Simple localStorage backup
         try {
-            const key = `draft_${studentId}_${subjectId}`;
+            const key = `draft_${termKey}_${studentId}_${subjectId}`;
             localStorage.setItem(key, JSON.stringify({ int, ext, timestamp: Date.now() }));
             return key;
         } catch (e) {
@@ -34,9 +35,9 @@ export function useOfflineCapability() {
         }
     }, []);
 
-    const getDraft = useCallback((studentId: string, subjectId: string) => {
+    const getDraft = useCallback((studentId: string, subjectId: string, termKey: string = 'unknown') => {
         try {
-            const key = `draft_${studentId}_${subjectId}`;
+            const key = `draft_${termKey}_${studentId}_${subjectId}`;
             const data = localStorage.getItem(key);
             return data ? JSON.parse(data) : null;
         } catch (e) {
@@ -44,9 +45,9 @@ export function useOfflineCapability() {
         }
     }, []);
 
-    const deleteDraft = useCallback((studentId: string, subjectId: string) => {
+    const deleteDraft = useCallback((studentId: string, subjectId: string, termKey: string = 'unknown') => {
         try {
-            const key = `draft_${studentId}_${subjectId}`;
+            const key = `draft_${termKey}_${studentId}_${subjectId}`;
             localStorage.removeItem(key);
             return true;
         } catch (e) {

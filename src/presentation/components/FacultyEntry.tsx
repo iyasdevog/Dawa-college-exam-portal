@@ -242,7 +242,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             let hasUpdates = false;
 
             for (const student of students) {
-                const draft = getDraft(student.id, selectedSubject);
+                const draft = getDraft(student.id, selectedSubject, activeTerm);
                 if (draft && (!marksData[student.id]?.int && !marksData[student.id]?.ext)) {
                     // Only load draft if no current data exists
                     updatedMarksData[student.id] = {
@@ -285,7 +285,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         student.id,
                         selectedSubject,
                         marks.int || '',
-                        marks.ext || ''
+                        marks.ext || '',
+                        activeTerm
                     );
                 }
             }
@@ -835,7 +836,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 }));
 
                 // Delete local draft to prevent it from being re-loaded
-                deleteDraft(studentId, selectedSubject);
+                deleteDraft(studentId, selectedSubject, activeTerm);
 
                 // Reload students to get updated data
                 await loadStudentsByClass();
@@ -873,7 +874,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 students.forEach(student => {
                     clearedMarks[student.id] = { int: '', ext: '' };
                     // Delete local draft for each student
-                    deleteDraft(student.id, selectedSubject);
+                    deleteDraft(student.id, selectedSubject, activeTerm);
                 });
                 setMarksData(clearedMarks);
 
@@ -914,9 +915,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         if (newMarks[student.id]) {
                             newMarks[student.id] = { ...newMarks[student.id], int: '' };
                             // Update local draft: keep EXT, clear INT
-                            const currentDraft = getDraft(student.id, selectedSubject);
+                            const currentDraft = getDraft(student.id, selectedSubject, activeTerm);
                             if (currentDraft) {
-                                saveDraft(student.id, selectedSubject, '', currentDraft.ext || '');
+                                saveDraft(student.id, selectedSubject, '', currentDraft.ext || '', activeTerm);
                             }
                         }
                     });
@@ -960,9 +961,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         if (newMarks[student.id]) {
                             newMarks[student.id] = { ...newMarks[student.id], ext: '' };
                             // Update local draft: keep INT, clear EXT
-                            const currentDraft = getDraft(student.id, selectedSubject);
+                            const currentDraft = getDraft(student.id, selectedSubject, activeTerm);
                             if (currentDraft) {
-                                saveDraft(student.id, selectedSubject, currentDraft.int || '', '');
+                                saveDraft(student.id, selectedSubject, currentDraft.int || '', '', activeTerm);
                             }
                         }
                     });
@@ -1037,7 +1038,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         student.id,
                         selectedSubject,
                         marks.int,
-                        marks.ext
+                        marks.ext,
+                        activeTerm
                     );
 
                     validUpdates.push({
@@ -1052,9 +1054,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             if (isOnline && validUpdates.length > 0) {
                 await dataService.bulkUpdateMarks(validUpdates, activeTerm);
                 for (const update of validUpdates) {
-                    const draft = getDraft(update.studentId, selectedSubject);
+                    const draft = getDraft(update.studentId, selectedSubject, activeTerm);
                     if (draft) {
-                        deleteDraft(update.studentId, selectedSubject);
+                        deleteDraft(update.studentId, selectedSubject, activeTerm);
                     }
                 }
             }
@@ -1116,7 +1118,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         // Update draft with INT marks (if successful, we probably want to clear draft, but preserving draft logic for now as 'sync').
                         // Actually, if saved online, we should remove draft? The original logic was updating draft.
                         // Let's stick to cleaning up drafts if online save succeeds.
-                        const draft = getDraft(student.id, selectedSubject);
+                        const draft = getDraft(student.id, selectedSubject, activeTerm);
                         if (draft) {
                             // If we only saved INT, but there is EXT in draft, we might want to keep EXT?
                             // For simplicity, we'll just save a new draft if useOfflineCapability doesn't support partial updates easily
@@ -1136,7 +1138,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                             student.id,
                             selectedSubject,
                             marks.int,
-                            marks.ext || ''
+                            marks.ext || '',
+                            activeTerm
                         );
                     }
                 }
@@ -1202,7 +1205,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         student.id,
                         selectedSubject,
                         marks.int || '',
-                        marks.ext
+                        marks.ext,
+                        activeTerm
                     );
 
                     validUpdates.push({
