@@ -48,8 +48,8 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     const validationConfig: FormValidationConfig = {
         ta: {
             rules: [
-                validationPresets.required('TA marks are required'),
-                validationPresets.marks(subject.maxINT, `TA marks must be between 0 and ${subject.maxINT}`)
+                validationPresets.required('EXT marks are required'),
+                validationPresets.marks(subject.maxEXT, `EXT marks must be between 0 and ${subject.maxEXT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
@@ -57,8 +57,8 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
         },
         ce: {
             rules: [
-                validationPresets.required('CE marks are required'),
-                validationPresets.marks(subject.maxEXT, `CE marks must be between 0 and ${subject.maxEXT}`)
+                validationPresets.required('INT marks are required'),
+                validationPresets.marks(subject.maxINT, `INT marks must be between 0 and ${subject.maxINT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
@@ -242,14 +242,14 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
 
             {/* Marks Input Section */}
             <div className={`grid gap-4 mb-6 ${isMobile && orientation === 'landscape' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {/* TA Marks */}
+                {/* EXT Marks (Legacy TA) */}
                 <MobileFormInput
-                    label={`TA Marks (Max: ${subject.maxINT})`}
+                    label={`EXT Marks (Max: ${subject.maxEXT})`}
                     type="number"
                     value={marks.ta}
                     placeholder="0"
                     min={0}
-                    max={subject.maxINT}
+                    max={subject.maxEXT}
                     required
                     error={showValidation ? validationErrors.ta : undefined}
                     validationState={
@@ -264,19 +264,19 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
                     leftIcon="fa-solid fa-pencil"
                     onChange={(e) => handleFieldChange('ta', e.target.value)}
                     onBlur={(e) => handleFieldBlur('ta', e.target.value)}
-                    hint={`Minimum required: ${minTA} marks`}
+                    hint={`Minimum required: ${minCE} marks`}
                     touchOptimized
                     autoComplete="off"
                 />
 
-                {/* CE Marks */}
+                {/* INT Marks (Legacy CE) */}
                 <MobileFormInput
-                    label={`CE Marks (Max: ${subject.maxEXT})`}
+                    label={`INT Marks (Max: ${subject.maxINT})`}
                     type="number"
                     value={marks.ce}
                     placeholder="0"
                     min={0}
-                    max={subject.maxEXT}
+                    max={subject.maxINT}
                     required
                     error={showValidation ? validationErrors.ce : undefined}
                     validationState={
@@ -291,7 +291,7 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
                     leftIcon="fa-solid fa-file-alt"
                     onChange={(e) => handleFieldChange('ce', e.target.value)}
                     onBlur={(e) => handleFieldBlur('ce', e.target.value)}
-                    hint={`Minimum required: ${minCE} marks`}
+                    hint={`Minimum required: ${minTA} marks`}
                     touchOptimized
                     autoComplete="off"
                 />
@@ -329,13 +329,13 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
                     {/* Individual component status */}
                     <div className="mt-3 pt-3 border-t border-slate-200">
                         <div className="flex justify-between text-sm">
-                            <span className={`${passedTA ? 'text-green-600' : 'text-red-600'}`}>
-                                <i className={`fa-solid ${passedTA ? 'fa-check' : 'fa-times'} mr-1`} aria-hidden="true"></i>
-                                TA: {passedTA ? 'Pass' : 'Fail'}
-                            </span>
                             <span className={`${passedCE ? 'text-green-600' : 'text-red-600'}`}>
                                 <i className={`fa-solid ${passedCE ? 'fa-check' : 'fa-times'} mr-1`} aria-hidden="true"></i>
-                                CE: {passedCE ? 'Pass' : 'Fail'}
+                                EXT: {passedCE ? 'Pass' : 'Fail'}
+                            </span>
+                            <span className={`${passedTA ? 'text-green-600' : 'text-red-600'}`}>
+                                <i className={`fa-solid ${passedTA ? 'fa-check' : 'fa-times'} mr-1`} aria-hidden="true"></i>
+                                INT: {passedTA ? 'Pass' : 'Fail'}
                             </span>
                         </div>
                     </div>

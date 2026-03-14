@@ -21,9 +21,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const [subjectForm, setSubjectForm] = useState({
         name: '',
         arabicName: '',
-        maxINT: 50,
-        maxEXT: 30,
-        passingTotal: 35,
+        maxINT: 30,
+        maxEXT: 70,
+        passingTotal: 40,
         facultyName: '',
         targetClasses: [] as string[],
         subjectType: 'general' as 'general' | 'elective',
@@ -49,9 +49,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         setSubjectForm({
             name: '',
             arabicName: '',
-            maxINT: 50,
-            maxEXT: 30,
-            passingTotal: 35,
+            maxINT: 30,
+            maxEXT: 70,
+            passingTotal: 40,
             facultyName: '',
             targetClasses: [],
             subjectType: 'general',
@@ -493,7 +493,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                         <th className="text-left p-4 font-bold text-slate-700">Name</th>
                                         <th className="text-left p-4 font-bold text-slate-700">Faculty</th>
                                         <th className="text-center p-4 font-bold text-slate-700">Type</th>
-                                        <th className="text-center p-4 font-bold text-slate-700">Max TA/CE</th>
+                                        <th className="text-center p-4 font-bold text-slate-700">Max EXT / INT</th>
                                         <th className="text-center p-4 font-bold text-slate-700">Class</th>
                                         <th className="text-center p-4 font-bold text-slate-700">Actions</th>
                                     </tr>
@@ -511,7 +511,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                                     <div className="text-[10px] text-slate-400 mt-1 font-medium">{(subject.enrolledStudents || []).length} enrolled</div>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxINT} / {subject.maxEXT}</td>
+                                            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxEXT} / {subject.maxINT}</td>
                                             <td className="p-4 text-center">
                                                 {Array.isArray(subject.specificClass) ? (
                                                     <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">
@@ -572,7 +572,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                                 )}
                                             </div>
                                             <div className="text-xs text-slate-400">
-                                                Max TA: {subject.maxINT} | Max CE: {subject.maxEXT}
+                                                Max EXT: {subject.maxEXT} | Max INT: {subject.maxINT}
                                             </div>
                                         </div>
                                     ))}
@@ -646,15 +646,15 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-bold mb-1">Max TA</label>
+                                    <label className="block text-sm font-bold mb-1">Max External (EXT)</label>
                                     <select
-                                        value={subjectForm.maxINT}
+                                        value={subjectForm.maxEXT}
                                         onChange={e => {
-                                            const newMaxTA = parseInt(e.target.value);
+                                            const newMaxEXT = parseInt(e.target.value);
                                             setSubjectForm(prev => ({
                                                 ...prev,
-                                                maxINT: newMaxTA,
-                                                maxEXT: newMaxTA === 100 ? 0 : (prev.maxEXT === 0 ? 30 : prev.maxEXT)
+                                                maxEXT: newMaxEXT,
+                                                maxINT: newMaxEXT === 100 ? 0 : (prev.maxINT === 0 ? 30 : prev.maxINT)
                                             }));
                                         }}
                                         className="w-full p-3 border rounded-xl"
@@ -666,14 +666,14 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold mb-1">Max CE</label>
+                                    <label className="block text-sm font-bold mb-1">Max Internal (INT)</label>
                                     <select
-                                        value={subjectForm.maxEXT}
-                                        onChange={e => setSubjectForm(prev => ({ ...prev, maxEXT: parseInt(e.target.value) }))}
+                                        value={subjectForm.maxINT}
+                                        onChange={e => setSubjectForm(prev => ({ ...prev, maxINT: parseInt(e.target.value) }))}
                                         className="w-full p-3 border rounded-xl disabled:bg-slate-100 disabled:text-slate-400"
-                                        disabled={subjectForm.maxINT === 100}
+                                        disabled={subjectForm.maxEXT === 100}
                                     >
-                                        {subjectForm.maxINT === 100 ? (
+                                        {subjectForm.maxEXT === 100 ? (
                                             <option value={0}>0 (Not Applicable)</option>
                                         ) : (
                                             <>

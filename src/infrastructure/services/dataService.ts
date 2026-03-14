@@ -125,8 +125,9 @@ export class DataService {
         const normalizedMarks: Record<string, SubjectMarks> = {};
         Object.entries(rawMarks).forEach(([subjectId, marks]: [string, any]) => {
             normalizedMarks[subjectId] = {
-                int: marks.int !== undefined ? marks.int : (marks.ta !== undefined ? marks.ta : 0),
-                ext: marks.ext !== undefined ? marks.ext : (marks.ce !== undefined ? marks.ce : 0),
+                // TA (legacy) maps to EXT, CE (legacy) maps to INT
+                int: marks.int !== undefined ? marks.int : (marks.ce !== undefined ? marks.ce : 0),
+                ext: marks.ext !== undefined ? marks.ext : (marks.ta !== undefined ? marks.ta : 0),
                 total: marks.total || 0,
                 status: marks.status || 'Pending',
                 isSupplementary: marks.isSupplementary,
@@ -180,8 +181,9 @@ export class DataService {
         return {
             ...data,
             id,
-            maxINT: data.maxINT !== undefined ? data.maxINT : (data.maxTA !== undefined ? data.maxTA : 0),
-            maxEXT: data.maxEXT !== undefined ? data.maxEXT : (data.maxCE !== undefined ? data.maxCE : 0),
+            // Mapping: TA -> EXT (70), CE -> INT (30)
+            maxINT: data.maxINT !== undefined ? data.maxINT : (data.maxCE !== undefined ? data.maxCE : 0),
+            maxEXT: data.maxEXT !== undefined ? data.maxEXT : (data.maxTA !== undefined ? data.maxTA : 0),
         } as SubjectConfig;
     }
 

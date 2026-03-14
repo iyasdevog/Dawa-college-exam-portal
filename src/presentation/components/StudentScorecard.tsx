@@ -304,8 +304,8 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                         <thead className="print:keep-with-next">
                                             <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-white print:text-black print:text-xs print:border-b-2 print:border-black print:break-inside-avoid" role="row">
                                                 <th className="px-8 py-6 text-left print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Subject</th>
-                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">INT</th>
                                                 <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">EXT</th>
+                                                <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">INT</th>
                                                 <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Total</th>
                                                 <th className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Max</th>
                                                 <th className="px-6 py-6 text-center print:px-1 print:py-1 print:leading-tight print:table-cell-padding" role="columnheader" scope="col">Status</th>
@@ -335,12 +335,6 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
-                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`INT marks: ${marks?.int ?? 'Not assessed'} out of ${subject.maxINT}`}>
-                                                                {marks?.int ?? '-'}
-                                                                <span className="text-xs text-slate-400 print:text-black">/{subject.maxINT}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
                                                             <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`EXT marks: ${marks?.ext ?? 'Not assessed'} out of ${subject.maxEXT}`}>
                                                                 {subject.maxINT === 100 || subject.maxEXT === 0 ? (
                                                                     <span className="text-xs text-slate-400 uppercase">N/A</span>
@@ -350,6 +344,12 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                                                         <span className="text-xs text-slate-400 print:text-black">/{subject.maxEXT}</span>
                                                                     </>
                                                                 )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
+                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`INT marks: ${marks?.int ?? 'Not assessed'} out of ${subject.maxINT}`}>
+                                                                {marks?.int ?? '-'}
+                                                                <span className="text-xs text-slate-400 print:text-black">/{subject.maxINT}</span>
                                                             </div>
                                                         </td>
 

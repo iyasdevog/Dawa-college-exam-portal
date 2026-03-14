@@ -257,13 +257,6 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                 {/* Marks Grid */}
                                                 <div className="grid grid-cols-3 gap-3">
                                                     <div className="bg-slate-50 rounded-xl p-3 text-center">
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">INT</p>
-                                                        <p className="text-lg font-black text-slate-700">
-                                                            {marks?.int ?? '-'}
-                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
-                                                        </p>
-                                                    </div>
-                                                    <div className="bg-slate-50 rounded-xl p-3 text-center">
                                                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">EXT</p>
                                                         <p className="text-lg font-black text-slate-700">
                                                             {subject.maxEXT === 0 ? 'N/A' : (
@@ -272,6 +265,13 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                                     <span className="text-[10px] text-slate-400 ml-1">/{subject.maxEXT}</span>
                                                                 </>
                                                             )}
+                                                        </p>
+                                                    </div>
+                                                    <div className="bg-slate-50 rounded-xl p-3 text-center">
+                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">INT</p>
+                                                        <p className="text-lg font-black text-slate-700">
+                                                            {marks?.int ?? '-'}
+                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
                                                         </p>
                                                     </div>
                                                     <div className={`rounded-xl p-3 text-center ${marks?.status === 'Failed'
@@ -319,8 +319,8 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                         <thead>
                                             <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-slate-100">
                                                 <th className="px-8 py-6 text-left print:px-4 print:py-3">Subject</th>
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">INT</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">EXT</th>
+                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">INT</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Total</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Max</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Status</th>
@@ -346,10 +346,6 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
-                                                            {marks?.int ?? '-'}
-                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
-                                                        </td>
-                                                        <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
                                                             {subject.maxEXT === 0 ? (
                                                                 <span className="text-[10px] text-slate-300 uppercase">N/A</span>
                                                             ) : (
@@ -358,6 +354,10 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                                     <span className="text-[10px] text-slate-400 ml-1">/{subject.maxEXT}</span>
                                                                 </>
                                                             )}
+                                                        </td>
+                                                        <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
+                                                            {marks?.int ?? '-'}
+                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
                                                         </td>
                                                         <td className={`px-6 py-6 text-center font-black text-2xl print:px-4 print:py-3 print:text-lg ${marks?.status === 'Failed' ? 'text-red-500' : 'text-slate-900'
                                                             }`}>

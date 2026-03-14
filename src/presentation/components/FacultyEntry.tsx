@@ -755,24 +755,24 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             // Find current student index
             const currentStudentIndex = students.findIndex(s => s.id === studentId);
 
-            if (field === 'int') {
-                // Move to EXT field of same student
-                const extInput = document.querySelector(`input[data-student="${studentId}"][data-field="ext"]`) as HTMLInputElement;
-                if (extInput) {
-                    extInput.focus();
-                    extInput.select();
+            if (field === 'ext') {
+                // Move to INT field of same student
+                const intInput = document.querySelector(`input[data-student="${studentId}"][data-field="int"]`) as HTMLInputElement;
+                if (intInput) {
+                    intInput.focus();
+                    intInput.select();
                 }
-            } else if (field === 'ext') {
-                // Move to INT field of next student, or save if last student
+            } else if (field === 'int') {
+                // Move to EXT field of next student, or save if last student
                 if (currentStudentIndex < students.length - 1) {
                     const nextStudentId = students[currentStudentIndex + 1].id;
-                    const nextINTInput = document.querySelector(`input[data-student="${nextStudentId}"][data-field="int"]`) as HTMLInputElement;
-                    if (nextINTInput) {
+                    const nextEXTInput = document.querySelector(`input[data-student="${nextStudentId}"][data-field="ext"]`) as HTMLInputElement;
+                    if (nextEXTInput) {
                         // Update navigation state and scroll to next student
                         setCurrentStudentIndex(currentStudentIndex + 1);
                         setTimeout(() => {
-                            nextINTInput.focus();
-                            nextINTInput.select();
+                            nextEXTInput.focus();
+                            nextEXTInput.select();
                         }, 100);
                     }
                 } else {
@@ -1690,32 +1690,34 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
                                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                                        INT (Max: {selectedSubjectData?.maxINT})
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={studentMarks.int}
-                                                        onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
-                                                        className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                                                        max={selectedSubjectData?.maxINT}
-                                                        min="0"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-slate-600 mb-1">
                                                         EXT (Max: {selectedSubjectData?.maxEXT})
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={studentMarks.ext}
                                                         onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)}
-                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxINT === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
+                                                        className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                                                         max={selectedSubjectData?.maxEXT}
                                                         min="0"
-                                                        disabled={selectedSubjectData?.maxINT === 100}
                                                         data-student={student.id}
                                                         data-field="ext"
-                                                        placeholder={selectedSubjectData?.maxINT === 100 ? "N/A" : ""}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                                        INT (Max: {selectedSubjectData?.maxINT})
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={studentMarks.int}
+                                                        onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
+                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxEXT === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
+                                                        max={selectedSubjectData?.maxINT}
+                                                        min="0"
+                                                        disabled={selectedSubjectData?.maxEXT === 100}
+                                                        data-student={student.id}
+                                                        data-field="int"
+                                                        placeholder={selectedSubjectData?.maxEXT === 100 ? "N/A" : ""}
                                                     />
                                                 </div>
                                             </div>
@@ -1766,10 +1768,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                 <th className="text-left p-4 font-bold text-slate-700">Adm No</th>
                                                 <th className="text-left p-4 font-bold text-slate-700">Student Name</th>
                                                 <th className="text-center p-4 font-bold text-slate-700">
-                                                    INT ({selectedSubjectData?.maxINT})
+                                                    EXT ({selectedSubjectData?.maxEXT})
                                                 </th>
                                                 <th className="text-center p-4 font-bold text-slate-700">
-                                                    EXT ({selectedSubjectData?.maxEXT})
+                                                    INT ({selectedSubjectData?.maxINT})
                                                 </th>
                                                 <th className="text-center p-4 font-bold text-slate-700">Total</th>
                                                 <th className="text-center p-4 font-bold text-slate-700">Status</th>
@@ -1799,53 +1801,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 autoCapitalize="off"
                                                                 spellCheck="false"
                                                                 enterKeyHint="next"
-                                                                data-student={student.id}
-                                                                data-field="int"
-                                                                value={marksData[student.id]?.int || ''}
-                                                                onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
-                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'int')}
-                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isINTExceeding
-                                                                    ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
-                                                                    : isINTFailing
-                                                                        ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                        : marksData[student.id]?.int && !isINTFailing && !isINTExceeding
-                                                                            ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                            : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
-                                                                    }`}
-                                                                placeholder="0"
-                                                                disabled={isSaving || operationLoading.type !== null}
-                                                                maxLength={3}
-                                                                style={{ minHeight: '48px' }}
-                                                            />
-                                                            {isINTExceeding && (
-                                                                <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
-                                                                    <i className="fa-solid fa-exclamation-triangle mr-1"></i>
-                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxINT}
-                                                                </div>
-                                                            )}
-                                                            {!isINTExceeding && isINTFailing && (
-                                                                <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
-                                                                    <i className="fa-solid fa-exclamation-circle mr-1"></i>
-                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxINT || 0) * 0.4)}
-                                                                </div>
-                                                            )}
-                                                            {marksData[student.id]?.int && !isINTFailing && !isINTExceeding && (
-                                                                <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
-                                                                    <i className="fa-solid fa-check-circle mr-1"></i>
-                                                                    Valid
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                        <td className="p-4 text-center">
-                                                            <input
-                                                                type="text"
-                                                                inputMode="numeric"
-                                                                pattern="[0-9]*"
-                                                                autoComplete="off"
-                                                                autoCorrect="off"
-                                                                autoCapitalize="off"
-                                                                spellCheck="false"
-                                                                enterKeyHint="done"
                                                                 data-student={student.id}
                                                                 data-field="ext"
                                                                 value={marksData[student.id]?.ext || ''}
@@ -1877,6 +1832,53 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 </div>
                                                             )}
                                                             {marksData[student.id]?.ext && !isEXTFailing && !isEXTExceeding && (
+                                                                <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
+                                                                    <i className="fa-solid fa-check-circle mr-1"></i>
+                                                                    Valid
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 text-center">
+                                                            <input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                pattern="[0-9]*"
+                                                                autoComplete="off"
+                                                                autoCorrect="off"
+                                                                autoCapitalize="off"
+                                                                spellCheck="false"
+                                                                enterKeyHint="done"
+                                                                data-student={student.id}
+                                                                data-field="int"
+                                                                value={marksData[student.id]?.int || ''}
+                                                                onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
+                                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'int')}
+                                                                className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isINTExceeding
+                                                                    ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
+                                                                    : isINTFailing
+                                                                        ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                        : marksData[student.id]?.int && !isINTFailing && !isINTExceeding
+                                                                            ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                            : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
+                                                                    }`}
+                                                                placeholder="0"
+                                                                disabled={isSaving || operationLoading.type !== null}
+                                                                maxLength={3}
+                                                                style={{ minHeight: '48px' }}
+                                                            />
+                                                            {isINTExceeding && (
+                                                                <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
+                                                                    <i className="fa-solid fa-exclamation-triangle mr-1"></i>
+                                                                    Max: {subjects.find(s => s.id === selectedSubject)?.maxINT}
+                                                                </div>
+                                                            )}
+                                                            {!isINTExceeding && isINTFailing && (
+                                                                <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
+                                                                    <i className="fa-solid fa-exclamation-circle mr-1"></i>
+                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxINT || 0) * 0.4)}
+                                                                </div>
+                                                            )}
+                                                            {marksData[student.id]?.int && !isINTFailing && !isINTExceeding && (
                                                                 <div className="text-xs text-emerald-900 mt-2 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-300 shadow-sm">
                                                                     <i className="fa-solid fa-check-circle mr-1"></i>
                                                                     Valid

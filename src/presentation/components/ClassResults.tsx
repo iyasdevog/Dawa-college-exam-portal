@@ -317,7 +317,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                 {marks ? (
                                                                     <div>
                                                                         <p className={`text-lg font-bold ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{marks.total}</p>
-                                                                        <p className="text-xs text-slate-500">{marks.int}+{subject.maxEXT === 0 ? 'N/A' : marks.ext}</p>
+                                                                        <p className="text-xs text-slate-500">{subject.maxEXT === 0 ? 'N/A' : marks.ext}+{marks.int}</p>
                                                                     </div>
                                                                 ) : <span className="text-slate-400">-</span>}
                                                             </div>
@@ -328,9 +328,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                             <p className="text-xs font-bold text-indigo-600 uppercase mb-1">Elective ({shortenSubjectName(studentElective.name)})</p>
                                                             {electiveMark ? (
                                                                 <div>
-                                                                    <p className={`text-lg font-bold ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{electiveMark.total}</p>
-                                                                    <p className="text-xs text-slate-500">{electiveMark.int}+{electiveMark.ext}</p>
-                                                                </div>
+                                                                        <p className={`text-lg font-bold ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{electiveMark.total}</p>
+                                                                        <p className="text-xs text-slate-500">{electiveMark.ext}+{electiveMark.int}</p>
+                                                                    </div>
                                                             ) : <span className="text-slate-400">-</span>}
                                                         </div>
                                                     )}
@@ -393,7 +393,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                         {marks ? (
                                                                             <div>
                                                                                 <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-[10px] ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{marks.total}</div>
-                                                                                {!isMobile && <div className="text-[10px] text-slate-400 print:hidden">{marks.int === 'A' ? 'A' : marks.int}+{subject.maxEXT === 0 ? 'N/A' : (marks.ext === 'A' ? 'A' : marks.ext)}</div>}
+                                                                                {!isMobile && <div className="text-[10px] text-slate-400 print:hidden">{subject.maxEXT === 0 ? 'N/A' : (marks.ext === 'A' ? 'A' : marks.ext)}+{marks.int === 'A' ? 'A' : marks.int}</div>}
                                                                             </div>
                                                                         ) : <span className="text-slate-300 text-sm">-</span>}
                                                                     </td>
