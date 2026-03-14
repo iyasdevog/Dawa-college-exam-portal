@@ -1524,7 +1524,7 @@ export class DataService {
             };
 
             const existingMarks = termRecord.marks[subjectId] || { int: 0, ext: 0, total: 0, status: 'Pending' };
-            const ext = existingMarks.ext;
+            const ext = existingMarks.ext !== undefined ? existingMarks.ext : ((existingMarks as any).ta !== undefined ? (existingMarks as any).ta : 0);
             const intVal = this.getMarkValue(int);
             const extVal = this.getMarkValue(ext);
             const total = intVal + extVal;
@@ -1603,7 +1603,7 @@ export class DataService {
             };
 
             const existingMarks = termRecord.marks[subjectId] || { int: 0, ext: 0, total: 0, status: 'Pending' };
-            const int = existingMarks.int;
+            const int = existingMarks.int !== undefined ? existingMarks.int : ((existingMarks as any).ce !== undefined ? (existingMarks as any).ce : 0);
             const intVal = this.getMarkValue(int);
             const extVal = this.getMarkValue(ext);
             const total = intVal + extVal;
