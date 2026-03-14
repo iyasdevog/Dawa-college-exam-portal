@@ -420,7 +420,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 if (!marks || !marks.int) return false;
                 if (marks.int === 'A') return true;
                 const int = parseInt(marks.int) || 0;
-                const minINT = Math.ceil(subject.maxINT * 0.4);
+                const minINT = Math.ceil(subject.maxINT * 0.5);
                 return int < minINT && int > 0 && int <= subject.maxINT;
             },
             isEXTFailing: (studentId: string): boolean => {
@@ -428,7 +428,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 if (!marks || !marks.ext) return false;
                 if (marks.ext === 'A') return true;
                 const ext = parseInt(marks.ext) || 0;
-                const minEXT = Math.ceil(subject.maxEXT * 0.5);
+                const minEXT = Math.ceil(subject.maxEXT * 0.4);
                 return ext < minEXT && ext > 0 && ext <= subject.maxEXT;
             },
             calculateTotal: (studentId: string): number => {
@@ -450,8 +450,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                 const int = parseInt(marks.int) || 0;
                 const ext = parseInt(marks.ext) || 0;
-                const minINT = Math.ceil(subject.maxINT * 0.4);
-                const minEXT = Math.ceil(subject.maxEXT * 0.5);
+                const minINT = Math.ceil(subject.maxINT * 0.5);
+                const minEXT = Math.ceil(subject.maxEXT * 0.4);
 
                 const passedINT = int >= minINT;
                 const passedEXT = isEXTNotApplicable || ext >= minEXT;
@@ -614,9 +614,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             // Initialize marks data with existing marks from the ACTIVE TERM's academicHistory
             const initialMarks: Record<string, { int: string; ext: string }> = {};
             studentsToShow.forEach(student => {
-                // Prefer marks from the active term's history; fall back to root marks for legacy data
+                // ONLY use marks from the active term's history to ensure marks clear when switching semesters
                 const termHistory = student.academicHistory?.[activeTerm];
-                const existingMarks = termHistory?.marks[selectedSubject] ?? student.marks?.[selectedSubject];
+                const existingMarks = termHistory?.marks[selectedSubject];
 
                 // Special conversion for Max INT 35 (scale from 70 back to 35 for display)
                 let displayINT = existingMarks?.int?.toString() || '';
@@ -711,8 +711,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
                 const subject = subjects.find(s => s.id === exam.subjectId);
                 if (subject) {
-                   const minINT = Math.ceil(subject.maxINT * 0.4);
-                   const minEXT = Math.ceil(subject.maxEXT * 0.5);
+                   const minINT = Math.ceil(subject.maxINT * 0.5);
+                   const minEXT = Math.ceil(subject.maxEXT * 0.4);
                    const passedINT = intVal !== 'A' && typeof intVal === 'number' && intVal >= minINT;
                    const passedEXT = extVal !== 'A' && typeof extVal === 'number' && extVal >= minEXT;
                    status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
@@ -1422,14 +1422,14 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             <span className="font-bold text-slate-700">Max INT:</span>
                                             <span className="ml-2 text-slate-600">{selectedSubjectData.maxINT}</span>
                                             <span className="ml-2 text-red-600 font-medium">
-                                                (Min: {Math.ceil(selectedSubjectData.maxINT * 0.4)})
+                                                (Min: {Math.ceil(selectedSubjectData.maxINT * 0.5)})
                                             </span>
                                         </div>
                                         <div>
                                             <span className="font-bold text-slate-700">Max EXT:</span>
                                             <span className="ml-2 text-slate-600">{selectedSubjectData.maxEXT}</span>
                                             <span className="ml-2 text-red-600 font-medium">
-                                                (Min: {Math.ceil(selectedSubjectData.maxEXT * 0.5)})
+                                                (Min: {Math.ceil(selectedSubjectData.maxEXT * 0.4)})
                                             </span>
                                         </div>
                                     </div>
@@ -1439,7 +1439,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             <span className="ml-2 text-slate-600">{selectedSubjectData.facultyName}</span>
                                         </div>
                                         <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded">
-                                            <strong>Passing Rule:</strong> Students must achieve both INT minimum (40%) AND EXT minimum (50%) to pass
+                                            <strong>Passing Rule:</strong> Students must achieve both INT minimum (50%) AND EXT minimum (40%) to pass
                                         </div>
                                     </div>
                                 </div>
@@ -1828,7 +1828,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                             {!isEXTExceeding && isEXTFailing && (
                                                                 <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-circle mr-1"></i>
-                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxEXT || 0) * 0.5)}
+                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxEXT || 0) * 0.4)}
                                                                 </div>
                                                             )}
                                                             {marksData[student.id]?.ext && !isEXTFailing && !isEXTExceeding && (
@@ -1875,7 +1875,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                             {!isINTExceeding && isINTFailing && (
                                                                 <div className="text-xs text-orange-900 mt-2 font-bold bg-orange-100 px-2 py-1 rounded-lg border border-orange-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-circle mr-1"></i>
-                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxINT || 0) * 0.4)}
+                                                                    Min: {Math.ceil((subjects.find(s => s.id === selectedSubject)?.maxINT || 0) * 0.5)}
                                                                 </div>
                                                             )}
                                                             {marksData[student.id]?.int && !isINTFailing && !isINTExceeding && (
@@ -2190,8 +2190,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             const subject = subjects.find(s => s.id === exam.subjectId);
                                             const maxINT = subject?.maxINT || 70;
                                             const maxEXT = subject?.maxEXT || 30;
-                                            const minINT = Math.ceil(maxINT * 0.4);
-                                            const minEXT = Math.ceil(maxEXT * 0.5);
+                                            const minINT = Math.ceil(maxINT * 0.5);
+                                            const minEXT = Math.ceil(maxEXT * 0.4);
 
                                             const prevIntVal = typeof prevMarks.int === 'string' && prevMarks.int !== 'A' && prevMarks.int !== 'N/A' ? parseInt(prevMarks.int) : 0;
                                             const prevExtVal = typeof prevMarks.ext === 'string' && prevMarks.ext !== 'A' && prevMarks.ext !== 'N/A' ? parseInt(prevMarks.ext) : 0;

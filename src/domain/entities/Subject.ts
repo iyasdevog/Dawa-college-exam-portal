@@ -43,11 +43,11 @@ export class Subject {
     }
 
     getMinimumINTRequired(): number {
-        return Math.ceil(this.maxINT * 0.4);
+        return Math.ceil(this.maxINT * 0.5);
     }
 
     getMinimumEXTRequired(): number {
-        return Math.ceil(this.maxEXT * 0.5);
+        return Math.ceil(this.maxEXT * 0.4);
     }
 
     isPassingScore(int: number, ext: number): boolean {

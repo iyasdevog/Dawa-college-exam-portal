@@ -83,8 +83,8 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     const percentage = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
 
     // Determine pass/fail status
-    const minTA = Math.ceil(subject.maxINT * 0.4);
-    const minCE = Math.ceil(subject.maxEXT * 0.5);
+    const minTA = Math.ceil(subject.maxINT * 0.5);
+    const minCE = Math.ceil(subject.maxEXT * 0.4);
     const passedTA = taValue >= minTA;
     const passedCE = ceValue >= minCE;
     const overallStatus = passedTA && passedCE ? 'Passed' : 'Failed';

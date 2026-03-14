@@ -1377,8 +1377,8 @@ export class DataService {
                     const intVal = this.getMarkValue(int);
                     const extVal = this.getMarkValue(ext);
 
-                    const minINT = Math.ceil(subject.maxINT * 0.4);
-                    const minEXT = Math.ceil(subject.maxEXT * 0.5);
+                    const minINT = Math.ceil(subject.maxINT * 0.5);
+                    const minEXT = Math.ceil(subject.maxEXT * 0.4);
                     const passedINT = int !== 'A' && intVal >= minINT;
                     const passedEXT = ext !== 'A' && extVal >= minEXT;
 
@@ -1433,8 +1433,8 @@ export class DataService {
             const total = intVal + extVal;
 
             const isFullINT = subject.maxINT === 100;
-            const minINT = Math.ceil(subject.maxINT * 0.4);
-            const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.5);
+            const minINT = Math.ceil(subject.maxINT * 0.5);
+            const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.4);
 
             const passedINT = int !== 'A' && intVal >= minINT;
             const passedEXT = isFullINT || (ext !== 'A' && extVal >= minEXT) || subject.maxEXT === 0;
@@ -1529,8 +1529,8 @@ export class DataService {
             const extVal = this.getMarkValue(ext);
             const total = intVal + extVal;
 
-            const minINT = Math.ceil(subject.maxINT * 0.4);
-            const minEXT = Math.ceil(subject.maxEXT * 0.5);
+            const minINT = Math.ceil(subject.maxINT * 0.5);
+            const minEXT = Math.ceil(subject.maxEXT * 0.4);
             const passedINT = int !== 'A' && intVal >= minINT;
             const passedEXT = ext !== 'A' && extVal >= minEXT;
 
@@ -1608,8 +1608,8 @@ export class DataService {
             const extVal = this.getMarkValue(ext);
             const total = intVal + extVal;
 
-            const minINT = Math.ceil(subject.maxINT * 0.4);
-            const minEXT = Math.ceil(subject.maxEXT * 0.5);
+            const minINT = Math.ceil(subject.maxINT * 0.5);
+            const minEXT = Math.ceil(subject.maxEXT * 0.4);
             const passedINT = int !== 'A' && intVal >= minINT;
             const passedEXT = ext !== 'A' && extVal >= minEXT;
 
@@ -2154,8 +2154,8 @@ export class DataService {
 
                             // Calculate status
                             const isFullINT = subject.maxINT === 100;
-                            const minINT = Math.ceil(subject.maxINT * 0.4);
-                            const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.5);
+                            const minINT = Math.ceil(subject.maxINT * 0.5);
+                            const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.4);
 
                             const passedINT = int >= minINT;
                             const passedEXT = isFullINT || ext >= minEXT || subject.maxEXT === 0;
