@@ -826,7 +826,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 setOperationLoading({ type: 'clearing', message: `Clearing marks for ${studentName}...` });
 
                 // Clear marks from database for this specific student
-                await dataService.clearStudentSubjectMarks(studentId, selectedSubject);
+                await dataService.clearStudentSubjectMarks(studentId, selectedSubject, activeTerm);
 
                 // Clear UI state for this student
                 setMarksData(prev => ({
@@ -905,7 +905,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 const studentIds = students.map(student => student.id);
 
                 // Clear marks from database
-                await dataService.clearSubjectINTMarks(selectedSubject, studentIds);
+                await dataService.clearSubjectINTMarks(selectedSubject, studentIds, activeTerm);
 
                 // Update UI state
                 setMarksData(prev => {
@@ -951,7 +951,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 const studentIds = students.map(student => student.id);
 
                 // Clear marks from database
-                await dataService.clearSubjectEXTMarks(selectedSubject, studentIds);
+                await dataService.clearSubjectEXTMarks(selectedSubject, studentIds, activeTerm);
 
                 // Update UI state
                 setMarksData(prev => {
@@ -1031,7 +1031,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                     try {
                         // Try to save online first
-                        await dataService.updateStudentMarks(student.id, selectedSubject, intToSave, extValue);
+                        await dataService.updateStudentMarks(student.id, selectedSubject, intToSave, extValue, activeTerm);
 
                         // If successful, delete any corresponding draft
                         const draft = getDraft(student.id, selectedSubject);
@@ -1071,7 +1071,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         } finally {
             setOperationLoading({ type: null });
         }
-    }, [selectedSubject, invalidMarksInfo, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft, deleteDraft]);
+    }, [selectedSubject, invalidMarksInfo, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft, deleteDraft, activeTerm]);
 
     // New handler for saving only INT marks
     const handleSaveINTMarks = useCallback(async (targetStudentId?: string) => {
@@ -1106,7 +1106,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                     try {
                         // Try to save online first
-                        await dataService.updateStudentINTMarks(student.id, selectedSubject, intToSave);
+                        await dataService.updateStudentINTMarks(student.id, selectedSubject, intToSave, activeTerm);
 
                         // Update draft with INT marks (if successful, we probably want to clear draft, but preserving draft logic for now as 'sync').
                         // Actually, if saved online, we should remove draft? The original logic was updating draft.
@@ -1164,7 +1164,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         } finally {
             setOperationLoading({ type: null });
         }
-    }, [selectedSubject, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft]);
+    }, [selectedSubject, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft, activeTerm]);
 
     // New handler for saving only EXT marks
     const handleSaveEXTMarks = useCallback(async (targetStudentId?: string) => {
@@ -1193,7 +1193,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                     try {
                         // Try to save online first
-                        await dataService.updateStudentEXTMarks(student.id, selectedSubject, ext);
+                        await dataService.updateStudentEXTMarks(student.id, selectedSubject, ext, activeTerm);
 
                         // Update draft with EXT marks - keep draft if EXT saved but INT not?
                         // For simplicity, just update draft if offline fails.
@@ -1239,7 +1239,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         } finally {
             setOperationLoading({ type: null });
         }
-    }, [selectedSubject, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft]);
+    }, [selectedSubject, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft, activeTerm]);
 
     const selectedSubjectData = subjects.find(s => s.id === selectedSubject);
     // Check if component mounted

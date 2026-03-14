@@ -1414,7 +1414,7 @@ export class DataService {
         }
     }
 
-    async updateStudentMarks(studentId: string, subjectId: string, int: number | 'A', ext: number | 'A'): Promise<void> {
+    async updateStudentMarks(studentId: string, subjectId: string, int: number | 'A', ext: number | 'A', termKey?: string): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1426,7 +1426,7 @@ export class DataService {
 
             const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
             const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
 
             const intVal = this.getMarkValue(int);
             const extVal = this.getMarkValue(ext);
@@ -1502,7 +1502,7 @@ export class DataService {
     }
 
     // New method for updating only INT marks
-    async updateStudentINTMarks(studentId: string, subjectId: string, int: number | 'A'): Promise<void> {
+    async updateStudentINTMarks(studentId: string, subjectId: string, int: number | 'A', termKey?: string): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1514,7 +1514,7 @@ export class DataService {
 
             const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
             const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
 
             // Get existing term record or create fresh one
             const termRecord = student.academicHistory?.[activeTerm] || {
@@ -1582,7 +1582,7 @@ export class DataService {
     }
 
     // New method for updating only EXT marks
-    async updateStudentEXTMarks(studentId: string, subjectId: string, ext: number | 'A'): Promise<void> {
+    async updateStudentEXTMarks(studentId: string, subjectId: string, ext: number | 'A', termKey?: string): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1594,7 +1594,7 @@ export class DataService {
 
             const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
             const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
 
             const termRecord = student.academicHistory?.[activeTerm] || {
                 className: student.currentClass,
@@ -1660,10 +1660,10 @@ export class DataService {
         }
     }
 
-    async clearSubjectMarks(subjectId: string, studentIds: string[]): Promise<void> {
+    async clearSubjectMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
         try {
             console.log('Clearing marks for subject:', subjectId, 'for', studentIds.length, 'students');
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
 
             for (const studentId of studentIds) {
                 const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
@@ -1709,13 +1709,13 @@ export class DataService {
         }
     }
 
-    async clearStudentSubjectMarks(studentId: string, subjectId: string): Promise<void> {
+    async clearStudentSubjectMarks(studentId: string, subjectId: string, termKey?: string): Promise<void> {
         try {
             const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
             if (!studentDoc.exists()) throw new Error('Student not found');
 
             const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
             const termRecord = student.academicHistory?.[activeTerm];
             if (!termRecord) return;
 
@@ -1752,10 +1752,10 @@ export class DataService {
         }
     }
 
-    async clearSubjectEXTMarks(subjectId: string, studentIds: string[]): Promise<void> {
+    async clearSubjectEXTMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
         try {
             console.log('Clearing EXT marks for subject:', subjectId, 'for', studentIds.length, 'students');
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
 
             for (const studentId of studentIds) {
                 const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
@@ -1808,10 +1808,10 @@ export class DataService {
         }
     }
 
-    async clearSubjectINTMarks(subjectId: string, studentIds: string[]): Promise<void> {
+    async clearSubjectINTMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
         try {
             console.log('Clearing INT marks for subject:', subjectId, 'for', studentIds.length, 'students');
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
 
             for (const studentId of studentIds) {
                 const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
