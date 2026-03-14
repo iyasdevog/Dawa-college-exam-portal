@@ -110,6 +110,40 @@ export class DataService {
     }
 
     /**
+     * Safely strips undefined values from an object before sending to Firestore.
+     */
+    private sanitize(data: any): any {
+        return JSON.parse(JSON.stringify(data));
+    }
+
+    /**
+     * Centralized logic to calculate grandTotal, average and performanceLevel for a term.
+     */
+    private calculateTermMetrics(marks: Record<string, SubjectMarks>, subjects: SubjectConfig[]): {
+        grandTotal: number;
+        average: number;
+        performanceLevel: PerformanceLevel;
+    } {
+        const marksEntries = Object.entries(marks);
+        const grandTotal = marksEntries.reduce((sum, [_, mark]) => sum + this.getMarkValue(mark.total), 0);
+
+        const generalSubjects = subjects.filter(s => s.subjectType !== 'elective');
+        const electiveSubjects = subjects.filter(s => s.subjectType === 'elective');
+
+        const generalMarksCount = generalSubjects.filter(s => marks[s.id] !== undefined).length;
+        const hasElectiveMark = electiveSubjects.some(s => marks[s.id] !== undefined);
+        const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+        let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+        if (isNaN(average)) average = 0;
+        average = Math.round(average * 100) / 100;
+
+        const performanceLevel = this.calculatePerformanceLevel(marks, subjects);
+
+        return { grandTotal, average, performanceLevel };
+    }
+
+    /**
      * Normalizes a student record from Firestore.
      * Maps legacy 'ta' and 'ce' fields in marks to 'int' and 'ext'.
      */
@@ -455,9 +489,13 @@ export class DataService {
 
     async addStudent(student: Omit<StudentRecord, 'id'>): Promise<string> {
         try {
-            const docRef = await addDoc(collection(this.db, this.studentsCollection), student);
+            const cleanStudent = this.sanitize(student);
+            const docRef = await addDoc(collection(this.db, this.studentsCollection), cleanStudent);
             console.log('Student added with ID:', docRef.id);
-            this.invalidateCache();
+            
+            // Proactively add to cache
+            this.updateStudentInCache(docRef.id, this.processStudentRecord(cleanStudent, docRef.id));
+            
             return docRef.id;
         } catch (error) {
             console.error('Error adding student:', error);
@@ -468,9 +506,12 @@ export class DataService {
     async updateStudent(id: string, updates: Partial<StudentRecord>): Promise<void> {
         try {
             const docRef = doc(this.db, this.studentsCollection, id);
-            await updateDoc(docRef, updates);
+            const cleanUpdates = this.sanitize(updates);
+            await updateDoc(docRef, cleanUpdates);
             console.log('Student updated:', id);
-            this.invalidateCache();
+            
+            // Proactively update cache
+            this.updateStudentInCache(id, cleanUpdates);
         } catch (error) {
             console.error('Error updating student:', error);
             throw error;
@@ -930,7 +971,7 @@ export class DataService {
                         }
 
                         const docRef = doc(collection(this.db, this.studentsCollection));
-                        batch.set(docRef, {
+                        const studentData = this.sanitize({
                             ...student,
                             marks: student.marks || {},
                             grandTotal: student.grandTotal || 0,
@@ -938,6 +979,7 @@ export class DataService {
                             rank: student.rank || 0,
                             performanceLevel: student.performanceLevel || 'C (Average)'
                         });
+                        batch.set(docRef, studentData);
 
                         results.success++;
                     } catch (error) {
@@ -1065,8 +1107,9 @@ export class DataService {
             for (let i = 0; i < sortedStudents.length; i++) {
                 const student = sortedStudents[i];
                 const total = student.academicHistory?.[activeTerm]?.grandTotal || 0;
+                const prevTotal = i > 0 ? (sortedStudents[i - 1].academicHistory?.[activeTerm]?.grandTotal || 0) : -1;
 
-                if (i > 0 && total === (sortedStudents[i - 1].academicHistory?.[activeTerm]?.grandTotal || 0) && total > 0) {
+                if (i > 0 && total === prevTotal && total > 0) {
                     // rank remains same as previous student's rank if totals are equal and > 0
                 } else {
                     currentRank = i + 1;
@@ -1083,6 +1126,18 @@ export class DataService {
                 }
 
                 batch.update(docRef, updates);
+
+                // Inline cache update
+                this.updateStudentInCache(student.id, {
+                    academicHistory: {
+                        ...student.academicHistory,
+                        [activeTerm]: {
+                            ...(student.academicHistory?.[activeTerm] || {} as any),
+                            rank: currentRank
+                        }
+                    },
+                    ...(activeTerm === this.getCurrentTermKey() ? { rank: currentRank } : {})
+                });
             }
 
             await batch.commit();
@@ -1181,22 +1236,43 @@ export class DataService {
 
                 for (const student of currentBatch) {
                     try {
-                        // Recalculate performance level based on subject individual marks
-                        const performanceLevel = this.calculatePerformanceLevel(student.marks, allSubjects);
+                        const activeTerm = this.getCurrentTermKey();
+                        const termRecord = student.academicHistory?.[activeTerm];
+                        if (!termRecord) continue;
 
-                        // Only update if performance level has changed
-                        if (student.performanceLevel !== performanceLevel) {
+                        const performanceLevel = this.calculatePerformanceLevel(termRecord.marks, allSubjects);
+
+                        if (termRecord.performanceLevel !== performanceLevel) {
+                            const updatedTermRecord = { ...termRecord, performanceLevel };
                             const docRef = doc(this.db, this.studentsCollection, student.id);
-                            batch.update(docRef, { performanceLevel });
+                            
+                            const updates: any = {
+                                [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
+                            };
+
+                            if (activeTerm === this.getCurrentTermKey()) {
+                                updates.performanceLevel = performanceLevel;
+                            }
+
+                            batch.update(docRef, updates);
+
+                            // Inline cache update
+                            this.updateStudentInCache(student.id, {
+                                academicHistory: {
+                                    ...student.academicHistory,
+                                    [activeTerm]: updatedTermRecord
+                                },
+                                ...(activeTerm === this.getCurrentTermKey() ? { performanceLevel } : {})
+                            });
+
                             results.updated++;
-                            console.log(`Updated ${student.name}: ${student.average}% from "${student.performanceLevel}" to "${performanceLevel}"`);
                         }
                     } catch (error) {
                         results.errors.push(`${student.name} (${student.adNo}): ${error instanceof Error ? error.message : 'Unknown error'}`);
                     }
                 }
 
-                if (currentBatch.length > 0) {
+                if (results.updated > 0) {
                     await batch.commit();
                 }
             }
@@ -1256,47 +1332,58 @@ export class DataService {
 
                 for (const student of currentBatch) {
                     try {
-                        const marksEntries = Object.entries(student.marks);
-                        if (marksEntries.length === 0) continue;
+                        const activeTerm = this.getCurrentTermKey();
+                        const termRecord = student.academicHistory?.[activeTerm];
+                        if (!termRecord) continue;
 
-                        // Identify which general subjects have marks
-                        const generalMarksCount = generalSubjects.filter(s =>
-                            student.marks[s.id] !== undefined
-                        ).length;
+                        const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(termRecord.marks, allSubjects);
 
-                        // Identify if any elective marks exist
-                        const electiveMarks = electiveSubjects.filter(s =>
-                            student.marks[s.id] !== undefined
-                        );
-                        const hasElectiveMark = electiveMarks.length > 0;
+                        if (termRecord.grandTotal !== grandTotal || termRecord.average !== average) {
+                            const updatedTermRecord = {
+                                ...termRecord,
+                                grandTotal,
+                                average,
+                                performanceLevel
+                            };
 
-                        // Recalculate grandTotal
-                        const grandTotal = marksEntries.reduce((sum, [_, mark]) =>
-                            sum + this.getMarkValue(mark.total as any), 0);
+                            const cleanTermRecord = this.sanitize(updatedTermRecord);
+                            const docRef = doc(this.db, this.studentsCollection, student.id);
+                            
+                            const updates: any = {
+                                [`academicHistory.${activeTerm}`]: cleanTermRecord
+                            };
 
-                        // Denominator: General subjects + 1 (if any elective marks exist)
-                        const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+                            if (activeTerm === this.getCurrentTermKey()) {
+                                updates.marks = cleanTermRecord.marks;
+                                updates.grandTotal = grandTotal;
+                                updates.average = average;
+                                updates.performanceLevel = performanceLevel;
+                            }
 
-                        let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                        if (isNaN(average)) average = 0;
+                            batch.update(docRef, updates);
 
-                        // Determine performance level
-                        const performanceLevel = this.calculatePerformanceLevel(student.marks, allSubjects);
+                            // Inline cache update
+                            this.updateStudentInCache(student.id, {
+                                academicHistory: {
+                                    ...student.academicHistory,
+                                    [activeTerm]: updatedTermRecord
+                                },
+                                ...(activeTerm === this.getCurrentTermKey() ? {
+                                    marks: termRecord.marks,
+                                    grandTotal,
+                                    average,
+                                    performanceLevel
+                                } : {})
+                            });
 
-                        const docRef = doc(this.db, this.studentsCollection, student.id);
-                        batch.update(docRef, {
-                            grandTotal,
-                            average: Math.round(average * 100) / 100,
-                            performanceLevel
-                        });
-
-                        results.updated++;
+                            results.updated++;
+                        }
                     } catch (error) {
                         results.errors.push(`${student.name} (${student.adNo}): ${error instanceof Error ? error.message : 'Unknown error'}`);
                     }
                 }
 
-                if (currentBatch.length > 0) {
+                if (results.updated > 0) {
                     await batch.commit();
                 }
             }
@@ -1374,46 +1461,101 @@ export class DataService {
 
             const subjectMap = new Map(subjects.map(s => [s.id, s]));
 
-            for (const student of students) {
-                let studentUpdated = false;
-                const updatedMarks = { ...student.marks };
+            const batchSize = 500;
+            for (let i = 0; i < students.length; i += batchSize) {
+                const batch = writeBatch(this.db);
+                const currentBatch = students.slice(i, i + batchSize);
 
-                for (const subjectId in updatedMarks) {
-                    const subject = subjectMap.get(subjectId);
-                    if (!subject) continue;
+                for (const student of currentBatch) {
+                    try {
+                        const activeTerm = this.getCurrentTermKey();
+                        const termRecord = student.academicHistory?.[activeTerm];
+                        if (!termRecord) continue;
 
-                    const marks = updatedMarks[subjectId] as any;
-                    const int = marks.int;
-                    const ext = marks.ext;
+                        let studentUpdated = false;
+                        const updatedMarks = { ...termRecord.marks };
 
-                    const intVal = this.getMarkValue(int);
-                    const extVal = this.getMarkValue(ext);
+                        for (const subjectId in updatedMarks) {
+                            const subject = subjectMap.get(subjectId);
+                            if (!subject) continue;
 
-                    const minINT = Math.ceil(subject.maxINT * 0.5);
-                    const minEXT = Math.ceil(subject.maxEXT * 0.4);
-                    const passedINT = int !== 'A' && intVal >= minINT;
-                    const passedEXT = ext !== 'A' && extVal >= minEXT;
+                            const marks = updatedMarks[subjectId] as any;
+                            const int = marks.int;
+                            const ext = marks.ext;
 
-                    const isFullINT = subject.maxINT === 100;
-                    const intReady = subject.maxINT > 0 ? (int !== undefined && int !== '') : true;
-                    // For full INT subjects, EXT is always considered ready
-                    const extReady = isFullINT || subject.maxEXT === 0 || (subject.maxEXT > 0 && ext !== undefined && ext !== '');
+                            const intVal = this.getMarkValue(int);
+                            const extVal = this.getMarkValue(ext);
 
-                    let newStatus: 'Passed' | 'Failed' | 'Pending' = 'Pending';
-                    if (intReady && extReady) {
-                        const finalPassedEXT = isFullINT || passedEXT || subject.maxEXT === 0;
-                        newStatus = (passedINT && finalPassedEXT) ? 'Passed' : 'Failed';
-                    }
+                            const minINT = Math.ceil(subject.maxINT * 0.5);
+                            const minEXT = Math.ceil(subject.maxEXT * 0.4);
+                            const passedINT = int !== 'A' && intVal >= minINT;
+                            const passedEXT = ext !== 'A' && extVal >= minEXT;
 
-                    if (marks.status !== newStatus) {
-                        updatedMarks[subjectId] = { ...marks, status: newStatus };
-                        studentUpdated = true;
+                            const isFullINT = subject.maxINT === 100;
+                            const intReady = subject.maxINT > 0 ? (int !== undefined && int !== '') : true;
+                            const extReady = isFullINT || subject.maxEXT === 0 || (subject.maxEXT > 0 && ext !== undefined && ext !== '');
+
+                            let newStatus: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+                            if (intReady && extReady) {
+                                const finalPassedEXT = isFullINT || passedEXT || subject.maxEXT === 0;
+                                newStatus = (passedINT && finalPassedEXT) ? 'Passed' : 'Failed';
+                            }
+
+                            if (marks.status !== newStatus) {
+                                updatedMarks[subjectId] = { ...marks, status: newStatus };
+                                studentUpdated = true;
+                            }
+                        }
+
+                        if (studentUpdated) {
+                            const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedMarks, subjects);
+                            const updatedTermRecord = {
+                                ...termRecord,
+                                marks: updatedMarks,
+                                grandTotal,
+                                average,
+                                performanceLevel
+                            };
+
+                            const cleanTermRecord = this.sanitize(updatedTermRecord);
+                            const docRef = doc(this.db, this.studentsCollection, student.id);
+                            
+                            const updates: any = {
+                                [`academicHistory.${activeTerm}`]: cleanTermRecord
+                            };
+
+                            if (activeTerm === this.getCurrentTermKey()) {
+                                updates.marks = cleanTermRecord.marks;
+                                updates.grandTotal = grandTotal;
+                                updates.average = average;
+                                updates.performanceLevel = performanceLevel;
+                            }
+
+                            batch.update(docRef, updates);
+
+                            // Inline cache update
+                            this.updateStudentInCache(student.id, {
+                                academicHistory: {
+                                    ...student.academicHistory,
+                                    [activeTerm]: updatedTermRecord
+                                },
+                                ...(activeTerm === this.getCurrentTermKey() ? {
+                                    marks: updatedMarks,
+                                    grandTotal,
+                                    average,
+                                    performanceLevel
+                                } : {})
+                            });
+
+                            results.updated++;
+                        }
+                    } catch (error) {
+                        results.errors.push(`${student.name} (${student.adNo}): ${error instanceof Error ? error.message : 'Unknown error'}`);
                     }
                 }
 
-                if (studentUpdated) {
-                    await updateDoc(doc(this.db, this.studentsCollection, student.id), { marks: updatedMarks });
-                    results.updated++;
+                if (results.updated > 0) {
+                    await batch.commit();
                 }
             }
 
@@ -1468,37 +1610,27 @@ export class DataService {
                 [subjectId]: { int, ext, total, status }
             } as Record<string, SubjectMarks>;
 
-            // Recalculate totals for this term
             const allSubjects = await this.getAllSubjects();
-            const generalSubjects = allSubjects.filter(s => s.subjectType !== 'elective');
-            const electiveSubjects = allSubjects.filter(s => s.subjectType === 'elective');
-
-            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-            const generalMarksCount = generalSubjects.filter(s => updatedTermMarks[s.id] !== undefined).length;
-            const hasElectiveMark = electiveSubjects.some(s => updatedTermMarks[s.id] !== undefined);
-            const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
-
-            let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-            if (isNaN(average)) average = 0;
-            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+            const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
             const updatedTermRecord = {
                 ...termRecord,
                 marks: updatedTermMarks,
                 grandTotal,
-                average: Math.round(average * 100) / 100,
+                average,
                 performanceLevel
             };
 
+            const cleanTermRecord = this.sanitize(updatedTermRecord);
             const updates: any = {
-                [`academicHistory.${activeTerm}`]: updatedTermRecord
+                [`academicHistory.${activeTerm}`]: cleanTermRecord
             };
 
             // Root synchronization for the globally active term
             if (activeTerm === this.getCurrentTermKey()) {
-                updates.marks = updatedTermMarks;
+                updates.marks = cleanTermRecord.marks;
                 updates.grandTotal = grandTotal;
-                updates.average = updatedTermRecord.average;
+                updates.average = average;
                 updates.performanceLevel = performanceLevel;
             }
 
@@ -1513,7 +1645,7 @@ export class DataService {
                 ...(activeTerm === this.getCurrentTermKey() ? {
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: updatedTermRecord.average,
+                    average,
                     performanceLevel
                 } : {})
             });
@@ -1577,25 +1709,23 @@ export class DataService {
                 [subjectId]: { int, ext, total, status }
             };
 
-            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-            const subjectCount = Object.keys(updatedTermMarks).length;
-            const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
             const allSubjects = await this.getAllSubjects();
-            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+            const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
             const updatedTermRecord = {
                 ...termRecord,
                 marks: updatedTermMarks,
                 grandTotal,
-                average: Math.round(average * 100) / 100,
+                average,
                 performanceLevel
             };
 
-            const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+            const cleanTermRecord = this.sanitize(updatedTermRecord);
+            const updates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
             if (activeTerm === this.getCurrentTermKey()) {
-                updates.marks = updatedTermMarks;
+                updates.marks = cleanTermRecord.marks;
                 updates.grandTotal = grandTotal;
-                updates.average = updatedTermRecord.average;
+                updates.average = average;
                 updates.performanceLevel = performanceLevel;
             }
 
@@ -1609,7 +1739,7 @@ export class DataService {
                 ...(activeTerm === this.getCurrentTermKey() ? {
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: updatedTermRecord.average,
+                    average,
                     performanceLevel
                 } : {})
             });
@@ -1670,25 +1800,23 @@ export class DataService {
                 [subjectId]: { int, ext, total, status }
             };
 
-            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-            const subjectCount = Object.keys(updatedTermMarks).length;
-            const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
             const allSubjects = await this.getAllSubjects();
-            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+            const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
             const updatedTermRecord = {
                 ...termRecord,
                 marks: updatedTermMarks,
                 grandTotal,
-                average: Math.round(average * 100) / 100,
+                average,
                 performanceLevel
             };
 
-            const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+            const cleanTermRecord = this.sanitize(updatedTermRecord);
+            const updates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
             if (activeTerm === this.getCurrentTermKey()) {
-                updates.marks = updatedTermMarks;
+                updates.marks = cleanTermRecord.marks;
                 updates.grandTotal = grandTotal;
-                updates.average = updatedTermRecord.average;
+                updates.average = average;
                 updates.performanceLevel = performanceLevel;
             }
 
@@ -1702,7 +1830,7 @@ export class DataService {
                 ...(activeTerm === this.getCurrentTermKey() ? {
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: updatedTermRecord.average,
+                    average,
                     performanceLevel
                 } : {})
             });
@@ -1735,27 +1863,22 @@ export class DataService {
                 const updatedTermMarks = { ...termRecord.marks };
                 delete updatedTermMarks[subjectId];
 
-                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
-                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
-                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
-
-                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
                     ...termRecord,
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: Math.round(average * 100) / 100,
+                    average,
                     performanceLevel
                 };
 
-                const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                const cleanTermRecord = this.sanitize(updatedTermRecord);
+                const updates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 if (activeTerm === this.getCurrentTermKey()) {
-                    updates.marks = updatedTermMarks;
+                    updates.marks = cleanTermRecord.marks;
                     updates.grandTotal = grandTotal;
-                    updates.average = updatedTermRecord.average;
+                    updates.average = average;
                     updates.performanceLevel = performanceLevel;
                 }
 
@@ -1765,7 +1888,7 @@ export class DataService {
                 // Inline cache update
                 this.updateStudentInCache(studentId, {
                     academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
-                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average, performanceLevel } : {})
                 });
             }
             
@@ -1793,28 +1916,33 @@ export class DataService {
             const updatedTermMarks = { ...termRecord.marks };
             delete updatedTermMarks[subjectId];
 
-            const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-            const average = Object.keys(updatedTermMarks).length > 0 ? grandTotal / Object.keys(updatedTermMarks).length : 0;
             const allSubjects = await this.getAllSubjects();
-            const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+            const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
             const updatedTermRecord = {
                 ...termRecord,
                 marks: updatedTermMarks,
                 grandTotal,
-                average: Math.round(average * 100) / 100,
+                average,
                 performanceLevel
             };
 
-            const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+            const cleanTermRecord = this.sanitize(updatedTermRecord);
+            const updates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
             if (activeTerm === this.getCurrentTermKey()) {
-                updates.marks = updatedTermMarks;
+                updates.marks = cleanTermRecord.marks;
                 updates.grandTotal = grandTotal;
-                updates.average = updatedTermRecord.average;
+                updates.average = average;
                 updates.performanceLevel = performanceLevel;
             }
 
             await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
+
+            this.updateStudentInCache(studentId, {
+                academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
+                ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average, performanceLevel } : {})
+            });
+
             await this.calculateClassRankings(student.currentClass, activeTerm);
             this.invalidateCache();
         } catch (error) {
@@ -1850,27 +1978,22 @@ export class DataService {
                     status: 'Pending'
                 };
 
-                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
-                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
-                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
-
-                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
                     ...termRecord,
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: Math.round(average * 100) / 100,
+                    average,
                     performanceLevel
                 };
 
-                const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                const cleanTermRecord = this.sanitize(updatedTermRecord);
+                const updates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 if (activeTerm === this.getCurrentTermKey()) {
-                    updates.marks = updatedTermMarks;
+                    updates.marks = cleanTermRecord.marks;
                     updates.grandTotal = grandTotal;
-                    updates.average = updatedTermRecord.average;
+                    updates.average = average;
                     updates.performanceLevel = performanceLevel;
                 }
 
@@ -1879,7 +2002,7 @@ export class DataService {
 
                 this.updateStudentInCache(studentId, {
                     academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
-                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average, performanceLevel } : {})
                 });
             }
 
@@ -1921,27 +2044,22 @@ export class DataService {
                     status: 'Pending'
                 };
 
-                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
-                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
-                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
-
-                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
                     ...termRecord,
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: Math.round(average * 100) / 100,
+                    average,
                     performanceLevel
                 };
 
-                const updates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                const cleanTermRecord = this.sanitize(updatedTermRecord);
+                const updates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 if (activeTerm === this.getCurrentTermKey()) {
-                    updates.marks = updatedTermMarks;
+                    updates.marks = cleanTermRecord.marks;
                     updates.grandTotal = grandTotal;
-                    updates.average = updatedTermRecord.average;
+                    updates.average = average;
                     updates.performanceLevel = performanceLevel;
                 }
 
@@ -1950,7 +2068,7 @@ export class DataService {
 
                 this.updateStudentInCache(studentId, {
                     academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
-                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average, performanceLevel } : {})
                 });
             }
 
@@ -1980,9 +2098,13 @@ export class DataService {
                 this.getAllSubjects()
             ]);
 
+            // Create Maps for O(1) lookups
+            const studentMap = new Map(allStudents.map(s => [s.id, s]));
+            const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
+
             for (const update of updates) {
-                const student = allStudents.find(s => s.id === update.studentId);
-                const subject = allSubjects.find(s => s.id === update.subjectId);
+                const student = studentMap.get(update.studentId);
+                const subject = subjectMap.get(update.subjectId);
                 
                 if (!student || !subject) continue;
                 affectedClasses.add(student.currentClass);
@@ -2023,34 +2145,27 @@ export class DataService {
                     [update.subjectId]: updatedSubjectMarks
                 } as Record<string, SubjectMarks>;
 
-                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
-                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
-                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
-
-                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
                     ...termRecord,
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: Math.round(average * 100) / 100,
+                    average,
                     performanceLevel
                 };
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
                 
-                // Wrap in JSON stringify/parse to safely strip any implicitly undefined fields before sending to Firestore
-                const cleanTermRecord = JSON.parse(JSON.stringify(updatedTermRecord));
-                const cleanTermMarks = JSON.parse(JSON.stringify(updatedTermMarks));
+                // Use centralized sanitization
+                const cleanTermRecord = this.sanitize(updatedTermRecord);
 
                 const docUpdates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 
                 if (activeTerm === this.getCurrentTermKey()) {
-                    docUpdates.marks = cleanTermMarks;
+                    docUpdates.marks = cleanTermRecord.marks;
                     docUpdates.grandTotal = grandTotal;
-                    docUpdates.average = cleanTermRecord.average;
+                    docUpdates.average = average;
                     docUpdates.performanceLevel = performanceLevel;
                 }
 
@@ -2059,7 +2174,7 @@ export class DataService {
                 // Update local cache manually
                 this.updateStudentInCache(student.id, {
                     academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
-                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average, performanceLevel } : {})
                 });
             }
 
@@ -2089,9 +2204,13 @@ export class DataService {
                 this.getAllSubjects()
             ]);
 
+            // Create Maps for O(1) lookups
+            const studentMap = new Map(allStudents.map(s => [s.id, s]));
+            const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
+
             for (const update of updates) {
-                const student = allStudents.find(s => s.id === update.studentId);
-                const subject = allSubjects.find(s => s.id === update.subjectId);
+                const student = studentMap.get(update.studentId);
+                const subject = subjectMap.get(update.subjectId);
                 
                 if (!student || !subject) continue;
                 affectedClasses.add(student.currentClass);
@@ -2132,42 +2251,36 @@ export class DataService {
                     [update.subjectId]: updatedSubjectMarks
                 } as Record<string, SubjectMarks>;
 
-                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
-                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
-                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
-
-                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
                     ...termRecord,
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: Math.round(average * 100) / 100,
+                    average,
                     performanceLevel
                 };
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
                 
-                // Wrap in JSON stringify/parse to safely strip any implicitly undefined fields before sending to Firestore
-                const cleanTermRecord = JSON.parse(JSON.stringify(updatedTermRecord));
-                const cleanTermMarks = JSON.parse(JSON.stringify(updatedTermMarks));
+                // Use centralized sanitization
+                const cleanTermRecord = this.sanitize(updatedTermRecord);
 
                 const docUpdates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 
                 if (activeTerm === this.getCurrentTermKey()) {
-                    docUpdates.marks = cleanTermMarks;
+                    docUpdates.marks = cleanTermRecord.marks;
                     docUpdates.grandTotal = grandTotal;
-                    docUpdates.average = cleanTermRecord.average;
+                    docUpdates.average = average;
                     docUpdates.performanceLevel = performanceLevel;
                 }
 
                 batch.update(docRef, docUpdates);
 
+                // Update local cache manually
                 this.updateStudentInCache(student.id, {
                     academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
-                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average, performanceLevel } : {})
                 });
             }
 
@@ -2196,9 +2309,13 @@ export class DataService {
                 this.getAllSubjects()
             ]);
 
+            // Create Maps for O(1) lookups
+            const studentMap = new Map(allStudents.map(s => [s.id, s]));
+            const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
+
             for (const update of updates) {
-                const student = allStudents.find(s => s.id === update.studentId);
-                const subject = allSubjects.find(s => s.id === update.subjectId);
+                const student = studentMap.get(update.studentId);
+                const subject = subjectMap.get(update.subjectId);
                 
                 if (!student || !subject) continue;
                 affectedClasses.add(student.currentClass);
@@ -2227,42 +2344,36 @@ export class DataService {
                     [update.subjectId]: { int: update.int, ext: update.ext, total, status }
                 } as Record<string, SubjectMarks>;
 
-                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
-                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
-                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
-
-                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
                     ...termRecord,
                     marks: updatedTermMarks,
                     grandTotal,
-                    average: Math.round(average * 100) / 100,
+                    average,
                     performanceLevel
                 };
 
                 const docRef = doc(this.db, this.studentsCollection, student.id);
 
-                // Wrap in JSON stringify/parse to safely strip any implicitly undefined fields before sending to Firestore
-                const cleanTermRecord = JSON.parse(JSON.stringify(updatedTermRecord));
-                const cleanTermMarks = JSON.parse(JSON.stringify(updatedTermMarks));
+                // Use centralized sanitization
+                const cleanTermRecord = this.sanitize(updatedTermRecord);
 
                 const docUpdates: any = { [`academicHistory.${activeTerm}`]: cleanTermRecord };
                 
                 if (activeTerm === this.getCurrentTermKey()) {
-                    docUpdates.marks = cleanTermMarks;
+                    docUpdates.marks = cleanTermRecord.marks;
                     docUpdates.grandTotal = grandTotal;
-                    docUpdates.average = cleanTermRecord.average;
+                    docUpdates.average = average;
                     docUpdates.performanceLevel = performanceLevel;
                 }
 
                 batch.update(docRef, docUpdates);
 
+                // Update local cache manually
                 this.updateStudentInCache(student.id, {
                     academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
-                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average, performanceLevel } : {})
                 });
             }
 
