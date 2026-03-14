@@ -198,6 +198,18 @@ export class DataService {
         this.cacheTimestamp = 0;
     }
 
+    private updateStudentInCache(studentId: string, updates: Partial<StudentRecord>): void {
+        if (this.studentsCache && this.isCacheValid()) {
+            const index = this.studentsCache.findIndex(s => s.id === studentId);
+            if (index !== -1) {
+                // Merge updates into the cached student
+                this.studentsCache[index] = { ...this.studentsCache[index], ...updates };
+                // Also update deep nested structures if necessary, but spreading handles top-level root fields.
+                // For deep updates like academicHistory, it's safer to just replace the whole academicHistory object passed in updates.
+            }
+        }
+    }
+
     private updateCache(students?: StudentRecord[], subjects?: SubjectConfig[]): void {
         if (students) this.studentsCache = students;
         if (subjects) this.subjectsCache = subjects;
@@ -1414,7 +1426,7 @@ export class DataService {
         }
     }
 
-    async updateStudentMarks(studentId: string, subjectId: string, int: number | 'A', ext: number | 'A', termKey?: string): Promise<void> {
+    async updateStudentMarks(studentId: string, subjectId: string, int: number | 'A', ext: number | 'A', termKey?: string, skipRankCalculation = false): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1438,7 +1450,7 @@ export class DataService {
 
             const passedINT = int !== 'A' && intVal >= minINT;
             const passedEXT = isFullINT || (ext !== 'A' && extVal >= minEXT) || subject.maxEXT === 0;
-            const status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
+            const status = ((passedINT && passedEXT) ? 'Passed' : 'Failed') as 'Passed' | 'Failed' | 'Pending';
 
             // Get existing term record or create fresh one
             const termRecord = student.academicHistory?.[activeTerm] || {
@@ -1454,7 +1466,7 @@ export class DataService {
             const updatedTermMarks = {
                 ...termRecord.marks,
                 [subjectId]: { int, ext, total, status }
-            };
+            } as Record<string, SubjectMarks>;
 
             // Recalculate totals for this term
             const allSubjects = await this.getAllSubjects();
@@ -1491,9 +1503,25 @@ export class DataService {
             }
 
             await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
-            await this.calculateClassRankings(student.currentClass, activeTerm);
 
-            this.invalidateCache();
+            // Directly update the cache instead of invalidating everything
+            this.updateStudentInCache(studentId, {
+                academicHistory: {
+                    ...student.academicHistory,
+                    [activeTerm]: updatedTermRecord
+                },
+                ...(activeTerm === this.getCurrentTermKey() ? {
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: updatedTermRecord.average,
+                    performanceLevel
+                } : {})
+            });
+
+            if (!skipRankCalculation) {
+                await this.calculateClassRankings(student.currentClass, activeTerm);
+            }
+
             console.log('Student marks updated for term:', activeTerm, studentId);
         } catch (error) {
             console.error('Error updating student marks:', error);
@@ -1502,7 +1530,7 @@ export class DataService {
     }
 
     // New method for updating only INT marks
-    async updateStudentINTMarks(studentId: string, subjectId: string, int: number | 'A', termKey?: string): Promise<void> {
+    async updateStudentINTMarks(studentId: string, subjectId: string, int: number | 'A', termKey?: string, skipRankCalculation = false): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1572,9 +1600,23 @@ export class DataService {
             }
 
             await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
-            await this.calculateClassRankings(student.currentClass, activeTerm);
 
-            this.invalidateCache();
+            this.updateStudentInCache(studentId, {
+                academicHistory: {
+                    ...student.academicHistory,
+                    [activeTerm]: updatedTermRecord
+                },
+                ...(activeTerm === this.getCurrentTermKey() ? {
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: updatedTermRecord.average,
+                    performanceLevel
+                } : {})
+            });
+
+            if (!skipRankCalculation) {
+                await this.calculateClassRankings(student.currentClass, activeTerm);
+            }
         } catch (error) {
             console.error('Error updating student INT marks:', error);
             throw error;
@@ -1582,7 +1624,7 @@ export class DataService {
     }
 
     // New method for updating only EXT marks
-    async updateStudentEXTMarks(studentId: string, subjectId: string, ext: number | 'A', termKey?: string): Promise<void> {
+    async updateStudentEXTMarks(studentId: string, subjectId: string, ext: number | 'A', termKey?: string, skipRankCalculation = false): Promise<void> {
         try {
             const [studentDoc, subjectDoc] = await Promise.all([
                 getDoc(doc(this.db, this.studentsCollection, studentId)),
@@ -1651,9 +1693,23 @@ export class DataService {
             }
 
             await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
-            await this.calculateClassRankings(student.currentClass, activeTerm);
 
-            this.invalidateCache();
+            this.updateStudentInCache(studentId, {
+                academicHistory: {
+                    ...student.academicHistory,
+                    [activeTerm]: updatedTermRecord
+                },
+                ...(activeTerm === this.getCurrentTermKey() ? {
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: updatedTermRecord.average,
+                    performanceLevel
+                } : {})
+            });
+
+            if (!skipRankCalculation) {
+                await this.calculateClassRankings(student.currentClass, activeTerm);
+            }
         } catch (error) {
             console.error('Error updating student EXT marks:', error);
             throw error;
@@ -1664,22 +1720,27 @@ export class DataService {
         try {
             console.log('Clearing marks for subject:', subjectId, 'for', studentIds.length, 'students');
             const activeTerm = termKey || this.getCurrentTermKey();
+            const batch = writeBatch(this.db);
+            const affectedClasses = new Set<string>();
+            const [allStudents, allSubjects] = await Promise.all([this.getAllStudents(), this.getAllSubjects()]);
 
             for (const studentId of studentIds) {
-                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (!studentDoc.exists()) continue;
+                const student = allStudents.find(s => s.id === studentId);
+                if (!student) continue;
 
-                const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
                 const termRecord = student.academicHistory?.[activeTerm];
-                if (!termRecord) continue;
+                if (!termRecord || !termRecord.marks[subjectId]) continue;
+                affectedClasses.add(student.currentClass);
 
                 const updatedTermMarks = { ...termRecord.marks };
                 delete updatedTermMarks[subjectId];
 
                 const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const subjectCount = Object.keys(updatedTermMarks).length;
+                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
+                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
+                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
                 const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
-                const allSubjects = await this.getAllSubjects();
                 const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
@@ -1698,11 +1759,21 @@ export class DataService {
                     updates.performanceLevel = performanceLevel;
                 }
 
-                await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
-                await this.calculateClassRankings(student.currentClass, activeTerm);
-            }
+                const docRef = doc(this.db, this.studentsCollection, studentId);
+                batch.update(docRef, updates);
 
-            this.invalidateCache();
+                // Inline cache update
+                this.updateStudentInCache(studentId, {
+                    academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                });
+            }
+            
+            await batch.commit();
+
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className, activeTerm);
+            }
         } catch (error) {
             console.error('Error clearing subject marks:', error);
             throw error;
@@ -1756,14 +1827,17 @@ export class DataService {
         try {
             console.log('Clearing EXT marks for subject:', subjectId, 'for', studentIds.length, 'students');
             const activeTerm = termKey || this.getCurrentTermKey();
+            const batch = writeBatch(this.db);
+            const affectedClasses = new Set<string>();
+            const [allStudents, allSubjects] = await Promise.all([this.getAllStudents(), this.getAllSubjects()]);
 
             for (const studentId of studentIds) {
-                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (!studentDoc.exists()) continue;
+                const student = allStudents.find(s => s.id === studentId);
+                if (!student) continue;
 
-                const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
                 const termRecord = student.academicHistory?.[activeTerm];
                 if (!termRecord || !termRecord.marks[subjectId]) continue;
+                affectedClasses.add(student.currentClass);
 
                 const updatedTermMarks = { ...termRecord.marks };
                 const marks = updatedTermMarks[subjectId];
@@ -1777,8 +1851,11 @@ export class DataService {
                 };
 
                 const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const average = Object.keys(updatedTermMarks).length > 0 ? grandTotal / Object.keys(updatedTermMarks).length : 0;
-                const allSubjects = await this.getAllSubjects();
+                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
+                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
+                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
                 const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
@@ -1797,11 +1874,20 @@ export class DataService {
                     updates.performanceLevel = performanceLevel;
                 }
 
-                await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
-                await this.calculateClassRankings(student.currentClass, activeTerm);
+                const docRef = doc(this.db, this.studentsCollection, studentId);
+                batch.update(docRef, updates);
+
+                this.updateStudentInCache(studentId, {
+                    academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                });
             }
 
-            this.invalidateCache();
+            await batch.commit();
+
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className, activeTerm);
+            }
         } catch (error) {
             console.error('Error clearing subject EXT marks:', error);
             throw error;
@@ -1812,14 +1898,17 @@ export class DataService {
         try {
             console.log('Clearing INT marks for subject:', subjectId, 'for', studentIds.length, 'students');
             const activeTerm = termKey || this.getCurrentTermKey();
+            const batch = writeBatch(this.db);
+            const affectedClasses = new Set<string>();
+            const [allStudents, allSubjects] = await Promise.all([this.getAllStudents(), this.getAllSubjects()]);
 
             for (const studentId of studentIds) {
-                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
-                if (!studentDoc.exists()) continue;
+                const student = allStudents.find(s => s.id === studentId);
+                if (!student) continue;
 
-                const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
                 const termRecord = student.academicHistory?.[activeTerm];
                 if (!termRecord || !termRecord.marks[subjectId]) continue;
+                affectedClasses.add(student.currentClass);
 
                 const updatedTermMarks = { ...termRecord.marks };
                 const marks = updatedTermMarks[subjectId];
@@ -1833,8 +1922,11 @@ export class DataService {
                 };
 
                 const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
-                const average = Object.keys(updatedTermMarks).length > 0 ? grandTotal / Object.keys(updatedTermMarks).length : 0;
-                const allSubjects = await this.getAllSubjects();
+                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
+                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
+                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
                 const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
 
                 const updatedTermRecord = {
@@ -1853,13 +1945,311 @@ export class DataService {
                     updates.performanceLevel = performanceLevel;
                 }
 
-                await updateDoc(doc(this.db, this.studentsCollection, studentId), updates);
-                await this.calculateClassRankings(student.currentClass, activeTerm);
+                const docRef = doc(this.db, this.studentsCollection, studentId);
+                batch.update(docRef, updates);
+
+                this.updateStudentInCache(studentId, {
+                    academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                });
             }
 
-            this.invalidateCache();
+            await batch.commit();
+
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className, activeTerm);
+            }
         } catch (error) {
             console.error('Error clearing subject INT marks:', error);
+            throw error;
+        }
+    }
+
+    // --- BULK BATCH UPDATES ---
+
+    async bulkUpdateINTMarks(updates: {studentId: string, subjectId: string, int: number | 'A'}[], termKey?: string): Promise<void> {
+        try {
+            console.log(`Starting bulk INT update for ${updates.length} records`);
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const batch = writeBatch(this.db);
+            const affectedClasses = new Set<string>();
+
+            // Pre-fetch all necessary data
+            const [allStudents, allSubjects] = await Promise.all([
+                this.getAllStudents(),
+                this.getAllSubjects()
+            ]);
+
+            for (const update of updates) {
+                const student = allStudents.find(s => s.id === update.studentId);
+                const subject = allSubjects.find(s => s.id === update.subjectId);
+                
+                if (!student || !subject) continue;
+                affectedClasses.add(student.currentClass);
+
+                const termRecord = student.academicHistory?.[activeTerm] || {
+                    className: student.currentClass,
+                    semester: activeTerm.split('-')[2] as 'Odd' | 'Even',
+                    marks: {}, grandTotal: 0, average: 0, rank: 0, performanceLevel: 'C (Average)'
+                };
+
+                const existingMarks = termRecord.marks[update.subjectId] || { int: 0, ext: 0, total: 0, status: 'Pending' };
+                const ext = existingMarks.ext !== undefined ? existingMarks.ext : ((existingMarks as any).ta !== undefined ? (existingMarks as any).ta : 0);
+                
+                const intVal = this.getMarkValue(update.int);
+                const extVal = this.getMarkValue(ext);
+                const total = intVal + extVal;
+
+                const isFullINT = subject.maxINT === 100;
+                const minINT = Math.ceil(subject.maxINT * 0.5);
+                const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.4);
+
+                const passedINT = update.int !== 'A' && intVal >= minINT;
+                const passedEXT = isFullINT || (ext !== 'A' && extVal >= minEXT) || subject.maxEXT === 0;
+                
+                let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+                if ((subject.maxINT > 0 ? (update.int !== undefined && update.int !== null) : true) && 
+                    (isFullINT || subject.maxEXT === 0 || (ext !== undefined && ext !== null))) {
+                    status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
+                }
+
+                const updatedTermMarks = {
+                    ...termRecord.marks,
+                    [update.subjectId]: { int: update.int, ext, total, status }
+                } as Record<string, SubjectMarks>;
+
+                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
+                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
+                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+
+                const updatedTermRecord = {
+                    ...termRecord,
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: Math.round(average * 100) / 100,
+                    performanceLevel
+                };
+
+                const docRef = doc(this.db, this.studentsCollection, student.id);
+                const docUpdates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                
+                if (activeTerm === this.getCurrentTermKey()) {
+                    docUpdates.marks = updatedTermMarks;
+                    docUpdates.grandTotal = grandTotal;
+                    docUpdates.average = updatedTermRecord.average;
+                    docUpdates.performanceLevel = performanceLevel;
+                }
+
+                batch.update(docRef, docUpdates);
+
+                // Update local cache manually
+                this.updateStudentInCache(student.id, {
+                    academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                });
+            }
+
+            await batch.commit();
+            console.log(`Bulk INT marks updated. Calculating ranks for ${affectedClasses.size} classes`);
+            
+            // Calculate ranks exactly ONCE per affected class
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className, activeTerm);
+            }
+
+        } catch (error) {
+            console.error('Error in bulk update INT marks:', error);
+            throw error;
+        }
+    }
+
+    async bulkUpdateEXTMarks(updates: {studentId: string, subjectId: string, ext: number | 'A'}[], termKey?: string): Promise<void> {
+        try {
+            console.log(`Starting bulk EXT update for ${updates.length} records`);
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const batch = writeBatch(this.db);
+            const affectedClasses = new Set<string>();
+
+            const [allStudents, allSubjects] = await Promise.all([
+                this.getAllStudents(),
+                this.getAllSubjects()
+            ]);
+
+            for (const update of updates) {
+                const student = allStudents.find(s => s.id === update.studentId);
+                const subject = allSubjects.find(s => s.id === update.subjectId);
+                
+                if (!student || !subject) continue;
+                affectedClasses.add(student.currentClass);
+
+                const termRecord = student.academicHistory?.[activeTerm] || {
+                    className: student.currentClass,
+                    semester: activeTerm.split('-')[2] as 'Odd' | 'Even',
+                    marks: {}, grandTotal: 0, average: 0, rank: 0, performanceLevel: 'C (Average)'
+                };
+
+                const existingMarks = termRecord.marks[update.subjectId] || { int: 0, ext: 0, total: 0, status: 'Pending' };
+                const int = existingMarks.int !== undefined ? existingMarks.int : ((existingMarks as any).ce !== undefined ? (existingMarks as any).ce : 0);
+                
+                const intVal = this.getMarkValue(int);
+                const extVal = this.getMarkValue(update.ext);
+                const total = intVal + extVal;
+
+                const isFullINT = subject.maxINT === 100;
+                const minINT = Math.ceil(subject.maxINT * 0.5);
+                const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.4);
+
+                const passedINT = int !== 'A' && intVal >= minINT;
+                const passedEXT = isFullINT || (update.ext !== 'A' && extVal >= minEXT) || subject.maxEXT === 0;
+                
+                let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
+                if ((subject.maxINT > 0 ? (int !== undefined && int !== null) : true) && 
+                    (isFullINT || subject.maxEXT === 0 || (update.ext !== undefined && update.ext !== null))) {
+                    status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
+                }
+
+                const updatedTermMarks = {
+                    ...termRecord.marks,
+                    [update.subjectId]: { int, ext: update.ext, total, status }
+                } as Record<string, SubjectMarks>;
+
+                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
+                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
+                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+
+                const updatedTermRecord = {
+                    ...termRecord,
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: Math.round(average * 100) / 100,
+                    performanceLevel
+                };
+
+                const docRef = doc(this.db, this.studentsCollection, student.id);
+                const docUpdates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                
+                if (activeTerm === this.getCurrentTermKey()) {
+                    docUpdates.marks = updatedTermMarks;
+                    docUpdates.grandTotal = grandTotal;
+                    docUpdates.average = updatedTermRecord.average;
+                    docUpdates.performanceLevel = performanceLevel;
+                }
+
+                batch.update(docRef, docUpdates);
+
+                this.updateStudentInCache(student.id, {
+                    academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                });
+            }
+
+            await batch.commit();
+            console.log(`Bulk EXT marks updated. Calculating ranks for ${affectedClasses.size} classes`);
+            
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className, activeTerm);
+            }
+
+        } catch (error) {
+            console.error('Error in bulk update EXT marks:', error);
+            throw error;
+        }
+    }
+
+    async bulkUpdateMarks(updates: {studentId: string, subjectId: string, int: number | 'A', ext: number | 'A'}[], termKey?: string): Promise<void> {
+        try {
+            console.log(`Starting bulk update for ${updates.length} records`);
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const batch = writeBatch(this.db);
+            const affectedClasses = new Set<string>();
+
+            const [allStudents, allSubjects] = await Promise.all([
+                this.getAllStudents(),
+                this.getAllSubjects()
+            ]);
+
+            for (const update of updates) {
+                const student = allStudents.find(s => s.id === update.studentId);
+                const subject = allSubjects.find(s => s.id === update.subjectId);
+                
+                if (!student || !subject) continue;
+                affectedClasses.add(student.currentClass);
+
+                const termRecord = student.academicHistory?.[activeTerm] || {
+                    className: student.currentClass,
+                    semester: activeTerm.split('-')[2] as 'Odd' | 'Even',
+                    marks: {}, grandTotal: 0, average: 0, rank: 0, performanceLevel: 'C (Average)'
+                };
+
+                const intVal = this.getMarkValue(update.int);
+                const extVal = this.getMarkValue(update.ext);
+                const total = intVal + extVal;
+
+                const isFullINT = subject.maxINT === 100;
+                const minINT = Math.ceil(subject.maxINT * 0.5);
+                const minEXT = isFullINT ? 0 : Math.ceil(subject.maxEXT * 0.4);
+
+                const passedINT = update.int !== 'A' && intVal >= minINT;
+                const passedEXT = isFullINT || (update.ext !== 'A' && extVal >= minEXT) || subject.maxEXT === 0;
+                
+                const status = (passedINT && passedEXT) ? 'Passed' : 'Failed' as 'Passed' | 'Failed' | 'Pending';
+
+                const updatedTermMarks = {
+                    ...termRecord.marks,
+                    [update.subjectId]: { int: update.int, ext: update.ext, total, status }
+                } as Record<string, SubjectMarks>;
+
+                const grandTotal = Object.values(updatedTermMarks).reduce((sum, mark) => sum + this.getMarkValue((mark as any).total), 0);
+                const generalMarksCount = allSubjects.filter(s => s.subjectType !== 'elective' && updatedTermMarks[s.id] !== undefined).length;
+                const hasElectiveMark = allSubjects.filter(s => s.subjectType === 'elective').some(s => updatedTermMarks[s.id] !== undefined);
+                const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+
+                const average = subjectCount > 0 ? grandTotal / subjectCount : 0;
+                const performanceLevel = this.calculatePerformanceLevel(updatedTermMarks, allSubjects);
+
+                const updatedTermRecord = {
+                    ...termRecord,
+                    marks: updatedTermMarks,
+                    grandTotal,
+                    average: Math.round(average * 100) / 100,
+                    performanceLevel
+                };
+
+                const docRef = doc(this.db, this.studentsCollection, student.id);
+                const docUpdates: any = { [`academicHistory.${activeTerm}`]: updatedTermRecord };
+                
+                if (activeTerm === this.getCurrentTermKey()) {
+                    docUpdates.marks = updatedTermMarks;
+                    docUpdates.grandTotal = grandTotal;
+                    docUpdates.average = updatedTermRecord.average;
+                    docUpdates.performanceLevel = performanceLevel;
+                }
+
+                batch.update(docRef, docUpdates);
+
+                this.updateStudentInCache(student.id, {
+                    academicHistory: { ...student.academicHistory, [activeTerm]: updatedTermRecord },
+                    ...(activeTerm === this.getCurrentTermKey() ? { marks: updatedTermMarks, grandTotal, average: updatedTermRecord.average, performanceLevel } : {})
+                });
+            }
+
+            await batch.commit();
+            console.log(`Bulk marks updated. Calculating ranks for ${affectedClasses.size} classes`);
+            
+            for (const className of affectedClasses) {
+                await this.calculateClassRankings(className, activeTerm);
+            }
+
+        } catch (error) {
+            console.error('Error in bulk update marks:', error);
             throw error;
         }
     }

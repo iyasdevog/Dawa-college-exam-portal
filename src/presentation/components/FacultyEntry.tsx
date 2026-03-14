@@ -1002,8 +1002,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
             setOperationLoading({ type: 'saving', message: 'Saving marks to database...' });
 
+            const validUpdates: {studentId: string, subjectId: string, int: number | 'A', ext: number | 'A'}[] = [];
+
             // Save marks for each student
-            const savePromises = students.map(async (student) => {
+            for (const student of students) {
                 const marks = marksData[student.id];
                 if (marks && marks.int && marks.ext) {
                     const intValue: number | 'A' = marks.int === 'A' ? 'A' : parseInt(marks.int);
@@ -1029,30 +1031,33 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         intToSave = (intValue as number) * 2;
                     }
 
-                    try {
-                        // Try to save online first
-                        await dataService.updateStudentMarks(student.id, selectedSubject, intToSave, extValue, activeTerm);
+                    // Assuming valid updates are drafted while processing, 
+                    // though for offline we might want to just draft anyway
+                    await saveDraft(
+                        student.id,
+                        selectedSubject,
+                        marks.int,
+                        marks.ext
+                    );
 
-                        // If successful, delete any corresponding draft
-                        const draft = getDraft(student.id, selectedSubject);
-                        if (draft) {
-                            deleteDraft(student.id, selectedSubject);
-                        }
-                    } catch (error) {
-                        console.warn('Online save failed, saving offline:', error);
+                    validUpdates.push({
+                        studentId: student.id,
+                        subjectId: selectedSubject,
+                        int: intToSave,
+                        ext: extValue
+                    });
+                }
+            }
 
-                        // If online save fails, save offline draft
-                        await saveDraft(
-                            student.id,
-                            selectedSubject,
-                            marks.int,
-                            marks.ext
-                        );
+            if (isOnline && validUpdates.length > 0) {
+                await dataService.bulkUpdateMarks(validUpdates, activeTerm);
+                for (const update of validUpdates) {
+                    const draft = getDraft(update.studentId, selectedSubject);
+                    if (draft) {
+                        deleteDraft(update.studentId, selectedSubject);
                     }
                 }
-            });
-
-            await Promise.all(savePromises);
+            }
 
             // Try to reload students to get updated data (only if online)
             if (isOnline) {
@@ -1181,56 +1186,46 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 ? students.filter(s => s.id === targetStudentId)
                 : students;
 
-            const savePromises = targetStudents.map(async (student) => {
+            const validUpdates: {studentId: string, subjectId: string, ext: number | 'A'}[] = [];
+
+            for (const student of targetStudents) {
                 const marks = marksData[student.id];
                 if (marks && marks.ext) {
-                    const ext = parseInt(marks.ext);
+                    const ext = marks.ext === 'A' ? 'A' : parseInt(marks.ext);
 
                     const subject = subjects.find(s => s.id === selectedSubject);
-                    if (subject && ext > subject.maxEXT) {
+                    if (subject && ext !== 'A' && (ext as number) > subject.maxEXT) {
                         throw new Error(`EXT marks for ${student.name} exceed maximum (${subject.maxEXT})`);
                     }
 
-                    try {
-                        // Try to save online first
-                        await dataService.updateStudentEXTMarks(student.id, selectedSubject, ext, activeTerm);
+                    await saveDraft(
+                        student.id,
+                        selectedSubject,
+                        marks.int || '',
+                        marks.ext
+                    );
 
-                        // Update draft with EXT marks - keep draft if EXT saved but INT not?
-                        // For simplicity, just update draft if offline fails.
-
-                    } catch (error) {
-                        console.warn('Online EXT save failed, saving offline:', error);
-
-                        // If online EXT save fails, save offline draft
-                        await saveDraft(
-                            student.id,
-                            selectedSubject,
-                            marks.int || '',
-                            marks.ext
-                        );
-                    }
+                    validUpdates.push({
+                        studentId: student.id,
+                        subjectId: selectedSubject,
+                        ext
+                    });
                 }
-            });
+            }
 
-            await Promise.all(savePromises);
-
-            // Try to reload students to get updated data (only if online)
-            if (isOnline) {
+            if (isOnline && validUpdates.length > 0) {
+                await dataService.bulkUpdateEXTMarks(validUpdates, activeTerm);
                 await Promise.all([
                     loadStudentsByClass(),
                     loadAllStudents()
                 ]);
-            }
 
-            // Show appropriate success message
-            if (isOnline) {
                 if (targetStudentId) {
                     alert('EXT marks saved successfully!');
                 } else {
-                    const studentsWithEXT = targetStudents.filter(s => marksData[s.id]?.ext).length;
-                    alert(`EXT marks saved successfully for ${studentsWithEXT} students!`);
+                    alert(`EXT marks saved successfully for ${validUpdates.length} students!`);
                 }
-            } else {
+            } else if (!isOnline && validUpdates.length > 0) {
                 alert('EXT marks saved offline as drafts!');
             }
         } catch (error) {
@@ -1245,10 +1240,12 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     // Check if component mounted
     if (isLoading) {
         return (
-            <ProgressiveLoadingSkeleton
-                stage={loadingStage}
-                progress={loadingProgress}
-            />
+            <div className="w-full flex items-center justify-center p-8">
+                <ProgressiveLoadingSkeleton
+                    stage={loadingStage}
+                    progress={loadingProgress}
+                />
+            </div>
         );
     }
     return (
