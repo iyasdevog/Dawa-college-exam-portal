@@ -1074,28 +1074,31 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     }, [selectedSubject, invalidMarksInfo, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft, deleteDraft]);
 
     // New handler for saving only INT marks
-    const handleSaveINTMarks = useCallback(async () => {
+    const handleSaveINTMarks = useCallback(async (targetStudentId?: string) => {
         if (!selectedSubject) {
             alert('Please select a subject');
             return;
         }
 
         try {
-            setOperationLoading({ type: 'saving', message: 'Saving INT marks to database...' });
+            const message = targetStudentId ? 'Saving INT marks...' : 'Saving all INT marks to database...';
+            setOperationLoading({ type: 'saving', message });
 
-            // Save INT marks for students who have INT entered
-            const savePromises = students.map(async (student) => {
+            // Filtering students if targetStudentId is provided
+            const targetStudents = targetStudentId 
+                ? students.filter(s => s.id === targetStudentId)
+                : students;
+
+            const savePromises = targetStudents.map(async (student) => {
                 const marks = marksData[student.id];
                 if (marks && marks.int) {
                     const int = parseInt(marks.int);
 
-                    // Validate INT marks against subject limits
                     const sub = subjects.find(s => s.id === selectedSubject);
                     if (sub && int > sub.maxINT) {
                         throw new Error(`INT marks for ${student.name} exceed maximum (${sub.maxINT})`);
                     }
 
-                    // Special conversion for Max INT 35 (scale from 35 to 70 for storage)
                     let intToSave = int;
                     if (sub?.maxINT === 35) {
                         intToSave = int * 2;
@@ -1145,11 +1148,15 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             }
 
             // Show appropriate success message
-            const studentsWithINT = students.filter(s => marksData[s.id]?.int).length;
             if (isOnline) {
-                alert(`INT marks saved successfully for ${studentsWithINT} students!`);
+                if (targetStudentId) {
+                    alert('INT marks saved successfully!');
+                } else {
+                    const studentsWithINT = targetStudents.filter(s => marksData[s.id]?.int).length;
+                    alert(`INT marks saved successfully for ${studentsWithINT} students!`);
+                }
             } else {
-                alert(`INT marks saved offline as drafts for ${studentsWithINT} students!`);
+                alert('INT marks saved offline as drafts!');
             }
         } catch (error) {
             console.error('Error saving INT marks:', error);
@@ -1160,22 +1167,25 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     }, [selectedSubject, students, marksData, subjects, loadStudentsByClass, isOnline, saveDraft, getDraft]);
 
     // New handler for saving only EXT marks
-    const handleSaveEXTMarks = useCallback(async () => {
+    const handleSaveEXTMarks = useCallback(async (targetStudentId?: string) => {
         if (!selectedSubject) {
             alert('Please select a subject');
             return;
         }
 
         try {
-            setOperationLoading({ type: 'saving', message: 'Saving EXT marks to database...' });
+            const message = targetStudentId ? 'Saving EXT marks...' : 'Saving all EXT marks to database...';
+            setOperationLoading({ type: 'saving', message });
 
-            // Save EXT marks for students who have EXT entered
-            const savePromises = students.map(async (student) => {
+            const targetStudents = targetStudentId 
+                ? students.filter(s => s.id === targetStudentId)
+                : students;
+
+            const savePromises = targetStudents.map(async (student) => {
                 const marks = marksData[student.id];
                 if (marks && marks.ext) {
                     const ext = parseInt(marks.ext);
 
-                    // Validate EXT marks against subject limits
                     const subject = subjects.find(s => s.id === selectedSubject);
                     if (subject && ext > subject.maxEXT) {
                         throw new Error(`EXT marks for ${student.name} exceed maximum (${subject.maxEXT})`);
@@ -1213,11 +1223,15 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             }
 
             // Show appropriate success message
-            const studentsWithEXT = students.filter(s => marksData[s.id]?.ext).length;
             if (isOnline) {
-                alert(`EXT marks saved successfully for ${studentsWithEXT} students!`);
+                if (targetStudentId) {
+                    alert('EXT marks saved successfully!');
+                } else {
+                    const studentsWithEXT = targetStudents.filter(s => marksData[s.id]?.ext).length;
+                    alert(`EXT marks saved successfully for ${studentsWithEXT} students!`);
+                }
             } else {
-                alert(`EXT marks saved offline as drafts for ${studentsWithEXT} students!`);
+                alert('EXT marks saved offline as drafts!');
             }
         } catch (error) {
             console.error('Error saving EXT marks:', error);
@@ -1901,22 +1915,22 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                             <div className="hidden md:flex flex-col gap-1">
                                                                 <div className="flex gap-1">
                                                                     <button
-                                                                        onClick={handleSaveINTMarks}
-                                                                        disabled={isSaving || operationLoading.type !== null || !marksData[student.id]?.int}
-                                                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 group"
-                                                                        aria-label="Save INT marks"
-                                                                    >
-                                                                        <i className="fa-solid fa-cloud-arrow-up text-xs group-hover:scale-110 transition-transform"></i>
-                                                                        <span className="text-xs">Save INT</span>
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={handleSaveEXTMarks}
+                                                                        onClick={() => handleSaveEXTMarks(student.id)}
                                                                         disabled={isSaving || operationLoading.type !== null || !marksData[student.id]?.ext}
                                                                         className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-sky-50 text-sky-700 rounded-lg hover:bg-sky-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 group"
                                                                         aria-label="Save EXT marks"
                                                                     >
                                                                         <i className="fa-solid fa-cloud-arrow-up text-xs group-hover:scale-110 transition-transform"></i>
                                                                         <span className="text-xs">Save EXT</span>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleSaveINTMarks(student.id)}
+                                                                        disabled={isSaving || operationLoading.type !== null || !marksData[student.id]?.int}
+                                                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 group"
+                                                                        aria-label="Save INT marks"
+                                                                    >
+                                                                        <i className="fa-solid fa-cloud-arrow-up text-xs group-hover:scale-110 transition-transform"></i>
+                                                                        <span className="text-xs">Save INT</span>
                                                                     </button>
                                                                 </div>
                                                                 <div className="flex gap-1">
@@ -1951,17 +1965,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
                                     <div className="flex gap-3">
                                         <button
-                                            onClick={handleSaveINTMarks}
-                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                            className="px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
-                                            style={{ minHeight: '44px' }}
-                                            aria-label="Save INT marks only"
-                                        >
-                                            <i className="fa-solid fa-clipboard-check text-sm"></i>
-                                            Save INT
-                                        </button>
-                                        <button
-                                            onClick={handleSaveEXTMarks}
+                                            onClick={() => handleSaveEXTMarks()}
                                             disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                             className="px-4 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
                                             style={{ minHeight: '44px' }}
@@ -1969,6 +1973,16 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                         >
                                             <i className="fa-solid fa-clipboard-check text-sm"></i>
                                             Save EXT
+                                        </button>
+                                        <button
+                                            onClick={() => handleSaveINTMarks()}
+                                            disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                            className="px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-md flex items-center gap-2"
+                                            style={{ minHeight: '44px' }}
+                                            aria-label="Save INT marks only"
+                                        >
+                                            <i className="fa-solid fa-clipboard-check text-sm"></i>
+                                            Save INT
                                         </button>
                                         <button
                                             onClick={handleClearINTMarks}
@@ -2066,17 +2080,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                     <div className="space-y-2">
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={handleSaveINTMarks}
-                                                disabled={isSaving || operationLoading.type !== null || !selectedSubject}
-                                                className="flex-1 py-2 px-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transform active:scale-95 shadow-md"
-                                                style={{ minHeight: '44px' }}
-                                                aria-label="Save INT marks"
-                                            >
-                                                <i className="fa-solid fa-clipboard-check text-xs"></i>
-                                                <span className="text-xs">Save INT</span>
-                                            </button>
-                                            <button
-                                                onClick={handleSaveEXTMarks}
+                                                onClick={() => handleSaveEXTMarks()}
                                                 disabled={isSaving || operationLoading.type !== null || !selectedSubject}
                                                 className="flex-1 py-2 px-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transform active:scale-95 shadow-md"
                                                 style={{ minHeight: '44px' }}
@@ -2084,6 +2088,16 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                             >
                                                 <i className="fa-solid fa-clipboard-check text-xs"></i>
                                                 <span className="text-xs">Save EXT</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleSaveINTMarks()}
+                                                disabled={isSaving || operationLoading.type !== null || !selectedSubject}
+                                                className="flex-1 py-2 px-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transform active:scale-95 shadow-md"
+                                                style={{ minHeight: '44px' }}
+                                                aria-label="Save INT marks"
+                                            >
+                                                <i className="fa-solid fa-clipboard-check text-xs"></i>
+                                                <span className="text-xs">Save INT</span>
                                             </button>
                                             <button
                                                 onClick={handleClearINTMarks}
