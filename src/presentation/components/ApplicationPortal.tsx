@@ -159,7 +159,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                 <i className="fa-solid fa-circle-info text-emerald-600"></i>
                                 Instructions
                             </h3>
-                            <div className="space-y-6 text-sm leading-relaxed text-slate-600 arabic-text text-right" style={{ direction: 'rtl' }}>
+                            <div className="space-y-6 text-sm leading-relaxed text-slate-600">
                                 <p className="font-bold text-emerald-700 text-lg">2025-26 ODD സെമസ്റ്റർ പരീക്ഷാ ഫലം</p>
                                 <p>പരീക്ഷയിൽ പ്രതീക്ഷിച്ച മാർക്ക് ലഭിക്കാത്തവർക്ക് റീവാല്യൂഷൻ, മാർക്ക് കൂട്ടാൻ ഇംപ്രൂവ്മെന്റ്, വിജയം നേടാത്തവർക്ക് സപ്ലിമെന്ററി / സ്പെഷ്യൽ സപ്ലിമെന്ററി അവസരവും ഉണ്ടായിരിക്കും. ഈ സേവനങ്ങൾക്കായി താഴെ കാണുന്ന ഫോം പൂരിപ്പിക്കുക.</p>
                                 
@@ -247,17 +247,6 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
                                             >
                                                 {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Action Type</label>
-                                            <select 
-                                                value={appType} onChange={e => setAppType(e.target.value as ApplicationType)}
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
-                                            >
-                                                {(['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'] as ApplicationType[]).map(type => (
-                                                    <option key={type} value={type}>{type.replace('-', ' ').toUpperCase()}</option>
-                                                ))}
                                             </select>
                                         </div>
                                     </div>
