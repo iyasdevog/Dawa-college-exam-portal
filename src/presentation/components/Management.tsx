@@ -38,27 +38,9 @@ const Management: React.FC = () => {
       setStudents(studentsData);
       setSubjects(subjectsData);
 
-      // Load supplementary if we have students/subjects
-      if (studentsData.length > 0 && subjectsData.length > 0) {
-        const currentYear = new Date().getFullYear();
-        const allSupplementaryExams = [];
-
-        for (const subject of subjectsData) {
-          const subjectSupplementaryExams = await dataService.getSupplementaryExamsBySubject(subject.id, currentYear);
-          for (const suppExam of subjectSupplementaryExams) {
-            const studentDoc = studentsData.find(s => s.id === suppExam.studentId);
-            if (studentDoc) {
-              allSupplementaryExams.push({
-                ...suppExam,
-                studentName: studentDoc.name,
-                studentAdNo: studentDoc.adNo,
-                subjectName: subject.name
-              });
-            }
-          }
-        }
-        setSupplementaryExams(allSupplementaryExams);
-      }
+      // Load supplementary data
+      const allSupplementaryExams = await dataService.getAllSupplementaryExams();
+      setSupplementaryExams(allSupplementaryExams);
 
     } catch (error) {
       console.error('Error loading data:', error);

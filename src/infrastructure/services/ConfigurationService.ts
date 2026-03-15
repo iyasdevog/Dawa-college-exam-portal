@@ -22,6 +22,7 @@ export interface AppConfig {
         sessionTimeout: number;
         maxLoginAttempts: number;
         lockoutDuration: number;
+        dbUnlockPassword: string;
     };
 }
 
@@ -61,7 +62,8 @@ export class ConfigurationService {
                 security: {
                     sessionTimeout: this.getNumberEnvVar('VITE_SESSION_TIMEOUT', 3600000), // 1 hour
                     maxLoginAttempts: this.getNumberEnvVar('VITE_MAX_LOGIN_ATTEMPTS', 5),
-                    lockoutDuration: this.getNumberEnvVar('VITE_LOCKOUT_DURATION', 900000) // 15 minutes
+                    lockoutDuration: this.getNumberEnvVar('VITE_LOCKOUT_DURATION', 900000), // 15 minutes
+                    dbUnlockPassword: this.getEnvVar('VITE_DB_UNLOCK_PASSWORD', '1234')
                 }
             };
 
@@ -197,7 +199,8 @@ export class ConfigurationService {
             security: {
                 sessionTimeout: config.security.sessionTimeout,
                 maxLoginAttempts: config.security.maxLoginAttempts,
-                lockoutDuration: config.security.lockoutDuration
+                lockoutDuration: config.security.lockoutDuration,
+                dbUnlockPassword: '[REDACTED]'
             },
             firebase: {
                 authDomain: config.firebase.authDomain,

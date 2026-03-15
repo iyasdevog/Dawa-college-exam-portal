@@ -6,6 +6,7 @@ import { TermProvider } from './viewmodels/TermContext';
 import { ViewType, StudentRecord } from '../domain/entities/types';
 import { User } from '../domain/entities/User';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
+import { configurationService } from '../infrastructure/services/ConfigurationService';
 
 // Lazy load components for code splitting
 const Layout = lazy(() => import('./components/Layout'));
@@ -99,7 +100,8 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'admin' && password === '1234') {
+    const securityConfig = configurationService.getSecurityConfig();
+    if (username === 'admin' && password === securityConfig.dbUnlockPassword) {
       const adminUser = User.create({
         id: 'admin-001',
         username: 'admin',

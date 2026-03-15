@@ -36,7 +36,8 @@ export class AuthenticationService implements IAuthenticationService {
             }
 
             // For now, use hardcoded admin credentials (will be replaced with proper user management)
-            if (credentials.username === 'admin' && credentials.password === '1234') {
+            const securityConfig = configurationService.getSecurityConfig();
+            if (credentials.username === 'admin' && credentials.password === securityConfig.dbUnlockPassword) {
                 const user = User.create({
                     id: 'admin-001',
                     username: 'admin',

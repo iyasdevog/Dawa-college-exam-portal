@@ -385,16 +385,6 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     </div>
                 )}
             </main>
-
-            <footer className="bg-slate-900/50 backdrop-blur-md py-12 px-8 text-center border-t border-white/10 print:hidden">
-                <div className="flex items-center justify-center gap-3 mb-4 opacity-60">
-                    <i className="fa-solid fa-graduation-cap text-xl text-emerald-400"></i>
-                    <span className="text-white font-black tracking-widest text-sm">AIC EXAM PORTAL</span>
-                </div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em]">
-                    &copy; 2026 AIC Da'wa College | Secure Academic Excellence System
-                </p>
-            </footer>
         </div >
     );
 };
