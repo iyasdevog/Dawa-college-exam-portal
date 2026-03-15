@@ -14,10 +14,11 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const [studentName, setStudentName] = useState('');
     const [className, setClassName] = useState(CLASSES[0]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
-    const [selectedSubject, setSelectedSubject] = useState('');
+    const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
     const [appType, setAppType] = useState<ApplicationType>('revaluation');
     const [reason, setReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isAutoFilling, setIsAutoFilling] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [searchAdNo, setSearchAdNo] = useState('');
     const [myApplications, setMyApplications] = useState<StudentApplication[]>([]);
@@ -25,14 +26,39 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
 
     const { isMobile } = useMobile();
 
+    // Auto-fill student name when Ad No changes
+    useEffect(() => {
+        const autoFill = async () => {
+            if (adNo.length >= 3) { // Threshold for searching
+                setIsAutoFilling(true);
+                try {
+                    const student = await dataService.getStudentByAdNo(adNo);
+                    if (student) {
+                        setStudentName(student.name);
+                        if (CLASSES.includes(student.className || '')) {
+                            setClassName(student.className || CLASSES[0]);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Auto-fill error:', error);
+                } finally {
+                    setIsAutoFilling(false);
+                }
+            }
+        };
+        const timer = setTimeout(autoFill, 500); // Debounce
+        return () => clearTimeout(timer);
+    }, [adNo]);
+
+    // Load subjects based on selected class
     useEffect(() => {
         const loadSubjects = async () => {
-            const allSubjects = await dataService.getAllSubjects();
-            setSubjects(allSubjects);
-            if (allSubjects.length > 0) setSelectedSubject(allSubjects[0].id);
+            const classSubjects = await dataService.getSubjectsByClass(className);
+            setSubjects(classSubjects);
+            setSelectedSubjects([]); // Reset selection when class changes
         };
         loadSubjects();
-    }, []);
+    }, [className]);
 
     const fees: Record<ApplicationType, number> = {
         'revaluation': 100,
@@ -42,35 +68,55 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         'special-supp': 150
     };
 
+    const toggleSubject = (subjectId: string) => {
+        setSelectedSubjects(prev => 
+            prev.includes(subjectId) 
+                ? prev.filter(id => id !== subjectId) 
+                : [...prev, subjectId]
+        );
+    };
+
     const handleApply = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (selectedSubjects.length === 0) {
+            setMessage({ type: 'error', text: 'Please select at least one subject.' });
+            return;
+        }
+
         setIsSubmitting(true);
         setMessage(null);
 
         try {
-            const subject = subjects.find(s => s.id === selectedSubject);
             const settings = await dataService.getGlobalSettings();
-
-            await dataService.submitApplication({
-                adNo,
-                studentName,
-                className,
-                subjectId: selectedSubject,
-                subjectName: subject?.name || selectedSubject,
-                type: appType,
-                fee: fees[appType],
-                appliedYear: settings.currentAcademicYear,
-                appliedSemester: settings.currentSemester,
-                reason: appType === 'special-supp' ? reason : undefined
+            
+            // Submit individual applications for each subject
+            const promises = selectedSubjects.map(async (subjId) => {
+                const subject = subjects.find(s => s.id === subjId);
+                return dataService.submitApplication({
+                    adNo,
+                    studentName,
+                    className,
+                    subjectId: subjId,
+                    subjectName: subject?.name || subjId,
+                    type: appType,
+                    fee: fees[appType],
+                    appliedYear: settings.currentAcademicYear,
+                    appliedSemester: settings.currentSemester,
+                    reason: appType === 'special-supp' ? reason : undefined
+                });
             });
 
-            setMessage({ type: 'success', text: 'Application submitted successfully! It is currently pending verification.' });
+            await Promise.all(promises);
+
+            setMessage({ type: 'success', text: `Successfully submitted ${selectedSubjects.length} application(s)! They are currently pending verification.` });
+            
             // Reset form
             setAdNo('');
             setStudentName('');
+            setSelectedSubjects([]);
             setReason('');
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to submit application. Please try again.' });
+            setMessage({ type: 'error', text: 'Failed to submit one or more applications. Please try again.' });
         } finally {
             setIsSubmitting(false);
         }
@@ -108,35 +154,40 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                 <div className="flex-1 overflow-y-auto">
                     <div className="grid grid-cols-1 lg:grid-cols-12 h-full">
                         {/* Sidebar - Instructions (Visible on Desktop) */}
-                        <div className="lg:col-span-4 bg-slate-50 p-6 md:p-8 border-r border-slate-100">
+                        <div className="lg:col-span-4 bg-slate-50 p-6 md:p-8 border-r border-slate-100 overflow-y-auto">
                             <h3 className="font-black text-slate-800 mb-6 flex items-center gap-2">
                                 <i className="fa-solid fa-circle-info text-emerald-600"></i>
                                 Instructions
                             </h3>
                             <div className="space-y-6 text-sm leading-relaxed text-slate-600 arabic-text text-right" style={{ direction: 'rtl' }}>
-                                <p className="font-bold text-emerald-700">2025-26 ODD സെമസ്റ്റർ പരീക്ഷാ ഫലം</p>
-                                <p>പരീക്ഷയിൽ പ്രതീക്ഷിച്ച മാർക്ക് ലഭിക്കാത്തവർക്ക് റീവാല്യൂഷൻ, മാർക്ക് കൂട്ടാൻ ഇംപ്രൂവ്മെന്റ്, വിജയം നേടാത്തവർക്ക് സപ്ലിമെന്ററി / സ്പെഷ്യൽ സപ്ലിമെന്ററി അവസരവും ഉണ്ടായിരിക്കും.</p>
+                                <p className="font-bold text-emerald-700 text-lg">2025-26 ODD സെമസ്റ്റർ പരീക്ഷാ ഫലം</p>
+                                <p>പരീക്ഷയിൽ പ്രതീക്ഷിച്ച മാർക്ക് ലഭിക്കാത്തവർക്ക് റീവാല്യൂഷൻ, മാർക്ക് കൂട്ടാൻ ഇംപ്രൂവ്മെന്റ്, വിജയം നേടാത്തവർക്ക് സപ്ലിമെന്ററി / സ്പെഷ്യൽ സപ്ലിമെന്ററി അവസരവും ഉണ്ടായിരിക്കും. ഈ സേവനങ്ങൾക്കായി താഴെ കാണുന്ന ഫോം പൂരിപ്പിക്കുക.</p>
                                 
                                 <div className="space-y-4 pt-4">
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                                        <p className="font-black text-slate-800 mb-1">1. റീവാല്യൂഷൻ</p>
-                                        <p>ഫീസ്‍: ഒരു പേപ്പറിന് 100 രൂപ. (5 ൽ കൂടുതൽ മാർക്ക് ലഭിച്ചാൽ ഫീസ്‍ തിരികെ നൽകുന്നതാണ്). ലാസ്റ്റ് ഡേറ്റ്: മാർച്ച് 18, 10 AM.</p>
+                                    <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="font-black text-slate-800 mb-1 text-base">1. റീവാല്യൂഷൻ</p>
+                                        <p className="text-xs">ഫീസ്‍: ഒരു പേപ്പറിന് 100 രൂപ. (5 ൽ കൂടുതൽ മാർക്ക് ലഭിച്ചാൽ ഫീസ്‍ തിരികെ നൽകുന്നതാണ്).</p>
+                                        <p className="text-[10px] font-black text-red-500 mt-2 uppercase tracking-widest">അവസാന തീയതി: മാർച്ച് 18, 10 AM</p>
                                     </div>
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                                        <p className="font-black text-slate-800 mb-1">2. ഇംപ്രൂവ്മെന്റ്</p>
-                                        <p>ഒരു വിഷയത്തിന് 100 രൂപ. ലാസ്റ്റ് ഡേറ്റ്: മാർച്ച് 27, 10 PM.</p>
+                                    <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="font-black text-slate-800 mb-1 text-base">2. ഇംപ്രൂവ്മെന്റ്</p>
+                                        <p className="text-xs">ഒരു വിഷയത്തിന് 100 രൂപ.</p>
+                                        <p className="text-[10px] font-black text-red-500 mt-2 uppercase tracking-widest">അവസാന തീയതി: മാർച്ച് 27, 10 PM</p>
                                     </div>
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                                        <p className="font-black text-slate-800 mb-1">3. എക്സ്റ്റേണൽ സപ്ലിമെന്ററി</p>
-                                        <p>ഒരു വിഷയത്തിന് 300 രൂപ. ലാസ്റ്റ് ഡേറ്റ്: മാർച്ച് 27, 10 PM.</p>
+                                    <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="font-black text-slate-800 mb-1 text-base">3. എക്സ്റ്റേണൽ സപ്ലിമെന്ററി</p>
+                                        <p className="text-xs">ഒരു വിഷയത്തിന് 300 രൂപ.</p>
+                                        <p className="text-[10px] font-black text-red-500 mt-2 uppercase tracking-widest">അവസാന തീയതി: മാർച്ച് 27, 10 PM</p>
                                     </div>
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                                        <p className="font-black text-slate-800 mb-1">4. ഇൻ്റേണൽ സപ്ലിമെന്ററി</p>
-                                        <p>ഒരു വിഷയത്തിന് 50 രൂപ. ലാസ്റ്റ് ഡേറ്റ്: മാർച്ച് 27, 10 PM.</p>
+                                    <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="font-black text-slate-800 mb-1 text-base">4. ഇൻ്റേണൽ സപ്ലിമെന്ററി</p>
+                                        <p className="text-xs">ഒരു വിഷയത്തിന് 50 രൂപ.</p>
+                                        <p className="text-[10px] font-black text-red-500 mt-2 uppercase tracking-widest">അവസാന തീയതി: മാർച്ച് 27, 10 PM</p>
                                     </div>
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                                        <p className="font-black text-slate-800 mb-1">5. സ്പെഷ്യൽ സപ്ലിമെന്ററി</p>
-                                        <p>ഒരു വിഷയത്തിന് 150 രൂപ. ലാസ്റ്റ് ഡേറ്റ്: മാർച്ച് 27.</p>
+                                    <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="font-black text-slate-800 mb-1 text-base">5. സ്പെഷ്യൽ സപ്ലിമെന്ററി</p>
+                                        <p className="text-xs">ഒരു വിഷയത്തിന് 150 രൂപ. ഹാജരില്ലാത്തവർക്കും മറ്റും പ്രത്യേക അനുമതിയോട് കൂടി അപേക്ഷിക്കാം.</p>
+                                        <p className="text-[10px] font-black text-red-500 mt-2 uppercase tracking-widest">അവസാന തീയതി: മാർച്ച് 27</p>
                                     </div>
                                 </div>
                             </div>
@@ -171,7 +222,10 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                 <form onSubmit={handleApply} className="space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Admission Number</label>
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Admission Number</label>
+                                                {isAutoFilling && <div className="w-3 h-3 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>}
+                                            </div>
                                             <input 
                                                 type="text" required value={adNo} onChange={e => setAdNo(e.target.value)}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
@@ -182,7 +236,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                             <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Student Name</label>
                                             <input 
                                                 type="text" required value={studentName} onChange={e => setStudentName(e.target.value)}
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
+                                                className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all ${isAutoFilling ? 'bg-slate-50 opacity-70' : ''}`}
                                                 placeholder="Full Name"
                                             />
                                         </div>
@@ -196,13 +250,39 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                             </select>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Subject</label>
+                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Action Type</label>
                                             <select 
-                                                value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}
+                                                value={appType} onChange={e => setAppType(e.target.value as ApplicationType)}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
                                             >
-                                                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                {(['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'] as ApplicationType[]).map(type => (
+                                                    <option key={type} value={type}>{type.replace('-', ' ').toUpperCase()}</option>
+                                                ))}
                                             </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Select Subject(s)</label>
+                                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">{selectedSubjects.length} subjects selected</span>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-1">
+                                            {subjects.map(s => (
+                                                <button
+                                                    key={s.id} type="button"
+                                                    onClick={() => toggleSubject(s.id)}
+                                                    className={`px-4 py-3 rounded-xl border text-left flex items-center justify-between transition-all ${selectedSubjects.includes(s.id) ? 'bg-emerald-50 border-emerald-500 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-300'}`}
+                                                >
+                                                    <span className={`text-xs font-bold ${selectedSubjects.includes(s.id) ? 'text-emerald-900' : 'text-slate-600'}`}>{s.name}</span>
+                                                    {selectedSubjects.includes(s.id) && <i className="fa-solid fa-circle-check text-emerald-500"></i>}
+                                                </button>
+                                            ))}
+                                            {subjects.length === 0 && (
+                                                <div className="col-span-full py-6 text-center text-slate-400 font-bold text-xs italic bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                                                    No subjects found for class {className}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -233,12 +313,19 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                     )}
 
                                     <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex items-center justify-between mt-auto">
-                                        <div>
-                                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-1">Estimated Fee</p>
-                                            <p className="text-3xl font-black text-emerald-900">₹{fees[appType]}</p>
+                                        <div className="flex items-center gap-6">
+                                            <div>
+                                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-1">Fee Per Subject</p>
+                                                <p className="text-xl font-black text-emerald-900 line-through opacity-30">₹{fees[appType]}</p>
+                                            </div>
+                                            <div className="h-10 w-px bg-emerald-200"></div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-1">Total Fee ({selectedSubjects.length})</p>
+                                                <p className="text-3xl font-black text-emerald-900">₹{fees[appType] * selectedSubjects.length}</p>
+                                            </div>
                                         </div>
                                         <button 
-                                            type="submit" disabled={isSubmitting}
+                                            type="submit" disabled={isSubmitting || selectedSubjects.length === 0}
                                             className="px-8 py-4 bg-emerald-600 text-white rounded-xl font-black shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
                                         >
                                             {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <i className="fa-solid fa-paper-plane"></i>}
