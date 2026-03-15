@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ApplicationErrorBoundary, FeatureErrorBoundary } from './components/ErrorBoundary';
+import ApplicationManagement from './components/ApplicationManagement';
 import { MobileProvider } from './viewmodels/MobileContext';
 import { TermProvider } from './viewmodels/TermContext';
 import { ViewType, StudentRecord } from '../domain/entities/types';
@@ -180,8 +181,14 @@ const App: React.FC = () => {
             </Suspense>
           </FeatureErrorBoundary>
         );
-
-
+      case 'applications':
+        return (
+          <FeatureErrorBoundary featureName="Application Management" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <ApplicationManagement />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
       case 'management':
         if (currentUser?.role !== 'admin') {
           setActiveView('dashboard');

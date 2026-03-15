@@ -80,7 +80,7 @@ export interface SubjectConfig {
   enrolledStudents?: string[]; // Student IDs for elective subjects
 }
 
-export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'management' | 'public';
+export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public';
 
 export interface ReleaseSettings {
   isReleased: boolean;
@@ -90,3 +90,23 @@ export interface ReleaseSettings {
 }
 
 export type ClassReleaseSettings = Record<string, ReleaseSettings>;
+
+export type ApplicationType = 'revaluation' | 'improvement' | 'external-supp' | 'internal-supp' | 'special-supp';
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface StudentApplication {
+    id: string;
+    adNo: string;
+    studentName: string;
+    className: string;
+    subjectId: string;
+    subjectName: string;
+    type: ApplicationType;
+    fee: number;
+    status: ApplicationStatus;
+    createdAt: number;
+    appliedYear: string;
+    appliedSemester: 'Odd' | 'Even';
+    reason?: string;
+    adminComment?: string;
+}

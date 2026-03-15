@@ -15,7 +15,7 @@ import {
     Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord, StudentApplication, ApplicationType, ApplicationStatus } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 import { normalizeName } from './formatUtils';
@@ -69,6 +69,63 @@ export class DataService {
     private subjectsCollection = 'subjects';
     private supplementaryExamsCollection = 'supplementaryExams';
     private settingsCollection = 'settings';
+    private applicationsCollection = 'applications';
+
+    // Application related methods
+    async submitApplication(appData: Omit<StudentApplication, 'id' | 'status' | 'createdAt'>): Promise<string> {
+        try {
+            const db = this.db;
+            const newApp = {
+                ...appData,
+                status: 'pending' as ApplicationStatus,
+                createdAt: Date.now()
+            };
+            const docRef = await addDoc(collection(db, this.applicationsCollection), newApp);
+            return docRef.id;
+        } catch (error) {
+            console.error('Error submitting application:', error);
+            throw error;
+        }
+    }
+
+    async getApplicationsByAdNo(adNo: string): Promise<StudentApplication[]> {
+        try {
+            const db = this.db;
+            const q = query(collection(db, this.applicationsCollection), where('adNo', '==', adNo), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentApplication));
+        } catch (error) {
+            console.error('Error fetching applications by AdNo:', error);
+            // Fallback: if index is missing or error, return all and filter client-side
+            const querySnapshot = await getDocs(collection(this.db, this.applicationsCollection));
+            return querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as StudentApplication))
+                .filter(app => app.adNo === adNo)
+                .sort((a, b) => b.createdAt - a.createdAt);
+        }
+    }
+
+    async getAllApplications(): Promise<StudentApplication[]> {
+        try {
+            const db = this.db;
+            const querySnapshot = await getDocs(collection(db, this.applicationsCollection));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentApplication));
+        } catch (error) {
+            console.error('Error fetching all applications:', error);
+            return [];
+        }
+    }
+
+    async updateApplicationStatus(id: string, status: ApplicationStatus, adminComment?: string): Promise<void> {
+        try {
+            const db = this.db;
+            const appRef = doc(db, this.applicationsCollection, id);
+            await updateDoc(appRef, { status, adminComment });
+        } catch (error) {
+            console.error('Error updating application status:', error);
+            throw error;
+        }
+    }
 
     // Cache for performance optimization
     private studentsCache: StudentRecord[] | null = null;

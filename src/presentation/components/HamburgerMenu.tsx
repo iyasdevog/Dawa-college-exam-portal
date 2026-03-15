@@ -41,7 +41,10 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         { id: 'entry', icon: 'fa-edit', label: 'Marks Entry', description: 'Enter and manage student marks' },
         { id: 'class-report', icon: 'fa-table', label: 'Class Report', description: 'Generate class performance reports' },
         { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards', description: 'View individual student scorecards' },
-        ...(currentUser?.role === 'admin' ? [{ id: 'management', icon: 'fa-sliders', label: 'Management', description: 'System administration and settings' } as NavigationItem] : []),
+        ...(currentUser?.role === 'admin' ? [
+            { id: 'applications', icon: 'fa-file-signature', label: 'Applications', description: 'Process student revaluation and supplementary requests' } as NavigationItem,
+            { id: 'management', icon: 'fa-sliders', label: 'Management', description: 'System administration and settings' } as NavigationItem
+        ] : []),
     ];
 
     // Handle navigation item click

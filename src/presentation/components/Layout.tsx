@@ -23,7 +23,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
-    ...(currentUser?.role === 'admin' ? [{ id: 'management', icon: 'fa-sliders', label: 'Management' }] : []),
+    ...(currentUser?.role === 'admin' ? [
+      { id: 'applications', icon: 'fa-file-signature', label: 'Applications' },
+      { id: 'management', icon: 'fa-sliders', label: 'Management' }
+    ] : []),
   ];
 
   const getViewTitle = (view: ViewType): string => {
@@ -32,6 +35,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
       'entry': 'Marks Entry',
       'class-report': 'Class Report',
       'student-card': 'Score Cards',
+      'applications': 'Applications',
       'management': 'Management',
       'public': 'Public Portal'
     };

@@ -437,6 +437,118 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 </div>
             </div>
 
+            {/* Fail Analysis Section - Admin/Internal View Only */}
+            {(!hideSelector || currentUser?.role === 'admin') && (
+                <div className="bg-white rounded-2xl p-6 md:p-10 shadow-sm border border-slate-200 mt-8 print:break-inside-avoid">
+                    <div className="flex items-center gap-3 mb-8">
+                        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                            <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-900">Failure Analysis</h2>
+                            <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">Academic Intervention Report</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Students with Failures */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i className="fa-solid fa-users-slash text-slate-400"></i>
+                                Students with Failures
+                            </h3>
+                            <div className="space-y-3">
+                                {students
+                                    .filter(s => {
+                                        const marks = (s as any).displayMarks || {};
+                                        return Object.values(marks).some((m: any) => m.status === 'Failed');
+                                    })
+                                    .map(student => {
+                                        const failedSubjects = Object.entries((student as any).displayMarks)
+                                            .filter(([_, m]: [string, any]) => m.status === 'Failed')
+                                            .map(([subjId, _]) => classSubjects.find(cs => cs.id === subjId)?.name || subjId);
+
+                                        const hasManyFailures = failedSubjects.length > 3;
+
+                                        return (
+                                            <div
+                                                key={student.id}
+                                                className={`p-4 rounded-xl border transition-all ${hasManyFailures
+                                                    ? 'bg-red-50 border-red-200 shadow-sm'
+                                                    : 'bg-slate-50 border-slate-100 hover:border-slate-200'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className={`font-black ${hasManyFailures ? 'text-red-700' : 'text-slate-900'}`}>{student.name}</span>
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${hasManyFailures ? 'bg-red-200 text-red-800' : 'bg-slate-200 text-slate-600'}`}>
+                                                        {failedSubjects.length} {failedSubjects.length === 1 ? 'Subject' : 'Subjects'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {failedSubjects.map((name, i) => (
+                                                        <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded ${hasManyFailures ? 'bg-white/60 text-red-600' : 'bg-white text-slate-500'}`}>
+                                                            {name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                {hasManyFailures && (
+                                                    <p className="mt-2 text-[10px] font-black text-red-500 uppercase flex items-center gap-1">
+                                                        <i className="fa-solid fa-circle-exclamation"></i> Critical: Requires Immediate Support
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                {students.every(s => !Object.values((s as any).displayMarks || {}).some((m: any) => m.status === 'Failed')) && (
+                                    <div className="p-6 text-center bg-emerald-50 rounded-2xl border border-emerald-100">
+                                        <i className="fa-solid fa-circle-check text-emerald-500 text-2xl mb-2"></i>
+                                        <p className="text-emerald-700 font-bold">Excellent! No failures detected in this class.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Subject Analysis */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i className="fa-solid fa-book-open-reader text-slate-400"></i>
+                                High-Failure Subjects
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {classSubjects.map(subject => {
+                                    const failureCount = students.filter(s => {
+                                        const mark = (s as any).displayMarks[subject.id];
+                                        return mark && mark.status === 'Failed';
+                                    }).length;
+
+                                    if (failureCount === 0) return null;
+
+                                    const isCritical = failureCount > 3;
+
+                                    return (
+                                        <div
+                                            key={subject.id}
+                                            className={`p-4 rounded-xl border flex flex-col justify-between ${isCritical
+                                                ? 'bg-amber-50 border-amber-200 shadow-sm'
+                                                : 'bg-slate-50 border-slate-100'
+                                                }`}
+                                        >
+                                            <div className="mb-2">
+                                                <p className={`text-xs font-black uppercase tracking-wider ${isCritical ? 'text-amber-700' : 'text-slate-500'}`}>{subject.name}</p>
+                                                <p className={`text-2xl font-black ${isCritical ? 'text-amber-600' : 'text-slate-900'}`}>{failureCount}</p>
+                                            </div>
+                                            <p className={`text-[10px] font-bold ${isCritical ? 'text-amber-600' : 'text-slate-400'}`}>
+                                                {isCritical ? 'CRITICAL: High failure rate' : 'Needs observation'}
+                                            </p>
+                                        </div>
+                                    );
+                                }).filter(Boolean)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Enhanced Print Footer - Visible only on Print */}
             <div className="hidden print:block print:mt-6 print:pt-4 border-t-2 border-black print:break-inside-avoid print:keep-with-previous print:keep-together">
                 <div className="grid grid-cols-3 gap-4 print:text-xs text-black print:leading-tight">
