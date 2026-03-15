@@ -342,7 +342,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                             ) : (
                                 /* Table View */
                                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:overflow-visible print:shadow-none print:border-none print:a4-content px-1">
-                                    <div className="overflow-y-auto print:overflow-visible" style={{ maxHeight: '75vh' }}>
+                                    <div className="print:overflow-visible">
                                         <table className="w-full border-separate border-spacing-0 print:table-compact" role="table" aria-label="Class results table" style={{ minWidth: '700px' }}>
                                             <thead className="sticky top-0 z-[110] print:static bg-slate-100">
                                                 <tr className="bg-slate-100 print:bg-slate-100 print:break-inside-avoid" role="row">
