@@ -459,16 +459,16 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                             </h3>
                             <div className="space-y-3">
                                 {students
-                                    .filter(s => {
-                                        const marks = (s as any).displayMarks || {};
-                                        return Object.values(marks).some((m: any) => m.status === 'Failed');
-                                    })
                                     .map(student => {
-                                        const failedSubjects = Object.entries((student as any).displayMarks)
+                                        const failedSubjects = Object.entries((student as any).displayMarks || {})
                                             .filter(([_, m]: [string, any]) => m.status === 'Failed')
                                             .map(([subjId, _]) => classSubjects.find(cs => cs.id === subjId)?.name || subjId);
-
-                                        const hasManyFailures = failedSubjects.length > 3;
+                                        return { ...student, failedSubjects, failureCount: failedSubjects.length };
+                                    })
+                                    .filter(s => s.failureCount > 0)
+                                    .sort((a, b) => b.failureCount - a.failureCount)
+                                    .map(student => {
+                                        const hasManyFailures = student.failureCount > 3;
 
                                         return (
                                             <div
@@ -481,11 +481,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                 <div className="flex items-center justify-between mb-2">
                                                     <span className={`font-black ${hasManyFailures ? 'text-red-700' : 'text-slate-900'}`}>{student.name}</span>
                                                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${hasManyFailures ? 'bg-red-200 text-red-800' : 'bg-slate-200 text-slate-600'}`}>
-                                                        {failedSubjects.length} {failedSubjects.length === 1 ? 'Subject' : 'Subjects'}
+                                                        {student.failureCount} {student.failureCount === 1 ? 'Subject' : 'Subjects'}
                                                     </span>
                                                 </div>
                                                 <div className="flex flex-wrap gap-1.5">
-                                                    {failedSubjects.map((name, i) => (
+                                                    {student.failedSubjects.map((name, i) => (
                                                         <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded ${hasManyFailures ? 'bg-white/60 text-red-600' : 'bg-white text-slate-500'}`}>
                                                             {name}
                                                         </span>
@@ -515,34 +515,37 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                 High-Failure Subjects
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {classSubjects.map(subject => {
-                                    const failureCount = students.filter(s => {
-                                        const mark = (s as any).displayMarks[subject.id];
-                                        return mark && mark.status === 'Failed';
-                                    }).length;
+                                {classSubjects
+                                    .map(subject => {
+                                        const failureCount = students.filter(s => {
+                                            const mark = (s as any).displayMarks[subject.id];
+                                            return mark && mark.status === 'Failed';
+                                        }).length;
+                                        return { ...subject, failureCount };
+                                    })
+                                    .filter(s => s.failureCount > 0)
+                                    .sort((a, b) => b.failureCount - a.failureCount)
+                                    .map(subject => {
+                                        const isCritical = subject.failureCount > 3;
 
-                                    if (failureCount === 0) return null;
-
-                                    const isCritical = failureCount > 3;
-
-                                    return (
-                                        <div
-                                            key={subject.id}
-                                            className={`p-4 rounded-xl border flex flex-col justify-between ${isCritical
-                                                ? 'bg-amber-50 border-amber-200 shadow-sm'
-                                                : 'bg-slate-50 border-slate-100'
-                                                }`}
-                                        >
-                                            <div className="mb-2">
-                                                <p className={`text-xs font-black uppercase tracking-wider ${isCritical ? 'text-amber-700' : 'text-slate-500'}`}>{subject.name}</p>
-                                                <p className={`text-2xl font-black ${isCritical ? 'text-amber-600' : 'text-slate-900'}`}>{failureCount}</p>
+                                        return (
+                                            <div
+                                                key={subject.id}
+                                                className={`p-4 rounded-xl border flex flex-col justify-between ${isCritical
+                                                    ? 'bg-amber-50 border-amber-200 shadow-sm'
+                                                    : 'bg-slate-50 border-slate-100'
+                                                    }`}
+                                            >
+                                                <div className="mb-2">
+                                                    <p className={`text-xs font-black uppercase tracking-wider ${isCritical ? 'text-amber-700' : 'text-slate-500'}`}>{subject.name}</p>
+                                                    <p className={`text-2xl font-black ${isCritical ? 'text-amber-600' : 'text-slate-900'}`}>{subject.failureCount}</p>
+                                                </div>
+                                                <p className={`text-[10px] font-bold ${isCritical ? 'text-amber-600' : 'text-slate-400'}`}>
+                                                    {isCritical ? 'CRITICAL: High failure rate' : 'Needs observation'}
+                                                </p>
                                             </div>
-                                            <p className={`text-[10px] font-bold ${isCritical ? 'text-amber-600' : 'text-slate-400'}`}>
-                                                {isCritical ? 'CRITICAL: High failure rate' : 'Needs observation'}
-                                            </p>
-                                        </div>
-                                    );
-                                }).filter(Boolean)}
+                                        );
+                                    })}
                             </div>
                         </div>
                     </div>
