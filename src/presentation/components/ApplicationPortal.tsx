@@ -17,6 +17,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
     const [appType, setAppType] = useState<ApplicationType>('revaluation');
     const [reason, setReason] = useState('');
+    const [specialReason, setSpecialReason] = useState<'medical' | 'other'>('medical');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isAutoFilling, setIsAutoFilling] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -102,7 +103,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                     fee: fees[appType],
                     appliedYear: settings.currentAcademicYear,
                     appliedSemester: settings.currentSemester,
-                    reason: appType === 'special-supp' ? reason : undefined
+                    reason: appType === 'special-supp' ? `[${specialReason.toUpperCase()}] ${reason}` : undefined
                 });
             });
 
@@ -115,6 +116,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
             setStudentName('');
             setSelectedSubjects([]);
             setReason('');
+            setSpecialReason('medical');
         } catch (error) {
             setMessage({ type: 'error', text: 'Failed to submit one or more applications. Please try again.' });
         } finally {
@@ -291,15 +293,65 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                     </div>
 
                                     {appType === 'special-supp' && (
-                                        <div className="space-y-2 animate-in fade-in slide-in-from-left-4 duration-300">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Reason for Absence</label>
-                                            <textarea 
-                                                required value={reason} onChange={e => setReason(e.target.value)}
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all h-24"
-                                                placeholder="Explain the reason (e.g., medical reasons)..."
-                                            />
+                                        <div className="space-y-4 animate-in fade-in slide-in-from-left-4 duration-300">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Reason Type</label>
+                                                <div className="flex gap-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSpecialReason('medical')}
+                                                        className={`flex-1 px-4 py-3 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 ${specialReason === 'medical' ? 'bg-red-50 text-red-700 border-red-400 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-red-300'}`}
+                                                    >
+                                                        <i className="fa-solid fa-briefcase-medical"></i>
+                                                        Medical
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSpecialReason('other')}
+                                                        className={`flex-1 px-4 py-3 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 ${specialReason === 'other' ? 'bg-amber-50 text-amber-700 border-amber-400 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300'}`}
+                                                    >
+                                                        <i className="fa-solid fa-circle-info"></i>
+                                                        Other
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {specialReason === 'medical' && (
+                                                <div className="p-4 bg-red-50 border border-red-200 rounded-xl animate-in fade-in duration-200">
+                                                    <p className="text-xs font-black text-red-700 flex items-start gap-2">
+                                                        <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                                                        <span>NB: Please share your medical document with your <strong>Mentor</strong>, <strong>Class Teacher</strong>, and <strong>Vice Principal</strong> for exam approval.</span>
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {specialReason === 'other' && (
+                                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl animate-in fade-in duration-200">
+                                                    <p className="text-xs font-black text-amber-700 flex items-start gap-2">
+                                                        <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                                                        <span>NB: Please write your reason on a white paper and share it with your <strong>Mentor</strong>, <strong>Class Teacher</strong>, and <strong>Vice Principal</strong> for exam approval.</span>
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Reason for Absence</label>
+                                                <textarea 
+                                                    required value={reason} onChange={e => setReason(e.target.value)}
+                                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all h-24"
+                                                    placeholder={specialReason === 'medical' ? 'Describe your medical reason...' : 'Explain the reason for absence...'}
+                                                />
+                                            </div>
                                         </div>
                                     )}
+
+                                    {/* Common Notification */}
+                                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+                                        <i className="fa-solid fa-bell text-blue-600 mt-0.5"></i>
+                                        <p className="text-xs font-bold text-blue-800">
+                                            Please share your payment screenshot to the number <strong className="text-blue-900 font-black">7559989590</strong>
+                                        </p>
+                                    </div>
 
                                     <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex items-center justify-between mt-auto">
                                         <div className="flex items-center gap-6">
