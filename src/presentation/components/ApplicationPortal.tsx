@@ -375,7 +375,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                         </p>
                                     </div>
 
-                                    <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex items-center justify-between mt-auto">
+                                    <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex flex-col md:flex-row items-center justify-between gap-4 mt-auto">
                                         <div className="flex items-center gap-6">
                                             <div>
                                                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-1">Fee Per Subject</p>
@@ -389,7 +389,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                         </div>
                                         <button 
                                             type="submit" disabled={isSubmitting || selectedSubjects.length === 0}
-                                            className="px-8 py-4 bg-emerald-600 text-white rounded-xl font-black shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                                            className="w-full md:w-auto px-8 py-4 bg-emerald-600 text-white rounded-xl font-black shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                                         >
                                             {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <i className="fa-solid fa-paper-plane"></i>}
                                             {isSubmitting ? 'Submitting...' : 'Submit Now'}
