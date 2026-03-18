@@ -137,6 +137,28 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         }
     };
 
+    const handleReapply = (app: StudentApplication) => {
+        // Pre-fill the form with the rejected application's data
+        setAdNo(app.adNo);
+        setStudentName(app.studentName);
+        setClassName(app.className);
+        setAppType(app.type);
+        setSelectedSubjects([app.subjectId]);
+        if (app.reason) {
+            // Extract the reason text, removing any [MEDICAL]/[OTHER] prefix
+            const cleanReason = app.reason.replace(/^\[(MEDICAL|OTHER)\]\s*/, '');
+            setReason(cleanReason);
+            // Set specialReason based on prefix
+            if (app.reason.startsWith('[MEDICAL]')) {
+                setSpecialReason('medical');
+            } else if (app.reason.startsWith('[OTHER]')) {
+                setSpecialReason('other');
+            }
+        }
+        setMessage({ type: 'success', text: `Reapplying for ${app.subjectName} — please modify your application and submit.` });
+        setView('apply');
+    };
+
     return (
         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 md:p-8">
             <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={onClose} />
@@ -396,23 +418,38 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
 
                                     <div className="space-y-4 flex-1">
                                         {myApplications.map(app => (
-                                            <div key={app.id} className="p-5 rounded-2xl border border-slate-100 bg-white shadow-sm flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{app.type.replace('-', ' ')}</span>
-                                                        <span className="text-slate-300">•</span>
-                                                        <span className="text-xs font-bold text-slate-500">{app.subjectName}</span>
+                                            <div key={app.id} className="p-5 rounded-2xl border border-slate-100 bg-white shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{app.type.replace('-', ' ')}</span>
+                                                            <span className="text-slate-300">•</span>
+                                                            <span className="text-xs font-bold text-slate-500">{app.subjectName}</span>
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-400 font-bold">Applied on {new Date(app.createdAt).toLocaleDateString()}</p>
+                                                        {app.adminComment && <p className="text-xs text-amber-600 font-bold mt-2 bg-amber-50 p-2 rounded-lg">Admin: {app.adminComment}</p>}
                                                     </div>
-                                                    <p className="text-[10px] text-slate-400 font-bold">Applied on {new Date(app.createdAt).toLocaleDateString()}</p>
-                                                    {app.adminComment && <p className="text-xs text-amber-600 font-bold mt-2 bg-amber-50 p-2 rounded-lg">Admin: {app.adminComment}</p>}
+                                                    <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                                        app.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                                        app.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                                                        'bg-red-100 text-red-700'
+                                                    }`}>
+                                                        {app.status}
+                                                    </div>
                                                 </div>
-                                                <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                                    app.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                                                    app.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                                                    'bg-red-100 text-red-700'
-                                                }`}>
-                                                    {app.status}
-                                                </div>
+                                                {app.status === 'rejected' && (
+                                                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                                        <p className="text-[10px] text-slate-400 font-bold italic">You can reapply with modifications</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleReapply(app)}
+                                                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-black hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-sm"
+                                                        >
+                                                            <i className="fa-solid fa-rotate-right"></i>
+                                                            Reapply
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                         {myApplications.length === 0 && !isSearching && searchAdNo && (
