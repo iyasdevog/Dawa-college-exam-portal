@@ -75,11 +75,11 @@ export class DataService {
     async submitApplication(appData: Omit<StudentApplication, 'id' | 'status' | 'createdAt'>): Promise<string> {
         try {
             const db = this.db;
-            const newApp = {
+            const newApp = this.sanitize({
                 ...appData,
                 status: 'pending' as ApplicationStatus,
                 createdAt: Date.now()
-            };
+            });
             const docRef = await addDoc(collection(db, this.applicationsCollection), newApp);
             return docRef.id;
         } catch (error) {
@@ -120,7 +120,8 @@ export class DataService {
         try {
             const db = this.db;
             const appRef = doc(db, this.applicationsCollection, id);
-            await updateDoc(appRef, { status, adminComment });
+            const updates = this.sanitize({ status, adminComment });
+            await updateDoc(appRef, updates);
         } catch (error) {
             console.error('Error updating application status:', error);
             throw error;

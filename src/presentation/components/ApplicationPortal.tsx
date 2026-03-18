@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
@@ -24,8 +24,14 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const [searchAdNo, setSearchAdNo] = useState('');
     const [myApplications, setMyApplications] = useState<StudentApplication[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [foundStudent, setFoundStudent] = useState<StudentRecord | null>(null);
 
     const { isMobile } = useMobile();
+    
+    // Reset selection when application type changes
+    useEffect(() => {
+        setSelectedSubjects([]);
+    }, [appType]);
 
     // Auto-fill student name when Ad No changes
     useEffect(() => {
@@ -35,10 +41,13 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                 try {
                     const student = await dataService.getStudentByAdNo(adNo);
                     if (student) {
+                        setFoundStudent(student);
                         setStudentName(student.name);
                         if (CLASSES.includes(student.className || '')) {
                             setClassName(student.className || CLASSES[0]);
                         }
+                    } else {
+                        setFoundStudent(null);
                     }
                 } catch (error) {
                     console.error('Auto-fill error:', error);
@@ -68,6 +77,28 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         'internal-supp': 50,
         'special-supp': 150
     };
+
+    const typeDetails: Record<ApplicationType, { label: string, desc: string, icon: string }> = {
+        'revaluation': { label: 'Revaluation', desc: 'Post-result counting', icon: 'fa-magnifying-glass' },
+        'improvement': { label: 'Improvement', desc: 'Higher grade attempt', icon: 'fa-arrow-up-right-dots' },
+        'external-supp': { label: 'External Supp.', desc: 'Regular Re-exam', icon: 'fa-file-signature' },
+        'internal-supp': { label: 'Internal Supp.', desc: 'Internal Re-exam', icon: 'fa-building-columns' },
+        'special-supp': { label: 'Special Supp.', desc: 'Special Approval', icon: 'fa-star' }
+    };
+
+    const filteredDisplaySubjects = useMemo(() => {
+        if (!foundStudent || !foundStudent.marks) return subjects;
+        
+        return subjects.filter(subj => {
+            const mark = foundStudent.marks?.[subj.id];
+            
+            if (appType === 'revaluation' || appType === 'improvement') {
+                return mark?.status === 'Passed';
+            }
+            // For all supplementary types
+            return !mark || mark.status === 'Failed' || mark.status === 'Pending';
+        });
+    }, [subjects, foundStudent, appType]);
 
     const toggleSubject = (subjectId: string) => {
         setSelectedSubjects(prev => 
@@ -278,37 +309,60 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
                                             <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Select Subject(s)</label>
-                                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">{selectedSubjects.length} subjects selected</span>
+                                            <div className="flex items-center gap-2">
+                                                {foundStudent && (
+                                                    <span className="text-[10px] font-black text-slate-400 italic">
+                                                        Showing {appType === 'revaluation' || appType === 'improvement' ? 'Passed' : 'Failed/Pending'} subjects
+                                                    </span>
+                                                )}
+                                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">{selectedSubjects.length} selected</span>
+                                            </div>
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-1">
-                                            {subjects.map(s => (
+                                            {filteredDisplaySubjects.map(s => (
                                                 <button
                                                     key={s.id} type="button"
                                                     onClick={() => toggleSubject(s.id)}
                                                     className={`px-4 py-3 rounded-xl border text-left flex items-center justify-between transition-all ${selectedSubjects.includes(s.id) ? 'bg-emerald-50 border-emerald-500 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-300'}`}
                                                 >
-                                                    <span className={`text-xs font-bold ${selectedSubjects.includes(s.id) ? 'text-emerald-900' : 'text-slate-600'}`}>{s.name}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className={`text-xs font-bold ${selectedSubjects.includes(s.id) ? 'text-emerald-900' : 'text-slate-600'}`}>{s.name}</span>
+                                                        {foundStudent?.marks?.[s.id] && (
+                                                            <span className="text-[9px] opacity-70 font-bold">Mark: {foundStudent.marks[s.id].total} ({foundStudent.marks[s.id].status})</span>
+                                                        )}
+                                                    </div>
                                                     {selectedSubjects.includes(s.id) && <i className="fa-solid fa-circle-check text-emerald-500"></i>}
                                                 </button>
                                             ))}
-                                            {subjects.length === 0 && (
+                                            {filteredDisplaySubjects.length === 0 && (
                                                 <div className="col-span-full py-6 text-center text-slate-400 font-bold text-xs italic bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                                                    No subjects found for class {className}
+                                                    {foundStudent 
+                                                        ? `No eligible subjects for ${appType} found`
+                                                        : `Please search for a student first`}
                                                 </div>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Action Type</label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             {(['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'] as ApplicationType[]).map(type => (
                                                 <button
                                                     key={type} type="button"
                                                     onClick={() => setAppType(type)}
-                                                    className={`px-4 py-3 rounded-xl border font-bold text-xs capitalize transition-all ${appType === type ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}
+                                                    className={`px-4 py-3 rounded-2xl border flex items-center gap-4 transition-all ${appType === type ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-200' : 'bg-white text-slate-600 border-slate-100 hover:border-emerald-300 shadow-sm'}`}
                                                 >
-                                                    {type.replace('-', ' ')}
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${appType === type ? 'bg-white/20' : 'bg-slate-50 text-slate-400'}`}>
+                                                        <i className={`fa-solid ${typeDetails[type].icon}`}></i>
+                                                    </div>
+                                                    <div className="text-left flex-1">
+                                                        <p className="font-black text-sm">{typeDetails[type].label}</p>
+                                                        <p className={`text-[10px] font-bold ${appType === type ? 'text-emerald-100' : 'text-slate-400'}`}>{typeDetails[type].desc}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-xs font-black">₹{fees[type]}</p>
+                                                    </div>
                                                 </button>
                                             ))}
                                         </div>
