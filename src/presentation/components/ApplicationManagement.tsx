@@ -27,8 +27,34 @@ const ApplicationManagement: React.FC = () => {
     };
 
     const handleUpdateStatus = async (appId: string, status: ApplicationStatus) => {
-        const comment = window.prompt(`Enter comment for ${status}:`);
-        if (comment === null) return;
+        let comment = '';
+        
+        if (status === 'approved') {
+            const usePreset = window.confirm('Use default approval message? (OK for "Qualified for examination", Cancel to type custom)');
+            if (usePreset) {
+                comment = 'Qualified for examination.';
+            } else {
+                const custom = window.prompt(`Enter custom comment for approval:`);
+                if (custom === null) return; // cancelled
+                comment = custom;
+            }
+        } else if (status === 'rejected') {
+            const reason = window.prompt(
+                'Enter rejection reason or choose an option:\n' +
+                '1: Submit relevant documents\n' +
+                '2: Complete payment to 7559989590\n' +
+                'Leave blank or type custom reason:'
+            );
+            if (reason === null) return; // cancelled
+            
+            if (reason === '1') {
+                comment = 'Please submit the relevant documents to proceed.';
+            } else if (reason === '2') {
+                comment = 'Please complete the fee payment to 7559989590 to proceed.';
+            } else {
+                comment = reason || 'Your application was rejected. Please contact the office.';
+            }
+        }
 
         try {
             await dataService.updateApplicationStatus(appId, status, comment);
