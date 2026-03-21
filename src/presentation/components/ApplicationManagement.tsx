@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { StudentApplication, ApplicationStatus } from '../../domain/entities/types';
+import { CLASSES } from '../../domain/entities/constants';
 
 const ApplicationManagement: React.FC = () => {
     const [applications, setApplications] = useState<StudentApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState<ApplicationStatus | 'all'>('all');
+    const [filterClass, setFilterClass] = useState<string>('all');
     const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
     useEffect(() => {
@@ -39,8 +41,22 @@ const ApplicationManagement: React.FC = () => {
         }
     };
 
+    const handleDelete = async (appId: string) => {
+        if (!window.confirm('Are you sure you want to delete this application? This action cannot be undone.')) return;
+        try {
+            await dataService.deleteApplication(appId);
+            setUpdateMessage(`Application deleted successfully.`);
+            loadApplications();
+            setTimeout(() => setUpdateMessage(null), 3000);
+        } catch (error) {
+            console.error('Error deleting application:', error);
+            alert('Failed to delete application.');
+        }
+    };
+
     const filteredApps = applications.filter(app => 
-        filterStatus === 'all' ? true : app.status === filterStatus
+        (filterStatus === 'all' ? true : app.status === filterStatus) &&
+        (filterClass === 'all' ? true : app.className === filterClass)
     );
 
     return (
@@ -51,7 +67,18 @@ const ApplicationManagement: React.FC = () => {
                     <p className="text-slate-500 font-bold mt-1">Review and process student service requests</p>
                 </div>
 
-                <div className="flex bg-slate-100 p-1 rounded-2xl">
+                <div className="flex bg-slate-100 p-1 rounded-2xl items-center flex-wrap gap-1">
+                    <select
+                        value={filterClass}
+                        onChange={(e) => setFilterClass(e.target.value)}
+                        className="px-4 py-2 rounded-xl text-xs font-black bg-white text-slate-700 shadow-sm border-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                    >
+                        <option value="all">All Classes</option>
+                        {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+
+                    <div className="w-px h-6 bg-slate-200 mx-1"></div>
+
                     {(['all', 'pending', 'approved', 'rejected'] as const).map(status => (
                         <button
                             key={status}
@@ -150,6 +177,13 @@ const ApplicationManagement: React.FC = () => {
                                             </button>
                                         </div>
                                     )}
+                                    <button 
+                                        onClick={() => handleDelete(app.id!)}
+                                        className="mt-3 w-full px-6 py-2 bg-white text-slate-400 rounded-xl font-black text-xs hover:bg-red-50 hover:text-red-600 transition-all border border-slate-100 hover:border-red-100 flex items-center justify-center gap-2"
+                                    >
+                                        <i className="fa-solid fa-trash-can"></i>
+                                        Delete
+                                    </button>
                                 </div>
                             </div>
                         </div>

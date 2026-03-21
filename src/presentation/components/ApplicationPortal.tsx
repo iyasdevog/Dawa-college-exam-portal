@@ -121,6 +121,26 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         try {
             const settings = await dataService.getGlobalSettings();
             
+            // Check for existing/duplicate applications
+            const existingApps = await dataService.getApplicationsByAdNo(adNo);
+            const duplicates = existingApps.filter(app => 
+                app.appliedYear === settings.currentAcademicYear &&
+                app.appliedSemester === settings.currentSemester &&
+                app.type === appType &&
+                (app.status === 'pending' || app.status === 'approved') &&
+                selectedSubjects.includes(app.subjectId)
+            );
+
+            if (duplicates.length > 0) {
+                const duplicateSubjectNames = duplicates.map(d => d.subjectName).join(', ');
+                setMessage({ 
+                    type: 'error', 
+                    text: `Duplicate application detected! You already have an active application for ${appType.replace('-', ' ')} in: ${duplicateSubjectNames}.` 
+                });
+                setIsSubmitting(false);
+                return;
+            }
+            
             // Submit individual applications for each subject
             const promises = selectedSubjects.map(async (subjId) => {
                 const subject = subjects.find(s => s.id === subjId);

@@ -128,6 +128,17 @@ export class DataService {
         }
     }
 
+    async deleteApplication(id: string): Promise<void> {
+        try {
+            const db = this.db;
+            const appRef = doc(db, this.applicationsCollection, id);
+            await deleteDoc(appRef);
+        } catch (error) {
+            console.error('Error deleting application:', error);
+            throw error;
+        }
+    }
+
     // Cache for performance optimization
     private studentsCache: StudentRecord[] | null = null;
     private subjectsCache: SubjectConfig[] | null = null;
