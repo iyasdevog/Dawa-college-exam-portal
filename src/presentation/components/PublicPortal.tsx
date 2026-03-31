@@ -4,7 +4,6 @@ import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import StudentAttendancePortal from './StudentAttendancePortal';
-import PublicAttendance from './PublicAttendance';
 import HallTicketView from './HallTicketView';
 import { mobileStorage, preventIOSZoom } from '../../infrastructure/services/mobileUtils';
 import ClassResults from './ClassResults';
@@ -35,6 +34,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     // Hall Ticket States
     const [htAdNo, setHtAdNo] = useState('');
     const [htClass, setHtClass] = useState(CLASSES[0]);
+    const [htSemester, setHtSemester] = useState<'Odd' | 'Even'>('Odd');
     const [htStudent, setHtStudent] = useState<StudentRecord | null>(null);
     const [htTimetable, setHtTimetable] = useState<ExamTimetableEntry[]>([]);
     const [htStatus, setHtStatus] = useState<{ released: boolean; attendance: number; searched: boolean }>({ released: false, attendance: 0, searched: false });
@@ -107,7 +107,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
             const student = await dataService.getStudentByAdNo(searchAdNo.trim());
 
-            if (student) {
+            if (student && student.className === searchClass) {
                 try {
                     const suppExams = await dataService.getSupplementaryExamsByStudent(student.id);
                     student.supplementaryExams = suppExams;
@@ -120,7 +120,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             } else {
                 setResult(null);
                 setHasSearched(true);
-                alert('No student found with this Admission Number.');
+                alert('No student found in the selected class with this Admission Number.');
             }
         } catch (error) {
             console.error('Search error:', error);
@@ -129,6 +129,37 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             setIsSearching(false);
         }
     }, [searchAdNo, searchClass]);
+
+    const handleHtSearch = useCallback(async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!htAdNo.trim()) return;
+
+        try {
+            setIsHtLoading(true);
+            setHtError('');
+            
+            const student = await dataService.getStudentByAdNo(htAdNo.trim());
+            
+            if (student && student.className === htClass) {
+                const released = await dataService.getHallTicketReleaseStatus(htClass, htSemester);
+                const attendance = await dataService.getOverallAttendance(student.id, htClass);
+                const timetable = await dataService.getExamTimetable(htClass, htSemester);
+                
+                setHtStudent(student);
+                setHtTimetable(timetable);
+                setHtStatus({ released, attendance: attendance || 0, searched: true });
+            } else {
+                setHtStudent(null);
+                setHtError('Student not found in the selected class.');
+                setHtStatus({ released: false, attendance: 0, searched: true });
+            }
+        } catch (error) {
+            console.error('Hall Ticket Search Error:', error);
+            setHtError('An error occurred during search.');
+        } finally {
+            setIsHtLoading(false);
+        }
+    }, [htAdNo, htClass, htSemester]);
 
     if (isLoading) {
         return (
@@ -174,12 +205,11 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
             <main className={`flex-1 container mx-auto print:py-0 print:px-0 print:max-w-none ${isMobile ? 'px-4 py-8' : 'px-6 py-12'}`}>
                 {/* Apps Navigation Tabs */}
-                <div className="flex bg-white/5 p-1 rounded-3xl mb-8 overflow-x-auto hide-scrollbar touch-pan-x print:hidden">
+                <div className="flex justify-center bg-white/5 p-1 rounded-3xl mb-8 overflow-x-auto hide-scrollbar touch-pan-x print:hidden w-fit mx-auto">
                     {[
                         { id: 'results', label: 'Scorecards', icon: 'fa-file-invoice' },
                         { id: 'hall-ticket', label: 'Hall Ticket', icon: 'fa-id-card-clip' },
-                        { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' },
-                        { id: 'live', label: 'Live Att.', icon: 'fa-wave-square' }
+                        { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -203,8 +233,86 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 </div>
 
                 {subView === 'attendance' && <StudentAttendancePortal />}
-                {subView === 'live' && <PublicAttendance />}
-                {subView === 'hall-ticket' && <HallTicketView />}
+                {subView === 'hall-ticket' && (
+                    <div className="w-full max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                        {/* Hall Ticket Search Form */}
+                        <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 p-6 md:p-8 mobile-layout-element print:hidden">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                                <h3 className="font-black text-white flex items-center gap-3 text-xl md:text-2xl">
+                                    <i className="fa-solid fa-id-card-clip text-emerald-400"></i>
+                                    Download Hall Ticket
+                                </h3>
+                            </div>
+
+                            <form onSubmit={handleHtSearch} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="space-y-3">
+                                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest"><i className="fa-solid fa-hashtag text-emerald-400 mr-2"></i> Ad. No</label>
+                                    <input 
+                                        type="text" value={htAdNo} onChange={e => setHtAdNo(e.target.value)} 
+                                        className="w-full bg-white/10 border-2 border-white/20 rounded-2xl p-4 text-white placeholder-slate-400 focus:ring-4 focus:ring-emerald-500/30 focus:border-emerald-400 outline-none transition-all" 
+                                        placeholder="e.g. 138" required 
+                                    />
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest"><i className="fa-solid fa-graduation-cap text-emerald-400 mr-2"></i> Class</label>
+                                    <select 
+                                        value={htClass} onChange={e => setHtClass(e.target.value)} 
+                                        className="w-full bg-[#1e293b] border-2 border-white/20 rounded-2xl p-4 text-white focus:ring-4 focus:ring-emerald-500/30 focus:border-emerald-400 outline-none transition-all cursor-pointer"
+                                    >
+                                        {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest"><i className="fa-solid fa-book-open text-emerald-400 mr-2"></i> Semester</label>
+                                    <select 
+                                        value={htSemester} onChange={e => setHtSemester(e.target.value as 'Odd'|'Even')} 
+                                        className="w-full bg-[#1e293b] border-2 border-white/20 rounded-2xl p-4 text-white focus:ring-4 focus:ring-emerald-500/30 focus:border-emerald-400 outline-none transition-all cursor-pointer"
+                                    >
+                                        <option value="Odd">Odd Semester</option>
+                                        <option value="Even">Even Semester</option>
+                                    </select>
+                                </div>
+                                <div className="md:col-span-3 mt-4">
+                                    <button 
+                                        type="submit" 
+                                        disabled={isHtLoading || !htAdNo.trim()}
+                                        className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isHtLoading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <><i className="fa-solid fa-search mr-2"></i> Check Hall Ticket</>}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Search Results / Status */}
+                        {htStatus.searched && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                {htError ? (
+                                    <div className="bg-red-500/20 border border-red-500/30 rounded-3xl p-8 text-center print:hidden">
+                                        <i className="fa-solid fa-triangle-exclamation text-4xl text-red-400 mb-3"></i>
+                                        <h4 className="text-red-300 font-bold text-lg">{htError}</h4>
+                                    </div>
+                                ) : !htStatus.released ? (
+                                    <div className="bg-orange-500/20 border border-orange-500/30 rounded-3xl p-8 text-center print:hidden">
+                                        <i className="fa-solid fa-clock text-4xl text-orange-400 mb-3"></i>
+                                        <h4 className="text-orange-300 font-bold text-lg">Not Released</h4>
+                                        <p className="text-orange-200/70 mt-2">Hall tickets for {htClass} - {htSemester} semester are not yet available.</p>
+                                    </div>
+                                ) : htStatus.attendance < 75 ? (
+                                    <div className="bg-red-500/20 border border-red-500/30 rounded-3xl p-8 text-center print:hidden">
+                                        <i className="fa-solid fa-user-xmark text-5xl text-red-400 mb-4 drop-shadow-lg"></i>
+                                        <h4 className="text-red-300 font-black text-xl mb-1 uppercase tracking-widest">Ineligible</h4>
+                                        <p className="text-red-200/90">Your attendance is <strong className="text-white text-lg mx-1">{htStatus.attendance.toFixed(1)}%</strong>, which is below the minimum required 75%.</p>
+                                    </div>
+                                ) : htStudent && (
+                                    <div className="bg-transparent">
+                                        <HallTicketView student={htStudent} timetable={htTimetable} semester={htSemester} />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {subView === 'results' && (
                     <>
