@@ -114,7 +114,7 @@ const App: React.FC = () => {
       setCurrentUser(adminUser);
       setIsLoggedIn(true);
       setMode('admin');
-    } else if (username === 'faculty1' && password === 'faculty1') {
+    } else if (username === 'faculty1' && password === (import.meta.env.VITE_FACULTY_PASSWORD || 'faculty1')) {
       const facultyUser = User.create({
         id: 'faculty-001',
         username: 'faculty1',

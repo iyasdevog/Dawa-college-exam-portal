@@ -176,7 +176,10 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
 
             await Promise.all(promises);
 
-            setMessage({ type: 'success', text: `Successfully submitted ${selectedSubjects.length} application(s)! They are currently pending verification.` });
+            setMessage({ type: 'success', text: `Successfully submitted ${selectedSubjects.length} application(s)!` });
+            
+            const currentAdNo = adNo;
+            setSearchAdNo(currentAdNo);
             
             // Reset form
             setAdNo('');
@@ -184,6 +187,10 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
             setSelectedSubjects([]);
             setReason('');
             setSpecialReason('medical');
+
+            // Switch view and fetch status
+            setView('status');
+            handleSearch(currentAdNo);
         } catch (error) {
             setMessage({ type: 'error', text: 'Failed to submit one or more applications. Please try again.' });
         } finally {
@@ -191,11 +198,12 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         }
     };
 
-    const handleSearch = async () => {
-        if (!searchAdNo) return;
+    const handleSearch = async (overrideAdNo?: string | React.MouseEvent) => {
+        const query = typeof overrideAdNo === 'string' ? overrideAdNo : searchAdNo;
+        if (!query) return;
         setIsSearching(true);
         try {
-            const apps = await dataService.getApplicationsByAdNo(searchAdNo);
+            const apps = await dataService.getApplicationsByAdNo(query);
             setMyApplications(apps);
         } catch (error) {
             console.error('Search error:', error);
