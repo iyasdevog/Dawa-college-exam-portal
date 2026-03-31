@@ -140,6 +140,22 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                 setIsSubmitting(false);
                 return;
             }
+
+            // Identify any rejected applications for the same subject/type to clean up before resubmitting
+            const rejectedApps = existingApps.filter(app => 
+                app.appliedYear === settings.currentAcademicYear &&
+                app.appliedSemester === settings.currentSemester &&
+                app.type === appType &&
+                app.status === 'rejected' &&
+                selectedSubjects.includes(app.subjectId)
+            );
+
+            // Delete old rejected apps before submitting new ones
+            for (const app of rejectedApps) {
+                if (app.id) {
+                    await dataService.deleteApplication(app.id);
+                }
+            }
             
             // Submit individual applications for each subject
             const promises = selectedSubjects.map(async (subjId) => {
