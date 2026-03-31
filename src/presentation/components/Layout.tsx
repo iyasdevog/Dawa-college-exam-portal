@@ -20,6 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
 
   const navItems = [
     { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
+    { id: 'attendance', icon: 'fa-clipboard-user', label: 'Attendance' },
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
@@ -32,12 +33,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   const getViewTitle = (view: ViewType): string => {
     const titles: Record<ViewType, string> = {
       'dashboard': 'Dashboard',
+      'attendance': 'Attendance Hub',
       'entry': 'Marks Entry',
       'class-report': 'Class Report',
       'student-card': 'Score Cards',
       'applications': 'Applications',
       'management': 'Management',
-      'public': 'Public Portal'
+      'public': 'Public Portal',
+      'attendance-public': 'Attendance Portal',
+      'student-attendance-portal': 'Student Attendance'
     };
     return titles[view] || view.replace('-', ' ');
   };

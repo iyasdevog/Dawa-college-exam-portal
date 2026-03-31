@@ -80,7 +80,7 @@ export interface SubjectConfig {
   enrolledStudents?: string[]; // Student IDs for elective subjects
 }
 
-export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public';
+export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public' | 'attendance' | 'attendance-public' | 'student-attendance-portal';
 
 export interface ReleaseSettings {
   isReleased: boolean;
@@ -109,4 +109,87 @@ export interface StudentApplication {
     appliedSemester: 'Odd' | 'Even';
     reason?: string;
     adminComment?: string;
+}
+
+export interface TimetableEntry {
+  id: string;
+  day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+  subjectId: string;
+  subjectName: string; // Denormalized for display convenience
+  className: string;
+  startTime: string; // e.g., "10:00"
+  endTime: string;   // e.g., "11:00"
+}
+
+export interface ExamTimetableEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  day: string;  // e.g., "Monday"
+  subjectId: string;
+  subjectName: string;
+  className: string;
+  semester: 'Odd' | 'Even';
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface HallTicketSettings {
+  id: string;
+  className: string;
+  semester: 'Odd' | 'Even';
+  isReleased: boolean;
+  releasedAt?: number;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  subjectId: string;
+  className: string;
+  presentStudentIds: string[];
+  absentStudentIds: string[];
+  markedBy: string; // Teacher name/ID
+  markedAt: number; // Timestamp
+  isSpecialDay?: boolean;
+  specialDayType?: 'Leave' | 'Program' | 'Other';
+  specialDayNote?: string;
+}
+
+export interface SpecialDay {
+  id: string;
+  date: string;
+  type: 'Leave' | 'Program';
+  className?: string; // If optional, applies to all
+  note: string;
+}
+
+export interface AcademicCalendarEntry {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  type: 'Public Holiday' | 'Continuous Vacation' | 'Program';
+  name: string;
+  appliesToClasses?: string[]; // If empty, applies to all
+}
+
+export interface PeriodTimeSlot {
+  startTime: string; // HH:mm
+  endTime: string;   // HH:mm
+}
+
+export type TimetableRule =
+  | { id: string; type: 'FixedSlot'; day: 'All' | string; periodIndex: number; subjectId: string }
+  | { id: string; type: 'DayRestriction'; day: string; restrictedToSubjectIds: string[] };
+
+export interface TimetableGeneratorConfig {
+  id: string;
+  className: string;
+  semester: 'Odd' | 'Even';
+  workingDays: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
+  periodsPerDay: number;
+  periodDurationMins: number; // e.g., 60
+  subjectWeeklyHours: Record<string, number>; // subjectId -> hours
+  breakSlots?: number[]; // indices of periods that are breaks
+  timeSlots?: PeriodTimeSlot[]; // Granular control over slots
+  rules?: TimetableRule[];
 }

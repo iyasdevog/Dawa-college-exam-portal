@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
-import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, ClassReleaseSettings, ExamTimetableEntry } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
+import StudentAttendancePortal from './StudentAttendancePortal';
+import PublicAttendance from './PublicAttendance';
+import HallTicketView from './HallTicketView';
 import { mobileStorage, preventIOSZoom } from '../../infrastructure/services/mobileUtils';
 import ClassResults from './ClassResults';
 import ApplicationPortal from './ApplicationPortal';
@@ -25,6 +28,18 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
     const [viewMode, setViewMode] = useState<'scorecard' | 'class-rank'>('scorecard');
     const [showAppPortal, setShowAppPortal] = useState(false); // Added state
+
+    // Tabs state
+    const [subView, setSubView] = useState<'results' | 'attendance' | 'live' | 'hall-ticket'>('results');
+
+    // Hall Ticket States
+    const [htAdNo, setHtAdNo] = useState('');
+    const [htClass, setHtClass] = useState(CLASSES[0]);
+    const [htStudent, setHtStudent] = useState<StudentRecord | null>(null);
+    const [htTimetable, setHtTimetable] = useState<ExamTimetableEntry[]>([]);
+    const [htStatus, setHtStatus] = useState<{ released: boolean; attendance: number; searched: boolean }>({ released: false, attendance: 0, searched: false });
+    const [isHtLoading, setIsHtLoading] = useState(false);
+    const [htError, setHtError] = useState('');
 
     // Derived state for release status
     const isResultsReleased = useMemo(() => {
@@ -158,6 +173,41 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
 
             <main className={`flex-1 container mx-auto print:py-0 print:px-0 print:max-w-none ${isMobile ? 'px-4 py-8' : 'px-6 py-12'}`}>
+                {/* Apps Navigation Tabs */}
+                <div className="flex bg-white/5 p-1 rounded-3xl mb-8 overflow-x-auto hide-scrollbar touch-pan-x print:hidden">
+                    {[
+                        { id: 'results', label: 'Scorecards', icon: 'fa-file-invoice' },
+                        { id: 'hall-ticket', label: 'Hall Ticket', icon: 'fa-id-card-clip' },
+                        { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' },
+                        { id: 'live', label: 'Live Att.', icon: 'fa-wave-square' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => {
+                                setSubView(tab.id as 'results' | 'attendance' | 'live' | 'hall-ticket');
+                                if (tab.id !== 'results') {
+                                    setHasSearched(false);
+                                    setResult(null);
+                                }
+                            }}
+                            className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-black uppercase tracking-widest transition-all whitespace-nowrap ${subView === tab.id
+                                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                }`}
+                        >
+                            <i className={`fa-solid ${tab.icon}`}></i>
+                            {isMobile && subView !== tab.id ? '' : tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {subView === 'attendance' && <StudentAttendancePortal />}
+                {subView === 'live' && <PublicAttendance />}
+                {subView === 'hall-ticket' && <HallTicketView />}
+
+                {subView === 'results' && (
+                    <>
                 {/* Search Header */}
                 <div className={`w-full max-w-4xl mx-auto text-center mb-12 print:hidden ${isMobile ? 'px-4' : ''}`}>
                     <h2 className={`font-black text-white tracking-tighter mb-6 ${isMobile ? 'text-3xl' : 'text-5xl'}`}>
@@ -385,6 +435,8 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                             </div>
                         )}
                     </div>
+                )}
+                </>
                 )}
             </main>
 

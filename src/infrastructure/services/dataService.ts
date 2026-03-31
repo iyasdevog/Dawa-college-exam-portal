@@ -12,10 +12,11 @@ import {
     orderBy,
     writeBatch,
     onSnapshot,
-    Unsubscribe
+    Unsubscribe,
+    setDoc
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord, StudentApplication, ApplicationType, ApplicationStatus } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord, StudentApplication, ApplicationType, ApplicationStatus, AttendanceRecord, TimetableEntry, SpecialDay, ExamTimetableEntry, HallTicketSettings, AcademicCalendarEntry, TimetableGeneratorConfig } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 import { normalizeName } from './formatUtils';
@@ -70,6 +71,13 @@ export class DataService {
     private supplementaryExamsCollection = 'supplementaryExams';
     private settingsCollection = 'settings';
     private applicationsCollection = 'applications';
+    private attendanceCollection = 'attendance';
+    private timetablesCollection = 'timetables';
+    private specialDaysCollection = 'specialDays';
+    private examTimetablesCollection = 'examTimetables';
+    private hallTicketSettingsCollection = 'hallTicketSettings';
+    private academicCalendarCollection = 'academicCalendar';
+    private generatorConfigsCollection = 'generatorConfigs';
 
     // Application related methods
     async submitApplication(appData: Omit<StudentApplication, 'id' | 'status' | 'createdAt'>): Promise<string> {
@@ -1214,6 +1222,147 @@ export class DataService {
         } catch (error) {
             console.error('Error calculating class rankings:', error);
             throw error;
+        }
+    }
+
+    // Attendance operations
+    async markAttendance(attendance: Omit<AttendanceRecord, 'id'>): Promise<string> {
+        try {
+            const docRef = await addDoc(collection(this.db, this.attendanceCollection), attendance);
+            console.log('Attendance marked with ID:', docRef.id);
+            return docRef.id;
+        } catch (error) {
+            console.error('Error marking attendance:', error);
+            throw error;
+        }
+    }
+
+    async getAllAttendanceRecords(): Promise<AttendanceRecord[]> {
+        try {
+            const q = query(
+                collection(this.db, this.attendanceCollection),
+                orderBy('date', 'desc'),
+                orderBy('markedAt', 'desc')
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+        } catch (error) {
+            console.error('Error fetching all attendance:', error);
+            return [];
+        }
+    }
+
+    async getAttendanceByClassAndDate(className: string, date: string): Promise<AttendanceRecord[]> {
+        try {
+            const q = query(
+                collection(this.db, this.attendanceCollection),
+                where('className', '==', className),
+                where('date', '==', date)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+        } catch (error) {
+            console.error('Error fetching attendance:', error);
+            return [];
+        }
+    }
+
+    async getAttendanceForStudent(studentId: string, subjectId?: string): Promise<AttendanceRecord[]> {
+        try {
+            // Firestore doesn't support searching inside arrays with equality filters on other fields easily without composite indexes
+            // We'll fetch all attendance and filter, or optimize later if needed
+            const q = subjectId
+                ? query(collection(this.db, this.attendanceCollection), where('subjectId', '==', subjectId))
+                : collection(this.db, this.attendanceCollection);
+
+            const snapshot = await getDocs(q);
+            const allAttendance = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+
+            return allAttendance.filter(record =>
+                record.presentStudentIds.includes(studentId) || record.absentStudentIds.includes(studentId)
+            );
+        } catch (error) {
+            console.error('Error fetching student attendance:', error);
+            return [];
+        }
+    }
+
+    async calculateAttendancePercentage(studentId: string, subjectId: string): Promise<number> {
+        const records = await this.getAttendanceForStudent(studentId, subjectId);
+        if (records.length === 0) return 100; // Assume 100% if no records yet? Or 0? Let's say 100 for eligibility purposes if no classes held.
+
+        const presentCount = records.filter(r => r.presentStudentIds.includes(studentId)).length;
+        return (presentCount / records.length) * 100;
+    }
+
+    // Timetable operations
+    async saveTimetableEntries(entries: Omit<TimetableEntry, 'id'>[]): Promise<void> {
+        try {
+            const batch = writeBatch(this.db);
+            for (const entry of entries) {
+                const docRef = doc(collection(this.db, this.timetablesCollection));
+                batch.set(docRef, entry);
+            }
+            await batch.commit();
+        } catch (error) {
+            console.error('Error saving timetable:', error);
+            throw error;
+        }
+    }
+
+    async getTimetableByClass(className: string): Promise<TimetableEntry[]> {
+        try {
+            const q = query(collection(this.db, this.timetablesCollection), where('className', '==', className));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+        } catch (error) {
+            console.error('Error fetching timetable:', error);
+            return [];
+        }
+    }
+
+    async getTimetableByDay(day: TimetableEntry['day']): Promise<TimetableEntry[]> {
+        try {
+            const q = query(collection(this.db, this.timetablesCollection), where('day', '==', day));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+        } catch (error) {
+            console.error('Error fetching timetable by day:', error);
+            return [];
+        }
+    }
+
+    async getAllTimetables(): Promise<TimetableEntry[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.timetablesCollection));
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+        } catch (error) {
+            console.error('Error fetching all timetables:', error);
+            return [];
+        }
+    }
+
+    // Special Days
+    async markSpecialDay(specialDay: Omit<SpecialDay, 'id'>): Promise<string> {
+        try {
+            const docRef = await addDoc(collection(this.db, this.specialDaysCollection), specialDay);
+            return docRef.id;
+        } catch (error) {
+            console.error('Error marking special day:', error);
+            throw error;
+        }
+    }
+
+    async getSpecialDays(date?: string): Promise<SpecialDay[]> {
+        try {
+            const q = date
+                ? query(collection(this.db, this.specialDaysCollection), where('date', '==', date))
+                : collection(this.db, this.specialDaysCollection);
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SpecialDay));
+        } catch (error) {
+            console.error('Error fetching special days:', error);
+            return [];
         }
     }
 
@@ -2803,12 +2952,147 @@ export class DataService {
             throw error;
         }
     }
-
     private sanitizeObject(obj: any) {
         return Object.entries(obj).reduce((acc, [key, value]) => {
             if (value !== undefined) acc[key] = value;
             return acc;
         }, {} as any);
+    }
+
+    // Exam Timetable Operations
+    async saveExamTimetableEntries(entries: Omit<ExamTimetableEntry, 'id'>[]): Promise<void> {
+        try {
+            const batch = writeBatch(this.db);
+            for (const entry of entries) {
+                const docRef = doc(collection(this.db, this.examTimetablesCollection));
+                batch.set(docRef, entry);
+            }
+            await batch.commit();
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error saving exam timetable:', error);
+            throw error;
+        }
+    }
+
+    async getExamTimetable(className: string, semester: 'Odd' | 'Even'): Promise<ExamTimetableEntry[]> {
+        try {
+            const q = query(
+                collection(this.db, this.examTimetablesCollection),
+                where('className', '==', className),
+                where('semester', '==', semester)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamTimetableEntry))
+                .sort((a, b) => a.date.localeCompare(b.date));
+        } catch (error) {
+            console.error('Error fetching exam timetable:', error);
+            return [];
+        }
+    }
+
+    async clearExamTimetable(className: string, semester: 'Odd' | 'Even'): Promise<void> {
+        try {
+            const q = query(
+                collection(this.db, this.examTimetablesCollection),
+                where('className', '==', className),
+                where('semester', '==', semester)
+            );
+            const snapshot = await getDocs(q);
+            const batch = writeBatch(this.db);
+            snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+            await batch.commit();
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error clearing exam timetable:', error);
+            throw error;
+        }
+    }
+
+    // Hall Ticket Release Operations
+    async setHallTicketReleaseStatus(className: string, semester: 'Odd' | 'Even', isReleased: boolean): Promise<void> {
+        try {
+            const id = `${className}-${semester}`;
+            const docRef = doc(this.db, this.hallTicketSettingsCollection, id);
+            await setDoc(docRef, {
+                id,
+                className,
+                semester,
+                isReleased,
+                releasedAt: isReleased ? Date.now() : null
+            });
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error setting hall ticket release status:', error);
+            throw error;
+        }
+    }
+
+    async getHallTicketReleaseStatus(className: string, semester: 'Odd' | 'Even'): Promise<boolean> {
+        try {
+            const id = `${className}-${semester}`;
+            const docRef = doc(this.db, this.hallTicketSettingsCollection, id);
+            const snapshot = await getDoc(docRef);
+            if (snapshot.exists()) {
+                return (snapshot.data() as HallTicketSettings).isReleased;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error fetching hall ticket release status:', error);
+            return false;
+        }
+    }
+
+    async getOverallAttendance(studentId: string, className: string): Promise<number> {
+        try {
+            const subjects = await this.getSubjectsByClass(className);
+            if (subjects.length === 0) return 100;
+
+            let totalClasses = 0;
+            let totalPresent = 0;
+
+            for (const subject of subjects) {
+                const records = await this.getAttendanceForStudent(studentId, subject.id);
+                totalClasses += records.length;
+                totalPresent += records.filter(r => r.presentStudentIds.includes(studentId)).length;
+            }
+
+            return totalClasses > 0 ? (totalPresent / totalClasses) * 100 : 100;
+        } catch (error) {
+            console.error('Error calculating overall attendance:', error);
+            return 0;
+        }
+    }
+
+    // Academic Calendar Methods
+    async getAcademicCalendar(): Promise<AcademicCalendarEntry[]> {
+        const querySnapshot = await getDocs(collection(this.db, this.academicCalendarCollection));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AcademicCalendarEntry));
+    }
+
+    async saveAcademicCalendarEntry(entry: Omit<AcademicCalendarEntry, 'id'>): Promise<string> {
+        const docRef = await addDoc(collection(this.db, this.academicCalendarCollection), entry);
+        return docRef.id;
+    }
+
+    async deleteAcademicCalendarEntry(id: string): Promise<void> {
+        await deleteDoc(doc(this.db, this.academicCalendarCollection, id));
+    }
+
+    // Timetable Generator Methods
+    async getGeneratorConfig(className: string, semester: 'Odd' | 'Even'): Promise<TimetableGeneratorConfig | null> {
+        const id = `${className}-${semester}`;
+        const docRef = doc(this.db, this.generatorConfigsCollection, id);
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+            return { id: snapshot.id, ...snapshot.data() } as TimetableGeneratorConfig;
+        }
+        return null;
+    }
+
+    async saveGeneratorConfig(config: TimetableGeneratorConfig): Promise<void> {
+        const { id, ...data } = config;
+        await setDoc(doc(this.db, this.generatorConfigsCollection, id), data);
     }
 }
 

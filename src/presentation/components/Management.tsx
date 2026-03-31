@@ -8,6 +8,8 @@ import SubjectManagement from './management/SubjectManagement';
 import SupplementaryManagement from './management/SupplementaryManagement';
 import ClassManagement from './management/ClassManagement';
 import SettingsManagement from './management/SettingsManagement';
+import AttendanceManagement from './management/AttendanceManagement';
+import TimetableManagement from './management/TimetableManagement';
 
 const Management: React.FC = () => {
   const { isMobile } = useMobile();
@@ -140,6 +142,7 @@ const Management: React.FC = () => {
               onRefresh={loadData}
             />
           )}
+
 
           {activeTab === 'classes' && (
             <ClassManagement

@@ -52,6 +52,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [supplementaryStudents, setSupplementaryStudents] = useState<{ student: any, supplementaryExam: any }[]>([]);
     const [currentStudentIndex, setCurrentStudentIndex] = useState(0);
     const studentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+    const [attendanceStats, setAttendanceStats] = useState<Record<string, { present: number; total: number; percentage: number }>>({});
 
     // Enhanced loading states
     const [loadingStage, setLoadingStage] = useState<'initializing' | 'loading-subjects' | 'loading-students' | 'preparing-interface'>('initializing');
@@ -159,6 +160,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         // Reset switching flag after a short delay to allow loadStudentsByClass to complete
         const timer = setTimeout(() => {
             setIsSubjectSwitching(false);
+            setAttendanceStats({}); // Clear attendance stats on subject switch
         }, 100);
 
         return () => {
@@ -646,6 +648,17 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             // Mark the subject as correctly loaded to allow auto-saving/draft loading
             loadedSubjectIdRef.current = selectedSubject;
             console.log('loadStudentsByClass: Successfully loaded marks for subject:', selectedSubject, 'term:', activeTerm);
+
+            // Fetch attendance stats for the loaded students
+            if (selectedSubject) {
+                const stats: Record<string, { present: number; total: number; percentage: number }> = {};
+                const attendancePromises = studentsToShow.map(async (student) => {
+                    const percentage = await dataService.calculateAttendancePercentage(student.id, selectedSubject);
+                    stats[student.id] = { present: 0, total: 0, percentage };
+                });
+                await Promise.all(attendancePromises);
+                setAttendanceStats(stats);
+            }
 
         } catch (error) {
             console.error('Error loading students:', error);
@@ -1711,12 +1724,25 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                         type="text"
                                                         value={studentMarks.ext}
                                                         onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)}
-                                                        className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${(attendanceStats[student.id]?.percentage || 0) < 75 ? 'bg-red-50 border-red-200 text-red-400 cursor-not-allowed' : ''}`}
                                                         max={selectedSubjectData?.maxEXT}
                                                         min="0"
+                                                        disabled={(attendanceStats[student.id]?.percentage || 0) < 75}
                                                         data-student={student.id}
                                                         data-field="ext"
+                                                        placeholder={(attendanceStats[student.id]?.percentage || 0) < 75 ? "Ineligible" : ""}
                                                     />
+                                                    {(attendanceStats[student.id]?.percentage || 0) < 75 && (
+                                                        <div className="mt-1 text-[10px] text-red-600 font-bold flex items-center gap-1">
+                                                            <i className="fa-solid fa-circle-exclamation"></i>
+                                                            Low Attendance: {attendanceStats[student.id]?.percentage.toFixed(0)}%
+                                                        </div>
+                                                    )}
+                                                    {(attendanceStats[student.id]?.percentage || 0) >= 75 && (
+                                                        <div className="mt-1 text-[10px] text-emerald-600 font-medium">
+                                                            Attendance: {attendanceStats[student.id]?.percentage.toFixed(0)}%
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -1726,13 +1752,13 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                         type="text"
                                                         value={studentMarks.int}
                                                         onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
-                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxEXT === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
+                                                        className={`w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxEXT === 100 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : (attendanceStats[student.id]?.percentage || 0) < 75 ? 'bg-red-50 border-red-200 text-red-400 cursor-not-allowed' : ''}`}
                                                         max={selectedSubjectData?.maxINT}
                                                         min="0"
-                                                        disabled={selectedSubjectData?.maxEXT === 100}
+                                                        disabled={selectedSubjectData?.maxEXT === 100 || (attendanceStats[student.id]?.percentage || 0) < 75}
                                                         data-student={student.id}
                                                         data-field="int"
-                                                        placeholder={selectedSubjectData?.maxEXT === 100 ? "N/A" : ""}
+                                                        placeholder={selectedSubjectData?.maxEXT === 100 ? "N/A" : (attendanceStats[student.id]?.percentage || 0) < 75 ? "Ineligible" : ""}
                                                     />
                                                 </div>
                                             </div>
@@ -1823,17 +1849,24 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')}
                                                                 className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isEXTExceeding
                                                                     ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
-                                                                    : isEXTFailing
-                                                                        ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                        : marksData[student.id]?.ext && !isEXTFailing && !isEXTExceeding
-                                                                            ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                            : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
+                                                                    : (attendanceStats[student.id]?.percentage || 0) < 75
+                                                                        ? 'border-red-300 bg-red-50 text-red-400 cursor-not-allowed opacity-60'
+                                                                        : isEXTFailing
+                                                                            ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                            : marksData[student.id]?.ext && !isEXTFailing && !isEXTExceeding
+                                                                                ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                                : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
                                                                     }`}
-                                                                placeholder="0"
-                                                                disabled={isSaving || operationLoading.type !== null}
+                                                                placeholder={(attendanceStats[student.id]?.percentage || 0) < 75 ? "N/A" : "0"}
+                                                                disabled={isSaving || operationLoading.type !== null || (attendanceStats[student.id]?.percentage || 0) < 75}
                                                                 maxLength={3}
                                                                 style={{ minHeight: '48px' }}
                                                             />
+                                                            {(attendanceStats[student.id]?.percentage || 0) < 75 && (
+                                                                <div className="text-[10px] text-red-600 mt-1 font-bold">
+                                                                    {attendanceStats[student.id]?.percentage.toFixed(0)}% Att.
+                                                                </div>
+                                                            )}
                                                             {isEXTExceeding && (
                                                                 <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-triangle mr-1"></i>
@@ -1870,17 +1903,24 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                 onKeyDown={(e) => handleKeyDown(e, student.id, 'int')}
                                                                 className={`w-20 p-4 text-xl border-2 rounded-xl text-center focus:ring-8 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-500 ease-out transform ${isINTExceeding
                                                                     ? 'border-red-700 bg-gradient-to-br from-red-50 to-red-100 text-red-900 ring-8 ring-red-600/60 shadow-2xl shadow-red-600/30 animate-pulse scale-[1.05] hover:scale-[1.06]'
-                                                                    : isINTFailing
-                                                                        ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                        : marksData[student.id]?.int && !isINTFailing && !isINTExceeding
-                                                                            ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
-                                                                            : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
+                                                                    : (attendanceStats[student.id]?.percentage || 0) < 75
+                                                                        ? 'border-red-300 bg-red-50 text-red-400 cursor-not-allowed opacity-60'
+                                                                        : isINTFailing
+                                                                            ? 'border-orange-700 bg-gradient-to-br from-orange-50 to-orange-100 text-orange-900 ring-8 ring-orange-600/60 shadow-xl shadow-orange-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                            : marksData[student.id]?.int && !isINTFailing && !isINTExceeding
+                                                                                ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
+                                                                                : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
                                                                     }`}
-                                                                placeholder="0"
-                                                                disabled={isSaving || operationLoading.type !== null}
+                                                                placeholder={selectedSubjectData?.maxTA === 100 ? "N/A" : (attendanceStats[student.id]?.percentage || 0) < 75 ? "N/A" : "0"}
+                                                                disabled={isSaving || operationLoading.type !== null || selectedSubjectData?.maxTA === 100 || (attendanceStats[student.id]?.percentage || 0) < 75}
                                                                 maxLength={3}
                                                                 style={{ minHeight: '48px' }}
                                                             />
+                                                            {(attendanceStats[student.id]?.percentage || 0) < 75 && (
+                                                                <div className="text-[10px] text-red-600 mt-1 font-bold">
+                                                                    Ineligible
+                                                                </div>
+                                                            )}
                                                             {isINTExceeding && (
                                                                 <div className="text-xs text-red-900 mt-2 font-black animate-bounce bg-red-100 px-2 py-1 rounded-lg border border-red-300 shadow-sm">
                                                                     <i className="fa-solid fa-exclamation-triangle mr-1"></i>

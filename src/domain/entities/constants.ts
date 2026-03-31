@@ -5,3 +5,5 @@ export const CLASSES = ['S1', 'S2', 'S3', 'D1', 'D2', 'D3', 'P1', 'P2', 'PG1', '
 
 // System starts completely empty - no pre-seeded data
 export const INITIAL_STUDENTS: StudentRecord[] = [];
+
+export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;

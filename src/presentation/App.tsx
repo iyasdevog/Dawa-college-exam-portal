@@ -16,6 +16,7 @@ const FacultyEntry = lazy(() => import('./components/FacultyEntry'));
 const ClassResults = lazy(() => import('./components/ClassResults'));
 const StudentScorecard = lazy(() => import('./components/StudentScorecard'));
 const Management = lazy(() => import('./components/Management'));
+const AttendancePortal = lazy(() => import('./components/AttendancePortal'));
 const PublicPortal = lazy(() => import('./components/PublicPortal'));
 
 // Loading fallback components
@@ -198,6 +199,14 @@ const App: React.FC = () => {
           <FeatureErrorBoundary featureName="Management" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
               <Management />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
+      case 'attendance':
+        return (
+          <FeatureErrorBoundary featureName="Attendance" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              <AttendancePortal />
             </Suspense>
           </FeatureErrorBoundary>
         );
