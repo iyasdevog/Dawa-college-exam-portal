@@ -9,6 +9,7 @@ import { mobileStorage, preventIOSZoom } from '../../infrastructure/services/mob
 import ClassResults from './ClassResults';
 import ApplicationPortal from './ApplicationPortal';
 import { TermSelector } from './TermSelector';
+import { useTerm } from '../viewmodels/TermContext';
 
 const PublicScorecard = React.lazy(() => import('./PublicScorecard'));
 
@@ -17,6 +18,7 @@ interface PublicPortalProps {
 }
 
 const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
+    const { activeTerm } = useTerm();
     const [searchAdNo, setSearchAdNo] = useState('');
     const [searchClass, setSearchClass] = useState(CLASSES[0]);
     const [result, setResult] = useState<StudentRecord | null>(null);
@@ -37,7 +39,13 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [htSemester, setHtSemester] = useState<'Odd' | 'Even'>('Odd');
     const [htStudent, setHtStudent] = useState<StudentRecord | null>(null);
     const [htTimetable, setHtTimetable] = useState<ExamTimetableEntry[]>([]);
-    const [htStatus, setHtStatus] = useState<{ released: boolean; attendance: number; searched: boolean }>({ released: false, attendance: 0, searched: false });
+    const [htStatus, setHtStatus] = useState<{ released: boolean; attendance: number; required: number; eligible: boolean; searched: boolean }>({ 
+        released: false, 
+        attendance: 0, 
+        required: 75,
+        eligible: true,
+        searched: false 
+    });
     const [isHtLoading, setIsHtLoading] = useState(false);
     const [htError, setHtError] = useState('');
 
@@ -76,14 +84,14 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     // Mobile detection
     const { isMobile, isIOS } = useMobile();
 
-    // Initialize database
+    // Initialize database and load subjects whenever term changes
     useEffect(() => {
         const initializeData = async () => {
             try {
-                setIsLoading(true);
+                if (!hasSearched) setIsLoading(true); // Only show full loader on initial entry
                 await dataService.initializeDatabase();
                 const [allSubjects, settings] = await Promise.all([
-                    dataService.getAllSubjects(),
+                    dataService.getAllSubjects(activeTerm),
                     dataService.getReleaseSettings()
                 ]);
                 setSubjects(allSubjects);
@@ -95,7 +103,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             }
         };
         initializeData();
-    }, []);
+    }, [activeTerm]);
 
     const handleSearch = useCallback(async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -105,7 +113,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             setIsSearching(true);
             setHasSearched(false);
 
-            const student = await dataService.getStudentByAdNo(searchAdNo.trim());
+            const student = await dataService.getStudentByAdNo(searchAdNo.trim(), activeTerm);
 
             if (student && student.className === searchClass) {
                 try {
@@ -128,7 +136,14 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
         } finally {
             setIsSearching(false);
         }
-    }, [searchAdNo, searchClass]);
+    }, [searchAdNo, searchClass, activeTerm]);
+ 
+    // Re-search automatically when term changes if a student is already being viewed
+    useEffect(() => {
+        if (hasSearched && searchAdNo) {
+            handleSearch();
+        }
+    }, [activeTerm, handleSearch]);
 
     const handleHtSearch = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -138,20 +153,29 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             setIsHtLoading(true);
             setHtError('');
             
-            const student = await dataService.getStudentByAdNo(htAdNo.trim());
+            const student = await dataService.getStudentByAdNo(htAdNo.trim(), activeTerm);
             
             if (student && student.className === htClass) {
-                const released = await dataService.getHallTicketReleaseStatus(htClass, htSemester);
-                const attendance = await dataService.getOverallAttendance(student.id, htClass);
-                const timetable = await dataService.getExamTimetable(htClass, htSemester);
+                const year = activeTerm.split('-').slice(0, 2).join('-');
+                const [released, eligibility, timetable] = await Promise.all([
+                    dataService.getHallTicketReleaseStatus(htClass, htSemester, year),
+                    dataService.isEligibleForHallTicket(student.id, htClass, activeTerm),
+                    dataService.getExamTimetable(htClass, htSemester, year)
+                ]);
                 
                 setHtStudent(student);
                 setHtTimetable(timetable);
-                setHtStatus({ released, attendance: attendance || 0, searched: true });
+                setHtStatus({ 
+                    released, 
+                    attendance: eligibility.percentage, 
+                    required: eligibility.required,
+                    eligible: eligibility.eligible,
+                    searched: true 
+                });
             } else {
                 setHtStudent(null);
                 setHtError('Student not found in the selected class.');
-                setHtStatus({ released: false, attendance: 0, searched: true });
+                setHtStatus({ released: false, attendance: 0, required: 75, eligible: false, searched: true });
             }
         } catch (error) {
             console.error('Hall Ticket Search Error:', error);
@@ -298,15 +322,20 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                         <h4 className="text-orange-300 font-bold text-lg">Not Released</h4>
                                         <p className="text-orange-200/70 mt-2">Hall tickets for {htClass} - {htSemester} semester are not yet available.</p>
                                     </div>
-                                ) : htStatus.attendance < 75 ? (
+                                ) : !htStatus.eligible ? (
                                     <div className="bg-red-500/20 border border-red-500/30 rounded-3xl p-8 text-center print:hidden">
                                         <i className="fa-solid fa-user-xmark text-5xl text-red-400 mb-4 drop-shadow-lg"></i>
                                         <h4 className="text-red-300 font-black text-xl mb-1 uppercase tracking-widest">Ineligible</h4>
-                                        <p className="text-red-200/90">Your attendance is <strong className="text-white text-lg mx-1">{htStatus.attendance.toFixed(1)}%</strong>, which is below the minimum required 75%.</p>
+                                        <p className="text-red-200/90">Your attendance is <strong className="text-white text-lg mx-1">{htStatus.attendance.toFixed(1)}%</strong>, which is below the minimum required {htStatus.required}%.</p>
                                     </div>
                                 ) : htStudent && (
                                     <div className="bg-transparent">
-                                        <HallTicketView student={htStudent} timetable={htTimetable} semester={htSemester} />
+                                        <HallTicketView 
+                                            student={htStudent} 
+                                            timetable={htTimetable} 
+                                            semester={htSemester} 
+                                            academicYear={activeTerm.split('-').slice(0, 2).join('-')}
+                                        />
                                     </div>
                                 )}
                             </div>

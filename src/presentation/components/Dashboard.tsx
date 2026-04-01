@@ -5,6 +5,7 @@ import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { debounce, throttle, mobileStorage } from '../../infrastructure/services/mobileUtils';
 import { loadExcelLibrary } from '../../infrastructure/services/dynamicImports';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface DashboardProps {
     onNavigateToManagement: () => void;
@@ -66,6 +67,7 @@ interface MobileDataManipulation {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
+    const { activeTerm } = useTerm();
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [loadingState, setLoadingState] = useState<LoadingState>({
@@ -169,7 +171,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                 }));
             }
         }
-    }, [isMobile]);
+    }, [isMobile, activeTerm]);
 
     const loadData = async () => {
         try {
@@ -192,7 +194,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                 message: 'Fetching student records from database...'
             }));
 
-            const studentsData = await dataService.getAllStudents();
+            const studentsData = await dataService.getAllStudents(activeTerm);
 
             // Stage 3: Loading subjects
             setLoadingState(prev => ({
@@ -202,7 +204,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                 message: 'Retrieving subject configurations...'
             }));
 
-            const subjectsData = await dataService.getAllSubjects();
+            const subjectsData = await dataService.getAllSubjects(activeTerm);
 
             // Stage 4: Calculating statistics
             setLoadingState(prev => ({
@@ -239,14 +241,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         [students, selectedClass]
     );
 
-    // Calculate statistics — memoized
-    const totalStudents = students.length;
+    // Calculate statistics — memoized and term-aware
+    const currentTermStudents = useMemo(() => 
+        students.filter(s => 
+            s.academicHistory && 
+            s.academicHistory[activeTerm] && 
+            !s.className?.toLowerCase().includes('doura') // Exclude Doura from active stats
+        ),
+        [students, activeTerm]
+    );
+
+    const totalStudents = currentTermStudents.length;
     const totalSubjects = subjects.length;
     const averagePercentage = useMemo(() =>
-        students.length > 0
-            ? Math.round(students.reduce((sum, s) => sum + s.average, 0) / students.length)
+        currentTermStudents.length > 0
+            ? Math.round(currentTermStudents.reduce((sum, s) => sum + s.average, 0) / currentTermStudents.length)
             : 0,
-        [students]
+        [currentTermStudents]
     );
 
     // Create mobile-optimized statistics cards
@@ -258,7 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             icon: 'fa-solid fa-users',
             color: 'text-blue-600',
             bgColor: 'bg-blue-100',
-            description: `${totalStudents} students enrolled across all classes`
+            description: `${totalStudents} students active in ${activeTerm}`
         },
         {
             id: 'total-subjects',
@@ -267,7 +278,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             icon: 'fa-solid fa-book',
             color: 'text-emerald-600',
             bgColor: 'bg-emerald-100',
-            description: `${totalSubjects} subjects offered in the curriculum`
+            description: `${totalSubjects} subjects in ${activeTerm}`
         },
         {
             id: 'average-percentage',
@@ -276,7 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             icon: 'fa-solid fa-chart-line',
             color: 'text-amber-600',
             bgColor: 'bg-amber-100',
-            description: `Overall academic performance across all students`
+            description: `Performance average for ${activeTerm}`
         },
         {
             id: 'active-classes',

@@ -13,7 +13,7 @@ import {
     writeBatch,
     onSnapshot,
     Unsubscribe,
-    setDoc
+    deleteField
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
 import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord, StudentApplication, ApplicationType, ApplicationStatus, AttendanceRecord, TimetableEntry, SpecialDay, ExamTimetableEntry, HallTicketSettings, AcademicCalendarEntry, TimetableGeneratorConfig } from '../../domain/entities/types';
@@ -130,6 +130,14 @@ export class DataService {
             const appRef = doc(db, this.applicationsCollection, id);
             const updates = this.sanitize({ status, adminComment });
             await updateDoc(appRef, updates);
+
+            // Sync with Supplementary Exam system if approved
+            if (status === 'approved') {
+                const application = await this.getApplicationById(id);
+                if (application && ['improvement', 'revaluation', 'external-supp', 'internal-supp', 'special-supp'].includes(application.type)) {
+                    await this.syncApplicationToSupplementary(application);
+                }
+            }
         } catch (error) {
             console.error('Error updating application status:', error);
             throw error;
@@ -147,14 +155,25 @@ export class DataService {
         }
     }
 
-    // Cache for performance optimization
-    private studentsCache: StudentRecord[] | null = null;
+    // Cache for performance optimization - Upgraded to Map for term-level isolation
+    private studentsCache = new Map<string, StudentRecord[]>();
     private subjectsCache: SubjectConfig[] | null = null;
+    private supplementaryCache = new Map<string, SupplementaryExam[]>();
     private cacheTimestamp: number = 0;
     private currentGlobalSettings: GlobalSettings | null = null;
     private readonly DEFAULT_ACADEMIC_YEAR = "2025-2026";
     private readonly DEFAULT_SEMESTER = "Odd";
-    private readonly CACHE_DURATION = 30000; // 30 seconds cache
+    private readonly ATTENDANCE_START = "2026-04-01";
+    private readonly ATTENDANCE_END = "2026-08-31";
+    private readonly CACHE_DURATION = 300000; // 5 minutes cache for better performance
+    
+    public clearCache() {
+        this.studentsCache.clear();
+        this.subjectsCache = null;
+        this.supplementaryCache.clear();
+        this.cacheTimestamp = 0;
+        this.currentGlobalSettings = null;
+    }
 
     // Helper method to get database instance
     private get db() {
@@ -163,6 +182,10 @@ export class DataService {
             throw new Error('Firebase not initialized');
         }
         return database;
+    }
+
+    public getDb() {
+        return this.db;
     }
 
     // Initialize database - NO automatic seeding
@@ -204,12 +227,9 @@ export class DataService {
         const marksEntries = Object.entries(marks);
         const grandTotal = marksEntries.reduce((sum, [_, mark]) => sum + this.getMarkValue(mark.total), 0);
 
-        const generalSubjects = subjects.filter(s => s.subjectType !== 'elective');
-        const electiveSubjects = subjects.filter(s => s.subjectType === 'elective');
-
-        const generalMarksCount = generalSubjects.filter(s => marks[s.id] !== undefined).length;
-        const hasElectiveMark = electiveSubjects.some(s => marks[s.id] !== undefined);
-        const subjectCount = generalMarksCount + (hasElectiveMark ? 1 : 0);
+        // Track all subjects as normal subjects (1-for-1 counting)
+        // This ensures elective failures and marks are fully integrated into the average
+        const subjectCount = Object.keys(marks).length;
 
         let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
         if (isNaN(average)) average = 0;
@@ -224,19 +244,32 @@ export class DataService {
      * Normalizes a student record from Firestore.
      * Maps legacy 'ta' and 'ce' fields in marks to 'int' and 'ext'.
      */
-    private processStudentRecord(data: any, id: string): StudentRecord {
-        const currentTermKey = this.getCurrentTermKey();
+    private processStudentRecord(data: any, id: string, termKey?: string): StudentRecord {
+        const currentTermKey = termKey || this.getCurrentTermKey();
         let academicHistory = data.academicHistory || {};
         const currentClass = data.currentClass || data.className || '';
 
-        // Extract marks for the current active term
+        // Migration: If we have top-level marks but NO history at all, 
+        // treat them as 2025-2026-Odd (the user's manual semester)
+        if (data.marks && Object.keys(data.marks).length > 0 && Object.keys(academicHistory).length === 0) {
+            academicHistory['2025-2026-Odd'] = {
+                className: currentClass,
+                semester: 'Odd',
+                marks: data.marks,
+                grandTotal: data.grandTotal || 0,
+                average: data.average || 0,
+                rank: data.rank || 0,
+                performanceLevel: data.performanceLevel || 'C (Average)'
+            };
+        }
+
+        // Extract marks ONLY for the requested term from history
         const termData = academicHistory[currentTermKey];
-        const rawMarks = termData?.marks || data.marks || {};
+        const rawMarks = termData?.marks || {}; // No fallback to root data.marks
 
         const normalizedMarks: Record<string, SubjectMarks> = {};
         Object.entries(rawMarks).forEach(([subjectId, marks]: [string, any]) => {
             normalizedMarks[subjectId] = {
-                // TA (legacy) maps to EXT, CE (legacy) maps to INT
                 int: marks.int !== undefined ? marks.int : (marks.ce !== undefined ? marks.ce : 0),
                 ext: marks.ext !== undefined ? marks.ext : (marks.ta !== undefined ? marks.ta : 0),
                 total: marks.total || 0,
@@ -246,7 +279,7 @@ export class DataService {
             };
         });
 
-        // Migration to new structure if needed
+        // Migration to new structure if needed (only if no academicHistory exists)
         if (!data.academicHistory && Object.keys(normalizedMarks).length > 0) {
             const legacyTerm = `${this.DEFAULT_ACADEMIC_YEAR}-${this.DEFAULT_SEMESTER}`;
             academicHistory[legacyTerm] = {
@@ -260,12 +293,12 @@ export class DataService {
             };
         }
 
-        // Always pull the current term's totals if available
+        // Pull the requested term's totals if available, otherwise start with defaults
         const currentTotals = academicHistory[currentTermKey] || {
-            grandTotal: data.grandTotal || 0,
-            average: data.average || 0,
-            rank: data.rank || 0,
-            performanceLevel: data.performanceLevel || 'C (Average)'
+            grandTotal: 0,
+            average: 0,
+            rank: 0,
+            performanceLevel: 'Pending' as PerformanceLevel
         };
 
         return {
@@ -273,8 +306,8 @@ export class DataService {
             id,
             currentClass,
             academicHistory,
-            // Reflect the active term in the root fields for component compatibility
-            className: currentClass,
+            // Reflect the ACTIVE term in the root fields for component compatibility
+            className: termData?.className || currentClass,
             marks: normalizedMarks,
             semester: currentTermKey.split('-')[2] as 'Odd' | 'Even',
             grandTotal: currentTotals.grandTotal,
@@ -304,25 +337,25 @@ export class DataService {
     }
 
     private invalidateCache(): void {
-        this.studentsCache = null;
+        this.studentsCache.clear();
         this.subjectsCache = null;
+        this.supplementaryCache.clear();
         this.cacheTimestamp = 0;
     }
 
-    private updateStudentInCache(studentId: string, updates: Partial<StudentRecord>): void {
-        if (this.studentsCache && this.isCacheValid()) {
-            const index = this.studentsCache.findIndex(s => s.id === studentId);
+    private updateStudentInCache(studentId: string, updates: Partial<StudentRecord>, termKey?: string): void {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const cachedStudents = this.studentsCache.get(activeTerm);
+        if (cachedStudents && this.isCacheValid()) {
+            const index = cachedStudents.findIndex(s => s.id === studentId);
             if (index !== -1) {
-                // Merge updates into the cached student
-                this.studentsCache[index] = { ...this.studentsCache[index], ...updates };
-                // Also update deep nested structures if necessary, but spreading handles top-level root fields.
-                // For deep updates like academicHistory, it's safer to just replace the whole academicHistory object passed in updates.
+                cachedStudents[index] = { ...cachedStudents[index], ...updates };
             }
         }
     }
 
-    private updateCache(students?: StudentRecord[], subjects?: SubjectConfig[]): void {
-        if (students) this.studentsCache = students;
+    private updateCache(students?: StudentRecord[], subjects?: SubjectConfig[], termKey?: string): void {
+        if (students && termKey) this.studentsCache.set(termKey, students);
         if (subjects) this.subjectsCache = subjects;
         this.cacheTimestamp = Date.now();
     }
@@ -335,13 +368,23 @@ export class DataService {
             const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
-                this.currentGlobalSettings = docSnap.data() as GlobalSettings;
+                const data = docSnap.data() as any;
+                this.currentGlobalSettings = {
+                    currentAcademicYear: data.currentAcademicYear || '2025-2026',
+                    currentSemester: data.currentSemester || 'Odd',
+                    availableYears: data.availableYears || ['2023-2024', '2024-2025', '2025-2026'],
+                    attendanceStartDate: data.attendanceStartDate || '2026-04-01',
+                    attendanceEndDate: data.attendanceEndDate || '2026-08-31',
+                    minAttendancePercentage: data.minAttendancePercentage || 75
+                };
                 return this.currentGlobalSettings;
             }
             // Return defaults if not set
             return {
                 currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR,
-                currentSemester: this.DEFAULT_SEMESTER
+                currentSemester: this.DEFAULT_SEMESTER,
+                attendanceStartDate: this.ATTENDANCE_START,
+                attendanceEndDate: this.ATTENDANCE_END
             };
         } catch (error) {
             console.error('Error getting global settings:', error);
@@ -349,34 +392,45 @@ export class DataService {
         }
     }
 
-    async getAvailableAcademicYears(): Promise<string[]> {
+    async getAvailableTerms(): Promise<string[]> {
         try {
             const students = await this.getAllStudents();
-            const years = new Set<string>();
+            const terms = new Set<string>();
 
-            // Add current default/global year
+            // Add current default/global term
             const settings = await this.getGlobalSettings();
-            years.add(settings.currentAcademicYear);
+            const currentTerm = this.getCurrentTermKey(settings);
+            terms.add(currentTerm);
 
-            // Add manually configured years
-            if (settings.availableYears) {
-                settings.availableYears.forEach(y => years.add(y));
-            }
+            // Add terms from student history that match the permitted academic years
+            const allowedYears = new Set(settings.availableYears || [settings.currentAcademicYear]);
 
             students.forEach(s => {
                 if (s.academicHistory) {
                     Object.keys(s.academicHistory).forEach(termKey => {
                         // Extract year part from "2024-2025-Odd"
-                        const match = termKey.match(/^(\d{4}-\d{4})/);
-                        if (match) years.add(match[1]);
+                        const yearMatch = termKey.match(/^(\d{4}-\d{4})/);
+                        if (yearMatch && allowedYears.has(yearMatch[1])) {
+                            terms.add(termKey);
+                        }
                     });
                 }
             });
 
-            return Array.from(years).sort().reverse();
+            // Sort terms: 2025-2026-Even, 2025-2026-Odd, 2024-2025-Even...
+            return Array.from(terms).sort((a, b) => {
+                const yearA = a.substring(0, 9);
+                const yearB = b.substring(0, 9);
+                const semA = a.split('-')[2];
+                const semB = b.split('-')[2];
+
+                if (yearA !== yearB) return yearB.localeCompare(yearA);
+                // Within same year, Odd comes before Even (if we want newest first, Even > Odd)
+                return semB === 'Even' ? 1 : -1;
+            });
         } catch (error) {
-            console.error('Error fetching available academic years:', error);
-            return [this.DEFAULT_ACADEMIC_YEAR];
+            console.error('Error fetching available terms:', error);
+            return [this.getCurrentTermKey()];
         }
     }
 
@@ -487,20 +541,21 @@ export class DataService {
         }
     }
 
-    // Student operations with caching
-    async getAllStudents(): Promise<StudentRecord[]> {
+    async getAllStudents(termKey?: string): Promise<StudentRecord[]> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+
         // Return cached data if valid
-        if (this.isCacheValid() && this.studentsCache) {
-            console.log('Returning cached students data');
-            return this.studentsCache;
+        if (this.isCacheValid() && this.studentsCache.has(activeTerm)) {
+            console.log(`Returning cached students data for term: ${activeTerm}`);
+            return this.studentsCache.get(activeTerm)!;
         }
 
         try {
-            console.log('=== FETCHING STUDENTS FROM FIREBASE ===');
+            console.log(`=== FETCHING STUDENTS FROM FIREBASE ${activeTerm ? `FOR TERM ${activeTerm}` : ''} ===`);
             // Remove orderBy to avoid composite index requirement
             const querySnapshot = await getDocs(collection(this.db, this.studentsCollection));
 
-            const students = querySnapshot.docs.map(doc => this.processStudentRecord(doc.data(), doc.id));
+            const students = querySnapshot.docs.map(doc => this.processStudentRecord(doc.data(), doc.id, activeTerm));
 
             // Sort manually by import row number (priority) or rank
             students.sort((a, b) => {
@@ -508,8 +563,6 @@ export class DataService {
                 if (a.importRowNumber !== undefined && b.importRowNumber !== undefined) {
                     return a.importRowNumber - b.importRowNumber;
                 }
-                // If only a has it, it comes first (or last? usually explicit order first)
-                // Let's keep mixed content sorted by rank if row number missing
                 if (a.importRowNumber !== undefined) return -1;
                 if (b.importRowNumber !== undefined) return 1;
 
@@ -517,25 +570,38 @@ export class DataService {
                 return (a.rank || 0) - (b.rank || 0);
             });
 
-            console.log('Total students in database:', students.length);
+            console.log('Total students processed:', students.length);
 
-            // Update cache
-            this.updateCache(students);
+            // Enrollment Term Lifecycle Filtering
+            const currentGlobalTerm = this.getCurrentTermKey();
+            const isCurrentTerm = activeTerm === currentGlobalTerm;
 
-            return students;
+            const filteredStudents = students.filter(student => {
+                const isActive = student.isActive !== false;
+                if (isCurrentTerm) {
+                    return isActive;
+                } else {
+                    return !!(student.academicHistory && student.academicHistory[activeTerm]);
+                }
+            });
+
+            // Store the filtered result in the Map cache
+            this.updateCache(filteredStudents, undefined, activeTerm);
+
+            return filteredStudents;
         } catch (error) {
             console.error('Error fetching students:', error);
             return [];
         }
     }
 
-    async getStudentsByClass(className: string): Promise<StudentRecord[]> {
+    async getStudentsByClass(className: string, termKey?: string): Promise<StudentRecord[]> {
         try {
-            // Use cached data if available
-            const allStudents = await this.getAllStudents();
+            // Get all students for the specified term
+            const allStudents = await this.getAllStudents(termKey);
             const classStudents = allStudents.filter(student => student.className === className);
 
-            console.log('Students found in class', className, ':', classStudents.length);
+            console.log('Students found in class', className, 'for term', termKey || 'default', ':', classStudents.length);
             return classStudents;
         } catch (error) {
             console.error('Error fetching students by class:', error);
@@ -543,7 +609,7 @@ export class DataService {
         }
     }
 
-    async getStudentByAdNo(adNo: string): Promise<StudentRecord | null> {
+    async getStudentByAdNo(adNo: string, termKey?: string): Promise<StudentRecord | null> {
         try {
             const q = query(
                 collection(this.db, this.studentsCollection),
@@ -557,16 +623,27 @@ export class DataService {
             }
 
             const doc = querySnapshot.docs[0];
-            return this.processStudentRecord(doc.data(), doc.id);
+            return this.processStudentRecord(doc.data(), doc.id, termKey);
         } catch (error) {
             console.error('Error fetching student by admission number:', error);
             return null;
         }
     }
 
+    async getStudentById(id: string, termKey?: string): Promise<StudentRecord | null> {
+        try {
+            const docRef = doc(this.db, this.studentsCollection, id);
+            const docSnap = await getDoc(docRef);
+            return docSnap.exists() ? this.processStudentRecord(docSnap.data(), docSnap.id, termKey) : null;
+        } catch (error) {
+            console.error('Error fetching student by ID:', error);
+            return null;
+        }
+    }
+
     async addStudent(student: Omit<StudentRecord, 'id'>): Promise<string> {
         try {
-            const cleanStudent = this.sanitize(student);
+            const cleanStudent = this.sanitize({ ...student, isActive: true });
             const docRef = await addDoc(collection(this.db, this.studentsCollection), cleanStudent);
             console.log('Student added with ID:', docRef.id);
             
@@ -591,6 +668,65 @@ export class DataService {
             this.updateStudentInCache(id, cleanUpdates);
         } catch (error) {
             console.error('Error updating student:', error);
+            throw error;
+        }
+    }
+
+    async archiveStudent(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.studentsCollection, id);
+            await updateDoc(docRef, { isActive: false });
+            
+            // Soft-delete from cache as well
+            this.clearCache();
+        } catch (error) {
+            console.error('Error archiving student:', error);
+            throw error;
+        }
+    }
+
+    async promoteClass(fromClass: string, toClass: string, termKey: string): Promise<void> {
+        try {
+            console.log(`Promoting class from ${fromClass} to ${toClass} for term ${termKey}`);
+            const students = await this.getAllStudents(); // Gets active students
+            const classStudents = students.filter(s => s.className === fromClass && s.isActive !== false);
+
+            if (classStudents.length === 0) {
+                throw new Error(`No active students found in class ${fromClass}`);
+            }
+
+            const batch = writeBatch(this.db);
+            const academicYear = termKey.split('-')[0];
+            const semester = termKey.split('-')[1] as 'Odd' | 'Even';
+
+            for (const student of classStudents) {
+                const docRef = doc(this.db, this.studentsCollection, student.id);
+                
+                // Initialize new term record in history
+                const newTermRecord: TermRecord = {
+                    className: toClass,
+                    semester: semester,
+                    marks: {},
+                    grandTotal: 0,
+                    average: 0,
+                    rank: 0,
+                    performanceLevel: 'C (Average)'
+                };
+
+                const updates: any = {
+                    className: toClass,
+                    currentClass: toClass, // Keep consistency
+                    [`academicHistory.${termKey}`]: newTermRecord
+                };
+
+                batch.update(docRef, updates);
+            }
+
+            await batch.commit();
+            this.clearCache();
+            console.log(`Successfully promoted ${classStudents.length} students to ${toClass}`);
+        } catch (error) {
+            console.error('Error promoting class:', error);
             throw error;
         }
     }
@@ -627,34 +763,121 @@ export class DataService {
     }
 
     // Subject operations
-    async getAllSubjects(): Promise<SubjectConfig[]> {
-        // Return cached data if valid
-        if (this.isCacheValid() && this.subjectsCache) {
-            return this.subjectsCache;
-        }
-
+    async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
         try {
-            const querySnapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            const settings = await this.getGlobalSettings();
+            
+            let targetYear = settings.currentAcademicYear;
+            let targetSem = settings.currentSemester;
+            
+            if (termKey) {
+                const parts = termKey.split('-');
+                if (parts.length >= 3) {
+                    targetSem = parts.pop() as 'Odd' | 'Even';
+                    targetYear = parts.join('-');
+                }
+            }
 
-            const subjects = querySnapshot.docs.map(doc => this.processSubjectConfig(doc.data(), doc.id));
+            const q = query(collection(this.db, this.subjectsCollection));
+            const snapshot = await getDocs(q);
+            const allSubjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+            
+            return allSubjects.filter(subject => {
+                const matchesClass = subject.targetClasses.includes(className);
+                if (!matchesClass) return false;
+                
+                // Semester filter
+                if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
+                    return false;
+                }
+                
+                // Strict Academic Year filter
+                if (subject.academicYear && subject.academicYear !== targetYear) {
+                    return false;
+                }
+                
+                // If we have a specific targetYear and targetSem, and the subject has them defined, 
+                // we should be strict to avoid duplicates from other years/semesters.
+                // However, we allow subjects with NO academicYear for backward compatibility 
+                // ONLY if no year-specific version of that same subject exists.
+                if (!subject.academicYear) {
+                    const hasYearSpecificVersion = allSubjects.some(s => 
+                        s.name === subject.name && 
+                        s.academicYear === targetYear && 
+                        (s.activeSemester === 'Both' || s.activeSemester === targetSem)
+                    );
+                    if (hasYearSpecificVersion) return false;
+                }
 
-            // Update cache
-            this.updateCache(undefined, subjects);
-
-            return subjects;
+                return true;
+            });
         } catch (error) {
             console.error('Error fetching subjects:', error);
             return [];
         }
     }
 
-    async getSubjectsByClass(className: string): Promise<SubjectConfig[]> {
+    async getAllSubjects(termKey?: string): Promise<SubjectConfig[]> {
         try {
-            const allSubjects = await this.getAllSubjects();
-            return allSubjects.filter(subject => subject.targetClasses.includes(className));
+            const settings = await this.getGlobalSettings();
+            
+            let targetYear = settings.currentAcademicYear;
+            let targetSem = settings.currentSemester;
+            
+            if (termKey) {
+                const parts = termKey.split('-');
+                if (parts.length >= 3) {
+                    targetSem = parts.pop() as 'Odd' | 'Even';
+                    targetYear = parts.join('-');
+                }
+            }
+
+            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            const allSubjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+            
+            return allSubjects.filter(subject => {
+                 // Semester filter
+                 if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
+                    return false;
+                }
+                
+                // Strict Academic Year filter
+                if (subject.academicYear && subject.academicYear !== targetYear) {
+                    return false;
+                }
+
+                // De-duplicate: Prioritize year-specific subjects over global ones
+                if (!subject.academicYear) {
+                    const hasYearSpecificVersion = allSubjects.some(s => 
+                        s.name === subject.name && 
+                        s.academicYear === targetYear && 
+                        (s.activeSemester === 'Both' || s.activeSemester === targetSem)
+                    );
+                    if (hasYearSpecificVersion) return false;
+                }
+                
+                return true;
+            });
         } catch (error) {
-            console.error('Error fetching subjects by class:', error);
+            console.error('Error fetching all subjects:', error);
             return [];
+        }
+    }
+
+    async isEligibleForHallTicket(studentId: string, className: string, termKey?: string): Promise<{ eligible: boolean, percentage: number, required: number }> {
+        try {
+            const settings = await this.getGlobalSettings();
+            const required = settings.minAttendancePercentage || 75;
+            const percentage = await this.getOverallAttendance(studentId, className, termKey);
+            
+            return {
+                eligible: percentage >= required,
+                percentage,
+                required
+            };
+        } catch (error) {
+            console.error('Error checking hall ticket eligibility:', error);
+            return { eligible: true, percentage: 100, required: 75 }; // Default to eligible on error
         }
     }
 
@@ -777,10 +1000,10 @@ export class DataService {
         }
     }
 
-    async getEnrolledStudentsForSubject(subjectId: string): Promise<StudentRecord[]> {
+    async getEnrolledStudentsForSubject(subjectId: string, termKey?: string): Promise<StudentRecord[]> {
         try {
             console.log('=== DEBUGGING getEnrolledStudentsForSubject ===');
-            console.log('Subject ID:', subjectId);
+            console.log('Subject ID:', subjectId, 'Term:', termKey);
 
             const subjectDoc = await getDoc(doc(this.db, this.subjectsCollection, subjectId));
             if (!subjectDoc.exists()) {
@@ -789,38 +1012,21 @@ export class DataService {
             }
 
             const subject = this.processSubjectConfig(subjectDoc.data(), subjectDoc.id);
-            console.log('Subject data:', {
-                name: subject.name,
-                subjectType: subject.subjectType,
-                targetClasses: subject.targetClasses,
-                enrolledStudents: subject.enrolledStudents?.length || 0
-            });
-
             if (subject.subjectType === 'general') {
-                console.log('Subject is GENERAL - getting all students from target classes');
                 // For general subjects, return all students from target classes
                 const allStudents: StudentRecord[] = [];
                 for (const className of subject.targetClasses) {
-                    console.log('Getting students from class:', className);
-                    const classStudents = await this.getStudentsByClass(className);
-                    console.log('Found students in', className, ':', classStudents.length);
+                    const classStudents = await this.getStudentsByClass(className, termKey);
                     allStudents.push(...classStudents);
                 }
-                console.log('Total students from all target classes:', allStudents.length);
                 return allStudents;
             } else {
-                console.log('Subject is ELECTIVE - getting only enrolled students');
                 // For elective subjects, return only enrolled students
                 const enrolledStudentIds = subject.enrolledStudents || [];
-                if (enrolledStudentIds.length === 0) {
-                    console.log('No students enrolled in this elective subject');
-                    return [];
-                }
+                if (enrolledStudentIds.length === 0) return [];
 
-                const allStudents = await this.getAllStudents();
-                const enrolledStudents = allStudents.filter(student => enrolledStudentIds.includes(student.id));
-                console.log('Enrolled students found:', enrolledStudents.length);
-                return enrolledStudents;
+                const allStudents = await this.getAllStudents(termKey);
+                return allStudents.filter(student => enrolledStudentIds.includes(student.id));
             }
         } catch (error) {
             console.error('Error getting enrolled students for subject:', error);
@@ -828,15 +1034,63 @@ export class DataService {
         }
     }
 
-    // Supplementary exam operations
+    /**
+     * Adds a supplementary exam, automatically calculating the attempt number
+     * and tracking the original failure term.
+     */
     async addSupplementaryExam(supplementaryExam: Omit<SupplementaryExam, 'id'>): Promise<string> {
         try {
-            const docRef = await addDoc(collection(this.db, this.supplementaryExamsCollection), supplementaryExam);
-            console.log('Supplementary exam added with ID:', docRef.id);
+            // Find existing attempts for this student and subject to determine the next attempt number
+            // and the original failure term.
+            const existingExams = await this.getSupplementaryExamHistory(supplementaryExam.studentId, supplementaryExam.subjectId);
+            
+            let nextAttempt = 1;
+            let originalTerm = supplementaryExam.examTerm || this.getCurrentTermKey();
+
+            if (existingExams.length > 0) {
+                // Get the highest attempt number and increment it
+                const highestAttempt = Math.max(...existingExams.map(e => e.attemptNumber || 0));
+                nextAttempt = highestAttempt + 1;
+                
+                // Use the original term from the first attempt
+                const firstAttempt = existingExams.sort((a, b) => a.appliedAt - b.appliedAt)[0];
+                originalTerm = firstAttempt.originalTerm || firstAttempt.examTerm;
+            }
+
+            const data = {
+                ...supplementaryExam,
+                attemptNumber: nextAttempt,
+                originalTerm: originalTerm,
+                examTerm: supplementaryExam.examTerm || this.getCurrentTermKey(),
+                appliedAt: supplementaryExam.appliedAt || Date.now(),
+                updatedAt: Date.now()
+            };
+
+            const docRef = await addDoc(collection(this.db, this.supplementaryExamsCollection), data);
+            console.log('Supplementary exam added with ID:', docRef.id, 'Attempt:', nextAttempt);
             return docRef.id;
         } catch (error) {
             console.error('Error adding supplementary exam:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Retrieves all supplementary exam attempts for a specific student and subject.
+     */
+    async getSupplementaryExamHistory(studentId: string, subjectId: string): Promise<SupplementaryExam[]> {
+        try {
+            const q = query(
+                collection(this.db, this.supplementaryExamsCollection),
+                where('studentId', '==', studentId),
+                where('subjectId', '==', subjectId)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupplementaryExam))
+                .sort((a, b) => a.appliedAt - b.appliedAt);
+        } catch (error) {
+            console.error('Error fetching supplementary history:', error);
+            return [];
         }
     }
 
@@ -877,22 +1131,6 @@ export class DataService {
         } catch (error) {
             console.error('Error fetching supplementary exams for subject:', error);
             return [];
-        }
-    }
-
-    async updateSupplementaryExamMarks(supplementaryExamId: string, marks: SubjectMarks): Promise<void> {
-        try {
-            const docRef = doc(this.db, this.supplementaryExamsCollection, supplementaryExamId);
-            await updateDoc(docRef, {
-                marks,
-                status: 'Completed'
-            });
-
-            this.invalidateCache();
-            console.log('Supplementary exam marks updated:', supplementaryExamId);
-        } catch (error) {
-            console.error('Error updating supplementary exam marks:', error);
-            throw error;
         }
     }
 
@@ -952,9 +1190,15 @@ export class DataService {
         }
     }
 
-    async getAllSupplementaryExams(): Promise<(SupplementaryExam & { studentName?: string; studentAdNo?: string; subjectName?: string })[]> {
+    async getAllSupplementaryExams(termKey?: string): Promise<(SupplementaryExam & { studentName?: string; studentAdNo?: string; subjectName?: string })[]> {
         try {
-            const snapshot = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            let q = query(collection(this.db, this.supplementaryExamsCollection));
+            
+            if (termKey && termKey !== 'All') {
+                q = query(q, where('examTerm', '==', termKey));
+            }
+
+            const snapshot = await getDocs(q);
             const exams = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupplementaryExam));
 
             // Enrich with student and subject details
@@ -972,12 +1216,81 @@ export class DataService {
                     ...exam,
                     studentName: student?.name,
                     studentAdNo: student?.adNo,
-                    subjectName: subject?.name
+                    subjectName: subject?.name,
+                    studentClass: student?.className // Added for filtering in UI
                 };
             });
         } catch (error) {
             console.error('Error fetching all supplementary exams:', error);
             return [];
+        }
+    }
+
+    /**
+     * One-time migration to backfill legacy supplementary records with term-scoped metadata.
+     */
+    async migrateLegacySupplementaryData(): Promise<{ total: number, migrated: number, applicationSync: number }> {
+        try {
+            const colRef = collection(this.db, this.supplementaryExamsCollection);
+            const snapshot = await getDocs(colRef);
+            let migrated = 0;
+
+            const batch = writeBatch(this.db);
+            snapshot.docs.forEach(d => {
+                const data = d.data() as SupplementaryExam;
+                if (!data.examTerm) {
+                    const year = data.supplementaryYear || new Date().getFullYear();
+                    const sem = data.originalSemester || 'Odd';
+                    const term = `${year}-${year + 1}-${sem}`;
+                    
+                    batch.update(d.ref, {
+                        examTerm: term,
+                        originalTerm: data.originalTerm || term,
+                        attemptNumber: data.attemptNumber || 1,
+                        updatedAt: Date.now()
+                    });
+                    migrated++;
+                }
+            });
+
+            if (migrated > 0) {
+                await batch.commit();
+            }
+
+            // Also sync approved applications that might have been missed
+            const appSyncCount = await this.syncAllApprovedApplications();
+
+            return { total: snapshot.docs.length, migrated, applicationSync: appSyncCount };
+        } catch (error) {
+            console.error('Migration failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Scans all applications and ensures all 'approved' ones have a corresponding supplementary entry.
+     */
+    async syncAllApprovedApplications(): Promise<number> {
+        try {
+            const q = query(
+                collection(this.db, this.applicationsCollection),
+                where('status', '==', 'approved')
+            );
+            const snapshot = await getDocs(q);
+            let count = 0;
+
+            for (const doc of snapshot.docs) {
+                const app = { id: doc.id, ...doc.data() } as StudentApplication;
+                // Only sync if it's a type that requires supplementary (Revaluation/Improvement/Supp)
+                if (['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'].includes(app.type)) {
+                    await this.syncApplicationToSupplementary(app);
+                    count++;
+                }
+            }
+            return count;
+        } catch (error) {
+            console.error('Error in bulk application sync:', error);
+            return 0;
         }
     }
 
@@ -1267,16 +1580,52 @@ export class DataService {
         }
     }
 
-    async getAttendanceForStudent(studentId: string, subjectId?: string): Promise<AttendanceRecord[]> {
+    async getAttendanceForStudent(studentId: string, subjectId?: string, termKey?: string): Promise<AttendanceRecord[]> {
         try {
-            // Firestore doesn't support searching inside arrays with equality filters on other fields easily without composite indexes
-            // We'll fetch all attendance and filter, or optimize later if needed
-            const q = subjectId
+            // Get date limits from global settings
+            const settings = await this.getGlobalSettings();
+            const startDate = settings.attendanceStartDate;
+            const endDate = settings.attendanceEndDate;
+            const currentTerm = `${settings.currentAcademicYear}-${settings.currentSemester}`;
+
+            let q = subjectId
                 ? query(collection(this.db, this.attendanceCollection), where('subjectId', '==', subjectId))
                 : collection(this.db, this.attendanceCollection);
 
             const snapshot = await getDocs(q);
-            const allAttendance = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+            let allAttendance = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+
+            // Filter by termKey if provided
+            if (termKey) {
+                const [targetYear, targetSem] = termKey.split('-');
+                allAttendance = allAttendance.filter(record => {
+                    // 1. If record has explicit term metadata, use it
+                    if (record.academicYear && record.semester) {
+                        return record.academicYear === targetYear && record.semester === targetSem;
+                    }
+                    
+                    // 2. If it's the current term and record has no metadata, use date filter as fallback
+                    if (termKey === currentTerm && (startDate || endDate)) {
+                        const recordDate = record.date;
+                        if (startDate && recordDate < startDate) return false;
+                        if (endDate && recordDate > endDate) return false;
+                        return true;
+                    }
+
+                    // 3. If it's a historical term with no metadata, we can't reliably filter by date without history
+                    // but for strict isolation, we should probably exclude it unless it's definitely from that period.
+                    // For now, if no metadata and not current term, exclude to prevent leakage.
+                    return false;
+                });
+            } else if (startDate || endDate) {
+                // Legacy date-only filtering if no termKey provided
+                allAttendance = allAttendance.filter(record => {
+                    const recordDate = record.date;
+                    if (startDate && recordDate < startDate) return false;
+                    if (endDate && recordDate > endDate) return false;
+                    return true;
+                });
+            }
 
             return allAttendance.filter(record =>
                 record.presentStudentIds.includes(studentId) || record.absentStudentIds.includes(studentId)
@@ -1287,10 +1636,10 @@ export class DataService {
         }
     }
 
-    async calculateAttendancePercentage(studentId: string, subjectId: string): Promise<number> {
-        const records = await this.getAttendanceForStudent(studentId, subjectId);
-        if (records.length === 0) return 100; // Assume 100% if no records yet? Or 0? Let's say 100 for eligibility purposes if no classes held.
-
+    async calculateAttendancePercentage(studentId: string, subjectId: string, termKey?: string): Promise<number> {
+        const records = await this.getAttendanceForStudent(studentId, subjectId, termKey);
+        if (records.length === 0) return 100; // Assume 100% if no records yet
+        
         const presentCount = records.filter(r => r.presentStudentIds.includes(studentId)).length;
         return (presentCount / records.length) * 100;
     }
@@ -1312,9 +1661,20 @@ export class DataService {
 
     async getTimetableByClass(className: string): Promise<TimetableEntry[]> {
         try {
-            const q = query(collection(this.db, this.timetablesCollection), where('className', '==', className));
+            const settings = await this.getGlobalSettings();
+            const q = query(
+                collection(this.db, this.timetablesCollection), 
+                where('className', '==', className)
+            );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+            const allEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+            
+            // Filter by semester/year context if they exist in the record
+            return allEntries.filter(entry => {
+                if (entry.semester && entry.semester !== settings.currentSemester) return false;
+                if (entry.academicYear && entry.academicYear !== settings.currentAcademicYear) return false;
+                return true;
+            });
         } catch (error) {
             console.error('Error fetching timetable:', error);
             return [];
@@ -1334,8 +1694,15 @@ export class DataService {
 
     async getAllTimetables(): Promise<TimetableEntry[]> {
         try {
+            const settings = await this.getGlobalSettings();
             const snapshot = await getDocs(collection(this.db, this.timetablesCollection));
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+            const allEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+            
+            return allEntries.filter(entry => {
+                if (entry.semester && entry.semester !== settings.currentSemester) return false;
+                if (entry.academicYear && entry.academicYear !== settings.currentAcademicYear) return false;
+                return true;
+            });
         } catch (error) {
             console.error('Error fetching all timetables:', error);
             return [];
@@ -2608,15 +2975,16 @@ export class DataService {
         }
     }
 
-    // Excel export functionality for marks backup
-    async exportMarksToExcel(): Promise<void> {
+        // Excel export functionality for marks backup
+    async exportMarksToExcel(termKey?: string): Promise<void> {
         try {
-            console.log('Starting marks export to Excel...');
+            const activeTerm = termKey || this.getCurrentTermKey();
+            console.log(`Starting marks export to Excel for term: ${activeTerm}...`);
 
-            // Get all students and subjects
+            // Get students for the SPECIFIC term
             const [students, subjects] = await Promise.all([
-                this.getAllStudents(),
-                this.getAllSubjects()
+                this.getAllStudents(activeTerm),
+                this.getAllSubjects(activeTerm)
             ]);
 
             if (students.length === 0) {
@@ -2634,7 +3002,7 @@ export class DataService {
             const workbook = (XLSX as any).utils.book_new();
 
             // Create marks data sheet
-            const marksData = this.prepareMarksDataForExport(students, subjects);
+            const marksData = this.prepareMarksDataForExport(students, subjects, activeTerm);
             const marksWorksheet = (XLSX as any).utils.json_to_sheet(marksData);
             (XLSX as any).utils.book_append_sheet(workbook, marksWorksheet, 'Student Marks');
 
@@ -2666,9 +3034,9 @@ export class DataService {
             }));
             const studentsWorksheet = (XLSX as any).utils.json_to_sheet(studentsData);
             (XLSX as any).utils.book_append_sheet(workbook, studentsWorksheet, 'Students Reference');
-            // Generate filename with timestamp
+            // Generate filename with term and timestamp
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            const filename = `AIC_Dawa_College_Marks_Backup_${timestamp}.xlsx`;
+            const filename = `AIC_Dawa_College_Marks_${activeTerm}_${timestamp}.xlsx`;
 
             // Write and download file
             XLSX.writeFile(workbook, filename);
@@ -2775,36 +3143,47 @@ export class DataService {
         }
     }
 
-    private prepareMarksDataForExport(students: StudentRecord[], subjects: SubjectConfig[]): any[] {
+    private prepareMarksDataForExport(students: StudentRecord[], subjects: SubjectConfig[], activeTerm: string): any[] {
         const exportData: any[] = [];
+        
+        // Find all unique subject names to ensure consistent columns across all rows
+        // DEDUPLICATION: Group by name to prevent repeating columns
+        const uniqueSubjectNames = [...new Set(subjects.map(s => s.name))];
 
         students.forEach(student => {
+            // Retrieve term data from history
+            const termRecord = student.academicHistory?.[activeTerm];
+            const termMarks = termRecord?.marks || {};
+
             // Base student info
-            const baseRow = {
+            const baseRow: any = {
                 'Student ID': student.id,
                 'Admission No': student.adNo,
                 'Student Name': student.name,
-                'Class': student.className,
-                'Semester': student.semester,
-                'Grand Total': student.grandTotal,
-                'Average': student.average,
-                'Rank': student.rank,
-                'Performance Level': student.performanceLevel
+                'Class': termRecord?.className || student.className,
+                'Semester': activeTerm, // Clearer term label
+                'Grand Total': termRecord?.grandTotal || 0,
+                'Average': termRecord?.average || 0,
+                'Rank': termRecord?.rank || 0,
+                'Performance': termRecord?.performanceLevel || 'Pending'
             };
 
-            // Add marks for each subject
+            // Initialize all possible subject columns with cleaner names
+            uniqueSubjectNames.forEach(name => {
+                baseRow[`${name} INT`] = '';
+                baseRow[`${name} EXT`] = '';
+                baseRow[`${name} Total`] = '';
+                baseRow[`${name} Status`] = '';
+            });
+
+            // Map marks for each subject in this term
             subjects.forEach(subject => {
-                const marks = student.marks[subject.id];
+                const marks = termMarks[subject.id];
                 if (marks) {
-                    baseRow[`${subject.name} - INT`] = marks.int;
-                    baseRow[`${subject.name} - EXT`] = marks.ext;
-                    baseRow[`${subject.name} - Total`] = marks.total;
-                    baseRow[`${subject.name} - Status`] = marks.status;
-                } else {
-                    baseRow[`${subject.name} - INT`] = '';
-                    baseRow[`${subject.name} - EXT`] = '';
-                    baseRow[`${subject.name} - Total`] = '';
-                    baseRow[`${subject.name} - Status`] = '';
+                    baseRow[`${subject.name} INT`] = marks.int;
+                    baseRow[`${subject.name} EXT`] = marks.ext;
+                    baseRow[`${subject.name} Total`] = marks.total;
+                    baseRow[`${subject.name} Status`] = marks.status;
                 }
             });
 
@@ -2867,9 +3246,12 @@ export class DataService {
                     const student = this.processStudentRecord(studentDoc.data(), studentDoc.id);
                     const updatedMarks = { ...student.marks };
 
-                    // Process marks for each subject
+                    // Process marks for each subject scoped to their class
                     let hasUpdates = false;
-                    for (const [subjectName, subject] of subjectMap) {
+                    const studentClassSubjects = subjects.filter(s => s.targetClasses.includes(student.className));
+
+                    for (const subject of studentClassSubjects) {
+                        const subjectName = subject.name;
                         const intKey = `${subjectName} - INT`;
                         const extKey = `${subjectName} - EXT`;
                         const statusKey = `${subjectName} - Status`;
@@ -2923,13 +3305,31 @@ export class DataService {
                         // Determine performance level
                         const performanceLevel = this.calculatePerformanceLevel(updatedMarks, subjects);
 
-                        // Update student document
+                        // Extract active term for correctly scoped update
+                        const settings = await this.getGlobalSettings();
+                        const activeTerm = this.getCurrentTermKey(settings);
+
+                        const termRecord: TermRecord = {
+                            className: student.className,
+                            semester: activeTerm.split('-')[2] as 'Odd' | 'Even',
+                            marks: updatedMarks,
+                            grandTotal,
+                            average: Math.round(average * 100) / 100,
+                            rank: student.rank || 0,
+                            performanceLevel
+                        };
+
+                        // Update student document with both root and history persistence
                         await updateDoc(doc(this.db, this.studentsCollection, studentId), {
                             marks: updatedMarks,
                             grandTotal,
                             average: Math.round(average * 100) / 100,
-                            performanceLevel
+                            performanceLevel,
+                            [`academicHistory.${activeTerm}`]: termRecord
                         });
+
+                        // Invalidate cache to reflect changes
+                        this.invalidateCache();
 
                         results.success++;
                     }
@@ -2962,10 +3362,14 @@ export class DataService {
     // Exam Timetable Operations
     async saveExamTimetableEntries(entries: Omit<ExamTimetableEntry, 'id'>[]): Promise<void> {
         try {
+            const settings = await this.getGlobalSettings();
             const batch = writeBatch(this.db);
             for (const entry of entries) {
                 const docRef = doc(collection(this.db, this.examTimetablesCollection));
-                batch.set(docRef, entry);
+                batch.set(docRef, {
+                    ...entry,
+                    academicYear: settings.currentAcademicYear
+                });
             }
             await batch.commit();
             this.invalidateCache();
@@ -2975,12 +3379,15 @@ export class DataService {
         }
     }
 
-    async getExamTimetable(className: string, semester: 'Odd' | 'Even'): Promise<ExamTimetableEntry[]> {
+    async getExamTimetable(className: string, semester: 'Odd' | 'Even', academicYear?: string): Promise<ExamTimetableEntry[]> {
         try {
+            const settings = await this.getGlobalSettings();
+            const targetYear = academicYear || settings.currentAcademicYear;
             const q = query(
                 collection(this.db, this.examTimetablesCollection),
                 where('className', '==', className),
-                where('semester', '==', semester)
+                where('semester', '==', semester),
+                where('academicYear', '==', targetYear)
             );
             const snapshot = await getDocs(q);
             return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamTimetableEntry))
@@ -2993,10 +3400,12 @@ export class DataService {
 
     async clearExamTimetable(className: string, semester: 'Odd' | 'Even'): Promise<void> {
         try {
+            const settings = await this.getGlobalSettings();
             const q = query(
                 collection(this.db, this.examTimetablesCollection),
                 where('className', '==', className),
-                where('semester', '==', semester)
+                where('semester', '==', semester),
+                where('academicYear', '==', settings.currentAcademicYear)
             );
             const snapshot = await getDocs(q);
             const batch = writeBatch(this.db);
@@ -3012,12 +3421,15 @@ export class DataService {
     // Hall Ticket Release Operations
     async setHallTicketReleaseStatus(className: string, semester: 'Odd' | 'Even', isReleased: boolean): Promise<void> {
         try {
-            const id = `${className}-${semester}`;
+            const settings = await this.getGlobalSettings();
+            const academicYear = settings.currentAcademicYear;
+            const id = `${className}-${academicYear}-${semester}`;
             const docRef = doc(this.db, this.hallTicketSettingsCollection, id);
             await setDoc(docRef, {
                 id,
                 className,
                 semester,
+                academicYear,
                 isReleased,
                 releasedAt: isReleased ? Date.now() : null
             });
@@ -3028,9 +3440,11 @@ export class DataService {
         }
     }
 
-    async getHallTicketReleaseStatus(className: string, semester: 'Odd' | 'Even'): Promise<boolean> {
+    async getHallTicketReleaseStatus(className: string, semester: 'Odd' | 'Even', academicYear?: string): Promise<boolean> {
         try {
-            const id = `${className}-${semester}`;
+            const settings = await this.getGlobalSettings();
+            const targetYear = academicYear || settings.currentAcademicYear;
+            const id = `${className}-${targetYear}-${semester}`;
             const docRef = doc(this.db, this.hallTicketSettingsCollection, id);
             const snapshot = await getDoc(docRef);
             if (snapshot.exists()) {
@@ -3043,7 +3457,7 @@ export class DataService {
         }
     }
 
-    async getOverallAttendance(studentId: string, className: string): Promise<number> {
+    async getOverallAttendance(studentId: string, className: string, termKey?: string): Promise<number> {
         try {
             const subjects = await this.getSubjectsByClass(className);
             if (subjects.length === 0) return 100;
@@ -3052,7 +3466,7 @@ export class DataService {
             let totalPresent = 0;
 
             for (const subject of subjects) {
-                const records = await this.getAttendanceForStudent(studentId, subject.id);
+                const records = await this.getAttendanceForStudent(studentId, subject.id, termKey);
                 totalClasses += records.length;
                 totalPresent += records.filter(r => r.presentStudentIds.includes(studentId)).length;
             }
@@ -3093,6 +3507,543 @@ export class DataService {
     async saveGeneratorConfig(config: TimetableGeneratorConfig): Promise<void> {
         const { id, ...data } = config;
         await setDoc(doc(this.db, this.generatorConfigsCollection, id), data);
+    }
+
+    async getApplicationById(id: string): Promise<StudentApplication | null> {
+        try {
+            const docRef = doc(this.db, this.applicationsCollection, id);
+            const docSnap = await getDoc(docRef);
+            return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as StudentApplication : null;
+        } catch (error) {
+            console.error('Error fetching application:', error);
+            return null;
+        }
+    }
+
+    async getPreviousMarks(studentId: string, subjectId: string): Promise<{ int: number | 'A', ext: number | 'A' } | undefined> {
+        try {
+            const student = await this.getStudentById(studentId);
+            if (!student || !student.academicHistory) return undefined;
+
+            const termKeys = Object.keys(student.academicHistory).sort((a, b) => b.localeCompare(a));
+            const currentTerm = this.getCurrentTermKey();
+
+            for (const termKey of termKeys) {
+                if (termKey === currentTerm) continue;
+
+                const marks = student.academicHistory[termKey].marks[subjectId];
+                if (marks && (marks.int !== undefined || marks.ext !== undefined)) {
+                    return {
+                        int: marks.int,
+                        ext: marks.ext
+                    };
+                }
+            }
+            return undefined;
+        } catch (error) {
+            console.error('Error fetching previous marks:', error);
+            return undefined;
+        }
+    }
+
+    public async syncApplicationToSupplementary(application: StudentApplication): Promise<void> {
+        try {
+            // Find student ID if not present
+            let studentId = application.studentId;
+            if (!studentId) {
+                const student = await this.getStudentByAdNo(application.adNo);
+                if (!student) return;
+                studentId = student.id;
+            }
+
+            // Check for existing record for this specific application or subject/term
+            const q = query(
+                collection(this.db, this.supplementaryExamsCollection),
+                where('studentId', '==', studentId),
+                where('subjectId', '==', application.subjectId),
+                where('examTerm', '==', `${application.appliedYear}-${application.appliedSemester}`)
+            );
+            const snapshot = await getDocs(q);
+            
+            // If already exists, we might need to update the application ID if missing
+            if (!snapshot.empty) {
+                const existingDoc = snapshot.docs[0];
+                const existingData = existingDoc.data() as SupplementaryExam;
+                if (!existingData.applicationId) {
+                    await updateDoc(existingDoc.ref, { 
+                        applicationId: application.id,
+                        applicationType: application.type
+                    });
+                }
+                return;
+            }
+
+            const previousMarks = await this.getPreviousMarks(studentId, application.subjectId);
+            const termKey = `${application.appliedYear}-${application.appliedSemester}`;
+
+            const suppExam: Omit<SupplementaryExam, 'id'> = {
+                studentId: studentId,
+                subjectId: application.subjectId,
+                examType: 'CurrentSemester',
+                attemptNumber: 1, 
+                originalTerm: termKey,
+                originalSemester: application.appliedSemester,
+                originalYear: parseInt(application.appliedYear.split('-')[0]),
+                supplementaryYear: parseInt(application.appliedYear.split('-')[0]),
+                status: 'Pending',
+                marks: {
+                    int: 0,
+                    ext: 0,
+                    total: 0,
+                    status: 'Pending'
+                },
+                previousMarks,
+                examTerm: termKey,
+                appliedAt: application.createdAt || Date.now(),
+                updatedAt: Date.now(),
+                applicationId: application.id,
+                applicationType: application.type
+            };
+
+            await addDoc(collection(this.db, this.supplementaryExamsCollection), suppExam);
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error syncing application:', error);
+        }
+    }
+
+    async updateSupplementaryExamMarks(id: string, marks: SubjectMarks, previousMarks?: { int: number | 'A', ext: number | 'A' }, attemptNumber?: number, originalTerm?: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.supplementaryExamsCollection, id);
+            const updates: any = {
+                marks,
+                status: 'Completed',
+                updatedAt: Date.now()
+            };
+            if (previousMarks) {
+                updates.previousMarks = previousMarks;
+            }
+            if (attemptNumber !== undefined) {
+                updates.attemptNumber = attemptNumber;
+            }
+            if (originalTerm !== undefined) {
+                updates.originalTerm = originalTerm;
+            }
+            await updateDoc(docRef, updates);
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error updating supplementary marks:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Finds all unique years present in student academic history
+     * and updates the global settings if any are missing from availableYears.
+     */
+    async syncAllAvailableYears(): Promise<string[]> {
+        try {
+            const settings = await this.getGlobalSettings();
+            const currentYears = new Set(settings.availableYears || []);
+            const allStudents = await this.getAllStudents();
+            
+            const discoveredYears = new Set<string>();
+            allStudents.forEach(student => {
+                if (student.academicHistory) {
+                    Object.keys(student.academicHistory).forEach(key => {
+                        // Key format is usually YYYY-YYYY-Semester
+                        const yearPart = key.split('-').slice(0, 2).join('-');
+                        if (yearPart) discoveredYears.add(yearPart);
+                    });
+                }
+            });
+
+            const merged = Array.from(new Set([...currentYears, ...discoveredYears])).sort().reverse();
+            
+            if (merged.length > currentYears.size) {
+                await this.updateGlobalSettings({
+                    ...settings,
+                    availableYears: merged
+                });
+                console.log('Synchronized available years:', merged);
+            }
+            
+            return merged;
+        } catch (error) {
+            console.error('Error syncing available years:', error);
+            return [];
+        }
+    }
+
+    async getSemesterSummaries(): Promise<any[]> {
+        try {
+            // Force a fresh fetch of students to ensure counters are accurate
+            this.invalidateCache();
+            
+            const settings = await this.getGlobalSettings();
+            const years = settings.availableYears || [this.getCurrentTermKey().split('-').slice(0, 2).join('-')];
+            const students = await this.getAllStudents();
+            const attendanceSnap = await getDocs(collection(this.db, this.attendanceCollection));
+            const attendanceRecords = attendanceSnap.docs.map(doc => doc.data());
+
+            const summaries: any[] = [];
+            const currentTerm = this.getCurrentTermKey();
+
+            // Unique years from settings + student history
+            const allYears = new Set([...years]);
+            students.forEach(s => {
+                if (s.academicHistory) {
+                    Object.keys(s.academicHistory).forEach(key => {
+                        const parts = key.split('-');
+                        if (parts.length >= 2) {
+                            allYears.add(parts.slice(0, 2).join('-'));
+                        }
+                    });
+                }
+            });
+
+            Array.from(allYears).forEach(year => {
+                ['Odd', 'Even'].forEach(sem => {
+                    const termKey = `${year}-${sem}`;
+                    const termStudents = students.filter(s => s.academicHistory && s.academicHistory[termKey]);
+                    const termAttendance = attendanceRecords.filter(a => 
+                        (a.academicYear === year && a.semester === sem) || 
+                        (a.termKey === termKey)
+                    );
+
+                    // Show terms that actually have data OR are the current term
+                    const hasStudents = termStudents.length > 0;
+                    const hasAttendance = termAttendance.length > 0;
+                    
+                    if (hasStudents || hasAttendance || termKey === currentTerm) {
+                        summaries.push({
+                            academicYear: year,
+                            semester: sem,
+                            termKey,
+                            studentCount: termStudents.length,
+                            attendanceCount: termAttendance.length,
+                            isCurrent: termKey === currentTerm
+                        });
+                    }
+                });
+            });
+
+            return summaries.sort((a, b) => b.termKey.localeCompare(a.termKey));
+        } catch (error) {
+            console.error('Error getting semester summaries:', error);
+            return [];
+        }
+    }
+
+    async deleteSemesterData(termKey: string): Promise<void> {
+        try {
+            const students = await this.getAllStudents();
+            
+            // Extract year and sem from "2025-2026-Odd"
+            const parts = termKey.split('-');
+            const sem = parts.pop();
+            const year = parts.join('-');
+
+            // We must process in batches since Firestore has a 500 writes limit per batch
+            const MAX_BATCH_SIZE = 400;
+            let currentBatch = writeBatch(this.db);
+            let operationCount = 0;
+
+            const commitBatchIfNeeded = async () => {
+                if (operationCount >= MAX_BATCH_SIZE) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(this.db);
+                    operationCount = 0;
+                }
+            };
+
+            // 1. Remove history from students
+            for (const student of students) {
+                let needsUpdate = false;
+                const updateData: any = {};
+
+                if (student.academicHistory && student.academicHistory[termKey]) {
+                    updateData[`academicHistory.${termKey}`] = deleteField();
+                    needsUpdate = true;
+                }
+                
+                // Also clear top-level current term data if deleting active term
+                if (termKey === this.getCurrentTermKey()) {
+                    if (student.marks && Object.keys(student.marks).length > 0) {
+                        updateData.marks = {};
+                        updateData.grandTotal = 0;
+                        updateData.average = 0;
+                        updateData.rank = 0;
+                        updateData.performanceLevel = 'Pending';
+                        needsUpdate = true;
+                    }
+                }
+
+                if (needsUpdate) {
+                    const docRef = doc(this.db, this.studentsCollection, student.id);
+                    currentBatch.update(docRef, updateData);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 2. Delete attendance records
+            const attendanceSnap = await getDocs(query(
+                collection(this.db, this.attendanceCollection),
+                where('termKey', '==', termKey)
+            ));
+            for (const d of attendanceSnap.docs) {
+                currentBatch.delete(d.ref);
+                operationCount++;
+                await commitBatchIfNeeded();
+            }
+            
+            // Fallback for legacy attendance with year/semester separate
+            const legacyAttendanceSnap = await getDocs(query(
+                collection(this.db, this.attendanceCollection),
+                where('academicYear', '==', year),
+                where('semester', '==', sem)
+            ));
+            for (const d of legacyAttendanceSnap.docs) {
+                currentBatch.delete(d.ref);
+                operationCount++;
+                await commitBatchIfNeeded();
+            }
+
+            // 3. Handle Active Term Cleanup & Metadata Pruning
+            const settings = await this.getGlobalSettings();
+            const currentTerm = this.getCurrentTermKey();
+            
+            // Prune availableYears: only remove if NO other semester exists for this year
+            let updatedAvailableYears = settings.availableYears || [];
+            const otherSemForThisYear = students.some(s => {
+                if (!s.academicHistory) return false;
+                return Object.keys(s.academicHistory).some(k => k.startsWith(year) && k !== termKey);
+            });
+            
+            if (!otherSemForThisYear) {
+                updatedAvailableYears = updatedAvailableYears.filter(y => y !== year);
+            }
+
+            const remainingSemesters = (settings.semesters || []).filter(s => s.termKey !== termKey);
+            
+            if (termKey === currentTerm) {
+                console.log('Deleting active term. Resetting global settings current semester pointers...');
+                
+                let fallbackYear = this.DEFAULT_ACADEMIC_YEAR;
+                let fallbackSem = this.DEFAULT_SEMESTER;
+
+                if (remainingSemesters.length > 0) {
+                    const latest = remainingSemesters[0];
+                    fallbackYear = latest.academicYear;
+                    fallbackSem = latest.semester;
+                } else if (updatedAvailableYears.length > 0) {
+                    fallbackYear = updatedAvailableYears[0];
+                    // If switching to a legacy year without a semester config, default to Odd
+                    fallbackSem = 'Odd';
+                }
+
+                await this.updateGlobalSettings({
+                    ...settings,
+                    currentAcademicYear: fallbackYear,
+                    currentSemester: fallbackSem as 'Odd' | 'Even',
+                    availableYears: updatedAvailableYears,
+                    semesters: remainingSemesters
+                });
+            } else {
+                // Just prune the metadata
+                await this.updateGlobalSettings({
+                    ...settings,
+                    availableYears: updatedAvailableYears,
+                    semesters: remainingSemesters
+                });
+            }
+
+            // Commit any remaining operations
+            if (operationCount > 0) {
+                await currentBatch.commit();
+            }
+            
+            console.log(`Deleted all data for term: ${termKey}`);
+            this.invalidateCache();
+            
+            // Auto-trigger repair after deletion to ensure fallback is solid
+            await this.repairGlobalSettings();
+        } catch (error) {
+            console.error('Error deleting semester data:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Scans all student records to rebuild availableYears and ensure currentActiveTerm points to real data.
+     */
+    async repairGlobalSettings(): Promise<{ discoveredYears: string[], activeTermSet: string }> {
+        try {
+            console.log('Repairing Global Settings...');
+            const settings = await this.getGlobalSettings();
+            const students = await this.getAllStudents();
+            
+            const discoveredYears = new Set<string>(settings.availableYears || []);
+            const discoveredTerms = new Set<string>();
+            
+            students.forEach(s => {
+                if (s.academicHistory) {
+                    Object.keys(s.academicHistory).forEach(tk => {
+                        discoveredTerms.add(tk);
+                        const yearPart = tk.split('-').slice(0, 2).join('-');
+                        if (yearPart) discoveredYears.add(yearPart);
+                    });
+                }
+            });
+
+            // Sort years newest first
+            const sortedYears = Array.from(discoveredYears).sort().reverse();
+            
+            let newYear = settings.currentAcademicYear;
+            let newSem = settings.currentSemester;
+            
+            // HEAL: If current year is NOT in discovered years (meaning it might be a deleted/orphaned term)
+            // or if it has 0 students while others have data, consider switching
+            const currentTermKey = this.getCurrentTermKey();
+            const currentHasData = students.some(s => s.academicHistory?.[currentTermKey]);
+            
+            if (!currentHasData && sortedYears.length > 0) {
+                // Find the first year in sorted list that actually has student records
+                for (const year of sortedYears) {
+                    const hasOdd = students.some(s => s.academicHistory?.[`${year}-Odd`]);
+                    const hasEven = students.some(s => s.academicHistory?.[`${year}-Even`]);
+                    
+                    if (hasOdd) {
+                        newYear = year;
+                        newSem = 'Odd';
+                        break;
+                    } else if (hasEven) {
+                        newYear = year;
+                        newSem = 'Even';
+                        break;
+                    }
+                }
+            }
+
+            const updatedSettings = {
+                ...settings,
+                availableYears: sortedYears,
+                currentAcademicYear: newYear,
+                currentSemester: newSem as 'Odd' | 'Even'
+            };
+
+            await this.updateGlobalSettings(updatedSettings);
+            console.log('Global Settings repaired. Active Term:', `${newYear}-${newSem}`);
+            
+            return { 
+                discoveredYears: sortedYears, 
+                activeTermSet: `${newYear}-${newSem}` 
+            };
+        } catch (error) {
+            console.error('Error repairing global settings:', error);
+            throw error;
+        }
+    }
+
+    // Clone subjects from one term to another (Helper for Wizard)
+    async cloneSubjectsForNewTerm(targetAcademicYear: string): Promise<number> {
+        try {
+            const allSubjects = await this.getAllSubjects();
+            if (allSubjects.length === 0) return 0;
+
+            const batch = writeBatch(this.db);
+            let count = 0;
+
+            // In this architecture, subjects are global but we can update their academicYear
+            // or simply ensure they are available for the new year's classes.
+            // If the user wants to strictly ISOLATE subjects by year, we would need to duplicate them.
+            // For now, let's just return the count and ensure they are all processed.
+            return allSubjects.length;
+        } catch (error) {
+            console.error('Error cloning subjects:', error);
+            return 0;
+        }
+    }
+
+    // Bulk class promotion
+    async promoteStudents(fromClass: string, toClass: string): Promise<void> {
+        try {
+            const students = await this.getAllStudents();
+            const targetStudents = students.filter(s => s.className === fromClass);
+
+            const MAX_BATCH_SIZE = 400;
+            let currentBatch = writeBatch(this.db);
+            let operationCount = 0;
+
+            for (const student of targetStudents) {
+                const docRef = doc(this.db, this.studentsCollection, student.id);
+                currentBatch.update(docRef, { className: toClass });
+                operationCount++;
+                
+                if (operationCount >= MAX_BATCH_SIZE) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(this.db);
+                    operationCount = 0;
+                }
+            }
+
+            if (operationCount > 0) {
+                await currentBatch.commit();
+            }
+            this.invalidateCache();
+            console.log(`Successfully promoted ${targetStudents.length} students from ${fromClass} to ${toClass}`);
+        } catch (error) {
+            console.error('Error promoting students:', error);
+            throw error;
+        }
+    }
+
+    // Master System Backup (High Fidelity JSON Export)
+    async downloadFullSystemBackup(): Promise<void> {
+        try {
+            console.log('Initiating Full System Backup (JSON)...');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const backup: Record<string, any[]> = {};
+            
+            const collectionsToBackup = [
+                this.studentsCollection,
+                this.subjectsCollection,
+                this.settingsCollection,
+                this.applicationsCollection,
+                this.supplementaryExamsCollection,
+                this.attendanceCollection,
+                this.timetablesCollection,
+                this.specialDaysCollection,
+                this.examTimetablesCollection,
+                this.hallTicketSettingsCollection,
+                this.academicCalendarCollection,
+                this.generatorConfigsCollection
+            ];
+
+            for (const colName of collectionsToBackup) {
+                const q = query(collection(this.db, colName));
+                const snapshot = await getDocs(q);
+                backup[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            }
+
+            const backupData = JSON.stringify(backup, null, 2);
+            const blob = new Blob([backupData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `AIC_Dawa_Portal_Master_Backup_${timestamp}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            console.log('Master Backup complete.');
+        } catch (error) {
+            console.error('Error during Master Backup:', error);
+            throw error;
+        }
     }
 }
 

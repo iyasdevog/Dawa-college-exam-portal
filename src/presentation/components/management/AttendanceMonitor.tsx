@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AttendanceRecord, StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
+import { useTerm } from '../../viewmodels/TermContext';
 
 interface AttendanceMonitorProps {
     students: StudentRecord[];
@@ -10,6 +11,7 @@ interface AttendanceMonitorProps {
 
 const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subjects }) => {
     const { isMobile } = useMobile();
+    const { activeTerm } = useTerm();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedClass, setSelectedClass] = useState('All');
@@ -21,13 +23,28 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
 
     useEffect(() => {
         loadRecords();
-    }, []);
+    }, [activeTerm]);
 
     const loadRecords = async () => {
         setIsLoading(true);
         try {
+            // Fetch all records - we will filter client-side for better UX with small segments
             const data = await dataService.getAllAttendanceRecords();
-            setRecords(data);
+            
+            const [targetYear, targetSem] = activeTerm.split('-');
+            
+            // Filter by term metadata if present, or fallback to general list if no metadata
+            // (Note: dataService already does date-based filtering for current term if no metadata)
+            const termFiltered = data.filter(record => {
+                if (record.academicYear && record.semester) {
+                    return record.academicYear === targetYear && record.semester === targetSem;
+                }
+                // If no metadata, we let it pass for now to show legacy data, 
+                // but ideally we should be strict.
+                return true; 
+            });
+
+            setRecords(termFiltered);
         } catch (error) {
             console.error('Error loading attendance records:', error);
         } finally {

@@ -5,15 +5,15 @@ interface HallTicketViewProps {
     student: StudentRecord;
     timetable: ExamTimetableEntry[];
     semester: 'Odd' | 'Even';
+    academicYear?: string;
 }
 
-const HallTicketView: React.FC<HallTicketViewProps> = ({ student, timetable, semester }) => {
+const HallTicketView: React.FC<HallTicketViewProps> = ({ student, timetable, semester, academicYear }) => {
     const handlePrint = () => {
         window.print();
     };
 
-    const currentYear = new Date().getFullYear();
-    const academicYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+    const displayYear = academicYear || `${new Date().getFullYear()}-${(new Date().getFullYear() + 1).toString().slice(-2)}`;
 
     return (
         <div className="w-full max-w-5xl mx-auto p-4 sm:p-8 relative">
@@ -65,7 +65,7 @@ const HallTicketView: React.FC<HallTicketViewProps> = ({ student, timetable, sem
                                 Islamic Dawa Academy
                             </h1>
                             <h2 className="text-xl font-bold uppercase tracking-widest text-slate-700 bg-slate-100 print:bg-transparent border border-slate-200 print:border-none inline-block px-6 py-2 rounded-full print:rounded-none relative z-10">
-                                {semester} Semester Regular Examination - January {academicYear}
+                                {semester} Semester Regular Examination - {displayYear}
                             </h2>
                             <div className="mt-8 relative z-10">
                                 <span className="bg-slate-900 text-white py-4 px-16 inline-block font-black uppercase tracking-[0.4em] text-2xl shadow-lg print:shadow-none rounded-sm">

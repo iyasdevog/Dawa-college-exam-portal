@@ -7,10 +7,15 @@ interface ClassManagementProps {
     onUpdateCustomClasses: (classes: string[]) => void;
     students: StudentRecord[];
     subjects: SubjectConfig[];
+    onRefresh: () => void;
 }
 
-const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, onUpdateCustomClasses, students, subjects }) => {
+const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, onUpdateCustomClasses, students, subjects, onRefresh }) => {
     const [showClassForm, setShowClassForm] = useState(false);
+    const [showPromoteForm, setShowPromoteForm] = useState(false);
+    const [sourceClass, setSourceClass] = useState('');
+    const [targetClass, setTargetClass] = useState('');
+    const [isPromoting, setIsPromoting] = useState(false);
     const [newClassName, setNewClassName] = useState('');
 
     const getAllClasses = () => [...CLASSES, ...customClasses];
@@ -44,6 +49,35 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, onUpda
 
         const updatedCustomClasses = customClasses.filter(c => c !== className);
         onUpdateCustomClasses(updatedCustomClasses);
+    };
+
+    const handlePromoteStudentsClick = (className: string) => {
+        setSourceClass(className);
+        setTargetClass('');
+        setShowPromoteForm(true);
+    };
+
+    const confirmPromotion = async () => {
+        if (!targetClass) {
+            alert('Please select a target class to promote students to.');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to promote ALL students from ${sourceClass} to ${targetClass}? This operation cannot be undone automatically.`)) return;
+
+        try {
+            setIsPromoting(true);
+            const { dataService } = await import('../../../infrastructure/services/dataService');
+            await dataService.promoteStudents(sourceClass, targetClass);
+            alert(`Successfully promoted students from ${sourceClass} to ${targetClass}.`);
+            setShowPromoteForm(false);
+            onRefresh();
+        } catch (error) {
+            console.error('Promotion error:', error);
+            alert('Failed to promote students. See console for details.');
+        } finally {
+            setIsPromoting(false);
+        }
     };
 
     return (
@@ -81,6 +115,13 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, onUpda
                                             <i className="fa-solid fa-trash text-sm"></i>
                                         </button>
                                     )}
+                                    <button
+                                        onClick={() => handlePromoteStudentsClick(className)}
+                                        className="p-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-all ml-1"
+                                        title="Promote Students"
+                                    >
+                                        <i className="fa-solid fa-arrow-up text-sm"></i>
+                                    </button>
                                 </div>
                             </div>
                             <div className="space-y-2 text-sm text-slate-600">
@@ -125,6 +166,50 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, onUpda
                                     className="flex-1 py-3 bg-emerald-600 text-white rounded-xl"
                                 >
                                     Add Class
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Promote Students Modal */}
+            {showPromoteForm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6">
+                        <h3 className="text-xl font-bold mb-4">Promote Students</h3>
+                        <p className="text-sm text-slate-600 mb-4">
+                            Select the destination class to promote all students currently enrolled in <strong>{sourceClass}</strong>. 
+                        </p>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold mb-1">Target Class</label>
+                                <select 
+                                    value={targetClass} 
+                                    onChange={(e) => setTargetClass(e.target.value)}
+                                    className="w-full p-3 border rounded-xl"
+                                    disabled={isPromoting}
+                                >
+                                    <option value="">-- Select Target Class --</option>
+                                    {getAllClasses().filter(c => c !== sourceClass).map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    onClick={() => setShowPromoteForm(false)}
+                                    className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-medium"
+                                    disabled={isPromoting}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmPromotion}
+                                    className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-medium disabled:opacity-50 flex justify-center items-center"
+                                    disabled={isPromoting || !targetClass}
+                                >
+                                    {isPromoting ? <div className="loader-ring w-5 h-5 border-2"></div> : 'Confirm Promotion'}
                                 </button>
                             </div>
                         </div>

@@ -36,7 +36,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [activeTerm]);
 
     useEffect(() => {
         if (selectedClass) {
@@ -47,7 +47,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     const loadData = async () => {
         try {
             setIsLoading(true);
-            const allSubjects = await dataService.getAllSubjects();
+            const allSubjects = await dataService.getAllSubjects(activeTerm);
             setSubjects(allSubjects);
         } catch (error) {
             console.error('Error loading data:', error);
@@ -58,7 +58,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
     const loadClassData = async () => {
         try {
-            const classStudents = await dataService.getStudentsByClass(selectedClass);
+            const classStudents = await dataService.getStudentsByClass(selectedClass, activeTerm);
 
             // Map students to their active term data for display and ranking
             const processedStudents = classStudents.map(student => {
@@ -561,7 +561,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                         <div className="space-y-1">
                             <div><span className="font-semibold">Report Type:</span> Class Results</div>
                             <div><span className="font-semibold">Class:</span> {selectedClass}</div>
-                            <div><span className="font-semibold">Academic Year:</span> 2026-27</div>
+                            <div><span className="font-semibold">Academic Year:</span> {currentAcademicYear}</div>
                             <div><span className="font-semibold">Generated:</span> {new Date().toLocaleDateString('en-IN')}</div>
                             <div><span className="font-semibold">Document ID:</span></div>
                             <div className="font-mono">AIC-CR-{selectedClass}-{Date.now().toString().slice(-8)}</div>

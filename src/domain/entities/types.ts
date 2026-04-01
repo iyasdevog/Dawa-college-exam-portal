@@ -25,11 +25,22 @@ export interface SupplementaryExam {
   studentId: string;
   subjectId: string;
   examType: SupplementaryExamType; // Distinguishes between repeating past years and current failures
+  attemptNumber?: number; // 1 to 10
+  originalTerm?: string; // The semester of the first failure (e.g. "2024-2025-Odd")
   originalSemester: 'Odd' | 'Even';
   originalYear: number;
   supplementaryYear: number;
   status: 'Pending' | 'Completed';
   marks?: SubjectMarks;
+  previousMarks?: {
+    int: number | 'A';
+    ext: number | 'A';
+  };
+  examTerm?: string;
+  appliedAt?: number;
+  updatedAt?: number;
+  applicationId?: string; // The specific application that triggered this
+  applicationType?: ApplicationType; // revaluation, improvement, etc.
 }
 
 export interface TermRecord {
@@ -47,6 +58,7 @@ export interface StudentRecord {
   adNo: string;
   name: string;
   currentClass: string; // The active class they are in right now
+  isActive?: boolean; // Controls whether this student is actively enrolled in current workflows
   academicHistory?: Record<string, TermRecord>; // e.g. "2023-2024-Odd": { ... }
 
   // Legacy fields for migration
@@ -61,10 +73,22 @@ export interface StudentRecord {
   importRowNumber?: number; // Track original import order
 }
 
+export interface SemesterConfig {
+  termKey: string; // e.g., "2026-Even"
+  academicYear: string;
+  semester: 'Odd' | 'Even';
+  startDate: string;
+  endDate: string;
+}
+
 export interface GlobalSettings {
   currentAcademicYear: string; // e.g., "2025-2026"
   currentSemester: 'Odd' | 'Even';
   availableYears?: string[]; // Manually managed list of academic years
+  attendanceStartDate?: string; // YYYY-MM-DD
+  attendanceEndDate?: string;   // YYYY-MM-DD
+  minAttendancePercentage?: number; // Minimum attendance required for hall ticket (e.g. 75)
+  semesters?: SemesterConfig[]; // History of explicit semester metadata
 }
 
 export interface SubjectConfig {
@@ -78,6 +102,8 @@ export interface SubjectConfig {
   targetClasses: string[];
   subjectType: 'general' | 'elective';
   enrolledStudents?: string[]; // Student IDs for elective subjects
+  activeSemester?: 'Odd' | 'Even' | 'Both';
+  academicYear?: string;
 }
 
 export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public' | 'attendance' | 'attendance-public' | 'student-attendance-portal';
@@ -109,6 +135,7 @@ export interface StudentApplication {
     appliedSemester: 'Odd' | 'Even';
     reason?: string;
     adminComment?: string;
+    studentId?: string; // Links to StudentRecord.id
 }
 
 export interface TimetableEntry {
@@ -119,6 +146,8 @@ export interface TimetableEntry {
   className: string;
   startTime: string; // e.g., "10:00"
   endTime: string;   // e.g., "11:00"
+  semester?: 'Odd' | 'Even';
+  academicYear?: string;
 }
 
 export interface ExamTimetableEntry {
@@ -129,6 +158,7 @@ export interface ExamTimetableEntry {
   subjectName: string;
   className: string;
   semester: 'Odd' | 'Even';
+  academicYear?: string;
   startTime?: string;
   endTime?: string;
 }
@@ -137,6 +167,7 @@ export interface HallTicketSettings {
   id: string;
   className: string;
   semester: 'Odd' | 'Even';
+  academicYear?: string;
   isReleased: boolean;
   releasedAt?: number;
 }
@@ -153,6 +184,8 @@ export interface AttendanceRecord {
   isSpecialDay?: boolean;
   specialDayType?: 'Leave' | 'Program' | 'Other';
   specialDayNote?: string;
+  semester?: 'Odd' | 'Even';
+  academicYear?: string;
 }
 
 export interface SpecialDay {

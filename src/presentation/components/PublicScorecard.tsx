@@ -3,6 +3,8 @@ import { StudentRecord, SubjectConfig, SubjectMarks } from '../../domain/entitie
 import { useMobile } from '../hooks/useMobile';
 import ClassResults from './ClassResults';
 import { useTerm } from '../viewmodels/TermContext';
+import { TermSelector } from './TermSelector';
+
 
 interface PublicScorecardProps {
     result: StudentRecord;
@@ -13,7 +15,7 @@ interface PublicScorecardProps {
 
 const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isResultsReleased = true, isSuppReleased = false }) => {
     const { isMobile } = useMobile();
-    const { activeTerm, currentSemester } = useTerm();
+    const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
 
     const handlePrint = () => {
         window.print();
@@ -31,7 +33,17 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
     const displayClass = activeTermRecord?.className || result?.currentClass || '';
     const displaySemester = activeTermRecord?.semester || currentSemester;
 
-    let resultSubjects = result ? subjects.filter(s => s.targetClasses?.includes(displayClass)) : [];
+    let resultSubjects = result ? subjects.filter(s => {
+        const isTargetClass = s.targetClasses?.includes(displayClass);
+        if (!isTargetClass) return false;
+
+        // For elective subjects, only show if student is explicitly enrolled
+        if (s.subjectType === 'elective') {
+            return s.enrolledStudents?.includes(result.id);
+        }
+
+        return true;
+    }) : [];
     
     // Merged marks mapping
     const finalMarks: Record<string, SubjectMarks> = { ...displayMarks };
@@ -83,7 +95,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                     <div className="grid grid-cols-3 gap-4 print:text-xs text-black print:leading-tight">
                         <div className="text-left">
                             <div className="font-bold">Academic Session:</div>
-                            <div>2026-27</div>
+                            <div>{currentAcademicYear}</div>
                         </div>
                         <div className="text-center">
                             <div className="font-bold">Document Type:</div>
@@ -148,7 +160,11 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                 <span className={`text-emerald-300 font-bold ${isMobile ? 'text-sm' : 'text-sm'}`}>
                                     Admission: {result.adNo}
                                 </span>
-                                <span className={`text-emerald-300 font-bold ${isMobile ? 'text-sm' : 'text-sm'}`}>
+                                <div className="flex items-center gap-2 print:hidden">
+                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">View Term:</span>
+                                    <TermSelector variant="dark" className="!bg-white/10 border-none !p-1 h-auto text-xs" />
+                                </div>
+                                <span className="hidden print:inline text-emerald-300 font-bold text-sm">
                                     Term: {activeTerm}
                                 </span>
                             </div>

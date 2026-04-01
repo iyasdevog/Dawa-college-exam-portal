@@ -3,6 +3,7 @@ import { dataService } from '../../infrastructure/services/dataService';
 import { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { useMobile } from '../hooks/useMobile';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface ApplicationPortalProps {
     onClose: () => void;
@@ -27,19 +28,21 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const [foundStudent, setFoundStudent] = useState<StudentRecord | null>(null);
 
     const { isMobile } = useMobile();
+    const { termOptions, activeTerm } = useTerm();
+    const [selectedTermKey, setSelectedTermKey] = useState(activeTerm);
     
     // Reset selection when application type changes
     useEffect(() => {
         setSelectedSubjects([]);
     }, [appType]);
 
-    // Auto-fill student name when Ad No changes
+    // Auto-fill student name and fetch term-specific marks when Ad No or Term changes
     useEffect(() => {
         const autoFill = async () => {
             if (adNo.length >= 3) { // Threshold for searching
                 setIsAutoFilling(true);
                 try {
-                    const student = await dataService.getStudentByAdNo(adNo);
+                    const student = await dataService.getStudentByAdNo(adNo, selectedTermKey);
                     if (student) {
                         setFoundStudent(student);
                         setStudentName(student.name);
@@ -58,17 +61,17 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         };
         const timer = setTimeout(autoFill, 500); // Debounce
         return () => clearTimeout(timer);
-    }, [adNo]);
+    }, [adNo, selectedTermKey]);
 
-    // Load subjects based on selected class
+    // Load subjects based on selected class and term
     useEffect(() => {
         const loadSubjects = async () => {
-            const classSubjects = await dataService.getSubjectsByClass(className);
+            const classSubjects = await dataService.getSubjectsByClass(className, selectedTermKey);
             setSubjects(classSubjects);
             setSelectedSubjects([]); // Reset selection when class changes
         };
         loadSubjects();
-    }, [className]);
+    }, [className, selectedTermKey]);
 
     const fees: Record<ApplicationType, number> = {
         'revaluation': 100,
@@ -90,12 +93,17 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         if (!foundStudent || !foundStudent.marks) return subjects;
         
         return subjects.filter(subj => {
+            // For elective subjects, only show if student is explicitly enrolled
+            if (subj.subjectType === 'elective' && !subj.enrolledStudents?.includes(foundStudent.id)) {
+                return false;
+            }
+
             const mark = foundStudent.marks?.[subj.id];
             
             if (appType === 'revaluation' || appType === 'improvement') {
                 return mark?.status === 'Passed';
             }
-            // For all supplementary types
+            // For all supplementary types (including cases where no mark exists yet)
             return !mark || mark.status === 'Failed' || mark.status === 'Pending';
         });
     }, [subjects, foundStudent, appType]);
@@ -119,13 +127,15 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         setMessage(null);
 
         try {
-            const settings = await dataService.getGlobalSettings();
+            const parts = selectedTermKey.split('-');
+            const appliedSemester = parts.pop() as 'Odd' | 'Even';
+            const appliedYear = parts.join('-');
             
             // Check for existing/duplicate applications
             const existingApps = await dataService.getApplicationsByAdNo(adNo);
             const duplicates = existingApps.filter(app => 
-                app.appliedYear === settings.currentAcademicYear &&
-                app.appliedSemester === settings.currentSemester &&
+                app.appliedYear === appliedYear &&
+                app.appliedSemester === appliedSemester &&
                 app.type === appType &&
                 (app.status === 'pending' || app.status === 'approved') &&
                 selectedSubjects.includes(app.subjectId)
@@ -143,8 +153,8 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
 
             // Identify any rejected applications for the same subject/type to clean up before resubmitting
             const rejectedApps = existingApps.filter(app => 
-                app.appliedYear === settings.currentAcademicYear &&
-                app.appliedSemester === settings.currentSemester &&
+                app.appliedYear === appliedYear &&
+                app.appliedSemester === appliedSemester &&
                 app.type === appType &&
                 app.status === 'rejected' &&
                 selectedSubjects.includes(app.subjectId)
@@ -168,8 +178,8 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                     subjectName: subject?.name || subjId,
                     type: appType,
                     fee: fees[appType],
-                    appliedYear: settings.currentAcademicYear,
-                    appliedSemester: settings.currentSemester,
+                    appliedYear,
+                    appliedSemester,
                     reason: appType === 'special-supp' ? `[${specialReason.toUpperCase()}] ${reason}` : undefined
                 });
             });
@@ -320,6 +330,30 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                             {view === 'apply' ? (
                                 <form onSubmit={handleApply} className="space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                                <i className="fa-solid fa-calendar-check text-emerald-600"></i>
+                                                Exam Period / Semester
+                                            </label>
+                                            <select 
+                                                value={selectedTermKey} 
+                                                onChange={e => setSelectedTermKey(e.target.value)}
+                                                className="w-full px-4 py-3 rounded-xl border-2 border-emerald-100 bg-emerald-50/30 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
+                                            >
+                                                {termOptions.map(term => {
+                                                    const parts = term.split('-');
+                                                    const year = `${parts[0]}-${parts[1]}`;
+                                                    const sem = parts[2];
+                                                    return (
+                                                        <option key={term} value={term}>
+                                                            {year} - {sem} Semester
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                            <p className="text-[10px] text-slate-400 font-bold italic">Select the semester you are applying for</p>
+                                        </div>
+
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Admission Number</label>
@@ -328,7 +362,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                             <input 
                                                 type="text" required value={adNo} onChange={e => setAdNo(e.target.value)}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
-                                                placeholder="e.g. 2023001"
+                                                placeholder="e.g. 138"
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -519,10 +553,14 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                             <div key={app.id} className="p-5 rounded-2xl border border-slate-100 bg-white shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
                                                 <div className="flex items-center justify-between">
                                                     <div className="space-y-1">
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex flex-col mb-1">
                                                             <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{app.type.replace('-', ' ')}</span>
-                                                            <span className="text-slate-300">•</span>
-                                                            <span className="text-xs font-bold text-slate-500">{app.subjectName}</span>
+                                                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-tight">
+                                                                Exam Period: {app.appliedYear} - {app.appliedSemester}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-bold text-slate-700">{app.subjectName}</span>
                                                         </div>
                                                         <p className="text-[10px] text-slate-400 font-bold">Applied on {new Date(app.createdAt).toLocaleDateString()}</p>
                                                         {app.adminComment && <p className="text-xs text-amber-600 font-bold mt-2 bg-amber-50 p-2 rounded-lg">Admin: {app.adminComment}</p>}

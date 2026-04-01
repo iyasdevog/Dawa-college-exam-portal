@@ -11,6 +11,87 @@ interface SubjectManagementProps {
     isLoading: boolean;
 }
 
+const SubjectRow = React.memo(({ subject, index, onEdit, onDelete, onManageEnrollment }: {
+    subject: any,
+    index: number,
+    onEdit: (s: any) => void,
+    onDelete: (s: any, c?: string) => void,
+    onManageEnrollment: (s: any) => void
+}) => {
+    return (
+        <tr key={`${subject.id}-${Array.isArray(subject.specificClass) ? 'all' : subject.specificClass}-${index}`} className="bg-white hover:bg-slate-50 transition-colors">
+            <td className="p-4 font-bold text-slate-800">{shortenSubjectName(subject.name)}</td>
+            <td className="p-4 text-slate-600">{subject.facultyName || '-'}</td>
+            <td className="p-4 text-center">
+                <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
+                    {subject.subjectType || 'general'}
+                </span>
+                {subject.subjectType === 'elective' && (
+                    <div className="text-[10px] text-slate-400 mt-1 font-medium">{(subject.enrolledStudents || []).length} enrolled</div>
+                )}
+            </td>
+            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxEXT} / {subject.maxINT}</td>
+            <td className="p-4 text-center">
+                {Array.isArray(subject.specificClass) ? (
+                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">
+                        {subject.specificClass.join(', ')}
+                    </span>
+                ) : (
+                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">{subject.specificClass}</span>
+                )}
+            </td>
+            <td className="p-4 text-center flex justify-center gap-2">
+                {subject.subjectType === 'elective' && (
+                    <button onClick={() => onManageEnrollment(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users"></i></button>
+                )}
+                <button onClick={() => onEdit(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit"><i className="fa-solid fa-pen"></i></button>
+                {!Array.isArray(subject.specificClass) ? (
+                    <button onClick={() => onDelete(subject, subject.specificClass as string)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Remove from this class"><i className="fa-solid fa-trash"></i></button>
+                ) : (
+                    <button onClick={() => onDelete(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Delete Subject"><i className="fa-solid fa-trash"></i></button>
+                )}
+            </td>
+        </tr>
+    );
+});
+
+const FacultyCard = React.memo(({ faculty, facultySubjects }: { faculty: string, facultySubjects: any[] }) => {
+    return (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+                <h3 className="font-bold text-slate-900">{faculty}</h3>
+                <span className="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded-full font-bold">{facultySubjects.length} Subject{facultySubjects.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {facultySubjects.map((subject, idx) => (
+                        <div key={`${subject.id}-${subject.specificClass}-${idx}`} className="border rounded-lg p-3 hover:bg-slate-50 transition-colors">
+                            <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-bold text-emerald-800">{shortenSubjectName(subject.name)}</h4>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${subject.subjectType === 'elective' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                    {subject.subjectType || 'General'}
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mb-2">
+                                {Array.isArray(subject.specificClass) ? (
+                                    <span className="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold shadow-sm">
+                                        {subject.specificClass.join(', ')}
+                                    </span>
+                                ) : (
+                                    <span className="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold shadow-sm">{subject.specificClass}</span>
+                                )}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                                Max EXT: {subject.maxEXT} | Max INT: {subject.maxINT}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+});
+
 const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, students, onRefresh, isLoading }) => {
     const { isMobile } = useMobile();
     const [isOperating, setIsOperating] = useState(false);
@@ -27,7 +108,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         facultyName: '',
         targetClasses: [] as string[],
         subjectType: 'general' as 'general' | 'elective',
-        enrolledStudents: [] as string[]
+        enrolledStudents: [] as string[],
+        activeSemester: 'Both' as 'Odd' | 'Even' | 'Both',
+        academicYear: ''
     });
 
     // Enrollment state
@@ -43,7 +126,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
 
     const uniqueClasses = Array.from(new Set(students.map(s => s.className))).sort();
 
-    const handleAddSubject = () => {
+    const handleAddSubject = async () => {
+        const settings = await dataService.getGlobalSettings();
         setEditingSubject(null);
         setIsCreatingNewFaculty(false);
         setSubjectForm({
@@ -55,7 +139,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             facultyName: '',
             targetClasses: [],
             subjectType: 'general',
-            enrolledStudents: []
+            enrolledStudents: [],
+            activeSemester: 'Both',
+            academicYear: settings.currentAcademicYear || ''
         });
         setShowSubjectForm(true);
     };
@@ -72,7 +158,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             facultyName: subject.facultyName || '',
             targetClasses: subject.targetClasses,
             subjectType: subject.subjectType || 'general',
-            enrolledStudents: subject.enrolledStudents || []
+            enrolledStudents: subject.enrolledStudents || [],
+            activeSemester: subject.activeSemester || 'Both',
+            academicYear: subject.academicYear || ''
         });
         setShowSubjectForm(true);
     };
@@ -146,7 +234,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                 facultyName: normalizedFacultyName,
                 targetClasses: uniqueTargetClasses, // Use filtered classes
                 subjectType: subjectForm.subjectType,
-                enrolledStudents: subjectForm.enrolledStudents
+                enrolledStudents: subjectForm.enrolledStudents,
+                activeSemester: subjectForm.activeSemester,
+                academicYear: subjectForm.academicYear
             };
 
             if (editingSubject) {
@@ -500,39 +590,14 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {flattenedSubjectList.map((subject, index) => (
-                                        <tr key={`${subject.id}-${Array.isArray(subject.specificClass) ? 'all' : subject.specificClass}-${index}`} className="bg-white hover:bg-slate-50 transition-colors">
-                                            <td className="p-4 font-bold text-slate-800">{shortenSubjectName(subject.name)}</td>
-                                            <td className="p-4 text-slate-600">{subject.facultyName || '-'}</td>
-                                            <td className="p-4 text-center">
-                                                <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
-                                                    {subject.subjectType || 'general'}
-                                                </span>
-                                                {subject.subjectType === 'elective' && (
-                                                    <div className="text-[10px] text-slate-400 mt-1 font-medium">{(subject.enrolledStudents || []).length} enrolled</div>
-                                                )}
-                                            </td>
-                                            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxEXT} / {subject.maxINT}</td>
-                                            <td className="p-4 text-center">
-                                                {Array.isArray(subject.specificClass) ? (
-                                                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">
-                                                        {subject.specificClass.join(', ')}
-                                                    </span>
-                                                ) : (
-                                                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">{subject.specificClass}</span>
-                                                )}
-                                            </td>
-                                            <td className="p-4 text-center flex justify-center gap-2">
-                                                {subject.subjectType === 'elective' && (
-                                                    <button onClick={() => handleManageEnrollment(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users"></i></button>
-                                                )}
-                                                <button onClick={() => handleEditSubject(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit"><i className="fa-solid fa-pen"></i></button>
-                                                {!Array.isArray(subject.specificClass) ? (
-                                                    <button onClick={() => handleDeleteSubject(subject, subject.specificClass as string)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Remove from this class"><i className="fa-solid fa-trash"></i></button>
-                                                ) : (
-                                                    <button onClick={() => handleDeleteSubject(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Delete Subject"><i className="fa-solid fa-trash"></i></button>
-                                                )}
-                                            </td>
-                                        </tr>
+                                        <SubjectRow
+                                            key={`${subject.id}-${index}`}
+                                            subject={subject}
+                                            index={index}
+                                            onEdit={handleEditSubject}
+                                            onDelete={handleDeleteSubject}
+                                            onManageEnrollment={handleManageEnrollment}
+                                        />
                                     ))}
                                 </tbody>
                             </table>
@@ -547,38 +612,11 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             ) : (
                 <div className="space-y-6">
                     {subjectsByFaculty.map(([faculty, facultySubjects]) => (
-                        <div key={faculty} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-                                <h3 className="font-bold text-slate-900">{faculty}</h3>
-                                <span className="bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded-full font-bold">{facultySubjects.length} Subject{facultySubjects.length !== 1 ? 's' : ''}</span>
-                            </div>
-                            <div className="p-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {facultySubjects.map((subject, idx) => (
-                                        <div key={`${subject.id}-${subject.specificClass}-${idx}`} className="border rounded-lg p-3 hover:bg-slate-50 transition-colors">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h4 className="font-bold text-emerald-800">{shortenSubjectName(subject.name)}</h4>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${subject.subjectType === 'elective' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    {subject.subjectType || 'General'}
-                                                </span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1 mb-2">
-                                                {Array.isArray(subject.specificClass) ? (
-                                                    <span className="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold shadow-sm">
-                                                        {subject.specificClass.join(', ')}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold shadow-sm">{subject.specificClass}</span>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-slate-400">
-                                                Max EXT: {subject.maxEXT} | Max INT: {subject.maxINT}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
+                        <FacultyCard
+                            key={faculty}
+                            faculty={faculty}
+                            facultySubjects={facultySubjects}
+                        />
                     ))}
                     {subjectsByFaculty.length === 0 && (
                         <div className="text-center p-8 text-slate-500">No faculty assignments found.</div>
@@ -684,12 +722,22 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                     </select>
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-bold mb-1">Type</label>
-                                <select value={subjectForm.subjectType} onChange={e => setSubjectForm(prev => ({ ...prev, subjectType: e.target.value as any }))} className="w-full p-3 border rounded-xl">
-                                    <option value="general">General</option>
-                                    <option value="elective">Elective</option>
-                                </select>
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold mb-1">Type</label>
+                                    <select value={subjectForm.subjectType} onChange={e => setSubjectForm(prev => ({ ...prev, subjectType: e.target.value as any }))} className="w-full p-3 border rounded-xl">
+                                        <option value="general">General</option>
+                                        <option value="elective">Elective</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold mb-1">Semester</label>
+                                    <select value={subjectForm.activeSemester} onChange={e => setSubjectForm(prev => ({ ...prev, activeSemester: e.target.value as any }))} className="w-full p-3 border rounded-xl">
+                                        <option value="Both">Both Semesters</option>
+                                        <option value="Odd">Odd Semester Only</option>
+                                        <option value="Even">Even Semester Only</option>
+                                    </select>
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-bold mb-1">Target Classes {subjectForm.subjectType === 'elective' && <span className="text-xs font-normal text-slate-500">(Click class to select students)</span>}</label>

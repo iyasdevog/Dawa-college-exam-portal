@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StudentRecord, SubjectConfig, AttendanceRecord, SpecialDay, TimetableEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
+import { useTerm } from '../../viewmodels/TermContext';
 
 interface AttendanceManagementProps {
     subjects: SubjectConfig[];
@@ -11,6 +12,7 @@ interface AttendanceManagementProps {
 
 const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, students, onRefresh }) => {
     const { isMobile } = useMobile();
+    const { currentAcademicYear, currentSemester } = useTerm();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('');
@@ -107,7 +109,9 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 presentStudentIds: presentIds,
                 absentStudentIds: absentIds,
                 markedBy: 'Current User', // Should be dynamic
-                markedAt: Date.now()
+                markedAt: Date.now(),
+                academicYear: currentAcademicYear,
+                semester: currentSemester
             });
 
             alert('Attendance saved!');

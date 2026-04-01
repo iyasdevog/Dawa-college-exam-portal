@@ -35,10 +35,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
     const [selectedClass, setSelectedClass] = useState(allowedClasses[0] || CLASSES[0]);
     const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
-    const [entryMode, setEntryMode] = useState<'regular' | 'supplementary'>('regular');
     const [selectedSubject, setSelectedSubject] = useState('');
-    const [suppExams, setSuppExams] = useState<(SupplementaryExam & { studentName?: string; studentAdNo?: string; subjectName?: string })[]>([]);
-    const [suppMarksData, setSuppMarksData] = useState<Record<string, { int: string; ext: string }>>({});
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [allStudents, setAllStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
@@ -48,8 +45,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [marksData, setMarksData] = useState<Record<string, { int: string; ext: string }>>({});
-    const [showSupplementaryOnly, setShowSupplementaryOnly] = useState(false);
-    const [supplementaryStudents, setSupplementaryStudents] = useState<{ student: any, supplementaryExam: any }[]>([]);
     const [currentStudentIndex, setCurrentStudentIndex] = useState(0);
     const studentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const [attendanceStats, setAttendanceStats] = useState<Record<string, { present: number; total: number; percentage: number }>>({});
@@ -507,7 +502,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
     const loadAllStudents = async () => {
         try {
-            const data = await dataService.getAllStudents();
+            const data = await dataService.getAllStudents(activeTerm);
             setAllStudents(data);
         } catch (error) {
             console.error('Error loading all students:', error);
@@ -528,8 +523,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
             setLoadingStage('loading-subjects');
             const [allSubjects, allStudentsData] = await Promise.all([
-                dataService.getAllSubjects(),
-                dataService.getAllStudents()
+                dataService.getAllSubjects(activeTerm),
+                dataService.getAllStudents(activeTerm)
             ]);
             setLoadingProgress(75);
 
@@ -555,6 +550,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
     const loadStudentsByClass = async () => {
         const currentRequestSubjectId = selectedSubject;
+        const currentRequestTerm = activeTerm;
 
         // Clear marks data immediately to prevent showing stale data
         setMarksData({});
@@ -570,45 +566,33 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 console.log('Selected Subject ID:', selectedSubject);
                 console.log('Selected Class:', selectedClass);
                 console.log('Subject Type:', subjectType);
-                console.log('Show Supplementary Only:', showSupplementaryOnly);
                 console.log('Active Term:', activeTerm);
 
-                if (showSupplementaryOnly) {
-                    // Load supplementary exam students for this subject
-                    const currentYear = new Date().getFullYear();
-                    const suppStudents = await dataService.getStudentsWithSupplementaryExams(selectedSubject, currentYear);
-                    console.log('Supplementary students found:', suppStudents.length);
-                    setSupplementaryStudents(suppStudents);
-                    studentsToShow = suppStudents
-                        .filter(item => item.student.className === selectedClass)
-                        .map(item => item.student);
-                } else {
-                    // Get enrolled students for the selected subject
-                    console.log('Getting enrolled students for subject...');
+                // Get enrolled students for the selected subject
+                console.log('Getting enrolled students for subject...');
 
-                    // The dataService.getEnrolledStudentsForSubject already handles differentiation
-                    // between general and elective subjects internally.
-                    // For General subjects: it fetches all students in target classes
-                    // For Elective subjects: it fetches only enrolled students
-                    studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject);
-                    console.log('Total students found for subject:', studentsToShow.length);
+                // The dataService.getEnrolledStudentsForSubject already handles differentiation
+                // between general and elective subjects internally.
+                // For General subjects: it fetches all students in target classes
+                // For Elective subjects: it fetches only enrolled students
+                studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject, activeTerm);
+                console.log('Total students found for subject:', studentsToShow.length);
 
-                    // Filter by selected class ONLY for general subjects
-                    if (subjectType === 'general') {
-                        studentsToShow = studentsToShow.filter(student => student.className === selectedClass);
-                        console.log('Students after class filter:', studentsToShow.length);
-                    }
+                // Filter by selected class ONLY for general subjects
+                if (subjectType === 'general') {
+                    studentsToShow = studentsToShow.filter(student => student.className === selectedClass);
+                    console.log('Students after class filter:', studentsToShow.length);
                 }
             } else {
                 console.log('No subject selected, getting all students from class...');
                 // If no subject selected, get all students from class
-                studentsToShow = await dataService.getStudentsByClass(selectedClass);
+                studentsToShow = await dataService.getStudentsByClass(selectedClass, activeTerm);
                 console.log('Students from class:', studentsToShow.length);
             }
 
-            // Check if subject changed during the async operation
-            if (currentRequestSubjectId !== selectedSubject) {
-                console.log('loadStudentsByClass: Subject changed during loading, discarding data.');
+            // Check if subject or term changed during the async operation
+            if (currentRequestSubjectId !== selectedSubject || currentRequestTerm !== activeTerm) {
+                console.log('loadStudentsByClass: Context changed during loading, discarding data.');
                 return;
             }
 
@@ -639,8 +623,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             });
 
             // Final check before setting marks data
-            if (currentRequestSubjectId !== selectedSubject) {
-                console.log('loadStudentsByClass: Subject changed before setting marks, discarding data.');
+            if (currentRequestSubjectId !== selectedSubject || currentRequestTerm !== activeTerm) {
+                console.log('loadStudentsByClass: Context changed before setting marks, discarding data.');
                 return;
             }
 
@@ -653,7 +637,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             if (selectedSubject) {
                 const stats: Record<string, { present: number; total: number; percentage: number }> = {};
                 const attendancePromises = studentsToShow.map(async (student) => {
-                    const percentage = await dataService.calculateAttendancePercentage(student.id, selectedSubject);
+                    const percentage = await dataService.calculateAttendancePercentage(student.id, selectedSubject, activeTerm);
                     stats[student.id] = { present: 0, total: 0, percentage };
                 });
                 await Promise.all(attendancePromises);
@@ -666,99 +650,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             setOperationLoading({ type: null });
         }
     };
-
-    const loadSupplementaryExams = async () => {
-        try {
-            setOperationLoading({ type: 'loading-students', message: 'Fetching supplementary exams...' });
-            const exams = await dataService.getAllSupplementaryExams();
-            // Filter only pending exams
-            const pendingExams = exams.filter(e => e.status === 'Pending');
-            setSuppExams(pendingExams);
-            
-            // initialize SuppMarksData
-            const initial: Record<string, { int: string; ext: string }> = {};
-            pendingExams.forEach(e => {
-                 initial[e.id] = { int: '', ext: '' };
-            });
-            setSuppMarksData(initial);
-        } catch(error) {
-            console.error('Error loading supp exams:', error);
-        } finally {
-            setOperationLoading({ type: null });
-        }
-    };
-
-    const getPreviousMarks = (exam: SupplementaryExam & { studentAdNo?: string, studentName?: string, subjectName?: string }) => {
-        const student = allStudents.find(s => s.id === exam.studentId);
-        if (!student || !student.academicHistory) return { int: 'N/A', ext: 'N/A' };
-        
-        // Find the marks from the student's original term
-        const termKey = `${exam.originalYear}-${exam.originalYear + 1}-${exam.originalSemester}`;
-        const marks = student.academicHistory[termKey]?.marks?.[exam.subjectId];
-        
-        return marks ? { int: marks.int || 'N/A', ext: marks.ext || 'N/A' } : { int: 'N/A', ext: 'N/A' };
-    };
-
-    const handleSaveSuppMarks = async () => {
-        try {
-            setOperationLoading({ type: 'saving', message: 'Saving supplementary marks...' });
-            
-            const savePromises = suppExams.map(async (exam) => {
-                const marks = suppMarksData[exam.id];
-                if (!marks) return;
-                
-                // Only save if there's actually a mark entered
-                if (!marks.int && !marks.ext) return;
-
-                const parseMark = (markStr: string): number | 'A' => {
-                    const trimmed = markStr.trim().toUpperCase();
-                    if (trimmed === 'A') return 'A';
-                    const num = parseInt(trimmed, 10);
-                    return isNaN(num) ? 0 : num;
-                };
-
-                const intVal = marks.int ? parseMark(marks.int) : 0;
-                const extVal = marks.ext ? parseMark(marks.ext) : 0;
-                const totalNum = (intVal === 'A' ? 0 : intVal) + (extVal === 'A' ? 0 : extVal);
-                
-                // Calculate Status
-                let status: 'Passed' | 'Failed' | 'Pending' = 'Pending';
-                const subject = subjects.find(s => s.id === exam.subjectId);
-                if (subject) {
-                   const minINT = Math.ceil(subject.maxINT * 0.5);
-                   const minEXT = Math.ceil(subject.maxEXT * 0.4);
-                   const passedINT = intVal !== 'A' && typeof intVal === 'number' && intVal >= minINT;
-                   const passedEXT = extVal !== 'A' && typeof extVal === 'number' && extVal >= minEXT;
-                   status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
-                }
-
-                await dataService.updateSupplementaryExamMarks(exam.id, {
-                    int: intVal,
-                    ext: extVal,
-                    total: totalNum,
-                    status,
-                    isSupplementary: true
-                });
-            });
-
-            await Promise.all(savePromises);
-
-            alert('Supplementary marks saved successfully!');
-            // Reload the exams to refresh the pending list
-            await loadSupplementaryExams();
-        } catch (error) {
-            console.error('Error saving supplementary marks:', error);
-            alert('Failed to save supplementary marks. Please try again.');
-        } finally {
-            setOperationLoading({ type: null });
-        }
-    };
-
-    useEffect(() => {
-        if (entryMode === 'supplementary') {
-            loadSupplementaryExams();
-        }
-    }, [entryMode]);
 
     // Memoized keyboard navigation handler
 
@@ -1318,23 +1209,14 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             {/* Marks Entry Tab Content */}
             {activeTab === 'marks-entry' && (
                 <>
-                    <div className="flex gap-2 mb-6 border-b border-slate-200">
+                    <div className="flex gap-2 mb-6">
                         <button
-                            onClick={() => setEntryMode('regular')}
-                            className={`px-6 py-2 rounded-t-lg font-bold text-sm transition-all ${entryMode === 'regular' ? 'bg-orange-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            className="px-6 py-2 rounded-t-lg font-bold text-sm bg-emerald-600 text-white shadow-md transition-all"
                         >
-                            Regular Entry
-                        </button>
-                        <button
-                            onClick={() => setEntryMode('supplementary')}
-                            className={`px-6 py-2 rounded-t-lg font-bold text-sm transition-all ${entryMode === 'supplementary' ? 'bg-orange-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                        >
-                            Supplementary Mode
+                            Regular Marks Entry
                         </button>
                     </div>
 
-                    {entryMode === 'regular' ? (
-                        <>
                             {/* Mobile-Optimized Selection Controls */}
                             <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-xl border-2 border-slate-200 mx-6 md:mx-0 print:hidden" style={{
                                 background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
@@ -1405,33 +1287,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                             </div>
                         </div>
 
-                        {selectedSubject && (
-                            <div className="mt-4 flex items-center gap-4 print:hidden">
-                                <label className="flex items-center gap-2 print:hidden">
-                                    <input
-                                        type="checkbox"
-                                        checked={showSupplementaryOnly}
-                                        onChange={(e) => {
-                                            setShowSupplementaryOnly(e.target.checked);
-                                            // Reload students when toggling supplementary mode
-                                            setTimeout(() => loadStudentsByClass(), 100);
-                                        }}
-                                        className="w-5 h-5 text-orange-600 focus:ring-orange-500 border-slate-300 rounded print:hidden"
-                                        disabled={isSaving || operationLoading.type !== null}
-                                        aria-describedby="supplementary-help"
-                                        style={{ minHeight: '44px', minWidth: '44px' }}
-                                    />
-                                    <span className="text-xs md:text-sm font-medium text-slate-700" id="supplementary-help">
-                                        Show Supplementary Exam Students Only
-                                    </span>
-                                </label>
-                                {showSupplementaryOnly && (
-                                    <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
-                                        Supplementary Mode
-                                    </span>
-                                )}
-                            </div>
-                        )}
 
                         {/* Absent Marks Instruction */}
                         <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
@@ -1809,10 +1664,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                 <th className="text-left p-4 font-bold text-slate-700">Adm No</th>
                                                 <th className="text-left p-4 font-bold text-slate-700">Student Name</th>
                                                 <th className="text-center p-4 font-bold text-slate-700">
-                                                    EXT ({selectedSubjectData?.maxEXT})
+                                                    EXT (Max: {selectedSubjectData?.maxEXT})
                                                 </th>
                                                 <th className="text-center p-4 font-bold text-slate-700">
-                                                    INT ({selectedSubjectData?.maxINT})
+                                                    INT (Max: {selectedSubjectData?.maxINT})
                                                 </th>
                                                 <th className="text-center p-4 font-bold text-slate-700">Total</th>
                                                 <th className="text-center p-4 font-bold text-slate-700">Status</th>
@@ -1911,8 +1766,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                                                                                 ? 'border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-900 ring-8 ring-emerald-600/60 shadow-xl shadow-emerald-600/25 scale-[1.03] hover:scale-[1.04]'
                                                                                 : 'border-slate-400 hover:border-slate-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:shadow-inner bg-gradient-to-br from-white to-slate-50 focus:bg-gradient-to-br focus:from-blue-50 focus:to-blue-100'
                                                                     }`}
-                                                                placeholder={selectedSubjectData?.maxTA === 100 ? "N/A" : (attendanceStats[student.id]?.percentage || 0) < 75 ? "N/A" : "0"}
-                                                                disabled={isSaving || operationLoading.type !== null || selectedSubjectData?.maxTA === 100 || (attendanceStats[student.id]?.percentage || 0) < 75}
+                                                                placeholder={selectedSubjectData?.maxEXT === 100 ? "N/A" : (attendanceStats[student.id]?.percentage || 0) < 75 ? "N/A" : "0"}
+                                                                disabled={isSaving || operationLoading.type !== null || selectedSubjectData?.maxEXT === 100 || (attendanceStats[student.id]?.percentage || 0) < 75}
                                                                 maxLength={3}
                                                                 style={{ minHeight: '48px' }}
                                                             />
@@ -2210,119 +2065,11 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-white rounded-xl md:rounded-2xl p-8 md:p-12 shadow-sm border border-slate-200 text-center mx-4 md:mx-0">
-                            <i className="fa-solid fa-clipboard-list text-4xl text-slate-400 mb-4"></i>
-                            <h3 className="text-xl font-bold text-slate-900 mb-2">No Data Available</h3>
-                            <p className="text-slate-600">
-                                {!selectedSubject
-                                    ? 'Please select a subject to begin entering marks'
-                                    : 'No students found in the selected class'
-                                }
+                        <div className="mx-6 md:mx-0 py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                            <i className="fa-solid fa-user-graduate text-4xl text-slate-300 mb-4"></i>
+                            <p className="text-slate-500 font-bold">
+                                {selectedSubject ? 'No students found for this selection' : 'Please select subject to start entry'}
                             </p>
-                        </div>
-                    )}
-                    </>
-                ) : null}
-
-                    {/* Supplementary Entry View */}
-                    {entryMode === 'supplementary' && (
-                        <div className="space-y-6 mx-4 md:mx-0">
-                            <div className="bg-white rounded-xl md:rounded-2xl p-6 shadow-sm border border-slate-200">
-                                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 mb-4">
-                                    <i className="fa-solid fa-file-signature text-orange-600"></i>
-                                    Pending Supplementary Exams
-                                </h3>
-                                
-                                {suppExams.length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <i className="fa-solid fa-check-circle text-4xl text-emerald-400 mb-4"></i>
-                                        <p className="text-slate-600">No pending supplementary exams found.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-6">
-                                        {suppExams.map(exam => {
-                                            const prevMarks = getPreviousMarks(exam);
-                                            const subject = subjects.find(s => s.id === exam.subjectId);
-                                            const maxINT = subject?.maxINT || 70;
-                                            const maxEXT = subject?.maxEXT || 30;
-                                            const minINT = Math.ceil(maxINT * 0.5);
-                                            const minEXT = Math.ceil(maxEXT * 0.4);
-
-                                            const prevIntVal = typeof prevMarks.int === 'string' && prevMarks.int !== 'A' && prevMarks.int !== 'N/A' ? parseInt(prevMarks.int) : 0;
-                                            const prevExtVal = typeof prevMarks.ext === 'string' && prevMarks.ext !== 'A' && prevMarks.ext !== 'N/A' ? parseInt(prevMarks.ext) : 0;
-                                            
-                                            // Determine if previous marks were failing
-                                            const intFailed = prevMarks.int === 'A' || prevIntVal < minINT;
-                                            const extFailed = prevMarks.ext === 'A' || prevExtVal < minEXT;
-
-                                            return (
-                                                <div key={exam.id} className="bg-slate-50 border-2 border-slate-200 rounded-xl p-5">
-                                                    <div className="flex justify-between items-start mb-4">
-                                                        <div>
-                                                            <div className="font-bold text-lg text-slate-800">{exam.studentName}</div>
-                                                            <div className="text-sm text-slate-500">Ad No: {exam.studentAdNo}</div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="font-bold text-slate-700">{exam.subjectName}</div>
-                                                            <div className="text-xs text-slate-500">{exam.originalSemester} {exam.originalYear}</div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-6">
-                                                        {/* Previous Marks */}
-                                                        <div className="bg-slate-100 p-4 rounded-lg">
-                                                            <div className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Previous Marks</div>
-                                                            <div className="flex items-center gap-4">
-                                                                <div className={`p-2 rounded flex-1 text-center font-bold ${intFailed ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
-                                                                    INT: {prevMarks.int}
-                                                                </div>
-                                                                <div className={`p-2 rounded flex-1 text-center font-bold ${extFailed ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
-                                                                    EXT: {prevMarks.ext}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* New Marks */}
-                                                        <div className="bg-orange-50 bg-opacity-50 border border-orange-100 p-4 rounded-lg shadow-sm">
-                                                            <div className="text-xs font-bold text-orange-600 mb-2 uppercase tracking-wider">Enter Supplementary Marks</div>
-                                                            <div className="flex gap-4">
-                                                                <div className="flex-1">
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder={`INT (Max ${maxINT})`}
-                                                                        value={suppMarksData[exam.id]?.int || ''}
-                                                                        onChange={(e) => setSuppMarksData(prev => ({ ...prev, [exam.id]: { ...prev[exam.id], int: e.target.value.toUpperCase() } }))}
-                                                                        className="w-full text-center p-2 rounded border-2 border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none font-bold"
-                                                                    />
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder={`EXT (Max ${maxEXT})`}
-                                                                        value={suppMarksData[exam.id]?.ext || ''}
-                                                                        onChange={(e) => setSuppMarksData(prev => ({ ...prev, [exam.id]: { ...prev[exam.id], ext: e.target.value.toUpperCase() } }))}
-                                                                        className="w-full text-center p-2 rounded border-2 border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none font-bold"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-
-                                        <div className="pt-6 border-t border-slate-200 flex justify-end">
-                                            <button
-                                                onClick={handleSaveSuppMarks}
-                                                disabled={operationLoading.type !== null}
-                                                className="px-8 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-200 transition-all active:scale-95 disabled:opacity-50"
-                                            >
-                                                <i className="fa-solid fa-save mr-2"></i> Save Supplementary Marks
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     )}
 

@@ -184,8 +184,20 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
     const handleApplyTimetable = async () => {
         if (!generatedTimetable.length) return;
         if (confirm('This will overwrite any existing manual timetable for this class. Proceed?')) {
-            await dataService.saveTimetableEntries(generatedTimetable);
-            alert('Timetable applied successfully!');
+            try {
+                const settings = await dataService.getGlobalSettings();
+                const enrichedEntries = generatedTimetable.map(entry => ({
+                    ...entry,
+                    semester: selectedSemester,
+                    academicYear: settings.currentAcademicYear
+                }));
+                
+                await dataService.saveTimetableEntries(enrichedEntries);
+                alert('Timetable applied successfully!');
+            } catch (error) {
+                console.error('Error applying timetable:', error);
+                alert('Failed to apply timetable');
+            }
         }
     };
 

@@ -1,12 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { GlobalSettings } from '../../domain/entities/types';
-import { DataService } from '../../infrastructure/services/dataService';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { dataService } from '../../infrastructure/services/dataService';
 
 interface TermContextType {
     currentAcademicYear: string;
     currentSemester: 'Odd' | 'Even';
     activeTerm: string;
     setTerm: (academicYear: string, semester: 'Odd' | 'Even') => void;
+    refreshTerms: () => Promise<void>;
     isLoading: boolean;
     termOptions: string[]; // List of available academic years to select, e.g. ["2023-2024", "2024-2025"]
 }
@@ -27,26 +28,43 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [termOptions, setTermOptions] = useState<string[]>(['2025-2026']);
     const [isLoading, setIsLoading] = useState(true);
 
+    const refreshTerms = async () => {
+        try {
+            // This function is now mostly used to refresh termOptions (available years)
+            // as the current year/semester are synced via onSnapshot
+            const availableTerms = await dataService.getAvailableTerms();
+            setTermOptions(availableTerms);
+        } catch (error) {
+            console.error('Error refreshing terms in TermContext', error);
+        }
+    };
+
     useEffect(() => {
-        const fetchInitialData = async () => {
-            try {
-                const dataService = new DataService();
-                const [settings, availableYears] = await Promise.all([
-                    dataService.getGlobalSettings(),
-                    dataService.getAvailableAcademicYears()
-                ]);
-
-                setCurrentAcademicYear(settings.currentAcademicYear);
-                setCurrentSemester(settings.currentSemester);
-                setTermOptions(availableYears);
-            } catch (error) {
-                console.error('Error fetching initial data for TermContext', error);
-            } finally {
-                setIsLoading(false);
+        setIsLoading(true);
+        
+        // 1. Listen for real-time changes to global settings
+        const settingsRef = doc(dataService.getDb(), 'settings', 'global_admin_settings');
+        const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const settings = docSnap.data();
+                if (settings.currentAcademicYear) setCurrentAcademicYear(settings.currentAcademicYear);
+                if (settings.currentSemester) setCurrentSemester(settings.currentSemester);
+                
+                // If settings has availableYears, sync it locally too
+                if (settings.availableYears) {
+                    setTermOptions(settings.availableYears);
+                }
             }
-        };
+            setIsLoading(false);
+        }, (error) => {
+            console.error('Error in settings listener:', error);
+            setIsLoading(false);
+        });
 
-        fetchInitialData();
+        // 2. Initial load for available terms (not all might be in global settings yet)
+        refreshTerms();
+
+        return () => unsubscribe();
     }, []);
 
 
@@ -57,15 +75,18 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const activeTerm = `${currentAcademicYear}-${currentSemester}`;
 
+    const contextValue = useMemo(() => ({
+        currentAcademicYear,
+        currentSemester,
+        activeTerm,
+        setTerm,
+        refreshTerms,
+        isLoading,
+        termOptions
+    }), [currentAcademicYear, currentSemester, activeTerm, isLoading, termOptions]);
+
     return (
-        <TermContext.Provider value={{
-            currentAcademicYear,
-            currentSemester,
-            activeTerm,
-            setTerm,
-            isLoading,
-            termOptions
-        }}>
+        <TermContext.Provider value={contextValue}>
             {children}
         </TermContext.Provider>
     );

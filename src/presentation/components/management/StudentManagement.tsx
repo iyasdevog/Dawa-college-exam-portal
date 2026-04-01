@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { StudentRecord } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../../hooks/useMobile';
@@ -80,6 +80,12 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
     const [csvData, setCsvData] = useState('');
     const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
     const [isImporting, setIsImporting] = useState(false);
+    const [showPromoteModal, setShowPromoteModal] = useState(false);
+    const [promotionStage, setPromotionStage] = useState({
+        fromClass: '',
+        toClass: '',
+        isPromoting: false
+    });
 
     // Load mobile preferences
     useEffect(() => {
@@ -209,13 +215,28 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         }
     };
 
+    const handleArchiveStudent = async (student: StudentRecord) => {
+        if (!confirm(`Are you sure you want to MARK ${student.name} AS PASSED OUT/ARCHIVED? They will be removed from the active semester but their historical performance will be saved.`)) return;
+        try {
+            setIsOperating(true);
+            await dataService.archiveStudent(student.id);
+            await onRefresh();
+            alert(`${student.name} has been archived successfully!`);
+        } catch (error) {
+            console.error('Error archiving student:', error);
+            alert(`Error archiving student: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
     const handleDeleteStudent = async (student: StudentRecord) => {
-        if (!confirm(`Are you sure you want to delete ${student.name}?`)) return;
+        if (!confirm(`DANGER: Are you sure you want to PERMANENTLY DELETE ${student.name}? ALL of their historical data across ALL semesters will be erased irrevocably!`)) return;
         try {
             setIsOperating(true);
             await dataService.deleteStudent(student.id);
             await onRefresh();
-            alert(`${student.name} has been deleted successfully!`);
+            alert(`${student.name} has been permanently deleted!`);
         } catch (error) {
             console.error('Error deleting student:', error);
             alert(`Error deleting student: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -317,6 +338,38 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         }
     };
 
+    const handlePromoteClass = async () => {
+        if (!promotionStage.fromClass || !promotionStage.toClass) {
+            alert('Please select both source and target classes');
+            return;
+        }
+        
+        if (promotionStage.fromClass === promotionStage.toClass) {
+            alert('Source and target classes cannot be the same');
+            return;
+        }
+
+        const confirmMsg = `Are you sure you want to promote ALL active students from ${promotionStage.fromClass} to ${promotionStage.toClass}? \n\nThis will update their current class and create new academic records for the active term.`;
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            setPromotionStage(prev => ({ ...prev, isPromoting: true }));
+            const settings = await dataService.getGlobalSettings();
+            const termKey = `${settings.currentAcademicYear}-${settings.currentSemester}`;
+            
+            await dataService.promoteClass(promotionStage.fromClass, promotionStage.toClass, termKey);
+            await onRefresh();
+            alert(`Promotion from ${promotionStage.fromClass} to ${promotionStage.toClass} completed successfully!`);
+            setShowPromoteModal(false);
+            setPromotionStage({ fromClass: '', toClass: '', isPromoting: false });
+        } catch (error) {
+            console.error('Promotion failed:', error);
+            alert(`Promotion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setPromotionStage(prev => ({ ...prev, isPromoting: false }));
+        }
+    };
+
     const downloadTemplate = () => {
         // Simple CSV template for now, could be Excel in future
         const headers = ['adNo', 'name', 'className', 'semester'];
@@ -334,28 +387,43 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         URL.revokeObjectURL(url);
     };
 
-    // Filtered students logic
-    const filteredStudents = students.filter(student =>
-        !mobileAdminState.filterBy ||
-        student.name.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
-        student.adNo.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
-        student.className.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase())
-    ).sort((a, b) => {
-        const { sortBy, sortOrder } = mobileAdminState;
-        let comparison = 0;
-        switch (sortBy) {
-            case 'name': comparison = a.name.localeCompare(b.name); break;
-            case 'class': comparison = a.className.localeCompare(b.className); break;
-            default: comparison = a.name.localeCompare(b.name);
-        }
-        return sortOrder === 'asc' ? comparison : -comparison;
-    });
+    // Memoized Handlers
+    const handleEdit = useCallback((student: StudentRecord) => handleEditStudent(student), []);
+    const handleArchive = useCallback((student: StudentRecord) => handleArchiveStudent(student), []);
+    const handleDelete = useCallback((student: StudentRecord) => handleDeleteStudent(student), []);
+
+    // Filtered students logic — Memoized
+    const filteredStudents = useMemo(() => {
+        return students.filter(student =>
+            !mobileAdminState.filterBy ||
+            student.name.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
+            student.adNo.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
+            student.className.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase())
+        ).sort((a, b) => {
+            const { sortBy, sortOrder } = mobileAdminState;
+            let comparison = 0;
+            switch (sortBy) {
+                case 'name': comparison = a.name.localeCompare(b.name); break;
+                case 'class': comparison = a.className.localeCompare(b.className); break;
+                default: comparison = a.name.localeCompare(b.name);
+            }
+            return sortOrder === 'asc' ? comparison : -comparison;
+        });
+    }, [students, mobileAdminState.filterBy, mobileAdminState.sortBy, mobileAdminState.sortOrder]);
 
     return (
         <div className="space-y-6">
             <div className={`flex items-center justify-between ${isMobile ? 'flex-col gap-4' : ''}`}>
                 <h2 className={`font-black text-slate-900 ${isMobile ? 'text-lg text-center' : 'text-xl'}`}>Student Management</h2>
                 <div className={`flex gap-3 ${isMobile ? 'w-full flex-col' : ''}`}>
+                    <button
+                        onClick={() => setShowPromoteModal(true)}
+                        className={`px-4 py-2 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition-all flex items-center gap-2 ${isMobile ? 'justify-center' : ''}`}
+                        style={{ minHeight: '44px' }}
+                    >
+                        <i className="fa-solid fa-arrow-trend-up"></i>
+                        Promote Class
+                    </button>
                     <button
                         onClick={() => setShowBulkImport(true)}
                         className={`px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2 ${isMobile ? 'justify-center' : ''}`}
@@ -409,20 +477,14 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
             {/* List View */}
             {isMobile && mobileAdminState.viewMode !== 'table' ? (
                 <div className="space-y-4">
-                    {/* Mobile Card List Logic */}
                     {filteredStudents.map(student => (
-                        <div key={student.id} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                            <div className="flex justify-between">
-                                <div>
-                                    <h3 className="font-bold">{student.name}</h3>
-                                    <p className="text-sm text-slate-600">{student.adNo} - {student.className}</p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleEditStudent(student)} className="text-blue-600"><i className="fa-solid fa-edit"></i></button>
-                                    <button onClick={() => handleDeleteStudent(student)} className="text-red-600"><i className="fa-solid fa-trash"></i></button>
-                                </div>
-                            </div>
-                        </div>
+                        <StudentCard 
+                            key={student.id} 
+                            student={student} 
+                            onEdit={handleEdit} 
+                            onArchive={handleArchive} 
+                            onDelete={handleDelete} 
+                        />
                     ))}
                 </div>
             ) : (
@@ -438,15 +500,14 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                         </thead>
                         <tbody>
                             {filteredStudents.map((student, index) => (
-                                <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                    <td className="p-4">{student.adNo}</td>
-                                    <td className="p-4">{student.name}</td>
-                                    <td className="p-4">{student.className}</td>
-                                    <td className="p-4 text-center flex justify-center gap-2">
-                                        <button onClick={() => handleEditStudent(student)} className="text-blue-600"><i className="fa-solid fa-edit"></i></button>
-                                        <button onClick={() => handleDeleteStudent(student)} className="text-red-600"><i className="fa-solid fa-trash"></i></button>
-                                    </td>
-                                </tr>
+                                <StudentRow 
+                                    key={student.id} 
+                                    student={student} 
+                                    index={index} 
+                                    onEdit={handleEdit} 
+                                    onArchive={handleArchive} 
+                                    onDelete={handleDelete} 
+                                />
                             ))}
                         </tbody>
                     </table>
@@ -589,8 +650,149 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                     </div>
                 </div>
             )}
+            {/* Promote Class Modal */}
+            {showPromoteModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in transition-opacity" onClick={() => !promotionStage.isPromoting && setShowPromoteModal(false)}></div>
+                    <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+                        <div className="p-8 bg-amber-50 border-b border-amber-100">
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-amber-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-amber-200">
+                                        <i className="fa-solid fa-arrow-trend-up text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">Promote Classes</h3>
+                                        <p className="text-amber-700 text-sm font-bold opacity-80 uppercase tracking-widest mt-1">Bulk Migration Engine</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => !promotionStage.isPromoting && setShowPromoteModal(false)}
+                                    className="w-10 h-10 rounded-full bg-white text-slate-400 hover:text-slate-600 border border-slate-200 flex items-center justify-center transition-all shadow-sm hover:shadow-md"
+                                >
+                                    <i className="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-8 space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative items-center">
+                                <div>
+                                    <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Target From</label>
+                                    <select
+                                        value={promotionStage.fromClass}
+                                        onChange={(e) => setPromotionStage(prev => ({ ...prev, fromClass: e.target.value }))}
+                                        className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-slate-900 font-bold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all outline-none"
+                                    >
+                                        <option value="">Select Level</option>
+                                        {Array.from(new Set(students.map(s => s.className))).sort().map(cls => (
+                                            <option key={cls} value={cls}>{cls}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
+                                <div className="absolute left-1/2 top-1/2 -ml-4 mt-2 z-10 hidden md:block">
+                                    <div className="w-8 h-8 bg-white border-2 border-amber-100 rounded-full flex items-center justify-center text-amber-600 shadow-sm">
+                                        <i className="fa-solid fa-arrow-right"></i>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Promote To</label>
+                                    <select
+                                        value={promotionStage.toClass}
+                                        onChange={(e) => setPromotionStage(prev => ({ ...prev, toClass: e.target.value }))}
+                                        className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-slate-900 font-bold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all outline-none"
+                                    >
+                                        <option value="">Next Level</option>
+                                        {['S1','S2','S3','S4','S5','S6','S7','S8'].map(cls => (
+                                            <option key={cls} value={cls}>{cls}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-2">
+                                <div className="flex items-center gap-3 text-amber-700">
+                                    <i className="fa-solid fa-circle-info"></i>
+                                    <span className="text-xs font-black uppercase tracking-wider">Critical Notice</span>
+                                </div>
+                                <p className="text-xs text-slate-500 font-bold leading-relaxed italic">
+                                    This operation will migrate all ACTIVE students from the source class to the target class. 
+                                    A new academic cycle will be initialized for each student while preserving their full historical database.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-8 bg-slate-50 border-t border-slate-100">
+                            <button
+                                onClick={handlePromoteClass}
+                                disabled={promotionStage.isPromoting || !promotionStage.fromClass || !promotionStage.toClass}
+                                className="w-full py-5 bg-amber-600 text-white rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-200 hover:bg-amber-700 transition-all disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-3"
+                            >
+                                {promotionStage.isPromoting ? (
+                                    <>
+                                        <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                        Processing Migration...
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fa-solid fa-bolt"></i>
+                                        Execute Bulk Promotion
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
+
+// Memoized Sub-components for performance
+const StudentCard = memo(({ student, onEdit, onArchive, onDelete }: { 
+    student: StudentRecord; 
+    onEdit: (s: StudentRecord) => void;
+    onArchive: (s: StudentRecord) => void;
+    onDelete: (s: StudentRecord) => void;
+}) => (
+    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-all">
+        <div className="flex justify-between items-center">
+            <div>
+                <h3 className="font-bold text-slate-800">{student.name}</h3>
+                <p className="text-xs font-black text-slate-500 uppercase tracking-tighter">{student.adNo} • {student.className}</p>
+            </div>
+            <div className="flex gap-2">
+                <button onClick={() => onEdit(student)} className="w-8 h-8 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all font-bold" title="Edit Student"><i className="fa-solid fa-edit text-xs"></i></button>
+                <button onClick={() => onArchive(student)} className="w-8 h-8 flex items-center justify-center bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all font-bold" title="Archive Student"><i className="fa-solid fa-box-archive text-xs"></i></button>
+                <button onClick={() => onDelete(student)} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all font-bold" title="Delete Student"><i className="fa-solid fa-trash text-xs"></i></button>
+            </div>
+        </div>
+    </div>
+));
+
+const StudentRow = memo(({ student, index, onEdit, onArchive, onDelete }: { 
+    student: StudentRecord; 
+    index: number;
+    onEdit: (s: StudentRecord) => void;
+    onArchive: (s: StudentRecord) => void;
+    onDelete: (s: StudentRecord) => void;
+}) => (
+    <tr className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-slate-100/50 transition-colors group`}>
+        <td className="p-4 text-sm font-bold text-slate-600">{student.adNo}</td>
+        <td className="p-4 text-sm font-black text-slate-800">{student.name}</td>
+        <td className="p-4 text-sm font-bold text-slate-600">
+            <span className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] uppercase">{student.className}</span>
+        </td>
+        <td className="p-4">
+            <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => onEdit(student)} className="text-blue-600 hover:text-blue-800 transition-colors" title="Edit Student"><i className="fa-solid fa-edit"></i></button>
+                <button onClick={() => onArchive(student)} className="text-amber-600 hover:text-amber-800 transition-colors" title="Archive Student"><i className="fa-solid fa-box-archive"></i></button>
+                <button onClick={() => onDelete(student)} className="text-red-600 hover:text-red-800 transition-colors" title="Delete Student"><i className="fa-solid fa-trash"></i></button>
+            </div>
+        </td>
+    </tr>
+));
 
 export default StudentManagement;

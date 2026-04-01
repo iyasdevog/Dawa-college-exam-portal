@@ -9,10 +9,11 @@ import SupplementaryManagement from './management/SupplementaryManagement';
 import ClassManagement from './management/ClassManagement';
 import SettingsManagement from './management/SettingsManagement';
 import AttendanceManagement from './management/AttendanceManagement';
-import TimetableManagement from './management/TimetableManagement';
+import { useTerm } from '../viewmodels/TermContext';
 
 const Management: React.FC = () => {
   const { isMobile } = useMobile();
+  const { activeTerm } = useTerm();
   const [activeTab, setActiveTab] = useState('students');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -21,6 +22,8 @@ const Management: React.FC = () => {
   const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
   const [supplementaryExams, setSupplementaryExams] = useState<any[]>([]);
   const [customClasses, setCustomClasses] = useState<string[]>([]);
+  const [loadedData, setLoadedData] = useState<Set<string>>(new Set());
+  const [isDataActionLoading, setIsDataActionLoading] = useState(false);
 
   const tabs = [
     { id: 'students', label: 'Students', icon: 'fa-users' },
@@ -30,34 +33,55 @@ const Management: React.FC = () => {
     { id: 'settings', label: 'Settings', icon: 'fa-cog' },
   ];
 
-  const loadData = useCallback(async () => {
+  const loadTabData = useCallback(async (tabId: string, force = false) => {
+    if (loadedData.has(tabId) && !force) return;
+
+    setIsDataActionLoading(true);
     try {
-      const [studentsData, subjectsData] = await Promise.all([
-        dataService.getAllStudents(),
-        dataService.getAllSubjects()
-      ]);
+      if (tabId === 'students' || tabId === 'subjects' || tabId === 'supplementary' || tabId === 'classes') {
+        const studentData = await dataService.getAllStudents(activeTerm);
+        setStudents(studentData);
+      }
 
-      setStudents(studentsData);
-      setSubjects(subjectsData);
+      if (tabId === 'subjects' || tabId === 'supplementary' || tabId === 'classes') {
+        const subjectData = await dataService.getAllSubjects();
+        setSubjects(subjectData);
+      }
 
-      // Load supplementary data
-      const allSupplementaryExams = await dataService.getAllSupplementaryExams();
-      setSupplementaryExams(allSupplementaryExams);
+      if (tabId === 'supplementary') {
+        const suppData = await dataService.getAllSupplementaryExams();
+        setSupplementaryExams(suppData);
+      }
 
+      setLoadedData(prev => new Set(prev).add(tabId));
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error(`Error loading data for tab ${tabId}:`, error);
     } finally {
+      setIsDataActionLoading(false);
       setIsLoading(false);
     }
-  }, []);
+  }, [activeTerm, loadedData]);
 
   useEffect(() => {
-    loadData();
+    // Reset loaded states when term changes
+    setLoadedData(new Set());
+    loadTabData(activeTab, true);
+  }, [activeTerm]);
+
+  useEffect(() => {
+    loadTabData(activeTab);
+  }, [activeTab, loadTabData]);
+
+  useEffect(() => {
     const savedClasses = localStorage.getItem('customClasses');
     if (savedClasses) {
       setCustomClasses(JSON.parse(savedClasses));
     }
-  }, [loadData]);
+  }, []);
+
+  const handleRefresh = async () => {
+    await loadTabData(activeTab, true);
+  };
 
   const handleUpdateCustomClasses = (classes: string[]) => {
     setCustomClasses(classes);
@@ -120,8 +144,8 @@ const Management: React.FC = () => {
           {activeTab === 'students' && (
             <StudentManagement
               students={students}
-              onRefresh={loadData}
-              isLoading={isLoading}
+              onRefresh={handleRefresh}
+              isLoading={isDataActionLoading}
             />
           )}
 
@@ -129,8 +153,8 @@ const Management: React.FC = () => {
             <SubjectManagement
               subjects={subjects}
               students={students}
-              onRefresh={loadData}
-              isLoading={isLoading}
+              onRefresh={handleRefresh}
+              isLoading={isDataActionLoading}
             />
           )}
 
@@ -139,7 +163,7 @@ const Management: React.FC = () => {
               supplementaryExams={supplementaryExams}
               students={students}
               subjects={subjects}
-              onRefresh={loadData}
+              onRefresh={handleRefresh}
             />
           )}
 
@@ -150,12 +174,14 @@ const Management: React.FC = () => {
               onUpdateCustomClasses={handleUpdateCustomClasses}
               students={students}
               subjects={subjects}
+              onRefresh={handleRefresh}
             />
           )}
 
           {activeTab === 'settings' && (
             <SettingsManagement
-              onRefresh={loadData}
+              onRefresh={handleRefresh}
+              onNavigate={setActiveTab}
             />
           )}
         </div>

@@ -221,61 +221,55 @@ const App: React.FC = () => {
     }
   };
 
-  if (mode === 'public') {
-    return (
-      <ApplicationErrorBoundary level="application" errorReporter={errorReporter}>
-        <TermProvider>
-          <MobileProvider>
-            <FeatureErrorBoundary featureName="Public Portal" errorReporter={errorReporter}>
-              <Suspense fallback={<ComponentLoadingFallback componentName="Public Portal" />}>
-                <PublicPortal onLoginClick={() => setMode('admin')} />
-              </Suspense>
-            </FeatureErrorBoundary>
-          </MobileProvider>
-        </TermProvider>
-      </ApplicationErrorBoundary>
-    );
-  }
+  const content = () => {
+    if (mode === 'public') {
+      return (
+        <FeatureErrorBoundary featureName="Public Portal" errorReporter={errorReporter}>
+          <Suspense fallback={<ComponentLoadingFallback componentName="Public Portal" />}>
+            <PublicPortal onLoginClick={() => setMode('admin')} />
+          </Suspense>
+        </FeatureErrorBoundary>
+      );
+    }
 
-  if (mode === 'admin' && !isLoggedIn) {
-    return (
-      <ApplicationErrorBoundary level="application" errorReporter={errorReporter}>
-        <TermProvider>
-          <MobileProvider>
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-              <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl">
-                <div className="text-center mb-10">
-                  <div className="bg-slate-100 text-slate-900 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
-                    <i className="fa-solid fa-shield-halved text-4xl"></i>
-                  </div>
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Admin Gateway</h2>
-                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Faculty Identification Required</p>
-                </div>
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Registry ID" />
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Security PIN" />
-                  <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl transition-all hover:bg-slate-800">Authenticate</button>
-                  <button type="button" onClick={() => setMode('public')} className="w-full text-slate-400 text-[10px] font-black uppercase mt-6 tracking-[0.2em] hover:text-slate-600">Cancel Access</button>
-                </form>
+    if (mode === 'admin' && !isLoggedIn) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] w-full max-w-md p-10 shadow-2xl">
+            <div className="text-center mb-10">
+              <div className="bg-slate-100 text-slate-900 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <i className="fa-solid fa-shield-halved text-4xl"></i>
               </div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Admin Gateway</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Faculty Identification Required</p>
             </div>
-          </MobileProvider>
-        </TermProvider>
-      </ApplicationErrorBoundary>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Registry ID" />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold" placeholder="Security PIN" />
+              <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl transition-all hover:bg-slate-800">Authenticate</button>
+              <button type="button" onClick={() => setMode('public')} className="w-full text-slate-400 text-[10px] font-black uppercase mt-6 tracking-[0.2em] hover:text-slate-600">Cancel Access</button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <FeatureErrorBoundary featureName="Layout" errorReporter={errorReporter}>
+        <Suspense fallback={<ComponentLoadingFallback componentName="Admin Interface" />}>
+          <Layout activeView={activeView} setView={setActiveView} onLogout={handleLogout} isCloudActive={isCloudActive} currentUser={currentUser}>
+            {renderAdminContent()}
+          </Layout>
+        </Suspense>
+      </FeatureErrorBoundary>
     );
-  }
+  };
 
   return (
     <ApplicationErrorBoundary level="application" errorReporter={errorReporter}>
       <TermProvider>
         <MobileProvider>
-          <FeatureErrorBoundary featureName="Layout" errorReporter={errorReporter}>
-            <Suspense fallback={<ComponentLoadingFallback componentName="Admin Interface" />}>
-              <Layout activeView={activeView} setView={setActiveView} onLogout={handleLogout} isCloudActive={isCloudActive} currentUser={currentUser}>
-                {renderAdminContent()}
-              </Layout>
-            </Suspense>
-          </FeatureErrorBoundary>
+          {content()}
         </MobileProvider>
       </TermProvider>
     </ApplicationErrorBoundary>

@@ -11,6 +11,7 @@ interface SupplementaryManagementProps {
 }
 
 const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ supplementaryExams, students, subjects, onRefresh }) => {
+    const { activeTerm } = useTerm();
     // Searchable dropdown state
     const [studentSearchTerm, setStudentSearchTerm] = useState('');
     const [showStudentDropdown, setShowStudentDropdown] = useState(false);
@@ -56,6 +57,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     const [classFilter, setClassFilter] = useState('All');
     const [subjectFilter, setSubjectFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
+    const [attemptFilter, setAttemptFilter] = useState('All');
+    const [termFilter, setTermFilter] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Mark Entry Modal State
@@ -63,8 +66,13 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     const [editingExam, setEditingExam] = useState<any>(null);
     const [markEntryForm, setMarkEntryForm] = useState({
         int: '',
-        ext: ''
+        ext: '',
+        prevInt: '',
+        prevExt: '',
+        attemptNumber: 1,
+        originalTerm: ''
     });
+    const [editingExamHistory, setEditingExamHistory] = useState<SupplementaryExam[]>([]);
 
     // Summary Statistics
     const stats = useMemo(() => {
@@ -89,12 +97,26 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         setShowSupplementaryForm(true);
     };
 
-    const handleOpenMarkEntry = (exam: any) => {
+    const handleOpenMarkEntry = async (exam: any) => {
         setEditingExam(exam);
         setMarkEntryForm({
             int: exam.marks?.int?.toString() || '',
-            ext: exam.marks?.ext?.toString() || ''
+            ext: exam.marks?.ext?.toString() || '',
+            prevInt: exam.previousMarks?.int?.toString() || '',
+            prevExt: exam.previousMarks?.ext?.toString() || '',
+            attemptNumber: exam.attemptNumber || 1,
+            originalTerm: exam.originalTerm || ''
         });
+        
+        // Fetch history for this student and subject
+        try {
+            const history = await dataService.getSupplementaryExamHistory(exam.studentId, exam.subjectId);
+            setEditingExamHistory(history);
+        } catch (error) {
+            console.error('Error fetching exam history:', error);
+            setEditingExamHistory([]);
+        }
+        
         setShowMarkEntryModal(true);
     };
 
@@ -118,6 +140,9 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             const extVal = markEntryForm.ext ? parseMark(markEntryForm.ext) : 0;
             const totalNum = (intVal === 'A' ? 0 : intVal) + (extVal === 'A' ? 0 : extVal);
 
+            const prevIntVal = markEntryForm.prevInt ? parseMark(markEntryForm.prevInt) : 0;
+            const prevExtVal = markEntryForm.prevExt ? parseMark(markEntryForm.prevExt) : 0;
+
             // Calculate Status
             const minINT = Math.ceil(subject.maxINT * 0.5);
             const minEXT = Math.ceil(subject.maxEXT * 0.4);
@@ -125,13 +150,21 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             const passedEXT = extVal !== 'A' && typeof extVal === 'number' && extVal >= minEXT;
             const status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
 
-            await dataService.updateSupplementaryExamMarks(editingExam.id, {
-                int: intVal,
-                ext: extVal,
-                total: totalNum,
-                status,
-                isSupplementary: true
-            });
+            await dataService.updateSupplementaryExamMarks(
+                editingExam.id, 
+                {
+                    int: intVal,
+                    ext: extVal,
+                    total: totalNum,
+                    status,
+                },
+                {
+                    int: prevIntVal,
+                    ext: prevExtVal
+                },
+                markEntryForm.attemptNumber,
+                markEntryForm.originalTerm
+            );
 
             await onRefresh();
             setShowMarkEntryModal(false);
@@ -157,7 +190,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 originalSemester: supplementaryForm.originalSemester,
                 originalYear: supplementaryForm.originalYear,
                 supplementaryYear: supplementaryForm.supplementaryYear,
-                status: 'Pending'
+                status: 'Pending',
+                examTerm: activeTerm
             };
 
             await dataService.addSupplementaryExam(newSupplementaryExam);
@@ -188,17 +222,25 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
     const filteredExams = useMemo(() => {
         return supplementaryExams.filter(exam => {
+            const matchesTerm = termFilter === 'All' || 
+                               (termFilter === 'Active' && exam.examTerm === activeTerm) ||
+                               exam.examTerm === termFilter;
             const matchesTab = activeTab === 'All' || exam.examType === activeTab;
             const matchesClass = classFilter === 'All' || exam.studentClass === classFilter;
             const matchesSubject = subjectFilter === 'All' || exam.subjectId === subjectFilter;
             const matchesStatus = statusFilter === 'All' || exam.status === statusFilter;
+            const matchesAttempt = attemptFilter === 'All' || exam.attemptNumber?.toString() === attemptFilter;
             const matchesSearch = !searchTerm.trim() || 
                 exam.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 exam.studentAdNo?.toLowerCase().includes(searchTerm.toLowerCase());
             
-            return matchesTab && matchesClass && matchesSubject && matchesStatus && matchesSearch;
+            return matchesTerm && matchesTab && matchesClass && matchesSubject && matchesStatus && matchesAttempt && matchesSearch;
         });
-    }, [supplementaryExams, activeTab, classFilter, subjectFilter, statusFilter, searchTerm]);
+    }, [supplementaryExams, activeTerm, termFilter, activeTab, classFilter, subjectFilter, statusFilter, attemptFilter, searchTerm]);
+
+    const uniqueTermsInSupp = useMemo(() => {
+        return Array.from(new Set(supplementaryExams.map(e => e.examTerm).filter(Boolean))).sort().reverse();
+    }, [supplementaryExams]);
 
     const uniqueClassesInSupp = useMemo(() => {
         return Array.from(new Set(supplementaryExams.map(e => e.studentClass).filter(Boolean))).sort();
@@ -281,14 +323,28 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                             className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-all"
                         />
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <select 
+                    <div className="flex flex-wrap items-center gap-3">
+                        <select
+                            value={termFilter}
+                            onChange={(e) => setTermFilter(e.target.value)}
+                            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none"
+                        >
+                            <option value="Active">Current Term Only</option>
+                            <option value="All">All Terms</option>
+                            {uniqueTermsInSupp.filter(t => t !== activeTerm).map(term => (
+                                <option key={term} value={term}>{term}</option>
+                            ))}
+                        </select>
+
+                        <select
                             value={classFilter}
                             onChange={(e) => setClassFilter(e.target.value)}
-                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:border-emerald-500"
+                            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none"
                         >
                             <option value="All">All Classes</option>
-                            {uniqueClassesInSupp.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                            {uniqueClassesInSupp.map(cls => (
+                                <option key={cls} value={cls}>{cls}</option>
+                            ))}
                         </select>
                         <select 
                             value={subjectFilter}
@@ -304,8 +360,19 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:border-emerald-500"
                         >
                             <option value="All">All Status</option>
-                            <option value="Pending">Pending</option>
                             <option value="Completed">Completed</option>
+                        </select>
+                        <select 
+                            value={attemptFilter}
+                            onChange={(e) => setAttemptFilter(e.target.value)}
+                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:border-emerald-500"
+                        >
+                            <option value="All">All Attempts</option>
+                            <option value="1">1st Attempt</option>
+                            <option value="2">2nd Attempt</option>
+                            <option value="3">3rd Attempt</option>
+                            <option value="4">4th Attempt</option>
+                            <option value="5">5th+ Attempt</option>
                         </select>
                     </div>
                 </div>
@@ -335,9 +402,9 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                     <th className="text-left p-4 font-bold text-slate-700">Student</th>
                                     <th className="text-left p-4 font-bold text-slate-700">Subject</th>
                                     <th className="text-center p-4 font-bold text-slate-700">Type</th>
-                                    <th className="text-center p-4 font-bold text-slate-700">INT</th>
-                                    <th className="text-center p-4 font-bold text-slate-700">EXT</th>
-                                    <th className="text-center p-4 font-bold text-slate-700">Total</th>
+                                    <th className="text-center p-4 font-bold text-slate-700">Exam Period</th>
+                                    <th className="text-center p-4 font-bold text-slate-700">Original Marks</th>
+                                    <th className="text-center p-4 font-bold text-slate-700">New Marks</th>
                                     <th className="text-center p-4 font-bold text-slate-700">Result</th>
                                     <th className="text-center p-4 font-bold text-slate-700">Status</th>
                                     <th className="text-center p-4 font-bold text-slate-700">Actions</th>
@@ -354,21 +421,57 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                             <div className="font-medium text-slate-700">{suppExam.subjectName}</div>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold ${suppExam.examType === 'PreviousYear'
-                                                ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                                                : 'bg-blue-50 text-blue-700 border border-blue-100'
-                                                }`}>
-                                                {suppExam.examType === 'PreviousYear' ? 'Repeat' : 'Semester'}
-                                            </span>
+                                            <div className="flex flex-col items-center gap-1">
+                                                <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-black ${suppExam.examType === 'PreviousYear'
+                                                    ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                                    : suppExam.applicationType === 'special-supp'
+                                                        ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                                                        : suppExam.applicationType === 'revaluation'
+                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                            : suppExam.applicationType === 'improvement'
+                                                                ? 'bg-cyan-50 text-cyan-700 border border-cyan-100'
+                                                                : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                                    }`}>
+                                                    {suppExam.examType === 'PreviousYear'
+                                                        ? 'Repeat'
+                                                        : suppExam.applicationType === 'special-supp'
+                                                            ? 'Special Supply'
+                                                            : suppExam.applicationType === 'revaluation'
+                                                                ? 'Revaluation'
+                                                                : suppExam.applicationType === 'improvement'
+                                                                    ? 'Improvement'
+                                                                    : 'Semester'}
+                                                </span>
+                                                {suppExam.attemptNumber > 1 && (
+                                                    <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[9px] font-black uppercase">
+                                                        Attempt {suppExam.attemptNumber}
+                                                    </span>
+                                                )}
+                                                {suppExam.originalTerm && (
+                                                    <span className="text-[9px] text-slate-400 font-medium">
+                                                        Failed In: {suppExam.originalTerm}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
-                                        <td className="p-4 text-center font-mono text-sm text-slate-600">
-                                            {suppExam.marks?.int ?? '-'}
+                                        <td className="p-4 text-center">
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase">{suppExam.examTerm}</div>
+                                            <div className="text-[9px] text-slate-400 font-medium">Attempt {suppExam.attemptNumber || 1}</div>
                                         </td>
-                                        <td className="p-4 text-center font-mono text-sm text-slate-600">
-                                            {suppExam.marks?.ext ?? '-'}
+                                        <td className="p-4 text-center">
+                                            {suppExam.previousMarks ? (
+                                                <div className="font-mono text-xs text-slate-500">
+                                                    INT: {suppExam.previousMarks.int} | EXT: {suppExam.previousMarks.ext}
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-300 text-xs">-</span>
+                                            )}
                                         </td>
-                                        <td className="p-4 text-center font-black text-slate-900">
-                                            {suppExam.marks?.total ?? '-'}
+                                        <td className="p-4 text-center">
+                                            <div className="font-mono text-sm font-bold text-slate-700">
+                                                {suppExam.marks?.int ?? '-'} / {suppExam.marks?.ext ?? '-'}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase">Update: {suppExam.marks?.total ?? '-'}</div>
                                         </td>
                                         <td className="p-4 text-center">
                                             {suppExam.marks ? (
@@ -589,32 +692,149 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                         <div className="bg-emerald-600 p-6 text-white">
                             <h3 className="text-xl font-black">Enter Supplementary Marks</h3>
                             <p className="text-emerald-100 text-sm">{editingExam.studentName} - {editingExam.subjectName}</p>
+                            {editingExam.attemptNumber > 1 && (
+                                <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/30 rounded text-[10px] font-bold uppercase tracking-wider">
+                                    <i className="fa-solid fa-rotate-right"></i>
+                                    Attempt {editingExam.attemptNumber}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Historical Timeline */}
+                        {editingExamHistory.length > 0 && (
+                            <div className="px-6 pt-6">
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <i className="fa-solid fa-timeline"></i>
+                                        Attempt History
+                                    </h4>
+                                    <div className="space-y-3 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200">
+                                        {editingExamHistory.map((historyExam, idx) => (
+                                            <div key={historyExam.id} className="relative pl-6">
+                                                <div className={`absolute left-0 top-1.5 w-[16px] h-[16px] rounded-full border-4 border-slate-50 flex items-center justify-center ${historyExam.id === editingExam.id ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <div className={`text-xs font-bold ${historyExam.id === editingExam.id ? 'text-emerald-700' : 'text-slate-700'}`}>
+                                                            Attempt {historyExam.attemptNumber} ({historyExam.examTerm})
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-500">
+                                                            {historyExam.status === 'Completed' 
+                                                                ? `Marks: ${historyExam.marks?.int ?? '-'}/${historyExam.marks?.ext ?? '-'} (${historyExam.marks?.status})`
+                                                                : 'Pending...'}
+                                                        </div>
+                                                    </div>
+                                                    {historyExam.id === editingExam.id && (
+                                                        <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase">Active</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         
                         <form onSubmit={handleSaveMarks} className="p-6 space-y-6">
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">INT Marks</label>
-                                    <input
-                                        type="text"
-                                        value={markEntryForm.int}
-                                        onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
-                                        placeholder="Enter INT"
-                                        className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all font-mono font-bold"
-                                        autoFocus
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-1">Max: {subjects.find(s => s.id === editingExam.subjectId)?.maxINT}</p>
+                                <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                                    <div className="flex-1">
+                                        <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Attempt</h4>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setMarkEntryForm(prev => ({ ...prev, attemptNumber: Math.max(1, prev.attemptNumber - 1) }))}
+                                            className="w-6 h-6 rounded-lg bg-white border border-amber-200 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-all text-xs"
+                                        >
+                                            <i className="fa-solid fa-minus"></i>
+                                        </button>
+                                        <span className="font-mono font-bold text-amber-700 w-4 text-center text-xs">{markEntryForm.attemptNumber}</span>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setMarkEntryForm(prev => ({ ...prev, attemptNumber: Math.min(10, prev.attemptNumber + 1) }))}
+                                            className="w-6 h-6 rounded-lg bg-white border border-amber-200 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-all text-xs"
+                                        >
+                                            <i className="fa-solid fa-plus"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">EXT Marks</label>
-                                    <input
+
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Source Term</h4>
+                                    <input 
                                         type="text"
-                                        value={markEntryForm.ext}
-                                        onChange={(e) => setMarkEntryForm(prev => ({ ...prev, ext: e.target.value }))}
-                                        placeholder="Enter EXT"
-                                        className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none transition-all font-mono font-bold"
+                                        value={markEntryForm.originalTerm}
+                                        onChange={(e) => setMarkEntryForm(prev => ({ ...prev, originalTerm: e.target.value }))}
+                                        placeholder="e.g. 2024-2025-Odd"
+                                        className="w-full bg-transparent border-none p-0 text-xs font-bold text-slate-700 focus:ring-0 outline-none"
                                     />
-                                    <p className="text-[10px] text-slate-400 mt-1">Max: {subjects.find(s => s.id === editingExam.subjectId)?.maxEXT}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <i className="fa-solid fa-history"></i>
+                                        Original Marks (Previous Record)
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">INT</label>
+                                            <input
+                                                type="text"
+                                                value={markEntryForm.prevInt}
+                                                onChange={(e) => setMarkEntryForm(prev => ({ ...prev, prevInt: e.target.value }))}
+                                                className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono text-sm focus:border-emerald-500 outline-none"
+                                                placeholder="INT"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">EXT</label>
+                                            <input
+                                                type="text"
+                                                value={markEntryForm.prevExt}
+                                                onChange={(e) => setMarkEntryForm(prev => ({ ...prev, prevExt: e.target.value }))}
+                                                className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono text-sm focus:border-emerald-500 outline-none"
+                                                placeholder="EXT"
+                                            />
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-2 font-medium">
+                                        <i className="fa-solid fa-info-circle mr-1"></i>
+                                        Manually enter or override historical marks if missing.
+                                    </p>
+                                </div>
+
+                                <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                                    <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <i className="fa-solid fa-file-pen"></i>
+                                        New Supplementary Marks
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">New INT</label>
+                                            <input
+                                                type="text"
+                                                value={markEntryForm.int}
+                                                onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
+                                                className="w-full p-2 bg-white border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm"
+                                                placeholder="Enter"
+                                                autoFocus
+                                            />
+                                            <p className="text-[9px] text-slate-400 mt-1">Max: {subjects.find(s => s.id === editingExam.subjectId)?.maxINT}</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">New EXT</label>
+                                            <input
+                                                type="text"
+                                                value={markEntryForm.ext}
+                                                onChange={(e) => setMarkEntryForm(prev => ({ ...prev, ext: e.target.value }))}
+                                                className="w-full p-2 bg-white border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm"
+                                                placeholder="Enter"
+                                            />
+                                            <p className="text-[9px] text-slate-400 mt-1">Max: {subjects.find(s => s.id === editingExam.subjectId)?.maxEXT}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

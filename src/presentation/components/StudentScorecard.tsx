@@ -25,7 +25,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const { activeTerm, currentSemester } = useTerm();
+    const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
 
     useEffect(() => {
         loadData();
@@ -41,7 +41,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
         try {
             setIsLoading(true);
             const [allStudents, allSubjects] = await Promise.all([
-                dataService.getAllStudents(),
+                dataService.getAllStudents(activeTerm),
                 dataService.getAllSubjects()
             ]);
             setStudents(allStudents);
@@ -55,7 +55,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
 
     const loadClassData = async () => {
         try {
-            const classStudents = await dataService.getStudentsByClass(selectedClass);
+            const classStudents = await dataService.getStudentsByClass(selectedClass, activeTerm);
             setClassStudents(classStudents);
 
             // Reset selected student if not in new class
@@ -213,7 +213,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                             <div className="grid grid-cols-3 gap-2 print:text-[10px] text-black print:leading-tight">
                                 <div className="text-left">
                                     <div className="font-bold">Academic Session:</div>
-                                    <div>2026-27</div>
+                                    <div>{currentAcademicYear}</div>
                                 </div>
                                 <div className="text-center">
                                     <div className="font-bold">Document Type:</div>

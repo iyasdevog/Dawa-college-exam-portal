@@ -8,9 +8,11 @@ import TimetableGenerator from './management/TimetableGenerator';
 import AcademicCalendar from './management/AcademicCalendar';
 import AttendanceMonitor from './management/AttendanceMonitor';
 import MasterTimetable from './management/MasterTimetable';
+import { useTerm } from '../viewmodels/TermContext';
 
 const AttendancePortal: React.FC = () => {
     const { isMobile } = useMobile();
+    const { activeTerm } = useTerm();
     const [activeTab, setActiveTab] = useState('marking');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);

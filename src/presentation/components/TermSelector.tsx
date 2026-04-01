@@ -28,12 +28,16 @@ export const TermSelector: React.FC<TermSelectorProps> = ({ className = '', vari
                     setTerm(year, sem as 'Odd' | 'Even');
                 }}
             >
-                {termOptions.map((year) => (
-                    <optgroup key={year} label={year} className="bg-slate-800 text-white">
-                        <option value={`${year}|Odd`}>{year} - Odd / Sem 1</option>
-                        <option value={`${year}|Even`}>{year} - Even / Sem 2</option>
-                    </optgroup>
-                ))}
+                {termOptions.map((termKey) => {
+                    const parts = termKey.split('-');
+                    const year = `${parts[0]}-${parts[1]}`;
+                    const semester = parts[2];
+                    return (
+                        <option key={termKey} value={`${year}|${semester}`}>
+                            {year} - {semester} / {semester === 'Odd' ? 'Sem 1' : 'Sem 2'}
+                        </option>
+                    );
+                })}
             </select>
         </div>
     );
