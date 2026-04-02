@@ -3703,11 +3703,14 @@ export class DataService {
             const students = await this.getAllStudents();
             const attendanceSnap = await getDocs(collection(this.db, this.attendanceCollection));
             const attendanceRecords = attendanceSnap.docs.map(doc => doc.data());
+            
+            const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            const allSubjects = subjectsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
 
             const summaries: any[] = [];
             const currentTerm = this.getCurrentTermKey();
 
-            // Unique years from settings + student history
+            // Unique years from settings + student history + subjects
             const allYears = new Set([...years]);
             students.forEach(s => {
                 if (s.academicHistory) {
@@ -3719,27 +3722,53 @@ export class DataService {
                     });
                 }
             });
+            allSubjects.forEach(s => {
+                if (s.academicYear) allYears.add(s.academicYear);
+            });
 
             Array.from(allYears).forEach(year => {
                 ['Odd', 'Even'].forEach(sem => {
                     const termKey = `${year}-${sem}`;
-                    const termStudents = students.filter(s => s.academicHistory && s.academicHistory[termKey]);
+                    
+                    const termStudents = students.filter(s => {
+                        if (termKey === currentTerm) return s.isActive !== false;
+                        return s.academicHistory && s.academicHistory[termKey];
+                    });
+                    
+                    // Same filtering rule as getAllSubjects
+                    const termSubjects = allSubjects.filter(sub => {
+                        if (sub.activeSemester && sub.activeSemester !== 'Both' && sub.activeSemester !== sem) return false;
+                        if (sub.academicYear && sub.academicYear !== year) return false;
+                        if (!sub.academicYear) {
+                            const hasSpecific = allSubjects.some(s => s.name === sub.name && s.academicYear === year && (s.activeSemester === 'Both' || s.activeSemester === sem));
+                            if (hasSpecific) return false;
+                        }
+                        return true;
+                    });
+                    
                     const termAttendance = attendanceRecords.filter(a => 
                         (a.academicYear === year && a.semester === sem) || 
                         (a.termKey === termKey)
                     );
 
+                    const uniqueTeachers = new Set(termSubjects.map(s => s.facultyName).filter(f => f && f.trim() !== ''));
+                    const uniqueClasses = new Set(termStudents.map(s => s.className).filter(Boolean));
+
                     // Show terms that actually have data OR are the current term
                     const hasStudents = termStudents.length > 0;
                     const hasAttendance = termAttendance.length > 0;
+                    const hasSubjects = termSubjects.length > 0;
                     
-                    if (hasStudents || hasAttendance || termKey === currentTerm) {
+                    if (hasStudents || hasAttendance || hasSubjects || termKey === currentTerm) {
                         summaries.push({
                             academicYear: year,
                             semester: sem,
                             termKey,
                             studentCount: termStudents.length,
                             attendanceCount: termAttendance.length,
+                            subjectCount: termSubjects.length,
+                            teacherCount: uniqueTeachers.size,
+                            classCount: uniqueClasses.size,
                             isCurrent: termKey === currentTerm
                         });
                     }

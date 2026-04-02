@@ -679,10 +679,22 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2 mb-6">
+                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 mb-6">
                                         <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
                                             <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Students</span>
                                             <span className="text-lg font-black text-slate-900">{summary.studentCount}</span>
+                                        </div>
+                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Classes</span>
+                                            <span className="text-lg font-black text-slate-900">{summary.classCount ?? 0}</span>
+                                        </div>
+                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Subjects</span>
+                                            <span className="text-lg font-black text-slate-900">{summary.subjectCount ?? 0}</span>
+                                        </div>
+                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Teachers</span>
+                                            <span className="text-lg font-black text-slate-900">{summary.teacherCount ?? 0}</span>
                                         </div>
                                         <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
                                             <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Attendance</span>
