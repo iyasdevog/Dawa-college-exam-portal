@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { StudentRecord, SubjectConfig, AttendanceRecord, SpecialDay, TimetableEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
@@ -9,6 +9,22 @@ interface AttendanceManagementProps {
     students: StudentRecord[];
     onRefresh: () => void;
 }
+
+// Memoized student row - re-renders ONLY when this student's attendance status changes
+const StudentAttendanceRow = memo(({ student, isPresent, onToggle }: { student: StudentRecord, isPresent: boolean, onToggle: (id: string) => void }) => (
+    <div
+        onClick={() => onToggle(student.id)}
+        className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer active:bg-slate-100 touch-pan-y"
+    >
+        <div className="flex-1 select-none">
+            <div className="font-bold text-slate-900 text-base">{student.name}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{student.adNo}</div>
+        </div>
+        <div className={`w-14 h-7 rounded-full relative transition-colors ${isPresent ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+            <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow-sm ${isPresent ? 'right-1' : 'left-1'}`}></div>
+        </div>
+    </div>
+));
 
 const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, students, onRefresh }) => {
     const { isMobile } = useMobile();
@@ -26,9 +42,9 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const [allTimetables, setAllTimetables] = useState<TimetableEntry[]>([]);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
 
-    const classes = [...new Set(students.map(s => s.className))];
-    const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
-    const filteredStudents = students.filter(s => s.className === selectedClass);
+    const classes = useMemo(() => [...new Set(students.map(s => s.className))], [students]);
+    const filteredSubjects = useMemo(() => subjects.filter(s => s.targetClasses.includes(selectedClass)), [subjects, selectedClass]);
+    const filteredStudents = useMemo(() => students.filter(s => s.className === selectedClass), [students, selectedClass]);
 
     useEffect(() => {
         const loadAllTimetables = async () => {
@@ -90,9 +106,9 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         setIsSpecialDayMode(false);
     };
 
-    const handleToggleAttendance = (studentId: string) => {
+    const handleToggleAttendance = useCallback((studentId: string) => {
         setAttendanceData(prev => ({ ...prev, [studentId]: !prev[studentId] }));
-    };
+    }, []);
 
     const handleSaveAttendance = async () => {
         if (!selectedClass || !selectedSubject) return;
@@ -320,21 +336,12 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                     </div>
                     <div className="divide-y divide-slate-100">
                         {filteredStudents.map(student => (
-                            <div
+                            <StudentAttendanceRow
                                 key={student.id}
-                                onClick={() => handleToggleAttendance(student.id)}
-                                className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer active:bg-slate-100 touch-pan-y"
-                            >
-                                <div className="flex-1 select-none">
-                                    <div className="font-bold text-slate-900 text-base">{student.name}</div>
-                                    <div className="text-xs text-slate-500 mt-0.5">{student.adNo}</div>
-                                </div>
-                                <div
-                                    className={`w-14 h-7 rounded-full relative transition-colors ${attendanceData[student.id] ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                >
-                                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow-sm ${attendanceData[student.id] ? 'right-1' : 'left-1'}`}></div>
-                                </div>
-                            </div>
+                                student={student}
+                                isPresent={attendanceData[student.id] ?? true}
+                                onToggle={handleToggleAttendance}
+                            />
                         ))}
                     </div>
                     <div className="p-6 bg-slate-50 border-t border-slate-200">
