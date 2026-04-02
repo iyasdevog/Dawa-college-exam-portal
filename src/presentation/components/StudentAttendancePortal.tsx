@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { StudentRecord, SubjectConfig, AttendanceRecord } from '../../domain/entities/types';
 import { MobileFacultyEntrySkeleton } from './SkeletonLoaders';
+import { useTerm } from '../viewmodels/TermContext';
+import { TermSelector } from './TermSelector';
+
 
 const StudentAttendancePortal: React.FC = () => {
+    const { activeTerm } = useTerm();
+    const [selectedTermKey, setSelectedTermKey] = useState(activeTerm);
     const [adNo, setAdNo] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [student, setStudent] = useState<StudentRecord | null>(null);
     const [attendanceData, setAttendanceData] = useState<Array<{ subject: SubjectConfig; percentage: number; present: number; total: number }>>([]);
     const [error, setError] = useState('');
+
+    // Update selectedTermKey when activeTerm changes (if not manually changed)
+    useEffect(() => {
+        setSelectedTermKey(activeTerm);
+    }, [activeTerm]);
+
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,17 +31,17 @@ const StudentAttendancePortal: React.FC = () => {
         setAttendanceData([]);
 
         try {
-            const foundStudent = await dataService.getStudentByAdNo(adNo.trim());
+            const foundStudent = await dataService.getStudentByAdNo(adNo.trim(), selectedTermKey);
             if (!foundStudent) {
-                setError('No student found with this admission number.');
+                setError(`No student found with this admission number in ${selectedTermKey}.`);
                 return;
             }
 
             setStudent(foundStudent);
-            const subjects = await dataService.getSubjectsByClass(foundStudent.className);
+            const subjects = await dataService.getSubjectsByClass(foundStudent.className, selectedTermKey);
 
             const attendanceStats = await Promise.all(subjects.map(async (subject) => {
-                const records = await dataService.getAttendanceForStudent(foundStudent.id, subject.id);
+                const records = await dataService.getAttendanceForStudent(foundStudent.id, subject.id, selectedTermKey);
                 const total = records.length;
                 const present = records.filter(r => r.presentStudentIds.includes(foundStudent.id)).length;
                 const percentage = total > 0 ? (present / total) * 100 : 100;
@@ -53,9 +64,21 @@ const StudentAttendancePortal: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto p-6 space-y-8">
-            <div className="text-center">
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Student Attendance Portal</h1>
-                <p className="text-slate-600 mt-2">View your live attendance records and subject-wise reports</p>
+            <div className="text-center space-y-4">
+                <div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Attendance Portal</h1>
+                    <p className="text-slate-600 mt-1 italic">Check subject-wise attendance percentage</p>
+                </div>
+                
+                <div className="inline-flex items-center gap-3 bg-slate-100 p-2 rounded-2xl border border-slate-200">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Academic Term:</span>
+                    <TermSelector 
+                        variant="light" 
+                        className="!bg-white border-none shadow-sm h-10 py-0" 
+                        value={selectedTermKey}
+                        onChange={(val) => setSelectedTermKey(val)}
+                    />
+                </div>
             </div>
 
             <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl max-w-md mx-auto">

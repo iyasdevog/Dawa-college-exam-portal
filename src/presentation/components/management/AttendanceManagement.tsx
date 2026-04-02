@@ -301,39 +301,39 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                     </div>
                 </div>
             ) : selectedClass && selectedSubject ? (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
                         <h3 className="font-bold text-slate-900">Mark Attendance: {filteredStudents.length} Students</h3>
                         <div className="flex gap-2">
                             <button onClick={() => {
                                 const allPresent = { ...attendanceData };
                                 filteredStudents.forEach(s => allPresent[s.id] = true);
                                 setAttendanceData(allPresent);
-                            }} className="text-xs font-bold text-emerald-600 hover:underline">All Present</button>
-                            <span className="text-slate-300">|</span>
+                            }} className="text-xs font-bold text-emerald-600 hover:underline p-2 -m-2">All Present</button>
+                            <span className="text-slate-300 ml-2 mr-2">|</span>
                             <button onClick={() => {
                                 const allAbsent = { ...attendanceData };
                                 filteredStudents.forEach(s => allAbsent[s.id] = false);
                                 setAttendanceData(allAbsent);
-                            }} className="text-xs font-bold text-rose-600 hover:underline">All Absent</button>
+                            }} className="text-xs font-bold text-rose-600 hover:underline p-2 -m-2">All Absent</button>
                         </div>
                     </div>
                     <div className="divide-y divide-slate-100">
                         {filteredStudents.map(student => (
                             <div
                                 key={student.id}
-                                className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                                onClick={() => handleToggleAttendance(student.id)}
+                                className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer active:bg-slate-100 touch-pan-y"
                             >
-                                <div>
-                                    <div className="font-bold text-slate-900">{student.name}</div>
-                                    <div className="text-xs text-slate-500">{student.adNo}</div>
+                                <div className="flex-1 select-none">
+                                    <div className="font-bold text-slate-900 text-base">{student.name}</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">{student.adNo}</div>
                                 </div>
-                                <button
-                                    onClick={() => handleToggleAttendance(student.id)}
-                                    className={`w-12 h-6 rounded-full relative transition-colors ${attendanceData[student.id] ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                <div
+                                    className={`w-14 h-7 rounded-full relative transition-colors ${attendanceData[student.id] ? 'bg-emerald-500' : 'bg-slate-300'}`}
                                 >
-                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${attendanceData[student.id] ? 'right-1' : 'left-1'}`}></div>
-                                </button>
+                                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow-sm ${attendanceData[student.id] ? 'right-1' : 'left-1'}`}></div>
+                                </div>
                             </div>
                         ))}
                     </div>

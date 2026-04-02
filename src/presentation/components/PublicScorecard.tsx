@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StudentRecord, SubjectConfig, SubjectMarks } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import ClassResults from './ClassResults';
 import { useTerm } from '../viewmodels/TermContext';
 import { TermSelector } from './TermSelector';
+import AggregatedScorecard from './AggregatedScorecard';
 
 
 interface PublicScorecardProps {
@@ -16,6 +17,7 @@ interface PublicScorecardProps {
 const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isResultsReleased = true, isSuppReleased = false }) => {
     const { isMobile } = useMobile();
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
+    const [showAggregatedView, setShowAggregatedView] = useState(false);
 
     const handlePrint = () => {
         window.print();
@@ -66,6 +68,10 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
             const suppSubjectIds = new Set(completedSupps.map(su => su.subjectId));
             resultSubjects = resultSubjects.filter(s => suppSubjectIds.has(s.id));
         }
+    }
+
+    if (showAggregatedView) {
+        return <AggregatedScorecard student={result} allSubjects={subjects} onClose={() => setShowAggregatedView(false)} />;
     }
 
     return (
@@ -160,9 +166,17 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                 <span className={`text-emerald-300 font-bold ${isMobile ? 'text-sm' : 'text-sm'}`}>
                                     Admission: {result.adNo}
                                 </span>
-                                <div className="flex items-center gap-2 print:hidden">
-                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">View Term:</span>
-                                    <TermSelector variant="dark" className="!bg-white/10 border-none !p-1 h-auto text-xs" />
+                                <div className={`flex items-center gap-2 print:hidden ${isMobile ? 'flex-col items-start gap-3 w-full mt-2' : ''}`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">View Term:</span>
+                                        <TermSelector variant="dark" className="!bg-white/10 border-none !p-1 h-auto text-xs" />
+                                    </div>
+                                    <button 
+                                        onClick={() => setShowAggregatedView(true)} 
+                                        className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-emerald-300 font-bold text-xs transition border border-emerald-400/30 whitespace-nowrap"
+                                    >
+                                        <i className="fa-solid fa-layer-group mr-1.5"></i> Full Transcript
+                                    </button>
                                 </div>
                                 <span className="hidden print:inline text-emerald-300 font-bold text-sm">
                                     Term: {activeTerm}

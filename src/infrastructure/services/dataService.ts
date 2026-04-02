@@ -763,6 +763,17 @@ export class DataService {
     }
 
     // Subject operations
+    async getRawSubjects(): Promise<SubjectConfig[]> {
+        try {
+            const q = query(collection(this.db, this.subjectsCollection));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+        } catch (error) {
+            console.error('Error fetching raw subjects:', error);
+            return [];
+        }
+    }
+
     async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
         try {
             const settings = await this.getGlobalSettings();
@@ -1565,15 +1576,27 @@ export class DataService {
         }
     }
 
-    async getAttendanceByClassAndDate(className: string, date: string): Promise<AttendanceRecord[]> {
+    async getAttendanceByClassAndDate(className: string, date: string, termKey?: string): Promise<AttendanceRecord[]> {
         try {
+            const settings = await this.getGlobalSettings();
+            const [targetYear, targetSem] = termKey ? termKey.split('-') : [settings.currentAcademicYear, settings.currentSemester];
+
             const q = query(
                 collection(this.db, this.attendanceCollection),
                 where('className', '==', className),
                 where('date', '==', date)
             );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+            const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+
+            // Strict term filter
+            return allRecords.filter(rec => {
+                if (rec.academicYear && rec.semester) {
+                    return rec.academicYear === targetYear && rec.semester === targetSem;
+                }
+                // If older records don't have metadata, we trust the date/class match for now
+                return true;
+            });
         } catch (error) {
             console.error('Error fetching attendance:', error);
             return [];
@@ -1582,11 +1605,21 @@ export class DataService {
 
     async getAttendanceForStudent(studentId: string, subjectId?: string, termKey?: string): Promise<AttendanceRecord[]> {
         try {
-            // Get date limits from global settings
+            // Get date limits from global settings or semester config
             const settings = await this.getGlobalSettings();
-            const startDate = settings.attendanceStartDate;
-            const endDate = settings.attendanceEndDate;
-            const currentTerm = `${settings.currentAcademicYear}-${settings.currentSemester}`;
+            let startDate = settings.attendanceStartDate;
+            let endDate = settings.attendanceEndDate;
+            
+            const currentTermKey = termKey || `${settings.currentAcademicYear}-${settings.currentSemester}`;
+            
+            // Try to find specific dates for this term in SemesterConfigs
+            if (settings.semesters) {
+                const config = settings.semesters.find(s => s.termKey === currentTermKey);
+                if (config) {
+                    if (config.startDate) startDate = config.startDate;
+                    if (config.endDate) endDate = config.endDate;
+                }
+            }
 
             let q = subjectId
                 ? query(collection(this.db, this.attendanceCollection), where('subjectId', '==', subjectId))
@@ -1595,41 +1628,26 @@ export class DataService {
             const snapshot = await getDocs(q);
             let allAttendance = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
 
-            // Filter by termKey if provided
-            if (termKey) {
-                const [targetYear, targetSem] = termKey.split('-');
-                allAttendance = allAttendance.filter(record => {
-                    // 1. If record has explicit term metadata, use it
-                    if (record.academicYear && record.semester) {
-                        return record.academicYear === targetYear && record.semester === targetSem;
-                    }
-                    
-                    // 2. If it's the current term and record has no metadata, use date filter as fallback
-                    if (termKey === currentTerm && (startDate || endDate)) {
-                        const recordDate = record.date;
-                        if (startDate && recordDate < startDate) return false;
-                        if (endDate && recordDate > endDate) return false;
-                        return true;
-                    }
+            const [targetYear, targetSem] = currentTermKey.split('-');
+            
+            return allAttendance.filter(record => {
+                // First check if the student is in this record at all
+                const hasStudent = record.presentStudentIds.includes(studentId) || record.absentStudentIds.includes(studentId);
+                if (!hasStudent) return false;
 
-                    // 3. If it's a historical term with no metadata, we can't reliably filter by date without history
-                    // but for strict isolation, we should probably exclude it unless it's definitely from that period.
-                    // For now, if no metadata and not current term, exclude to prevent leakage.
-                    return false;
-                });
-            } else if (startDate || endDate) {
-                // Legacy date-only filtering if no termKey provided
-                allAttendance = allAttendance.filter(record => {
-                    const recordDate = record.date;
-                    if (startDate && recordDate < startDate) return false;
-                    if (endDate && recordDate > endDate) return false;
-                    return true;
-                });
-            }
-
-            return allAttendance.filter(record =>
-                record.presentStudentIds.includes(studentId) || record.absentStudentIds.includes(studentId)
-            );
+                // 1. If record has explicit term metadata, use it
+                if (record.academicYear && record.semester) {
+                    return record.academicYear === targetYear && record.semester === targetSem;
+                }
+                
+                // 2. Fallback to date filter if record has no metadata
+                if (startDate && record.date < startDate) return false;
+                if (endDate && record.date > endDate) return false;
+                
+                // If we are looking for a specific term and the record has NO term info,
+                // we only include it if it falls within the window for that term.
+                return true;
+            });
         } catch (error) {
             console.error('Error fetching student attendance:', error);
             return [];

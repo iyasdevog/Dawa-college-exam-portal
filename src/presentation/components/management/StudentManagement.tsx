@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { StudentRecord } from '../../../domain/entities/types';
+import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../../hooks/useMobile';
 import { mobileStorage } from '../../../infrastructure/services/mobileUtils';
+import AggregatedScorecard from '../AggregatedScorecard';
 
 interface StudentManagementProps {
     students: StudentRecord[];
@@ -86,6 +87,9 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         toClass: '',
         isPromoting: false
     });
+
+    const [transcriptStudent, setTranscriptStudent] = useState<StudentRecord | null>(null);
+    const [allSubjects, setAllSubjects] = useState<SubjectConfig[]>([]);
 
     // Load mobile preferences
     useEffect(() => {
@@ -387,10 +391,25 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         URL.revokeObjectURL(url);
     };
 
+    const handleViewTranscript = async (student: StudentRecord) => {
+        setIsOperating(true);
+        try {
+            const subjects = await dataService.getRawSubjects();
+            setAllSubjects(subjects);
+            setTranscriptStudent(student);
+        } catch (error) {
+            console.error("Failed to load transcript data", error);
+            alert("Failed to load transcript data. Please try again.");
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
     // Memoized Handlers
     const handleEdit = useCallback((student: StudentRecord) => handleEditStudent(student), []);
     const handleArchive = useCallback((student: StudentRecord) => handleArchiveStudent(student), []);
     const handleDelete = useCallback((student: StudentRecord) => handleDeleteStudent(student), []);
+    const handleTranscript = useCallback((student: StudentRecord) => handleViewTranscript(student), []);
 
     // Filtered students logic — Memoized
     const filteredStudents = useMemo(() => {
@@ -484,6 +503,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                             onEdit={handleEdit} 
                             onArchive={handleArchive} 
                             onDelete={handleDelete} 
+                            onViewTranscript={handleTranscript}
                         />
                     ))}
                 </div>
@@ -507,6 +527,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                     onEdit={handleEdit} 
                                     onArchive={handleArchive} 
                                     onDelete={handleDelete} 
+                                    onViewTranscript={handleTranscript}
                                 />
                             ))}
                         </tbody>
@@ -746,16 +767,30 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                     </div>
                 </div>
             )}
+
+            {/* Transcript Modal */}
+            {transcriptStudent && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm print:p-0 print:bg-white print:block">
+                    <div className="w-full max-w-6xl max-h-screen print:max-h-none h-full print:h-auto overflow-hidden rounded-[2rem] print:rounded-none">
+                        <AggregatedScorecard 
+                            student={transcriptStudent} 
+                            allSubjects={allSubjects} 
+                            onClose={() => setTranscriptStudent(null)} 
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 // Memoized Sub-components for performance
-const StudentCard = memo(({ student, onEdit, onArchive, onDelete }: { 
+const StudentCard = memo(({ student, onEdit, onArchive, onDelete, onViewTranscript }: { 
     student: StudentRecord; 
     onEdit: (s: StudentRecord) => void;
     onArchive: (s: StudentRecord) => void;
     onDelete: (s: StudentRecord) => void;
+    onViewTranscript: (s: StudentRecord) => void;
 }) => (
     <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-all">
         <div className="flex justify-between items-center">
@@ -764,6 +799,7 @@ const StudentCard = memo(({ student, onEdit, onArchive, onDelete }: {
                 <p className="text-xs font-black text-slate-500 uppercase tracking-tighter">{student.adNo} • {student.className}</p>
             </div>
             <div className="flex gap-2">
+                <button onClick={() => onViewTranscript(student)} className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-all font-bold" title="View Transcript"><i className="fa-solid fa-layer-group text-xs"></i></button>
                 <button onClick={() => onEdit(student)} className="w-8 h-8 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all font-bold" title="Edit Student"><i className="fa-solid fa-edit text-xs"></i></button>
                 <button onClick={() => onArchive(student)} className="w-8 h-8 flex items-center justify-center bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all font-bold" title="Archive Student"><i className="fa-solid fa-box-archive text-xs"></i></button>
                 <button onClick={() => onDelete(student)} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all font-bold" title="Delete Student"><i className="fa-solid fa-trash text-xs"></i></button>
@@ -772,12 +808,13 @@ const StudentCard = memo(({ student, onEdit, onArchive, onDelete }: {
     </div>
 ));
 
-const StudentRow = memo(({ student, index, onEdit, onArchive, onDelete }: { 
+const StudentRow = memo(({ student, index, onEdit, onArchive, onDelete, onViewTranscript }: { 
     student: StudentRecord; 
     index: number;
     onEdit: (s: StudentRecord) => void;
     onArchive: (s: StudentRecord) => void;
     onDelete: (s: StudentRecord) => void;
+    onViewTranscript: (s: StudentRecord) => void;
 }) => (
     <tr className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-slate-100/50 transition-colors group`}>
         <td className="p-4 text-sm font-bold text-slate-600">{student.adNo}</td>
@@ -787,6 +824,7 @@ const StudentRow = memo(({ student, index, onEdit, onArchive, onDelete }: {
         </td>
         <td className="p-4">
             <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => onViewTranscript(student)} className="text-emerald-600 hover:text-emerald-800 transition-colors" title="View Transcript"><i className="fa-solid fa-layer-group"></i></button>
                 <button onClick={() => onEdit(student)} className="text-blue-600 hover:text-blue-800 transition-colors" title="Edit Student"><i className="fa-solid fa-edit"></i></button>
                 <button onClick={() => onArchive(student)} className="text-amber-600 hover:text-amber-800 transition-colors" title="Archive Student"><i className="fa-solid fa-box-archive"></i></button>
                 <button onClick={() => onDelete(student)} className="text-red-600 hover:text-red-800 transition-colors" title="Delete Student"><i className="fa-solid fa-trash"></i></button>
