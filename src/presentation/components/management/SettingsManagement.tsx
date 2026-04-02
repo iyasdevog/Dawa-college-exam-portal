@@ -176,6 +176,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         
                         await dataService.addSubject({
                             ...subData,
+                            enrolledStudents: sub.subjectType === 'elective' ? [] : (subData.enrolledStudents || []),
                             academicYear: derivedYear,
                             facultyName: assignedFaculty // Using the dynamic name from wizard
                         });

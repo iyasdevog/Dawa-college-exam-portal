@@ -44,7 +44,7 @@ const Management: React.FC = () => {
       }
 
       if (tabId === 'subjects' || tabId === 'supplementary' || tabId === 'classes') {
-        const subjectData = await dataService.getAllSubjects();
+        const subjectData = await dataService.getAllSubjects(activeTerm);
         setSubjects(subjectData);
       }
 

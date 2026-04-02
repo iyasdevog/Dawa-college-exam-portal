@@ -38,6 +38,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
     const navItems: NavigationItem[] = [
         { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard', description: 'View academic performance overview' },
+        { id: 'attendance', icon: 'fa-clipboard-user', label: 'Attendance', description: 'Manage student attendance' },
         { id: 'entry', icon: 'fa-edit', label: 'Marks Entry', description: 'Enter and manage student marks' },
         { id: 'class-report', icon: 'fa-table', label: 'Class Report', description: 'Generate class performance reports' },
         { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards', description: 'View individual student scorecards' },
