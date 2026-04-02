@@ -3870,7 +3870,42 @@ export class DataService {
                 }
             }
 
-            // 4. Handle Active Term Cleanup & Metadata Pruning
+            // 4. Delete Supplementary Exams for this term
+            const suppSnap = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            for (const docSnap of suppSnap.docs) {
+                const supp = docSnap.data();
+                // Match by termKey OR by originalTerm (for attempts logged under old term)
+                if (supp.termKey === termKey || supp.originalTerm === termKey) {
+                    currentBatch.delete(docSnap.ref);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 5. Delete Student Applications for this term
+            const appsSnap = await getDocs(collection(this.db, this.applicationsCollection));
+            for (const docSnap of appsSnap.docs) {
+                const app = docSnap.data();
+                // Applications store academicYear and semester separately
+                if (app.academicYear === year && app.semester === sem) {
+                    currentBatch.delete(docSnap.ref);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 6. Delete Exam Timetables for this term
+            const examTTSnap = await getDocs(collection(this.db, this.examTimetablesCollection));
+            for (const docSnap of examTTSnap.docs) {
+                const et = docSnap.data();
+                if (et.academicYear === year && (et.semester === sem || et.termKey === termKey)) {
+                    currentBatch.delete(docSnap.ref);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 7. Handle Active Term Cleanup & Metadata Pruning
             const settings = await this.getGlobalSettings();
             const currentTerm = this.getCurrentTermKey();
             
