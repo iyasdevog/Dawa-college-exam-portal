@@ -4105,6 +4105,146 @@ export class DataService {
             throw error;
         }
     }
+
+    /**
+     * Restore a specific academic term's data from a JSON backup file.
+     * Restores: student academicHistory entries, subjects for that term, and attendance records.
+     * SAFE: skips write if a student already has the academicHistory key (won't overwrite current data).
+     * @param backupJson - Parsed JSON object from the backup file
+     * @param termKey - e.g. "2025-2026-Odd"
+     * @param forceOverwrite - if true, overwrites even existing academicHistory
+     */
+    async restoreTermFromBackup(
+        backupJson: Record<string, any[]>,
+        termKey: string,
+        forceOverwrite = false
+    ): Promise<{ studentsRestored: number; subjectsRestored: number; attendanceRestored: number; skipped: number }> {
+        try {
+            const parts = termKey.split('-');
+            const sem = parts.pop()!; // 'Odd' or 'Even'
+            const year = parts.join('-'); // '2025-2026'
+
+            const MAX_BATCH_SIZE = 400;
+            let currentBatch = writeBatch(this.db);
+            let operationCount = 0;
+
+            const commitBatchIfNeeded = async () => {
+                if (operationCount >= MAX_BATCH_SIZE) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(this.db);
+                    operationCount = 0;
+                }
+            };
+
+            // ─── 1. Restore student academicHistory entries ─────────────────
+            const backupStudents: any[] = backupJson[this.studentsCollection] || [];
+            let studentsRestored = 0;
+            let skipped = 0;
+
+            // Get live students map
+            const liveSnap = await getDocs(collection(this.db, this.studentsCollection));
+            const liveStudentsMap: Record<string, any> = {};
+            liveSnap.docs.forEach(d => { liveStudentsMap[d.id] = d.data(); });
+
+            for (const backupStudent of backupStudents) {
+                const historyEntry = backupStudent.academicHistory?.[termKey];
+                if (!historyEntry) continue; // This student had no data for this term
+
+                const liveStudent = liveStudentsMap[backupStudent.id];
+
+                if (!forceOverwrite && liveStudent?.academicHistory?.[termKey]) {
+                    skipped++;
+                    continue; // Already has this term's data
+                }
+
+                const docRef = doc(this.db, this.studentsCollection, backupStudent.id);
+                const updateData: any = {
+                    [`academicHistory.${termKey}`]: historyEntry
+                };
+
+                // If the student doesn't exist at all in live DB, create them
+                if (!liveStudent) {
+                    const { id, ...studentData } = backupStudent;
+                    await setDoc(docRef, {
+                        ...studentData,
+                        // Ensure we don't import marks/grades from another term as current
+                        marks: {},
+                        grandTotal: 0,
+                        average: 0,
+                        rank: 0,
+                        performanceLevel: 'Pending'
+                    });
+                } else {
+                    currentBatch.update(docRef, updateData);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+                studentsRestored++;
+            }
+
+            // ─── 2. Restore subjects for this term ──────────────────────────
+            const backupSubjects: any[] = backupJson[this.subjectsCollection] || [];
+            let subjectsRestored = 0;
+
+            // Get live subjects to avoid duplicates
+            const liveSubjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            const liveSubjectIds = new Set(liveSubjectsSnap.docs.map(d => d.id));
+
+            for (const sub of backupSubjects) {
+                if (sub.academicYear !== year) continue;
+                if (sub.activeSemester && sub.activeSemester !== sem && sub.activeSemester !== 'Both') continue;
+
+                if (!liveSubjectIds.has(sub.id)) {
+                    // Subject was deleted — restore it
+                    const { id, ...subjectData } = sub;
+                    const subDocRef = doc(this.db, this.subjectsCollection, id);
+                    currentBatch.set(subDocRef, subjectData);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                    subjectsRestored++;
+                }
+            }
+
+            // ─── 3. Restore attendance records for this term ─────────────────
+            const backupAttendance: any[] = backupJson[this.attendanceCollection] || [];
+            let attendanceRestored = 0;
+
+            // Get live attendance ids for this term
+            const liveAttSnap = await getDocs(query(
+                collection(this.db, this.attendanceCollection),
+                where('termKey', '==', termKey)
+            ));
+            const liveAttIds = new Set(liveAttSnap.docs.map(d => d.id));
+
+            for (const att of backupAttendance) {
+                if (att.termKey !== termKey) {
+                    // Also try matching via academicYear+semester for legacy records
+                    if (!(att.academicYear === year && att.semester === sem)) continue;
+                }
+                if (liveAttIds.has(att.id)) continue; // Already exists
+
+                const { id, ...attData } = att;
+                const attDocRef = doc(this.db, this.attendanceCollection, id);
+                currentBatch.set(attDocRef, attData);
+                operationCount++;
+                await commitBatchIfNeeded();
+                attendanceRestored++;
+            }
+
+            // Commit remaining
+            if (operationCount > 0) {
+                await currentBatch.commit();
+            }
+
+            this.invalidateCache();
+            console.log(`Restore complete: ${studentsRestored} students, ${subjectsRestored} subjects, ${attendanceRestored} attendance records`);
+
+            return { studentsRestored, subjectsRestored, attendanceRestored, skipped };
+        } catch (error) {
+            console.error('Error restoring from backup:', error);
+            throw error;
+        }
+    }
 }
 
 // Export singleton instance

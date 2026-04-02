@@ -57,6 +57,13 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         passingTotal: 40
     });
 
+    // Restore from Backup State
+    const [restoreFile, setRestoreFile] = useState<File | null>(null);
+    const [restoreTermKey, setRestoreTermKey] = useState('2025-2026-Odd');
+    const [restoreForceOverwrite, setRestoreForceOverwrite] = useState(false);
+    const [isRestoring, setIsRestoring] = useState(false);
+    const [restoreResult, setRestoreResult] = useState<{ studentsRestored: number; subjectsRestored: number; attendanceRestored: number; skipped: number } | null>(null);
+
     React.useEffect(() => {
         const loadSettings = async () => {
             const settings = await dataService.getGlobalSettings();
@@ -116,6 +123,35 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             alert('Failed to save settings');
         } finally {
             setIsOperating(false);
+        }
+    };
+
+    const handleRestoreFromBackup = async () => {
+        if (!restoreFile) { alert('Please select a backup JSON file first.'); return; }
+        if (!restoreTermKey.trim()) { alert('Please specify the term key (e.g. 2025-2026-Odd).'); return; }
+        if (!window.confirm(`⚠️ This will restore data for term "${restoreTermKey}" from the backup file "${restoreFile.name}".\n\n${restoreForceOverwrite ? '⚠️ FORCE OVERWRITE is ON — this will replace existing term data.' : 'Safe mode: existing term data will NOT be overwritten.'}\n\nContinue?`)) return;
+
+        setIsRestoring(true);
+        setRestoreResult(null);
+        try {
+            const text = await restoreFile.text();
+            const backupJson = JSON.parse(text);
+
+            if (typeof backupJson !== 'object' || Array.isArray(backupJson)) {
+                throw new Error('Invalid backup file format. Expected a JSON object with collection names as keys.');
+            }
+
+            const result = await dataService.restoreTermFromBackup(backupJson, restoreTermKey, restoreForceOverwrite);
+            setRestoreResult(result);
+            await dataService.clearCache();
+            await refreshTerms();
+            const updated = await dataService.getSemesterSummaries();
+            setSemesterSummaries(updated);
+        } catch (err: any) {
+            alert(`❌ Restore failed: ${err.message}`);
+            console.error('Restore error:', err);
+        } finally {
+            setIsRestoring(false);
         }
     };
 
@@ -617,6 +653,104 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                             {isOperating ? 'Updating System...' : 'Update Current Active Framework'}
                         </button>
                     </div>
+                </div>
+
+                {/* Restore from Backup Panel */}
+                <div className="bg-white p-6 rounded-xl border-2 border-amber-200 shadow-sm md:col-span-2">
+                    <div className="flex items-center gap-3 mb-5">
+                        <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                            <i className="fa-solid fa-file-import text-amber-600"></i>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg text-slate-800 leading-none">Restore Term from Backup</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Upload a JSON backup file to recover a deleted semester's data</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        {/* File Upload */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Backup JSON File</label>
+                            <label className={`flex items-center gap-3 p-3 rounded-xl border-2 border-dashed cursor-pointer transition-all ${restoreFile ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:border-amber-300 hover:bg-amber-50/50'}`}>
+                                <i className={`fa-solid ${restoreFile ? 'fa-file-circle-check text-amber-600' : 'fa-upload text-slate-400'}`}></i>
+                                <span className="text-sm font-semibold text-slate-700 truncate">
+                                    {restoreFile ? restoreFile.name : 'Choose backup file...'}
+                                </span>
+                                <input
+                                    type="file"
+                                    accept=".json"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        setRestoreFile(e.target.files?.[0] || null);
+                                        setRestoreResult(null);
+                                    }}
+                                />
+                            </label>
+                        </div>
+
+                        {/* Term Key */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Term to Restore</label>
+                            <input
+                                type="text"
+                                value={restoreTermKey}
+                                onChange={(e) => setRestoreTermKey(e.target.value)}
+                                placeholder="e.g. 2025-2026-Odd"
+                                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 outline-none font-bold transition-all"
+                            />
+                            <p className="text-[10px] text-slate-400 mt-1">Format: YEAR-Odd or YEAR-Even (e.g. 2025-2026-Odd)</p>
+                        </div>
+                    </div>
+
+                    {/* Force Overwrite Toggle */}
+                    <label className="flex items-center gap-3 mb-5 cursor-pointer p-3 bg-slate-50 rounded-xl border border-slate-200 hover:bg-amber-50 transition-colors">
+                        <div
+                            onClick={() => setRestoreForceOverwrite(!restoreForceOverwrite)}
+                            className={`w-10 h-6 rounded-full relative transition-colors ${restoreForceOverwrite ? 'bg-amber-500' : 'bg-slate-300'}`}
+                        >
+                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${restoreForceOverwrite ? 'right-1' : 'left-1'}`}></div>
+                        </div>
+                        <div>
+                            <span className="text-sm font-bold text-slate-700">Force Overwrite</span>
+                            <p className="text-[10px] text-slate-500">If OFF (recommended): only restores data for students who don't have this term's marks. If ON: replaces all existing data for this term.</p>
+                        </div>
+                    </label>
+
+                    {/* Success Result */}
+                    {restoreResult && (
+                        <div className="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                            <div className="flex items-center gap-2 mb-3">
+                                <i className="fa-solid fa-circle-check text-emerald-600"></i>
+                                <span className="font-bold text-emerald-800">Restore Complete!</span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {[
+                                    { label: 'Students', value: restoreResult.studentsRestored, icon: 'fa-users' },
+                                    { label: 'Subjects', value: restoreResult.subjectsRestored, icon: 'fa-book' },
+                                    { label: 'Attendance', value: restoreResult.attendanceRestored, icon: 'fa-clipboard-check' },
+                                    { label: 'Skipped', value: restoreResult.skipped, icon: 'fa-forward' },
+                                ].map(({ label, value, icon }) => (
+                                    <div key={label} className="bg-white p-2 rounded-lg border border-emerald-100 text-center">
+                                        <i className={`fa-solid ${icon} text-emerald-500 text-sm mb-1`}></i>
+                                        <div className="font-black text-lg text-slate-900">{value}</div>
+                                        <div className="text-[9px] font-bold text-slate-500 uppercase">{label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleRestoreFromBackup}
+                        disabled={isRestoring || !restoreFile}
+                        className="w-full py-4 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg shadow-amber-200/50"
+                    >
+                        {isRestoring ? (
+                            <><div className="loader-ring w-4 h-4 border-2 border-white"></div> Restoring...</>
+                        ) : (
+                            <><i className="fa-solid fa-rotate-left"></i> Restore "{restoreTermKey}" from Backup</>
+                        )}
+                    </button>
                 </div>
 
                 {/* Academic Term Management Dashboard */}
