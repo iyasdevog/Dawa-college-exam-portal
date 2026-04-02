@@ -62,7 +62,15 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [restoreTermKey, setRestoreTermKey] = useState('2025-2026-Odd');
     const [restoreForceOverwrite, setRestoreForceOverwrite] = useState(false);
     const [isRestoring, setIsRestoring] = useState(false);
-    const [restoreResult, setRestoreResult] = useState<{ studentsRestored: number; subjectsRestored: number; attendanceRestored: number; skipped: number } | null>(null);
+    const [restoreResult, setRestoreResult] = useState<{ 
+        studentsRestored: number; 
+        subjectsRestored: number; 
+        attendanceRestored: number; 
+        applicationsRestored: number;
+        suppRestored: number;
+        examTTRestored: number;
+        skipped: number 
+    } | null>(null);
 
     React.useEffect(() => {
         const loadSettings = async () => {
@@ -728,6 +736,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                     { label: 'Students', value: restoreResult.studentsRestored, icon: 'fa-users' },
                                     { label: 'Subjects', value: restoreResult.subjectsRestored, icon: 'fa-book' },
                                     { label: 'Attendance', value: restoreResult.attendanceRestored, icon: 'fa-clipboard-check' },
+                                    { label: 'Applications', value: restoreResult.applicationsRestored, icon: 'fa-file-invoice' },
+                                    { label: 'Supp Exams', value: restoreResult.suppRestored, icon: 'fa-graduation-cap' },
+                                    { label: 'Timetables', value: restoreResult.examTTRestored, icon: 'fa-calendar-days' },
                                     { label: 'Skipped', value: restoreResult.skipped, icon: 'fa-forward' },
                                 ].map(({ label, value, icon }) => (
                                     <div key={label} className="bg-white p-2 rounded-lg border border-emerald-100 text-center">

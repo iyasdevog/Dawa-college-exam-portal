@@ -4153,7 +4153,15 @@ export class DataService {
         backupJson: Record<string, any[]>,
         termKey: string,
         forceOverwrite = false
-    ): Promise<{ studentsRestored: number; subjectsRestored: number; attendanceRestored: number; skipped: number }> {
+    ): Promise<{ 
+        studentsRestored: number; 
+        subjectsRestored: number; 
+        attendanceRestored: number; 
+        applicationsRestored: number;
+        suppRestored: number;
+        examTTRestored: number;
+        skipped: number 
+    }> {
         try {
             const parts = termKey.split('-');
             const sem = parts.pop()!; // 'Odd' or 'Even'
@@ -4266,15 +4274,69 @@ export class DataService {
                 attendanceRestored++;
             }
 
+            // ─── 4. Restore Supplementary Exams for this term ────────────────
+            const backupSupp: any[] = backupJson[this.supplementaryExamsCollection] || [];
+            let suppRestored = 0;
+            const liveSuppSnap = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            const liveSuppIds = new Set(liveSuppSnap.docs.map(d => d.id));
+
+            for (const supp of backupSupp) {
+                if (supp.termKey !== termKey && supp.originalTerm !== termKey) continue;
+                if (liveSuppIds.has(supp.id)) continue;
+
+                const { id, ...suppData } = supp;
+                const docRef = doc(this.db, this.supplementaryExamsCollection, id);
+                currentBatch.set(docRef, suppData);
+                operationCount++;
+                await commitBatchIfNeeded();
+                suppRestored++;
+            }
+
+            // ─── 5. Restore Student Applications for this term ───────────────
+            const backupApps: any[] = backupJson[this.applicationsCollection] || [];
+            let applicationsRestored = 0;
+            const liveAppsSnap = await getDocs(collection(this.db, this.applicationsCollection));
+            const liveAppIds = new Set(liveAppsSnap.docs.map(d => d.id));
+
+            for (const app of backupApps) {
+                if (app.academicYear !== year || app.semester !== sem) continue;
+                if (liveAppIds.has(app.id)) continue;
+
+                const { id, ...appData } = app;
+                const docRef = doc(this.db, this.applicationsCollection, id);
+                currentBatch.set(docRef, appData);
+                operationCount++;
+                await commitBatchIfNeeded();
+                applicationsRestored++;
+            }
+
+            // ─── 6. Restore Exam Timetables for this term ────────────────────
+            const backupExamTT: any[] = backupJson[this.examTimetablesCollection] || [];
+            let examTTRestored = 0;
+            const liveExamTTSnap = await getDocs(collection(this.db, this.examTimetablesCollection));
+            const liveExamTTIds = new Set(liveExamTTSnap.docs.map(d => d.id));
+
+            for (const et of backupExamTT) {
+                if (et.academicYear !== year || (et.semester !== sem && et.termKey !== termKey)) continue;
+                if (liveExamTTIds.has(et.id)) continue;
+
+                const { id, ...etData } = et;
+                const docRef = doc(this.db, this.examTimetablesCollection, id);
+                currentBatch.set(docRef, etData);
+                operationCount++;
+                await commitBatchIfNeeded();
+                examTTRestored++;
+            }
+
             // Commit remaining
             if (operationCount > 0) {
                 await currentBatch.commit();
             }
 
             this.invalidateCache();
-            console.log(`Restore complete: ${studentsRestored} students, ${subjectsRestored} subjects, ${attendanceRestored} attendance records`);
+            console.log(`Restore complete: ${studentsRestored} students, ${subjectsRestored} subjects, ${attendanceRestored} attendance, ${applicationsRestored} apps, ${suppRestored} supp, ${examTTRestored} examTT`);
 
-            return { studentsRestored, subjectsRestored, attendanceRestored, skipped };
+            return { studentsRestored, subjectsRestored, attendanceRestored, applicationsRestored, suppRestored, examTTRestored, skipped };
         } catch (error) {
             console.error('Error restoring from backup:', error);
             throw error;
