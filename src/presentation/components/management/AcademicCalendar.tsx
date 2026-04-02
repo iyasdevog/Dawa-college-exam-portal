@@ -22,7 +22,8 @@ const AcademicCalendar: React.FC = () => {
     const loadEntries = async () => {
         setIsLoading(true);
         try {
-            const data = await dataService.getAcademicCalendar();
+            const termKey = dataService.getCurrentTermKey();
+            const data = await dataService.getAcademicCalendar(termKey);
             setEntries(data.sort((a, b) => a.startDate.localeCompare(b.startDate)));
         } catch (error) {
             console.error('Error loading academic calendar:', error);

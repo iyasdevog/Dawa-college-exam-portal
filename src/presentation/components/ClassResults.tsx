@@ -437,6 +437,26 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 </div>
             </div>
 
+            {/* Diagnostic Dump */}
+            <div className="bg-slate-900 text-green-400 p-4 rounded-xl text-xs overflow-auto my-4 font-mono print:hidden max-h-64">
+                <h4 className="text-white font-bold mb-2">DIAGNOSTIC DUMP (Please send a screenshot of this)</h4>
+                <p className="mb-2">Total Columns Rendered: {classSubjects.filter(s => s.subjectType !== 'elective').length}</p>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <strong className="text-white block mb-1">UI Columns (classSubjects):</strong>
+                        <pre>{JSON.stringify(classSubjects.map(s => ({name: s.name, id: s.id})), null, 2)}</pre>
+                    </div>
+                    <div>
+                        {students.slice(0, 1).map(student => (
+                            <div key={student.id}>
+                                <strong className="text-white block mb-1">First Student ({student.name}) displayMarks:</strong>
+                                <pre>{JSON.stringify((student as any).displayMarks, null, 2)}</pre>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
             {/* Fail Analysis Section - Admin/Internal View Only */}
             {(!hideSelector || currentUser?.role === 'admin') && (
                 <div className="bg-white rounded-2xl p-6 md:p-10 shadow-sm border border-slate-200 mt-8 print:break-inside-avoid">

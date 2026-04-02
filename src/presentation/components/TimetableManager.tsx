@@ -27,11 +27,12 @@ const TimetableManager: React.FC = () => {
     const loadData = async () => {
         setIsLoading(true);
         try {
+            const termKey = dataService.getCurrentTermKey();
             const [tt, et, releaseStatus, sd, allSubjects] = await Promise.all([
                 dataService.getTimetableByClass(selectedClass),
                 dataService.getExamTimetable(selectedClass, selectedSemester),
                 dataService.getHallTicketReleaseStatus(selectedClass, selectedSemester),
-                dataService.getSpecialDays(),
+                dataService.getSpecialDays(termKey),
                 dataService.getAllSubjects()
             ]);
             setTimetable(tt);

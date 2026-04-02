@@ -194,6 +194,7 @@ export interface SpecialDay {
   type: 'Leave' | 'Program';
   className?: string; // If optional, applies to all
   note: string;
+  termKey?: string; // e.g. "2025-2026-Odd"
 }
 
 export interface AcademicCalendarEntry {
@@ -203,6 +204,7 @@ export interface AcademicCalendarEntry {
   type: 'Public Holiday' | 'Continuous Vacation' | 'Program';
   name: string;
   appliesToClasses?: string[]; // If empty, applies to all
+  termKey?: string; // e.g. "2025-2026-Odd"
 }
 
 export interface PeriodTimeSlot {
@@ -215,9 +217,10 @@ export type TimetableRule =
   | { id: string; type: 'DayRestriction'; day: string; restrictedToSubjectIds: string[] };
 
 export interface TimetableGeneratorConfig {
-  id: string;
+  id: string; // Now format: ${className}-${academicYear}-${semester}
   className: string;
   semester: 'Odd' | 'Even';
+  academicYear?: string;
   workingDays: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
   periodsPerDay: number;
   periodDurationMins: number; // e.g., 60

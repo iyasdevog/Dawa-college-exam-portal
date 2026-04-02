@@ -62,6 +62,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [restoreTermKey, setRestoreTermKey] = useState('2025-2026-Odd');
     const [restoreForceOverwrite, setRestoreForceOverwrite] = useState(false);
     const [isRestoring, setIsRestoring] = useState(false);
+    const [isAligning, setIsAligning] = useState(false);
     const [restoreResult, setRestoreResult] = useState<{ 
         studentsRestored: number; 
         subjectsRestored: number; 
@@ -69,6 +70,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         applicationsRestored: number;
         suppRestored: number;
         examTTRestored: number;
+        specialDaysRestored: number;
+        calendarRestored: number;
+        genConfigsRestored: number;
         skipped: number 
     } | null>(null);
 
@@ -131,6 +135,21 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             alert('Failed to save settings');
         } finally {
             setIsOperating(false);
+        }
+    };
+
+    const handleAlignData = async () => {
+        if (!window.confirm("⚠️ This will scan for any Special Days or Calendar entries missing a term tag and align them to the current active term.\n\nRecommended before taking a Master Backup. Continue?")) return;
+        
+        setIsAligning(true);
+        try {
+            const result = await dataService.alignDataToTerms();
+            alert(`✅ Alignment Complete!\n- Special Days Fixed: ${result.specialDaysFixed}\n- Calendar Entries Fixed: ${result.calendarFixed}`);
+        } catch (error) {
+            console.error('Alignment error:', error);
+            alert('Failed to align data.');
+        } finally {
+            setIsAligning(false);
         }
     };
 
@@ -456,6 +475,21 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 <i className="fa-solid fa-database"></i>
                                 Download JSON Master Backup
                             </button>
+
+                            <button
+                                onClick={handleAlignData}
+                                disabled={isOperating || isAligning}
+                                className={`w-full mt-2 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border-2 ${
+                                    isAligning 
+                                        ? 'bg-slate-50 text-slate-400 border-slate-100' 
+                                        : 'bg-white text-indigo-700 border-indigo-100 hover:bg-indigo-50 active:scale-[0.98]'
+                                }`}
+                                title="Aligns untagged Holidays and Special Days to your current active term. Recommended BEFORE taking a master backup."
+                            >
+                                <i className={`fa-solid ${isAligning ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
+                                {isAligning ? 'Aligning Data...' : 'Align Metadata to Current Term'}
+                            </button>
+
                             <button
                                 onClick={handleSyncYears}
                                 disabled={isOperating}
@@ -731,7 +765,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 <i className="fa-solid fa-circle-check text-emerald-600"></i>
                                 <span className="font-bold text-emerald-800">Restore Complete!</span>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                                 {[
                                     { label: 'Students', value: restoreResult.studentsRestored, icon: 'fa-users' },
                                     { label: 'Subjects', value: restoreResult.subjectsRestored, icon: 'fa-book' },
@@ -739,6 +773,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                     { label: 'Applications', value: restoreResult.applicationsRestored, icon: 'fa-file-invoice' },
                                     { label: 'Supp Exams', value: restoreResult.suppRestored, icon: 'fa-graduation-cap' },
                                     { label: 'Timetables', value: restoreResult.examTTRestored, icon: 'fa-calendar-days' },
+                                    { label: 'Holidays', value: restoreResult.specialDaysRestored, icon: 'fa-umbrella-beach' },
+                                    { label: 'Calendar', value: restoreResult.calendarRestored, icon: 'fa-calendar-check' },
+                                    { label: 'Generator', value: restoreResult.genConfigsRestored, icon: 'fa-gears' },
                                     { label: 'Skipped', value: restoreResult.skipped, icon: 'fa-forward' },
                                 ].map(({ label, value, icon }) => (
                                     <div key={label} className="bg-white p-2 rounded-lg border border-emerald-100 text-center">

@@ -1730,7 +1730,13 @@ export class DataService {
     // Special Days
     async markSpecialDay(specialDay: Omit<SpecialDay, 'id'>): Promise<string> {
         try {
-            const docRef = await addDoc(collection(this.db, this.specialDaysCollection), specialDay);
+            const settings = await this.getGlobalSettings();
+            const termKey = this.getCurrentTermKey();
+            const data = {
+                ...specialDay,
+                termKey: specialDay.termKey || termKey
+            };
+            const docRef = await addDoc(collection(this.db, this.specialDaysCollection), this.sanitize(data));
             return docRef.id;
         } catch (error) {
             console.error('Error marking special day:', error);
@@ -1738,13 +1744,20 @@ export class DataService {
         }
     }
 
-    async getSpecialDays(date?: string): Promise<SpecialDay[]> {
+    async getSpecialDays(date?: string, termKey?: string): Promise<SpecialDay[]> {
         try {
-            const q = date
-                ? query(collection(this.db, this.specialDaysCollection), where('date', '==', date))
-                : collection(this.db, this.specialDaysCollection);
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const q = query(
+                collection(this.db, this.specialDaysCollection),
+                where('termKey', '==', activeTerm)
+            );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SpecialDay));
+            let results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SpecialDay));
+            
+            if (date) {
+                results = results.filter(d => d.date === date);
+            }
+            return results;
         } catch (error) {
             console.error('Error fetching special days:', error);
             return [];
@@ -3497,14 +3510,34 @@ export class DataService {
     }
 
     // Academic Calendar Methods
-    async getAcademicCalendar(): Promise<AcademicCalendarEntry[]> {
-        const querySnapshot = await getDocs(collection(this.db, this.academicCalendarCollection));
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AcademicCalendarEntry));
+    async getAcademicCalendar(termKey?: string): Promise<AcademicCalendarEntry[]> {
+        try {
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const q = query(
+                collection(this.db, this.academicCalendarCollection),
+                where('termKey', '==', activeTerm)
+            );
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AcademicCalendarEntry));
+        } catch (error) {
+            console.error('Error fetching academic calendar:', error);
+            return [];
+        }
     }
 
     async saveAcademicCalendarEntry(entry: Omit<AcademicCalendarEntry, 'id'>): Promise<string> {
-        const docRef = await addDoc(collection(this.db, this.academicCalendarCollection), entry);
-        return docRef.id;
+        try {
+            const termKey = this.getCurrentTermKey();
+            const data = {
+                ...entry,
+                termKey: entry.termKey || termKey
+            };
+            const docRef = await addDoc(collection(this.db, this.academicCalendarCollection), this.sanitize(data));
+            return docRef.id;
+        } catch (error) {
+            console.error('Error saving academic calendar entry:', error);
+            throw error;
+        }
     }
 
     async deleteAcademicCalendarEntry(id: string): Promise<void> {
@@ -3512,19 +3545,51 @@ export class DataService {
     }
 
     // Timetable Generator Methods
-    async getGeneratorConfig(className: string, semester: 'Odd' | 'Even'): Promise<TimetableGeneratorConfig | null> {
-        const id = `${className}-${semester}`;
-        const docRef = doc(this.db, this.generatorConfigsCollection, id);
-        const snapshot = await getDoc(docRef);
-        if (snapshot.exists()) {
-            return { id: snapshot.id, ...snapshot.data() } as TimetableGeneratorConfig;
+    async getGeneratorConfig(className: string, semester: 'Odd' | 'Even', academicYear?: string): Promise<TimetableGeneratorConfig | null> {
+        try {
+            const settings = await this.getGlobalSettings();
+            const year = academicYear || settings.currentAcademicYear;
+            
+            // Try new scoped ID first
+            const scopedId = `${className}-${year}-${semester}`;
+            const scopedRef = doc(this.db, this.generatorConfigsCollection, scopedId);
+            const scopedSnap = await getDoc(scopedRef);
+            
+            if (scopedSnap.exists()) {
+                return { id: scopedSnap.id, ...scopedSnap.data() } as TimetableGeneratorConfig;
+            }
+            
+            // Fallback to legacy ID
+            const legacyId = `${className}-${semester}`;
+            const legacyRef = doc(this.db, this.generatorConfigsCollection, legacyId);
+            const legacySnap = await getDoc(legacyRef);
+            
+            if (legacySnap.exists()) {
+                return { id: legacySnap.id, ...legacySnap.data() } as TimetableGeneratorConfig;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Error fetching generator config:', error);
+            return null;
         }
-        return null;
     }
 
     async saveGeneratorConfig(config: TimetableGeneratorConfig): Promise<void> {
-        const { id, ...data } = config;
-        await setDoc(doc(this.db, this.generatorConfigsCollection, id), data);
+        try {
+            const settings = await this.getGlobalSettings();
+            const year = config.academicYear || settings.currentAcademicYear;
+            const id = `${config.className}-${year}-${config.semester}`;
+            
+            const { id: _, ...data } = config;
+            await setDoc(doc(this.db, this.generatorConfigsCollection, id), this.sanitize({
+                ...data,
+                academicYear: year
+            }));
+        } catch (error) {
+            console.error('Error saving generator config:', error);
+            throw error;
+        }
     }
 
     async getApplicationById(id: string): Promise<StudentApplication | null> {
@@ -3905,7 +3970,40 @@ export class DataService {
                 }
             }
 
-            // 7. Handle Active Term Cleanup & Metadata Pruning
+            // 7. Delete Special Days for this term
+            const specialDaysSnap = await getDocs(collection(this.db, this.specialDaysCollection));
+            for (const docSnap of specialDaysSnap.docs) {
+                const sd = docSnap.data();
+                if (sd.termKey === termKey) {
+                    currentBatch.delete(docSnap.ref);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 8. Delete Academic Calendar for this term
+            const calendarSnap = await getDocs(collection(this.db, this.academicCalendarCollection));
+            for (const docSnap of calendarSnap.docs) {
+                const entry = docSnap.data();
+                if (entry.termKey === termKey) {
+                    currentBatch.delete(docSnap.ref);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 9. Delete Timetable Generator Configs for this term
+            const genConfigSnap = await getDocs(collection(this.db, this.generatorConfigsCollection));
+            for (const docSnap of genConfigSnap.docs) {
+                const config = docSnap.data();
+                if (config.academicYear === year && config.semester === sem) {
+                    currentBatch.delete(docSnap.ref);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 10. Handle Active Term Cleanup & Metadata Pruning
             const settings = await this.getGlobalSettings();
             const currentTerm = this.getCurrentTermKey();
             
@@ -4041,6 +4139,49 @@ export class DataService {
         }
     }
 
+    /**
+     * Pre-Backup Health Check: Aligns any untagged legacy metadata (Special Days, Academic Calendar)
+     * to the current active term. This ensures the backup is 100% term-isolated.
+     */
+    async alignDataToTerms(): Promise<{ specialDaysFixed: number; calendarFixed: number }> {
+        try {
+            const termKey = this.getCurrentTermKey();
+            let specialDaysFixed = 0;
+            let calendarFixed = 0;
+            const batch = writeBatch(this.db);
+
+            // 1. Process Special Days
+            const specialDaysSnap = await getDocs(collection(this.db, this.specialDaysCollection));
+            for (const docSnap of specialDaysSnap.docs) {
+                const data = docSnap.data() as SpecialDay;
+                if (!data.termKey) {
+                    batch.update(docSnap.ref, { termKey });
+                    specialDaysFixed++;
+                }
+            }
+
+            // 2. Process Academic Calendar
+            const calendarSnap = await getDocs(collection(this.db, this.academicCalendarCollection));
+            for (const docSnap of calendarSnap.docs) {
+                const data = docSnap.data() as AcademicCalendarEntry;
+                if (!data.termKey) {
+                    batch.update(docSnap.ref, { termKey });
+                    calendarFixed++;
+                }
+            }
+
+            if (specialDaysFixed > 0 || calendarFixed > 0) {
+                await batch.commit();
+            }
+
+            console.log(`Alignment complete: ${specialDaysFixed} special days, ${calendarFixed} calendar entries tagged with ${termKey}`);
+            return { specialDaysFixed, calendarFixed };
+        } catch (error) {
+            console.error('Error alignment data:', error);
+            throw error;
+        }
+    }
+
     // Clone subjects from one term to another (Helper for Wizard)
     async cloneSubjectsForNewTerm(targetAcademicYear: string): Promise<number> {
         try {
@@ -4160,6 +4301,9 @@ export class DataService {
         applicationsRestored: number;
         suppRestored: number;
         examTTRestored: number;
+        specialDaysRestored: number;
+        calendarRestored: number;
+        genConfigsRestored: number;
         skipped: number 
     }> {
         try {
@@ -4190,8 +4334,31 @@ export class DataService {
             liveSnap.docs.forEach(d => { liveStudentsMap[d.id] = d.data(); });
 
             for (const backupStudent of backupStudents) {
-                const historyEntry = backupStudent.academicHistory?.[termKey];
-                if (!historyEntry) continue; // This student had no data for this term
+                let historyEntry = backupStudent.academicHistory?.[termKey];
+                
+                // Legacy Fallback: If no history for this term, but student has top-level marks
+                if (!historyEntry && backupStudent.marks && Object.keys(backupStudent.marks).length > 0) {
+                    const normalizedMarks: Record<string, any> = {};
+                    Object.entries(backupStudent.marks).forEach(([sid, m]: [string, any]) => {
+                        normalizedMarks[sid] = {
+                            ...m,
+                            int: m.int !== undefined ? m.int : (m.ce !== undefined ? m.ce : 0),
+                            ext: m.ext !== undefined ? m.ext : (m.ta !== undefined ? m.ta : 0),
+                        };
+                    });
+
+                    historyEntry = {
+                        className: backupStudent.className || backupStudent.currentClass || "",
+                        semester: sem as any,
+                        marks: normalizedMarks,
+                        grandTotal: backupStudent.grandTotal || 0,
+                        average: backupStudent.average || 0,
+                        rank: backupStudent.rank || 0,
+                        performanceLevel: backupStudent.performanceLevel || 'Pending'
+                    };
+                }
+
+                if (!historyEntry) continue; // This student had no data for this term or legacy marks
 
                 const liveStudent = liveStudentsMap[backupStudent.id];
 
@@ -4201,15 +4368,15 @@ export class DataService {
                 }
 
                 const docRef = doc(this.db, this.studentsCollection, backupStudent.id);
-                const updateData: any = {
-                    [`academicHistory.${termKey}`]: historyEntry
-                };
 
-                // If the student doesn't exist at all in live DB, create them
                 if (!liveStudent) {
                     const { id, ...studentData } = backupStudent;
-                    await setDoc(docRef, {
+                    const academicHistory = studentData.academicHistory || {};
+                    academicHistory[termKey] = historyEntry;
+
+                    currentBatch.set(docRef, {
                         ...studentData,
+                        academicHistory,
                         // Ensure we don't import marks/grades from another term as current
                         marks: {},
                         grandTotal: 0,
@@ -4218,10 +4385,13 @@ export class DataService {
                         performanceLevel: 'Pending'
                     });
                 } else {
-                    currentBatch.update(docRef, updateData);
-                    operationCount++;
-                    await commitBatchIfNeeded();
+                    currentBatch.update(docRef, {
+                        [`academicHistory.${termKey}`]: historyEntry
+                    });
                 }
+
+                operationCount++;
+                await commitBatchIfNeeded();
                 studentsRestored++;
             }
 
@@ -4233,19 +4403,32 @@ export class DataService {
             const liveSubjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
             const liveSubjectIds = new Set(liveSubjectsSnap.docs.map(d => d.id));
 
-            for (const sub of backupSubjects) {
-                if (sub.academicYear !== year) continue;
-                if (sub.activeSemester && sub.activeSemester !== sem && sub.activeSemester !== 'Both') continue;
+            const backupClasses = new Set(backupStudents.map(s => s.className || s.currentClass).filter(Boolean));
 
-                if (!liveSubjectIds.has(sub.id)) {
-                    // Subject was deleted — restore it
-                    const { id, ...subjectData } = sub;
-                    const subDocRef = doc(this.db, this.subjectsCollection, id);
-                    currentBatch.set(subDocRef, subjectData);
-                    operationCount++;
-                    await commitBatchIfNeeded();
-                    subjectsRestored++;
-                }
+            for (const sub of backupSubjects) {
+                // Relaxed checking for legacy backups:
+                const exactMatch = sub.academicYear === year && (sub.activeSemester === sem || sub.activeSemester === 'Both' || !sub.activeSemester);
+                const classMatch = sub.targetClasses?.some((c: string) => backupClasses.has(c));
+
+                if (!exactMatch && !classMatch) continue;
+
+                // Force update/set the subject to ensure it has the correct term tags for UI visibility
+                const { id, ...subjectData } = sub;
+                const subDocRef = doc(this.db, this.subjectsCollection, id);
+                
+                const restoredSub = {
+                    ...subjectData,
+                    // Intelligent normalization of legacy fields
+                    maxINT: sub.maxINT !== undefined ? sub.maxINT : (sub.maxCE !== undefined ? sub.maxCE : 0),
+                    maxEXT: sub.maxEXT !== undefined ? sub.maxEXT : (sub.maxTA !== undefined ? sub.maxTA : 0),
+                    academicYear: year, // Force alignment to restoration target
+                    activeSemester: sub.activeSemester || sem 
+                };
+
+                currentBatch.set(subDocRef, restoredSub);
+                operationCount++;
+                await commitBatchIfNeeded();
+                subjectsRestored++;
             }
 
             // ─── 3. Restore attendance records for this term ─────────────────
@@ -4260,18 +4443,22 @@ export class DataService {
             const liveAttIds = new Set(liveAttSnap.docs.map(d => d.id));
 
             for (const att of backupAttendance) {
-                if (att.termKey !== termKey) {
-                    // Also try matching via academicYear+semester for legacy records
-                    if (!(att.academicYear === year && att.semester === sem)) continue;
-                }
-                if (liveAttIds.has(att.id)) continue; // Already exists
+                const yearMatch = att.academicYear === year || (att.academicYear && year.includes(att.academicYear));
+                if (att.termKey !== termKey && !(yearMatch && att.semester === sem)) continue;
 
-                const { id, ...attData } = att;
-                const attDocRef = doc(this.db, this.attendanceCollection, id);
-                currentBatch.set(attDocRef, attData);
-                operationCount++;
-                await commitBatchIfNeeded();
-                attendanceRestored++;
+                if (!liveAttIds.has(att.id)) {
+                    const { id, ...attData } = att;
+                    const attDocRef = doc(this.db, this.attendanceCollection, id);
+                    currentBatch.set(attDocRef, { 
+                        ...attData, 
+                        termKey,
+                        academicYear: year,
+                        semester: sem
+                    });
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                    attendanceRestored++;
+                }
             }
 
             // ─── 4. Restore Supplementary Exams for this term ────────────────
@@ -4281,12 +4468,20 @@ export class DataService {
             const liveSuppIds = new Set(liveSuppSnap.docs.map(d => d.id));
 
             for (const supp of backupSupp) {
-                if (supp.termKey !== termKey && supp.originalTerm !== termKey) continue;
+                const yearMatch = supp.academicYear === year || (supp.termKey && supp.termKey.includes(year)) || (supp.academicYear && year.includes(supp.academicYear));
+                const termMatch = supp.termKey === termKey || supp.originalTerm === termKey || (yearMatch && (supp.semester === sem || (!supp.semester && (supp.termKey || "").includes(sem))));
+
+                if (!termMatch && !yearMatch) continue;
                 if (liveSuppIds.has(supp.id)) continue;
 
                 const { id, ...suppData } = supp;
                 const docRef = doc(this.db, this.supplementaryExamsCollection, id);
-                currentBatch.set(docRef, suppData);
+                currentBatch.set(docRef, {
+                    ...suppData,
+                    termKey,
+                    academicYear: year,
+                    semester: sem
+                });
                 operationCount++;
                 await commitBatchIfNeeded();
                 suppRestored++;
@@ -4299,12 +4494,17 @@ export class DataService {
             const liveAppIds = new Set(liveAppsSnap.docs.map(d => d.id));
 
             for (const app of backupApps) {
-                if (app.academicYear !== year || app.semester !== sem) continue;
+                const yearMatch = app.academicYear === year || (app.academicYear && year.includes(app.academicYear));
+                if (!yearMatch || app.semester !== sem) continue;
                 if (liveAppIds.has(app.id)) continue;
 
                 const { id, ...appData } = app;
                 const docRef = doc(this.db, this.applicationsCollection, id);
-                currentBatch.set(docRef, appData);
+                currentBatch.set(docRef, {
+                    ...appData,
+                    appliedYear: year,
+                    appliedSemester: sem
+                });
                 operationCount++;
                 await commitBatchIfNeeded();
                 applicationsRestored++;
@@ -4317,15 +4517,81 @@ export class DataService {
             const liveExamTTIds = new Set(liveExamTTSnap.docs.map(d => d.id));
 
             for (const et of backupExamTT) {
-                if (et.academicYear !== year || (et.semester !== sem && et.termKey !== termKey)) continue;
+                const yearMatch = et.academicYear === year || (et.academicYear && year.includes(et.academicYear));
+                const semMatch = et.semester === sem || et.termKey === termKey;
+                if (!yearMatch || !semMatch) continue;
                 if (liveExamTTIds.has(et.id)) continue;
 
                 const { id, ...etData } = et;
                 const docRef = doc(this.db, this.examTimetablesCollection, id);
-                currentBatch.set(docRef, etData);
+                currentBatch.set(docRef, {
+                    ...etData,
+                    academicYear: year,
+                    semester: sem,
+                    termKey
+                });
                 operationCount++;
                 await commitBatchIfNeeded();
                 examTTRestored++;
+            }
+
+            // ─── 7. Restore Special Days for this term ───────────────────────
+            const backupSpecial: any[] = backupJson[this.specialDaysCollection] || [];
+            let specialDaysRestored = 0;
+            const liveSpecialSnap = await getDocs(collection(this.db, this.specialDaysCollection));
+            const liveSpecialIds = new Set(liveSpecialSnap.docs.map(d => d.id));
+
+            for (const sd of backupSpecial) {
+                if (sd.termKey !== termKey) continue;
+                if (liveSpecialIds.has(sd.id)) continue;
+
+                const { id, ...sdData } = sd;
+                currentBatch.set(doc(this.db, this.specialDaysCollection, id), sdData);
+                operationCount++;
+                await commitBatchIfNeeded();
+                specialDaysRestored++;
+            }
+
+            // ─── 8. Restore Academic Calendar for this term ──────────────────
+            const backupCalendar: any[] = backupJson[this.academicCalendarCollection] || [];
+            let calendarRestored = 0;
+            const liveCalSnap = await getDocs(collection(this.db, this.academicCalendarCollection));
+            const liveCalIds = new Set(liveCalSnap.docs.map(d => d.id));
+
+            for (const entry of backupCalendar) {
+                if (entry.termKey !== termKey) continue;
+                if (liveCalIds.has(entry.id)) continue;
+
+                const { id, ...entryData } = entry;
+                currentBatch.set(doc(this.db, this.academicCalendarCollection, id), entryData);
+                operationCount++;
+                await commitBatchIfNeeded();
+                calendarRestored++;
+            }
+
+            // ─── 9. Restore Timetable Generator Configs ──────────────────────
+            const backupGenConfigs: any[] = backupJson[this.generatorConfigsCollection] || [];
+            let genConfigsRestored = 0;
+            const liveGenSnap = await getDocs(collection(this.db, this.generatorConfigsCollection));
+            const liveGenIds = new Set(liveGenSnap.docs.map(d => d.id));
+
+            for (const config of backupGenConfigs) {
+                const yearMatch = config.academicYear === year || (config.academicYear && year.includes(config.academicYear));
+                if (!yearMatch || config.semester !== sem) continue;
+                
+                // Construct correctly scoped ID if missing
+                const targetId = config.id.includes(year) ? config.id : `${config.className}-${year}-${config.semester}`;
+                if (liveGenIds.has(targetId)) continue;
+
+                const { id, ...configData } = config;
+                currentBatch.set(doc(this.db, this.generatorConfigsCollection, targetId), { 
+                    ...configData, 
+                    academicYear: year,
+                    semester: sem
+                });
+                operationCount++;
+                await commitBatchIfNeeded();
+                genConfigsRestored++;
             }
 
             // Commit remaining
@@ -4333,10 +4599,24 @@ export class DataService {
                 await currentBatch.commit();
             }
 
+            // ─── 10. Sync Global Settings & Invalidate Cache ─────────────
+            await this.repairGlobalSettings();
             this.invalidateCache();
-            console.log(`Restore complete: ${studentsRestored} students, ${subjectsRestored} subjects, ${attendanceRestored} attendance, ${applicationsRestored} apps, ${suppRestored} supp, ${examTTRestored} examTT`);
+            
+            console.log(`Restore complete: ${studentsRestored} students, ${subjectsRestored} subjects, ${attendanceRestored} attendance, ${applicationsRestored} apps, ${suppRestored} supp, ${examTTRestored} examTT, ${specialDaysRestored} specialDays, ${calendarRestored} calendar, ${genConfigsRestored} genConfigs`);
 
-            return { studentsRestored, subjectsRestored, attendanceRestored, applicationsRestored, suppRestored, examTTRestored, skipped };
+            return { 
+                studentsRestored, 
+                subjectsRestored, 
+                attendanceRestored, 
+                applicationsRestored, 
+                suppRestored, 
+                examTTRestored,
+                specialDaysRestored,
+                calendarRestored,
+                genConfigsRestored,
+                skipped 
+            };
         } catch (error) {
             console.error('Error restoring from backup:', error);
             throw error;
