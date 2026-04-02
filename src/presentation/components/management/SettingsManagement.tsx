@@ -717,7 +717,34 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                                 <i className="fa-solid fa-clock-rotate-left text-slate-400"></i>
                                                 Past Term Overviews ({semesterSummaries.filter(s => !s.isCurrent).length})
                                             </div>
-                                            <i className="fa-solid fa-chevron-down transition-transform group-open:rotate-180 text-slate-400"></i>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.preventDefault();
+                                                        if (!window.confirm(`⚠️ This will permanently delete ALL past term data (subjects, attendance, history) for ${semesterSummaries.filter(s => !s.isCurrent).length} terms. This cannot be undone.\n\nContinue?`)) return;
+                                                        setIsOperating(true);
+                                                        try {
+                                                            const pastTerms = semesterSummaries.filter(s => !s.isCurrent);
+                                                            for (const term of pastTerms) {
+                                                                await dataService.deleteSemesterData(term.termKey);
+                                                            }
+                                                            const updated = await dataService.getSemesterSummaries();
+                                                            setSemesterSummaries(updated);
+                                                            await refreshTerms();
+                                                            alert('✅ All past term data cleared.');
+                                                        } catch (err) {
+                                                            alert('Failed to clear some terms. Check console.');
+                                                        } finally {
+                                                            setIsOperating(false);
+                                                        }
+                                                    }}
+                                                    disabled={isOperating}
+                                                    className="text-[10px] font-black text-red-500 bg-red-50 hover:bg-red-100 border border-red-100 px-3 py-1 rounded-lg transition-all flex items-center gap-1 disabled:opacity-50"
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i> Clear All
+                                                </button>
+                                                <i className="fa-solid fa-chevron-down transition-transform group-open:rotate-180 text-slate-400"></i>
+                                            </div>
                                         </summary>
                                         <div className="p-4 pt-0">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">

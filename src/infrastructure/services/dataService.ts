@@ -3857,13 +3857,13 @@ export class DataService {
                 await commitBatchIfNeeded();
             }
 
-            // 3. Delete Subjects
+            // 3. Delete Subjects - broad sweep: any subject matching this academicYear
+            // included subjects without explicit activeSemester (orphaned test data)
             const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
             for (const docSnap of subjectsSnap.docs) {
                 const sub = docSnap.data();
-                if (sub.academicYear === year && (sub.activeSemester === sem || sub.activeSemester === 'Both')) {
-                    // Note: modern wizards create explicit 'Odd' or 'Even'. 
-                    // 'Both' is legacy, but if they delete the term, we assume they want to wipe it.
+                const matchingSem = !sub.activeSemester || sub.activeSemester === sem || sub.activeSemester === 'Both';
+                if (sub.academicYear === year && matchingSem) {
                     currentBatch.delete(docSnap.ref);
                     operationCount++;
                     await commitBatchIfNeeded();
