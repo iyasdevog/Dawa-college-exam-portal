@@ -302,20 +302,20 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 </div>
             ) : selectedClass && selectedSubject ? (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
-                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-3 sticky top-0 z-10">
                         <h3 className="font-bold text-slate-900">Mark Attendance: {filteredStudents.length} Students</h3>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 w-full sm:w-auto justify-between sm:justify-end bg-white sm:bg-transparent p-2 sm:p-0 rounded-lg border sm:border-none border-slate-200">
                             <button onClick={() => {
                                 const allPresent = { ...attendanceData };
                                 filteredStudents.forEach(s => allPresent[s.id] = true);
                                 setAttendanceData(allPresent);
-                            }} className="text-xs font-bold text-emerald-600 hover:underline p-2 -m-2">All Present</button>
-                            <span className="text-slate-300 ml-2 mr-2">|</span>
+                            }} className="flex-1 sm:flex-none text-xs font-bold text-emerald-600 hover:bg-emerald-50 sm:hover:bg-transparent rounded px-2 py-1 transition-colors">All Present</button>
+                            <span className="text-slate-300 hidden sm:inline">|</span>
                             <button onClick={() => {
                                 const allAbsent = { ...attendanceData };
                                 filteredStudents.forEach(s => allAbsent[s.id] = false);
                                 setAttendanceData(allAbsent);
-                            }} className="text-xs font-bold text-rose-600 hover:underline p-2 -m-2">All Absent</button>
+                            }} className="flex-1 sm:flex-none text-xs font-bold text-rose-600 hover:bg-rose-50 sm:hover:bg-transparent rounded px-2 py-1 transition-colors">All Absent</button>
                         </div>
                     </div>
                     <div className="divide-y divide-slate-100">

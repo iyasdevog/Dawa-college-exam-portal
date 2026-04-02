@@ -641,77 +641,137 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="space-y-6">
                         {semesterSummaries.length === 0 && !isLoadingSummaries ? (
-                            <div className="col-span-full py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                            <div className="py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                                 <p className="text-slate-500 font-medium font-bold">No academic terms found in the database.</p>
                             </div>
                         ) : (
-                            semesterSummaries.map((summary) => (
-                                <div 
-                                    key={summary.termKey}
-                                    className={`relative p-5 rounded-2xl border-2 transition-all hover:shadow-md ${
-                                        summary.isCurrent 
-                                            ? 'border-blue-500 bg-blue-50/30' 
-                                            : 'border-slate-100 bg-white'
-                                    }`}
-                                >
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                                Academic Year
-                                            </span>
-                                            <h4 className="font-black text-xl text-slate-900 leading-none">
-                                                {summary.academicYear}
-                                            </h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                                                    summary.semester === 'Odd' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
-                                                }`}>
-                                                    {summary.semester} Semester
-                                                </span>
-                                                {summary.isCurrent && (
-                                                    <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase animate-pulse">
-                                                        Active
+                            <>
+                                {/* Active Term Section */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {semesterSummaries.filter(s => s.isCurrent).map((summary) => (
+                                        <div 
+                                            key={summary.termKey}
+                                            className="relative p-5 rounded-2xl border-2 border-blue-500 bg-blue-50/30 transition-all shadow-md col-span-1"
+                                        >
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                                        Active Academic Year
                                                     </span>
-                                                )}
+                                                    <h4 className="font-black text-xl text-slate-900 leading-none">
+                                                        {summary.academicYear}
+                                                    </h4>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${summary.semester === 'Odd' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                                            {summary.semester} Semester
+                                                        </span>
+                                                        <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase animate-pulse">
+                                                            Active
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 mb-6">
+                                                <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                                    <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Students</span>
+                                                    <span className="text-lg font-black text-slate-900">{summary.studentCount}</span>
+                                                </div>
+                                                <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                                    <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Classes</span>
+                                                    <span className="text-lg font-black text-slate-900">{summary.classCount ?? 0}</span>
+                                                </div>
+                                                <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                                    <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Subjects</span>
+                                                    <span className="text-lg font-black text-slate-900">{summary.subjectCount ?? 0}</span>
+                                                </div>
+                                                <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                                    <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Teachers</span>
+                                                    <span className="text-lg font-black text-slate-900">{summary.teacherCount ?? 0}</span>
+                                                </div>
+                                                <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
+                                                    <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Attendance</span>
+                                                    <span className="text-lg font-black text-slate-900">{summary.attendanceCount}</span>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={() => handleDeleteSemester(summary)}
+                                                disabled={isOperating}
+                                                className="w-full py-2 bg-slate-50 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50 hover:text-red-700 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <i className="fa-solid fa-trash-can text-[10px]"></i>
+                                                Clear Term Data
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Past Terms Collapsible */}
+                                {semesterSummaries.filter(s => !s.isCurrent).length > 0 && (
+                                    <details className="group border border-slate-200 rounded-xl bg-slate-50 overflow-hidden">
+                                        <summary className="flex items-center justify-between p-4 cursor-pointer font-bold text-slate-700 hover:bg-slate-100 transition-colors">
+                                            <div className="flex items-center gap-2">
+                                                <i className="fa-solid fa-clock-rotate-left text-slate-400"></i>
+                                                Past Term Overviews ({semesterSummaries.filter(s => !s.isCurrent).length})
+                                            </div>
+                                            <i className="fa-solid fa-chevron-down transition-transform group-open:rotate-180 text-slate-400"></i>
+                                        </summary>
+                                        <div className="p-4 pt-0">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                                                {semesterSummaries.filter(s => !s.isCurrent).map((summary) => (
+                                                    <div 
+                                                        key={summary.termKey}
+                                                        className="relative p-4 rounded-2xl border-2 border-slate-200 bg-white hover:shadow-md transition-all"
+                                                    >
+                                                        <div className="mb-4">
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                                                Academic Year
+                                                            </span>
+                                                            <h4 className="font-black text-lg text-slate-900 leading-none">
+                                                                {summary.academicYear}
+                                                            </h4>
+                                                            <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${summary.semester === 'Odd' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                                                {summary.semester} Semester
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-2 mb-4">
+                                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Students</span>
+                                                                <span className="text-base font-black text-slate-900">{summary.studentCount}</span>
+                                                            </div>
+                                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Classes</span>
+                                                                <span className="text-base font-black text-slate-900">{summary.classCount ?? 0}</span>
+                                                            </div>
+                                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Subjects</span>
+                                                                <span className="text-base font-black text-slate-900">{summary.subjectCount ?? 0}</span>
+                                                            </div>
+                                                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                                <span className="block text-[8px] font-bold text-slate-400 uppercase">Attendance</span>
+                                                                <span className="text-base font-black text-slate-900">{summary.attendanceCount}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={() => handleDeleteSemester(summary)}
+                                                            disabled={isOperating}
+                                                            className="w-full py-1.5 bg-white border border-red-100 text-red-500 rounded-lg text-[10px] font-bold hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                                                        >
+                                                            <i className="fa-solid fa-trash-can"></i>
+                                                            Clear Term
+                                                        </button>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 mb-6">
-                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
-                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Students</span>
-                                            <span className="text-lg font-black text-slate-900">{summary.studentCount}</span>
-                                        </div>
-                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
-                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Classes</span>
-                                            <span className="text-lg font-black text-slate-900">{summary.classCount ?? 0}</span>
-                                        </div>
-                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
-                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Subjects</span>
-                                            <span className="text-lg font-black text-slate-900">{summary.subjectCount ?? 0}</span>
-                                        </div>
-                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
-                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Teachers</span>
-                                            <span className="text-lg font-black text-slate-900">{summary.teacherCount ?? 0}</span>
-                                        </div>
-                                        <div className="bg-white/80 p-3 rounded-xl border border-slate-100">
-                                            <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Attendance</span>
-                                            <span className="text-lg font-black text-slate-900">{summary.attendanceCount}</span>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        onClick={() => handleDeleteSemester(summary)}
-                                        disabled={isOperating}
-                                        className="w-full py-2 bg-slate-50 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50 hover:text-red-700 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <i className="fa-solid fa-trash-can text-[10px]"></i>
-                                        Clear Term Data
-                                    </button>
-                                </div>
-                            ))
+                                    </details>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -1394,49 +1454,49 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 )}
                             </div>
 
-                            <div className="p-4 bg-slate-50 border-t flex justify-between gap-3">
-                            <div>
-                                {wizardStep > 1 && (
+                            <div className="p-4 bg-slate-50 border-t flex flex-col-reverse sm:flex-row justify-between gap-3">
+                                <div className="w-full sm:w-auto">
+                                    {wizardStep > 1 && (
+                                        <button
+                                            onClick={() => setWizardStep(wizardStep - 1)}
+                                            className="w-full sm:w-auto px-6 py-3 sm:py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                                            disabled={isOperating}
+                                        >
+                                            <i className="fa-solid fa-arrow-left"></i> Back
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                                     <button
-                                        onClick={() => setWizardStep(wizardStep - 1)}
-                                        className="px-6 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors flex items-center gap-2"
+                                        onClick={() => setShowNewSemesterModal(false)}
+                                        className="w-full sm:w-auto px-6 py-3 sm:py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors order-last sm:order-first"
                                         disabled={isOperating}
                                     >
-                                        <i className="fa-solid fa-arrow-left"></i> Back
+                                        Cancel
                                     </button>
-                                )}
+                                    {wizardStep < 4 ? (
+                                        <button
+                                            onClick={() => setWizardStep(wizardStep + 1)}
+                                            disabled={isOperating || (wizardStep === 1 && (!newSemesterData.startDate || !newSemesterData.endDate))}
+                                            className="w-full sm:w-auto px-8 py-3 sm:py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-200/50"
+                                        >
+                                            Next &nbsp;<i className="fa-solid fa-arrow-right"></i>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={handleStartNewSemester}
+                                            disabled={isOperating}
+                                            className="w-full sm:w-auto px-8 py-3 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-200/50"
+                                        >
+                                            {isOperating ? (
+                                                <><div className="loader-ring w-4 h-4 border-2 border-white"></div> Launching...</>
+                                            ) : (
+                                                <>Finalize & Launch &nbsp;<i className="fa-solid fa-rocket"></i></>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => setShowNewSemesterModal(false)}
-                                    className="px-6 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors"
-                                    disabled={isOperating}
-                                >
-                                    Cancel
-                                </button>
-                                {wizardStep < 4 ? (
-                                    <button
-                                        onClick={() => setWizardStep(wizardStep + 1)}
-                                        disabled={isOperating || (wizardStep === 1 && (!newSemesterData.startDate || !newSemesterData.endDate))}
-                                        className="px-8 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-200/50"
-                                    >
-                                        Next &nbsp;<i className="fa-solid fa-arrow-right"></i>
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={handleStartNewSemester}
-                                        disabled={isOperating}
-                                        className="px-8 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-emerald-200/50"
-                                    >
-                                        {isOperating ? (
-                                            <><div className="loader-ring w-4 h-4 border-2 border-white"></div> Launching...</>
-                                        ) : (
-                                            <>Finalize & Launch &nbsp;<i className="fa-solid fa-rocket"></i></>
-                                        )}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
                     </div>
                 </div>
             )}

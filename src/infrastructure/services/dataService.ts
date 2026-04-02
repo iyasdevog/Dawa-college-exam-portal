@@ -3857,7 +3857,20 @@ export class DataService {
                 await commitBatchIfNeeded();
             }
 
-            // 3. Handle Active Term Cleanup & Metadata Pruning
+            // 3. Delete Subjects
+            const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            for (const docSnap of subjectsSnap.docs) {
+                const sub = docSnap.data();
+                if (sub.academicYear === year && (sub.activeSemester === sem || sub.activeSemester === 'Both')) {
+                    // Note: modern wizards create explicit 'Odd' or 'Even'. 
+                    // 'Both' is legacy, but if they delete the term, we assume they want to wipe it.
+                    currentBatch.delete(docSnap.ref);
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            // 4. Handle Active Term Cleanup & Metadata Pruning
             const settings = await this.getGlobalSettings();
             const currentTerm = this.getCurrentTermKey();
             
