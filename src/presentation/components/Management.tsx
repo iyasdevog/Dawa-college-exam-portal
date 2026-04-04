@@ -49,7 +49,7 @@ const Management: React.FC = () => {
       }
 
       if (tabId === 'supplementary') {
-        const suppData = await dataService.getAllSupplementaryExams();
+        const suppData = await dataService.getAllSupplementaryExams(activeTerm);
         setSupplementaryExams(suppData);
       }
 
@@ -77,7 +77,7 @@ const Management: React.FC = () => {
     if (savedClasses) {
       setCustomClasses(JSON.parse(savedClasses));
     }
-  }, []);
+  }, [activeTab, activeTerm]);
 
   const handleRefresh = async () => {
     await loadTabData(activeTab, true);

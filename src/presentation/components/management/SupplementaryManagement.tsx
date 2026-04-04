@@ -58,7 +58,6 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     const [subjectFilter, setSubjectFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
     const [attemptFilter, setAttemptFilter] = useState('All');
-    const [termFilter, setTermFilter] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Mark Entry Modal State
@@ -247,9 +246,6 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             // the exam status was incorrectly set to 'Completed' by legacy data.
             if (exam.status === 'Completed' && exam.marks?.status === 'Passed') return false;
 
-            const matchesTerm = termFilter === 'All' || 
-                               (termFilter === 'Active' && exam.examTerm === activeTerm) ||
-                               exam.examTerm === termFilter;
             const appType = (exam.applicationType || '').toLowerCase();
             const matchesTab = activeTab === 'All' 
                 || (activeTab === 'PreviousYear' && exam.examType === 'PreviousYear')
@@ -267,13 +263,10 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 exam.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 exam.studentAdNo?.toLowerCase().includes(searchTerm.toLowerCase());
             
-            return matchesTerm && matchesTab && matchesClass && matchesSubject && matchesStatus && matchesAttempt && matchesSearch;
+            return matchesTab && matchesClass && matchesSubject && matchesStatus && matchesAttempt && matchesSearch;
         });
-    }, [supplementaryExams, activeTerm, termFilter, activeTab, classFilter, subjectFilter, statusFilter, attemptFilter, searchTerm]);
+    }, [supplementaryExams, activeTab, classFilter, subjectFilter, statusFilter, attemptFilter, searchTerm]);
 
-    const uniqueTermsInSupp = useMemo(() => {
-        return Array.from(new Set(supplementaryExams.map(e => e.examTerm).filter(Boolean))).sort().reverse();
-    }, [supplementaryExams]);
 
     const uniqueClassesInSupp = useMemo(() => {
         return Array.from(new Set(supplementaryExams.map(e => e.studentClass).filter(Boolean))).sort();
@@ -357,17 +350,6 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                         />
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <select
-                            value={termFilter}
-                            onChange={(e) => setTermFilter(e.target.value)}
-                            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none"
-                        >
-                            <option value="Active">Current Term Only</option>
-                            <option value="All">All Terms</option>
-                            {uniqueTermsInSupp.filter(t => t !== activeTerm).map(term => (
-                                <option key={term} value={term}>{term}</option>
-                            ))}
-                        </select>
 
                         <select
                             value={classFilter}
@@ -561,7 +543,6 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                             <div className="flex items-center justify-center gap-3">
                                 <button
                                     onClick={() => {
-                                        setTermFilter('All');
                                         setClassFilter('All');
                                         setSubjectFilter('All');
                                         setStatusFilter('All');

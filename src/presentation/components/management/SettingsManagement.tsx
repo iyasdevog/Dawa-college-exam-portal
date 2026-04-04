@@ -170,6 +170,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
             const result = await dataService.restoreTermFromBackup(backupJson, restoreTermKey, restoreForceOverwrite);
             setRestoreResult(result);
+            
+            // Critical: Repair metadata immediately after restore so data is visible
+            await dataService.repairGlobalSettings();
             dataService.invalidateCache();
             await refreshTerms();
             const updated = await dataService.getSemesterSummaries();
@@ -241,13 +244,26 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                             ...subData,
                             enrolledStudents: sub.subjectType === 'elective' ? [] : (subData.enrolledStudents || []),
                             academicYear: derivedYear,
+                            activeSemester: newSemesterData.semester as 'Odd' | 'Even',
                             facultyName: assignedFaculty // Using the dynamic name from wizard
                         });
                     }
                 }
             }
 
-            // 3. Clear caches to ensure new term is picked up
+            // 2.3 Save custom classes to LocalStorage so they appear
+            const existingCustomStr = localStorage.getItem('customClasses');
+            let existingCustom: string[] = [];
+            if (existingCustomStr) {
+                try { existingCustom = JSON.parse(existingCustomStr); } catch (e) {}
+            }
+            const mergedCustom = Array.from(new Set([...existingCustom, ...selectedClasses]));
+            localStorage.setItem('customClasses', JSON.stringify(mergedCustom));
+
+            // 3. Clone Active Students into the new Semester
+            await dataService.bulkCloneStudentsToSemester(targetTermKey, newSemesterData.semester as 'Odd' | 'Even');
+
+            // 4. Clear caches to ensure new term is picked up
             dataService.invalidateCache();
             await refreshTerms();
             
@@ -496,7 +512,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                     if (!confirm('This will repair missing historical marks, backfill "Failed In" metadata, and apply smart semester transitions. Continue?')) return;
                                     try {
                                         setIsOperating(true);
-                                        const result = await dataService.repairAndAlignSupplementaryExams();
+                                        const result = await dataService.repairAndAlignSupplementaryExams(activeTerm);
                                         await onRefresh();
                                         alert(`✅ Repair & Alignment Complete!\n- Semesters Aligned: ${result.updated}\n- Records Enriched (Marks/Metadata): ${result.repaired}`);
                                     } catch (err) {
@@ -721,17 +737,22 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         </div>
                     </div>
 
-                    {/* Force Overwrite Toggle */}
-                    <label className="flex items-center gap-3 mb-5 cursor-pointer p-3 bg-slate-50 rounded-xl border border-slate-200 hover:bg-amber-50 transition-colors">
+                    {/* Force Overwrite & Migration Toggle */}
+                    <label className="flex items-center gap-3 mb-5 cursor-pointer p-3 bg-white border-2 border-amber-200 rounded-xl hover:bg-amber-50 transition-colors shadow-sm">
                         <div
                             onClick={() => setRestoreForceOverwrite(!restoreForceOverwrite)}
-                            className={`w-10 h-6 rounded-full relative transition-colors ${restoreForceOverwrite ? 'bg-amber-500' : 'bg-slate-300'}`}
+                            className={`w-10 h-6 rounded-full relative transition-colors ${restoreForceOverwrite ? 'bg-amber-500 shadow-inner' : 'bg-slate-300'}`}
                         >
-                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${restoreForceOverwrite ? 'right-1' : 'left-1'}`}></div>
+                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${restoreForceOverwrite ? 'right-1' : 'left-1'}`}></div>
                         </div>
                         <div>
-                            <span className="text-sm font-bold text-slate-700">Force Overwrite</span>
-                            <p className="text-[10px] text-slate-500">If OFF (recommended): only restores data for students who don't have this term's marks. If ON: replaces all existing data for this term.</p>
+                            <span className="text-sm font-black text-amber-900 flex items-center gap-2">
+                                <i className="fa-solid fa-wand-magic-sparkles text-amber-500"></i>
+                                Force Overwrite & Migration
+                            </span>
+                            <p className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-tighter">
+                                Mandatory for legacy backups or term-shifting. Force maps all data to the target semester.
+                            </p>
                         </div>
                     </label>
 

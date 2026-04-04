@@ -98,13 +98,56 @@ export class StudentService extends BaseDataService {
                     created++;
                 }
             } catch (err: any) {
-                errors.push(`Error with student ${studentData.adNo}: ${err.message}`);
+                errors.push(`Row ${studentData.adNo}: ${err.message}`);
+                console.error('Error importing student row:', err);
             }
         });
 
         this.invalidateCache();
-        return { created, updated, errors };
+        return { updated, created, errors };
     }
+
+    /**
+     * Bulk clones active students into a newly created semester.
+     */
+    public async bulkCloneStudentsToSemester(targetTermKey: string, semesterType: 'Odd' | 'Even'): Promise<number> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.studentsCollection));
+            let clonedCount = 0;
+            
+            await this.runBatchedOperation(snapshot.docs, (batch, docSnap) => {
+                const student = docSnap.data() as StudentRecord;
+                
+                // Only clone active students who don't already have this term
+                if (student.isActive !== false && (!student.academicHistory || !student.academicHistory[targetTermKey])) {
+                    const newHistory = student.academicHistory ? { ...student.academicHistory } : {};
+                    newHistory[targetTermKey] = {
+                        className: student.currentClass || student.className || 'Unknown',
+                        semester: semesterType,
+                        marks: {},
+                        grandTotal: 0,
+                        average: 0,
+                        rank: 0,
+                        performanceLevel: 'Needs Improvement'
+                    };
+                    
+                    batch.update(docSnap.ref, {
+                        semester: semesterType,
+                        academicHistory: newHistory
+                    });
+                    
+                    clonedCount++;
+                }
+            });
+            
+            this.invalidateCache();
+            return clonedCount;
+        } catch (error) {
+            console.error('Error cloning students to new semester:', error);
+            throw error;
+        }
+    }
+
     /**
      * Normalizes a student record from Firestore.
      * Maps legacy 'ta' and 'ce' fields in marks to 'int' and 'ext'.

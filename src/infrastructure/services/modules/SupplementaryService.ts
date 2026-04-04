@@ -6,7 +6,8 @@ import {
     updateDoc,
     query,
     where,
-    writeBatch
+    writeBatch,
+    deleteDoc
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
 import { StudentService } from './StudentService';
@@ -88,7 +89,7 @@ export class SupplementaryService extends BaseDataService {
             }
 
             const activeTerm = this.getCurrentTermKey();
-            const targetExamTerm = examTerm || this.getNextAcademicTerm(activeTerm);
+            const targetExamTerm = examTerm || activeTerm;
             
             let failureTerm = (originalYear && originalSemester) ? `${originalYear}-${originalSemester}` : undefined;
             let failureMarks = undefined;
@@ -151,16 +152,65 @@ export class SupplementaryService extends BaseDataService {
         }
     }
 
-    public async updateSupplementaryExamMarks(examId: string, marks: { int: number; ext: number; total: number; status: 'Passed' | 'Failed' | 'Pending' }): Promise<void> {
+    public async addSupplementaryExam(exam: Omit<SupplementaryExam, 'id'>): Promise<string> {
+        try {
+            const docRef = await addDoc(collection(this.db, this.supplementaryExamsCollection), {
+                ...exam,
+                appliedAt: Date.now(),
+                updatedAt: Date.now()
+            });
+            return docRef.id;
+        } catch (error) {
+            console.error('Error adding supplementary exam:', error);
+            throw error;
+        }
+    }
+
+    public async deleteSupplementaryExam(examId: string): Promise<void> {
+        try {
+            await deleteDoc(doc(this.db, this.supplementaryExamsCollection, examId));
+        } catch (error) {
+            console.error('Error deleting supplementary exam:', error);
+            throw error;
+        }
+    }
+
+    public async getSupplementaryExamHistory(studentId: string, subjectId: string): Promise<SupplementaryExam[]> {
+        try {
+            const q = query(
+                collection(this.db, this.supplementaryExamsCollection),
+                where('studentId', '==', studentId),
+                where('subjectId', '==', subjectId)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupplementaryExam));
+        } catch (error) {
+            console.error('Error fetching supplementary exam history:', error);
+            return [];
+        }
+    }
+
+    public async updateSupplementaryExamMarks(
+        examId: string, 
+        marks: { int: number | 'A'; ext: number | 'A'; total: number; status: 'Passed' | 'Failed' | 'Pending' },
+        previousMarks?: { int: number | 'A'; ext: number | 'A' },
+        attemptNumber?: number,
+        originalTerm?: string
+    ): Promise<void> {
         try {
             const docRef = doc(this.db, this.supplementaryExamsCollection, examId);
             const status = marks.status === 'Passed' ? 'Completed' : marks.status;
             
-            await updateDoc(docRef, {
+            const updateData: any = {
                 marks,
                 status,
                 updatedAt: Date.now()
-            });
+            };
+            if (previousMarks) updateData.previousMarks = previousMarks;
+            if (attemptNumber) updateData.attemptNumber = attemptNumber;
+            if (originalTerm) updateData.originalTerm = originalTerm;
+
+            await updateDoc(docRef, updateData);
 
             if (marks.status === 'Passed') {
                 const exams = await this.getAllSupplementaryExams();

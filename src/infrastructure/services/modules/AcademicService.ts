@@ -285,12 +285,27 @@ export class AcademicService extends BaseDataService {
                 }
             });
 
-            return Object.entries(termStats).map(([termKey, stats]) => ({
-                termKey,
-                studentCount: stats.studentCount,
-                passPercentage: stats.studentCount > 0 ? Math.round((stats.passedCount / stats.studentCount) * 100) : 0,
-                averageScore: stats.studentCount > 0 ? Math.round(stats.totalMarks / stats.studentCount) : 0
-            })).sort((a, b) => b.termKey.localeCompare(a.termKey));
+            return Object.entries(termStats).map(([termKey, stats]) => {
+                const parts = termKey.split('-');
+                let academicYear = '';
+                let semester = '';
+                if (parts.length >= 3) {
+                    academicYear = `${parts[0]}-${parts[1]}`;
+                    semester = parts[2];
+                } else if (parts.length === 2) {
+                    academicYear = parts[0];
+                    semester = parts[1];
+                }
+
+                return {
+                    termKey,
+                    academicYear,
+                    semester,
+                    studentCount: stats.studentCount,
+                    passPercentage: stats.studentCount > 0 ? Math.round((stats.passedCount / stats.studentCount) * 100) : 0,
+                    averageScore: stats.studentCount > 0 ? Math.round(stats.totalMarks / stats.studentCount) : 0
+                };
+            }).sort((a, b) => b.termKey.localeCompare(a.termKey));
         } catch (error) {
             console.error('Error fetching semester summaries:', error);
             return [];

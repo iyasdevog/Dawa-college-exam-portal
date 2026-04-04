@@ -39,18 +39,33 @@ export const TermSelector: React.FC<TermSelectorProps> = ({
                     if (controlledOnChange) {
                         controlledOnChange(val);
                     } else {
-                        const [year1, year2, sem] = val.split('-');
-                        setTerm(`${year1}-${year2}`, sem as 'Odd' | 'Even');
+                        const parts = val.split('-');
+                        if (parts.length >= 3) {
+                            setTerm(`${parts[0]}-${parts[1]}`, parts[2] as 'Odd' | 'Even');
+                        } else if (parts.length === 2) {
+                            setTerm(parts[0], parts[1] as 'Odd' | 'Even');
+                        } else {
+                            setTerm(val, 'Odd');
+                        }
                     }
                 }}
             >
                 {termOptions.map((termKey) => {
                     const parts = termKey.split('-');
-                    const year = `${parts[0]}-${parts[1]}`;
-                    const semester = parts[2];
+                    let year, semester;
+                    if (parts.length >= 3) {
+                        year = `${parts[0]}-${parts[1]}`;
+                        semester = parts[2];
+                    } else if (parts.length === 2) {
+                        year = parts[0];
+                        semester = parts[1];
+                    } else {
+                        year = termKey;
+                        semester = '';
+                    }
                     return (
                         <option key={termKey} value={termKey} className="bg-slate-800 text-white">
-                            {year} - {semester}
+                            {semester ? `${year} - ${semester}` : year}
                         </option>
                     );
                 })}

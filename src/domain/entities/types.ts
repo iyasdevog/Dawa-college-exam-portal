@@ -217,7 +217,9 @@ export interface PeriodTimeSlot {
 
 export type TimetableRule =
   | { id: string; type: 'FixedSlot'; day: 'All' | string; periodIndex: number; subjectId: string }
-  | { id: string; type: 'DayRestriction'; day: string; restrictedToSubjectIds: string[] };
+  | { id: string; type: 'DayRestriction'; day: string; restrictedToSubjectIds: string[] }
+  | { id: string; type: 'FixedFaculty'; day: 'All' | string; periodIndex: number; facultyName: string }
+  | { id: string; type: 'FixedClass'; day: 'All' | string; periodIndex: number; className: string; subjectId: string };
 
 export interface TimetableGeneratorConfig {
   id: string; // Now format: ${className}-${academicYear}-${semester}

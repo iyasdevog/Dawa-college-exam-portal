@@ -32,8 +32,22 @@ export class AdministrativeService extends BaseDataService {
         super();
     }
 
-    public async getAllApplications(): Promise<StudentApplication[]> {
-        const querySnapshot = await getDocs(collection(this.db, this.applicationsCollection));
+    public async getAllApplications(termKey?: string): Promise<StudentApplication[]> {
+        let q = query(collection(this.db, this.applicationsCollection));
+        
+        if (termKey && termKey !== 'All') {
+            // termKey can be "2025-2026-Odd" or "2026-Even"
+            // appliedYear stores "2025-2026" or "2026", appliedSemester stores "Odd" or "Even"
+            const parts = termKey.split('-');
+            const sem = parts.pop()!; // Last part is always the semester (Odd/Even)
+            const year = parts.join('-'); // Everything before is the academic year
+            q = query(q, 
+                where('appliedYear', '==', year),
+                where('appliedSemester', '==', sem)
+            );
+        }
+
+        const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentApplication));
     }
 
@@ -71,6 +85,17 @@ export class AdministrativeService extends BaseDataService {
             }
         } catch (error) {
             console.error('Error updating application status:', error);
+            throw error;
+        }
+    }
+
+    public async deleteApplication(id: string): Promise<void> {
+        try {
+            const appRef = doc(this.db, this.applicationsCollection, id);
+            await deleteDoc(appRef);
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error deleting application:', error);
             throw error;
         }
     }
@@ -123,67 +148,165 @@ export class AdministrativeService extends BaseDataService {
         backupJson: Record<string, any[]>,
         termKey: string,
         forceOverwrite = false
-    ): Promise<{ processed: number; students: number; subjects: number }> {
+    ): Promise<{ 
+        processed: number; 
+        studentsRestored: number; 
+        subjectsRestored: number;
+        attendanceRestored: number;
+        applicationsRestored: number;
+        suppRestored: number;
+        examTTRestored: number;
+        specialDaysRestored: number;
+        calendarRestored: number;
+        genConfigsRestored: number;
+        skipped: number;
+    }> {
         try {
-            console.log(`Starting restoration for ${termKey}...`);
+            console.log(`Starting ROBUST enhanced restoration for ${termKey}...`);
             const parts = termKey.split('-');
             const sem = parts.pop()!;
             const year = parts.join('-');
 
-            const studentsRaw = backupJson[this.studentsCollection] || [];
-            const subjectsRaw = backupJson[this.subjectsCollection] || [];
-            
-            let processedStudents = 0;
-            let processedSubjects = 0;
+            // Helper to get collection data regardless of case
+            const normalizeBackup = (json: any) => {
+                const normalized: Record<string, any[]> = {};
+                Object.keys(json).forEach(key => {
+                    normalized[key.toLowerCase()] = json[key];
+                });
+                return normalized;
+            };
 
-            // 1. Process Subjects first to ensure they exist for the term
+            const data = normalizeBackup(backupJson);
+            const studentsRaw = data[this.studentsCollection.toLowerCase()] || [];
+            const subjectsRaw = data[this.subjectsCollection.toLowerCase()] || [];
+            const applicationsRaw = data[this.applicationsCollection.toLowerCase()] || [];
+            const supplementaryRaw = data[this.supplementaryExamsCollection.toLowerCase()] || [];
+            
+            let studentsRestored = 0;
+            let subjectsRestored = 0;
+            let applicationsRestored = 0;
+            let suppRestored = 0;
+            let skipped = 0;
+
+            // 1. Process Subjects
             if (subjectsRaw.length > 0) {
                 await this.runBatchedOperation(subjectsRaw, (batch, sub) => {
-                    const subRef = doc(this.db, this.subjectsCollection, sub.id);
-                    const subData = { ...sub };
-                    delete subData.id;
-                    
-                    // Force the subject into the target term
-                    subData.academicYear = year;
-                    subData.activeSemester = sem;
-                    
-                    batch.set(subRef, subData, { merge: true });
-                    processedSubjects++;
+                    // Restore if it matches OR if we are forcing migration
+                    const isSameTerm = sub.academicYear === year && sub.activeSemester === sem;
+                    if (isSameTerm || forceOverwrite) {
+                        const subRef = doc(this.db, this.subjectsCollection, sub.id);
+                        const { id, ...subData } = sub;
+                        
+                        // Force migration if term is different
+                        if (!isSameTerm) {
+                            subData.academicYear = year;
+                            subData.activeSemester = sem;
+                        }
+                        
+                        batch.set(subRef, subData, { merge: true });
+                        subjectsRestored++;
+                    } else {
+                        skipped++;
+                    }
                 });
             }
 
-            // 2. Process Students and their academic history
+            // 2. Process Students
             if (studentsRaw.length > 0) {
                 await this.runBatchedOperation(studentsRaw, (batch, stud) => {
                     const studRef = doc(this.db, this.studentsCollection, stud.id);
                     
-                    // Prepare the term record
-                    const termRecord = {
-                        className: stud.currentClass || stud.className || 'Unknown',
-                        semester: sem,
-                        marks: stud.marks || {},
-                        grandTotal: stud.grandTotal || 0,
-                        average: stud.average || 0,
-                        rank: stud.rank || 0,
-                        performanceLevel: stud.performanceLevel || 'Pending'
-                    };
+                    const backupHistory = stud.academicHistory || {};
+                    let termRecord = backupHistory[termKey];
+                    
+                    if (!termRecord) {
+                        // Attempt to find ANY history if specific term is missing
+                        const anyHistoryKey = Object.keys(backupHistory)[0];
+                        const sourceHistory = anyHistoryKey ? backupHistory[anyHistoryKey] : null;
+                        
+                        termRecord = {
+                            className: sourceHistory?.className || stud.currentClass || stud.className || 'Unknown',
+                            semester: sem,
+                            marks: sourceHistory?.marks || stud.marks || {},
+                            grandTotal: sourceHistory?.grandTotal || stud.grandTotal || 0,
+                            average: sourceHistory?.average || stud.average || 0,
+                            rank: sourceHistory?.rank || stud.rank || 0,
+                            performanceLevel: sourceHistory?.performanceLevel || stud.performanceLevel || 'Pending'
+                        };
+                    }
 
-                    const updateData: any = {
+                    // Prepare update data with dot-notation for nested history preservation
+                    const { id, academicHistory, ...topLevelData } = stud;
+                    const studentUpdate: any = {
+                        ...topLevelData,
                         [`academicHistory.${termKey}`]: termRecord
                     };
 
-                    // If it's the newest data, also update top-level currentClass
                     if (forceOverwrite) {
-                        updateData.currentClass = termRecord.className;
+                        studentUpdate.currentClass = termRecord.className;
+                        studentUpdate.semester = sem;
                     }
 
-                    batch.update(studRef, updateData);
-                    processedStudents++;
+                    batch.set(studRef, studentUpdate, { merge: true });
+                    studentsRestored++;
+                });
+            }
+
+            // 3. Process Applications
+            if (applicationsRaw.length > 0) {
+                await this.runBatchedOperation(applicationsRaw, (batch, app) => {
+                    const isSameTerm = app.appliedYear === year && app.appliedSemester === sem;
+                    if (isSameTerm || forceOverwrite) {
+                        const appRef = doc(this.db, this.applicationsCollection, app.id);
+                        const { id, ...appData } = app;
+                        
+                        if (!isSameTerm) {
+                            appData.appliedYear = year;
+                            appData.appliedSemester = sem;
+                        }
+                        
+                        batch.set(appRef, appData, { merge: true });
+                        applicationsRestored++;
+                    } else {
+                        skipped++;
+                    }
+                });
+            }
+
+            // 4. Process Supplementary Exams
+            if (supplementaryRaw.length > 0) {
+                await this.runBatchedOperation(supplementaryRaw, (batch, exam) => {
+                    const isSameTerm = exam.examTerm === termKey;
+                    if (isSameTerm || forceOverwrite) {
+                        const examRef = doc(this.db, this.supplementaryExamsCollection, exam.id);
+                        const { id, ...examData } = exam;
+                        
+                        if (!isSameTerm) {
+                            examData.examTerm = termKey;
+                        }
+
+                        batch.set(examRef, examData, { merge: true });
+                        suppRestored++;
+                    } else {
+                        skipped++;
+                    }
                 });
             }
 
             this.invalidateCache();
-            return { processed: processedStudents + processedSubjects, students: processedStudents, subjects: processedSubjects };
+            return { 
+                processed: studentsRestored + subjectsRestored + applicationsRestored + suppRestored,
+                studentsRestored,
+                subjectsRestored,
+                attendanceRestored: 0,
+                applicationsRestored,
+                suppRestored,
+                examTTRestored: 0,
+                specialDaysRestored: 0,
+                calendarRestored: 0,
+                genConfigsRestored: 0,
+                skipped
+            };
         } catch (error) {
             console.error('Error restoring from backup:', error);
             throw error;
@@ -227,6 +350,24 @@ export class AdministrativeService extends BaseDataService {
             await this.runBatchedOperation(students.docs, (batch, d) => {
                 batch.update(d.ref, { [`academicHistory.${termKey}`]: deleteField() });
             });
+
+            // Check if deleted term is the current active term and reset it
+            const settingsDocRef = doc(this.db, 'settings', 'global_admin_settings');
+            const settingsDoc = await getDoc(settingsDocRef);
+            if (settingsDoc.exists()) {
+                const settings = settingsDoc.data();
+                const currentStr = settings.currentAcademicYear && settings.currentSemester 
+                    ? `${settings.currentAcademicYear}-${settings.currentSemester}` 
+                    : settings.currentAcademicYear || "";
+                    
+                if (currentStr === termKey) {
+                    await updateDoc(settingsDocRef, {
+                        currentAcademicYear: deleteField(),
+                        currentSemester: deleteField()
+                    });
+                }
+            }
+
             this.invalidateCache();
         } catch (error) {
             console.error('Error deleting semester data:', error);
@@ -323,9 +464,13 @@ export class AdministrativeService extends BaseDataService {
             throw error;
         }
     }
-    public async repairAndAlignSupplementaryExams(): Promise<{ updated: number; repaired: number }> {
+    public async repairAndAlignSupplementaryExams(targetExamTerm?: string): Promise<{ updated: number; repaired: number }> {
         try {
             const exams = await this.supplementaryService.getAllSupplementaryExams();
+            const allStudents = await this.studentService.getAllStudents('All');
+            const studentMap = new Map(allStudents.map(s => [s.id, s]));
+            const currentActiveTerm = targetExamTerm || this.getCurrentTermKey();
+            
             let updated = 0;
             let repaired = 0;
 
@@ -345,14 +490,44 @@ export class AdministrativeService extends BaseDataService {
                     }
                 }
 
-                // 2. Align semester metadata (ensure examTerm is used)
-                if (exam.examTerm && !exam.originalSemester) {
-                    const parts = exam.examTerm.split('-');
-                    const sem = parts[parts.length - 1]; // Odd or Even
+                // 2. Align examTerm to current active term for all pending exams
+                if (exam.status !== 'Completed' && exam.examTerm !== currentActiveTerm) {
+                    updateData.examTerm = currentActiveTerm;
+                    needsUpdate = true;
+                    updated++;
+                }
+
+                // 3. Derive correct originalTerm from student's academic history
+                const student = studentMap.get(exam.studentId);
+                if (student?.academicHistory) {
+                    for (const [termKey, termRecord] of Object.entries(student.academicHistory)) {
+                        const marks = (termRecord as any).marks;
+                        if (marks && marks[exam.subjectId]) {
+                            const subMark = marks[exam.subjectId];
+                            if (subMark.status === 'Failed') {
+                                if (exam.originalTerm !== termKey) {
+                                    updateData.originalTerm = termKey;
+                                    // Also fix originalSemester and originalYear
+                                    const parts = termKey.split('-');
+                                    const sem = parts.pop();
+                                    updateData.originalSemester = sem as 'Odd' | 'Even';
+                                    updateData.originalYear = parseInt(parts[0]);
+                                    needsUpdate = true;
+                                    repaired++;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // 4. Ensure originalSemester is set even if no history match
+                if (!exam.originalSemester && exam.originalTerm) {
+                    const parts = exam.originalTerm.split('-');
+                    const sem = parts[parts.length - 1];
                     if (sem === 'Odd' || sem === 'Even') {
                         updateData.originalSemester = sem as 'Odd' | 'Even';
                         needsUpdate = true;
-                        updated++;
                     }
                 }
 

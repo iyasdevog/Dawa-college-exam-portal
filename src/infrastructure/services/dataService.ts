@@ -64,6 +64,10 @@ export class DataService extends BaseDataService {
         return this.studentService.addStudent(studentData);
     }
 
+    async bulkCloneStudentsToSemester(targetTermKey: string, semesterType: 'Odd' | 'Even'): Promise<number> {
+        return this.studentService.bulkCloneStudentsToSemester(targetTermKey, semesterType);
+    }
+
     async deleteStudent(id: string): Promise<void> {
         return this.studentService.deleteStudent(id);
     }
@@ -110,8 +114,26 @@ export class DataService extends BaseDataService {
         return this.supplementaryService.syncApplicationToSupplementary(application);
     }
 
-    async updateSupplementaryExamMarks(examId: string, marks: any): Promise<void> {
-        return this.supplementaryService.updateSupplementaryExamMarks(examId, marks);
+    async updateSupplementaryExamMarks(
+        examId: string, 
+        marks: any, 
+        previousMarks?: any, 
+        attemptNumber?: number, 
+        originalTerm?: string
+    ): Promise<void> {
+        return this.supplementaryService.updateSupplementaryExamMarks(examId, marks, previousMarks, attemptNumber, originalTerm);
+    }
+
+    async addSupplementaryExam(exam: Omit<SupplementaryExam, 'id'>): Promise<string> {
+        return this.supplementaryService.addSupplementaryExam(exam);
+    }
+
+    async deleteSupplementaryExam(examId: string): Promise<void> {
+        return this.supplementaryService.deleteSupplementaryExam(examId);
+    }
+
+    async getSupplementaryExamHistory(studentId: string, subjectId: string): Promise<SupplementaryExam[]> {
+        return this.supplementaryService.getSupplementaryExamHistory(studentId, subjectId);
     }
 
     // --- Settings & Configurations ---
@@ -149,8 +171,8 @@ export class DataService extends BaseDataService {
     }
 
     // --- Administrative ---
-    async getAllApplications(): Promise<StudentApplication[]> {
-        return this.administrativeService.getAllApplications();
+    async getAllApplications(termKey?: string): Promise<StudentApplication[]> {
+        return this.administrativeService.getAllApplications(termKey);
     }
 
     async getApplicationsByAdNo(adNo: string): Promise<StudentApplication[]> {
@@ -159,6 +181,10 @@ export class DataService extends BaseDataService {
 
     async updateApplicationStatus(id: string, status: ApplicationStatus, adminComment?: string): Promise<void> {
         return this.administrativeService.updateApplicationStatus(id, status, adminComment);
+    }
+
+    async deleteApplication(id: string): Promise<void> {
+        return this.administrativeService.deleteApplication(id);
     }
 
     async downloadFullSystemBackup(): Promise<void> {
@@ -173,7 +199,19 @@ export class DataService extends BaseDataService {
         return this.academicService.calculateTermMetrics(marks, subjects, supplementaryMarks);
     }
 
-    public async restoreTermFromBackup(backupJson: Record<string, any[]>, termKey: string, forceOverwrite = false): Promise<{ processed: number; students: number; subjects: number }> {
+    public async restoreTermFromBackup(backupJson: Record<string, any[]>, termKey: string, forceOverwrite = false): Promise<{ 
+        processed: number; 
+        studentsRestored: number; 
+        subjectsRestored: number;
+        attendanceRestored: number;
+        applicationsRestored: number;
+        suppRestored: number;
+        examTTRestored: number;
+        specialDaysRestored: number;
+        calendarRestored: number;
+        genConfigsRestored: number;
+        skipped: number;
+    }> {
         return this.administrativeService.restoreTermFromBackup(backupJson, termKey, forceOverwrite);
     }
 
@@ -200,7 +238,48 @@ export class DataService extends BaseDataService {
     }
 
     async getSemesterSummaries(): Promise<any[]> {
-        return this.academicService.getSemesterSummaries();
+        const summaries = await this.academicService.getSemesterSummaries();
+        const settings = await this.getGlobalSettings();
+        const currentTermKey = this.getCurrentTermKey(settings);
+
+        let hasCurrent = false;
+
+        const mapped = summaries.map(s => {
+            const isCurrent = s.termKey === currentTermKey;
+            if (isCurrent) hasCurrent = true;
+            return {
+                ...s,
+                isCurrent
+            };
+        });
+
+        if (!hasCurrent && settings.currentAcademicYear) {
+            // Inject empty current term so it always shows up
+            const parts = currentTermKey.split('-');
+            let academicYear = '';
+            let semester = '';
+            if (parts.length >= 3) {
+                academicYear = `${parts[0]}-${parts[1]}`;
+                semester = parts[2];
+            } else if (parts.length === 2) {
+                academicYear = parts[0];
+                semester = parts[1];
+            } else {
+                academicYear = currentTermKey;
+            }
+
+            mapped.unshift({
+                termKey: currentTermKey,
+                academicYear,
+                semester,
+                studentCount: 0,
+                passPercentage: 0,
+                averageScore: 0,
+                isCurrent: true
+            });
+        }
+
+        return mapped;
     }
 
     async recalculateAllMarkStatuses(): Promise<{ updated: number }> {
@@ -227,8 +306,8 @@ export class DataService extends BaseDataService {
         return this.administrativeService.cleanAndSyncApplications(targetTermKey);
     }
 
-    async repairAndAlignSupplementaryExams(): Promise<{ updated: number; repaired: number }> {
-        return this.administrativeService.repairAndAlignSupplementaryExams();
+    async repairAndAlignSupplementaryExams(targetExamTerm?: string): Promise<{ updated: number; repaired: number }> {
+        return this.administrativeService.repairAndAlignSupplementaryExams(targetExamTerm);
     }
 
     async clearAllData(collectionName: string): Promise<void> {

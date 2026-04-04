@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { StudentApplication, ApplicationStatus, ApplicationType } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
+import { useTerm } from '../viewmodels/TermContext';
 
 const ApplicationManagement: React.FC = () => {
+    const { activeTerm } = useTerm();
     const [applications, setApplications] = useState<StudentApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState<ApplicationStatus | 'all'>('all');
     const [filterClass, setFilterClass] = useState<string>('all');
     const [filterType, setFilterType] = useState<ApplicationType | 'all'>('all');
+    const [filterSubject, setFilterSubject] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [updateMessage, setUpdateMessage] = useState<string | null>(null);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -16,12 +19,12 @@ const ApplicationManagement: React.FC = () => {
 
     useEffect(() => {
         loadApplications();
-    }, []);
+    }, [activeTerm]);
 
     const loadApplications = async () => {
         setIsLoading(true);
         try {
-            const apps = await dataService.getAllApplications();
+            const apps = await dataService.getAllApplications(activeTerm);
             setApplications(apps);
         } catch (error) {
             console.error('Error loading applications:', error);
@@ -140,10 +143,32 @@ const ApplicationManagement: React.FC = () => {
         }
     };
 
+    // Derive unique subjects from loaded applications (grouped by normalized name)
+    const uniqueSubjects = React.useMemo(() => {
+        const subjectMap = new Map<string, { name: string; count: number }>();
+        applications.forEach(app => {
+            if (app.subjectName) {
+                const key = app.subjectName.trim().toUpperCase();
+                const existing = subjectMap.get(key);
+                if (existing) {
+                    existing.count++;
+                } else {
+                    // Display name: capitalize first letter of each word
+                    const displayName = app.subjectName.trim().replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+                    subjectMap.set(key, { name: displayName, count: 1 });
+                }
+            }
+        });
+        return Array.from(subjectMap.entries())
+            .map(([key, { name, count }]) => ({ key, name, count }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [applications]);
+
     const filteredApps = applications.filter(app => 
         (filterStatus === 'all' ? app.status !== 'approved' : app.status === filterStatus) &&
         (filterClass === 'all' ? true : app.className === filterClass) &&
         (filterType === 'all' ? true : app.type === filterType) &&
+        (filterSubject === 'all' ? true : (app.subjectName?.trim().toUpperCase() === filterSubject)) &&
         (searchQuery ? 
             app.studentName.toLowerCase().includes(searchQuery.toLowerCase()) || 
             app.adNo.toLowerCase().includes(searchQuery.toLowerCase())
@@ -203,6 +228,14 @@ const ApplicationManagement: React.FC = () => {
                             <option value="external-supp">External Supp</option>
                             <option value="internal-supp">Internal Supp</option>
                             <option value="special-supp">Special Supp</option>
+                        </select>
+                        <select
+                            value={filterSubject}
+                            onChange={(e) => setFilterSubject(e.target.value)}
+                            className="px-4 py-3 rounded-xl text-xs font-black bg-white text-slate-700 border border-slate-200 focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                        >
+                            <option value="all">All Subjects ({applications.length})</option>
+                            {uniqueSubjects.map(s => <option key={s.key} value={s.key}>{s.name} ({s.count})</option>)}
                         </select>
                         <div className="flex bg-white p-1 rounded-xl border border-slate-200 shrink-0">
                             {(['all', 'pending', 'approved', 'rejected'] as const).map(status => {

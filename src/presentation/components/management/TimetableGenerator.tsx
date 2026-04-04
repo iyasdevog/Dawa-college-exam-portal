@@ -117,6 +117,52 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                             }
                         });
                     }
+
+                    // FixedFaculty: Pin any subject taught by this faculty to the specified slot
+                    if (rule.type === 'FixedFaculty') {
+                        const facultySubject = filteredSubjects.find(s => s.facultyName?.toLowerCase() === rule.facultyName.toLowerCase());
+                        if (!facultySubject) return;
+
+                        const targetDays = rule.day === 'All' ? days : [rule.day].filter(d => days.includes(d as any));
+                        targetDays.forEach(day => {
+                            if (grid[day] && grid[day][rule.periodIndex] === null && !config.breakSlots?.includes(rule.periodIndex)) {
+                                const slotTime = config.timeSlots?.[rule.periodIndex];
+                                grid[day][rule.periodIndex] = {
+                                    id: Math.random().toString(36).substr(2, 9),
+                                    day: day as any,
+                                    subjectId: facultySubject.id,
+                                    subjectName: facultySubject.name,
+                                    className: selectedClass,
+                                    startTime: slotTime?.startTime || "",
+                                    endTime: slotTime?.endTime || ""
+                                };
+                                subjectUsage[facultySubject.id] = (subjectUsage[facultySubject.id] || 0) + 1;
+                            }
+                        });
+                    }
+
+                    // FixedClass: Pin a specific class-subject combo to a slot
+                    if (rule.type === 'FixedClass') {
+                        const subject = subjects.find(s => s.id === rule.subjectId);
+                        if (!subject) return;
+
+                        const targetDays = rule.day === 'All' ? days : [rule.day].filter(d => days.includes(d as any));
+                        targetDays.forEach(day => {
+                            if (grid[day] && grid[day][rule.periodIndex] === null && !config.breakSlots?.includes(rule.periodIndex)) {
+                                const slotTime = config.timeSlots?.[rule.periodIndex];
+                                grid[day][rule.periodIndex] = {
+                                    id: Math.random().toString(36).substr(2, 9),
+                                    day: day as any,
+                                    subjectId: rule.subjectId,
+                                    subjectName: subject.name,
+                                    className: rule.className,
+                                    startTime: slotTime?.startTime || "",
+                                    endTime: slotTime?.endTime || ""
+                                };
+                                subjectUsage[rule.subjectId] = (subjectUsage[rule.subjectId] || 0) + 1;
+                            }
+                        });
+                    }
                 });
 
                 // 3. Prepare remaining pool
@@ -425,8 +471,8 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                                     <i className="fa-solid fa-xmark text-[10px]"></i>
                                                 </button>
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${rule.type === 'FixedSlot' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
-                                                        {rule.type === 'FixedSlot' ? 'Fixed' : 'Restricted'}
+                                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${rule.type === 'FixedSlot' ? 'bg-blue-100 text-blue-600' : rule.type === 'FixedFaculty' ? 'bg-amber-100 text-amber-600' : rule.type === 'FixedClass' ? 'bg-teal-100 text-teal-600' : 'bg-purple-100 text-purple-600'}`}>
+                                                        {rule.type === 'FixedSlot' ? 'Fixed Slot' : rule.type === 'FixedFaculty' ? 'Fixed Faculty' : rule.type === 'FixedClass' ? 'Fixed Class' : 'Restricted'}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-slate-600">{rule.day}</span>
                                                 </div>
@@ -467,6 +513,99 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                                                     setConfig({ ...config, rules: updated });
                                                                 }}
                                                                 className="col-span-2 p-1 text-[10px] bg-white border border-slate-200 rounded"
+                                                            >
+                                                                {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                            </select>
+                                                        </div>
+                                                    ) : rule.type === 'FixedFaculty' ? (
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <select
+                                                                value={rule.day}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(config.rules || [])];
+                                                                    updated[idx] = { ...rule, day: e.target.value };
+                                                                    setConfig({ ...config, rules: updated });
+                                                                }}
+                                                                className="p-1 text-[10px] bg-white border border-slate-200 rounded"
+                                                            >
+                                                                <option value="All">All Days</option>
+                                                                {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                                                            </select>
+                                                            <select
+                                                                value={rule.periodIndex}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(config.rules || [])];
+                                                                    updated[idx] = { ...rule, periodIndex: parseInt(e.target.value) };
+                                                                    setConfig({ ...config, rules: updated });
+                                                                }}
+                                                                className="p-1 text-[10px] bg-white border border-slate-200 rounded"
+                                                            >
+                                                                {Array.from({ length: config.periodsPerDay }).map((_, i) => (
+                                                                    <option key={i} value={i}>Slot {i + 1}</option>
+                                                                ))}
+                                                            </select>
+                                                            <select
+                                                                value={rule.facultyName}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(config.rules || [])];
+                                                                    updated[idx] = { ...rule, facultyName: e.target.value };
+                                                                    setConfig({ ...config, rules: updated });
+                                                                }}
+                                                                className="col-span-2 p-1 text-[10px] bg-white border border-slate-200 rounded"
+                                                            >
+                                                                <option value="">Select Faculty</option>
+                                                                {[...new Set(filteredSubjects.map(s => s.facultyName).filter(Boolean))].sort().map(f => (
+                                                                    <option key={f} value={f}>{f}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    ) : rule.type === 'FixedClass' ? (
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <select
+                                                                value={rule.day}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(config.rules || [])];
+                                                                    updated[idx] = { ...rule, day: e.target.value };
+                                                                    setConfig({ ...config, rules: updated });
+                                                                }}
+                                                                className="p-1 text-[10px] bg-white border border-slate-200 rounded"
+                                                            >
+                                                                <option value="All">All Days</option>
+                                                                {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                                                            </select>
+                                                            <select
+                                                                value={rule.periodIndex}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(config.rules || [])];
+                                                                    updated[idx] = { ...rule, periodIndex: parseInt(e.target.value) };
+                                                                    setConfig({ ...config, rules: updated });
+                                                                }}
+                                                                className="p-1 text-[10px] bg-white border border-slate-200 rounded"
+                                                            >
+                                                                {Array.from({ length: config.periodsPerDay }).map((_, i) => (
+                                                                    <option key={i} value={i}>Slot {i + 1}</option>
+                                                                ))}
+                                                            </select>
+                                                            <select
+                                                                value={rule.className}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(config.rules || [])];
+                                                                    updated[idx] = { ...rule, className: e.target.value };
+                                                                    setConfig({ ...config, rules: updated });
+                                                                }}
+                                                                className="p-1 text-[10px] bg-white border border-slate-200 rounded"
+                                                            >
+                                                                <option value="">Select Class</option>
+                                                                {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                                                            </select>
+                                                            <select
+                                                                value={rule.subjectId}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(config.rules || [])];
+                                                                    updated[idx] = { ...rule, subjectId: e.target.value };
+                                                                    setConfig({ ...config, rules: updated });
+                                                                }}
+                                                                className="p-1 text-[10px] bg-white border border-slate-200 rounded"
                                                             >
                                                                 {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                                             </select>
@@ -544,6 +683,43 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                                 className="py-2 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-black text-slate-400 hover:border-purple-300 hover:text-purple-500 transition-all"
                                             >
                                                 + Restriction
+                                            </button>
+                                            <button
+                                                onClick={() => setConfig({
+                                                    ...config,
+                                                    rules: [
+                                                        ...(config.rules || []),
+                                                        {
+                                                            id: Math.random().toString(36).substr(2, 9),
+                                                            type: 'FixedFaculty',
+                                                            day: 'All',
+                                                            periodIndex: 0,
+                                                            facultyName: filteredSubjects.find(s => s.facultyName)?.facultyName || ''
+                                                        }
+                                                    ]
+                                                })}
+                                                className="py-2 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-black text-slate-400 hover:border-amber-300 hover:text-amber-500 transition-all"
+                                            >
+                                                + Fixed Faculty
+                                            </button>
+                                            <button
+                                                onClick={() => setConfig({
+                                                    ...config,
+                                                    rules: [
+                                                        ...(config.rules || []),
+                                                        {
+                                                            id: Math.random().toString(36).substr(2, 9),
+                                                            type: 'FixedClass',
+                                                            day: 'All',
+                                                            periodIndex: 0,
+                                                            className: selectedClass,
+                                                            subjectId: filteredSubjects[0]?.id || ''
+                                                        }
+                                                    ]
+                                                })}
+                                                className="py-2 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-black text-slate-400 hover:border-teal-300 hover:text-teal-500 transition-all"
+                                            >
+                                                + Fixed Class
                                             </button>
                                         </div>
                                     </div>
