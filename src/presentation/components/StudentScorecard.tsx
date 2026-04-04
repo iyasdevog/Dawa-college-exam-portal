@@ -312,7 +312,13 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50 print:divide-black">
-                                            {classSubjects.map(subject => {
+                                            {[...classSubjects].sort((a,b) => {
+                                                const aStatus = displayMarks[a.id]?.status;
+                                                const bStatus = displayMarks[b.id]?.status;                                                
+                                                if (aStatus === 'Failed' && bStatus !== 'Failed') return 1;
+                                                if (aStatus !== 'Failed' && bStatus === 'Failed') return -1;
+                                                return 0;
+                                            }).map(subject => {
                                                 const marks = displayMarks[subject.id];
                                                 const maxTotal = subject.maxINT + subject.maxEXT;
                                                 const percentage = marks ? Math.round((marks.total / maxTotal) * 100) : 0;

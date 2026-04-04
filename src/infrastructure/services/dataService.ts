@@ -23,7 +23,6 @@ import { normalizeName } from './formatUtils';
 
 export class DataService {
     // Helper to calculate performance level
-    // Helper to calculate performance level
     private calculatePerformanceLevel(marks: Record<string, any>, subjects: SubjectConfig[]): PerformanceLevel {
         const marksEntries = Object.entries(marks);
         if (marksEntries.length === 0) return 'F (Failed)';
@@ -63,6 +62,128 @@ export class DataService {
         if (minPercentage >= 65) return 'B+ (Good)';
         if (minPercentage >= 55) return 'B (Good)';
         return 'C (Average)';
+    }
+    // Application utility methods (Moved to top for visibility)
+    async getApplicationById(id: string): Promise<StudentApplication | null> {
+        try {
+            const docRef = doc(this.db, this.applicationsCollection, id);
+            const docSnap = await getDoc(docRef);
+            return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as StudentApplication : null;
+        } catch (error) {
+            console.error('Error fetching application:', error);
+            return null;
+        }
+    }
+
+    async getPreviousMarks(studentId: string, subjectId: string): Promise<{ int: number | 'A', ext: number | 'A' } | undefined> {
+        try {
+            const student = await this.getStudentById(studentId);
+            if (!student || !student.academicHistory) return undefined;
+
+            const termKeys = Object.keys(student.academicHistory).sort((a, b) => b.localeCompare(a));
+            const currentTerm = this.getCurrentTermKey();
+
+            for (const termKey of termKeys) {
+                if (termKey === currentTerm) continue;
+
+                const marks = student.academicHistory[termKey].marks[subjectId];
+                if (marks && (marks.int !== undefined || marks.ext !== undefined)) {
+                    return {
+                        int: marks.int,
+                        ext: marks.ext
+                    };
+                }
+            }
+            return undefined;
+        } catch (error) {
+            console.error('Error fetching previous marks:', error);
+            return undefined;
+        }
+    }
+
+    public async syncApplicationToSupplementary(application: StudentApplication, existingStudent?: StudentRecord): Promise<void> {
+        try {
+            // Find student ID if not present
+            let studentId = application.studentId;
+            if (!studentId && !existingStudent) {
+                // Try aggressive search (exact, then trimmed)
+                let student = await this.getStudentByAdNo(application.adNo.trim());
+                
+                if (!student) {
+                    // Try alternative: search for all students and find a substring match for adNo
+                    const allStudents = await this.getAllStudents();
+                    student = allStudents.find(s => 
+                        s.adNo.trim().toLowerCase() === application.adNo.trim().toLowerCase()
+                    );
+                }
+
+                if (!student) {
+                    console.warn(`Sync skipped: Student with AdNo ${application.adNo} not found in database.`);
+                    return;
+                }
+                studentId = student.id;
+                existingStudent = student;
+            } else if (existingStudent) {
+                studentId = existingStudent.id;
+            }
+
+            // Check for existing record for this specific application or subject/term
+            const q = query(
+                collection(this.db, this.supplementaryExamsCollection),
+                where('applicationId', '==', application.id)
+            );
+            const snapshot = await getDocs(q);
+            
+            // If already exists, we must ensure it's updated with latest application data
+            if (!snapshot.empty) {
+                const existingDoc = snapshot.docs[0];
+                await updateDoc(existingDoc.ref, { 
+                    studentId: studentId || application.adNo, // Fallback to adNo
+                    studentName: existingStudent?.name || application.studentName || '',
+                    studentAdNo: application.adNo,
+                    applicationId: application.id,
+                    applicationType: application.type,
+                    subjectId: application.subjectId,
+                    examTerm: `${application.appliedYear}-${application.appliedSemester}`,
+                    updatedAt: Date.now()
+                });
+                return;
+            }
+
+            const previousMarks = studentId ? await this.getPreviousMarks(studentId, application.subjectId) : undefined;
+            const termKey = `${application.appliedYear}-${application.appliedSemester}`;
+
+            const suppExam: Omit<SupplementaryExam, 'id'> = {
+                studentId: studentId || application.adNo, // Fallback to adNo if student record is missing
+                studentName: existingStudent?.name || application.studentName || '',
+                studentAdNo: application.adNo,
+                subjectId: application.subjectId,
+                examType: 'CurrentSemester',
+                attemptNumber: 1, 
+                originalTerm: termKey,
+                originalSemester: application.appliedSemester,
+                originalYear: parseInt(application.appliedYear.split('-')[0]),
+                supplementaryYear: parseInt(application.appliedYear.split('-')[0]),
+                status: 'Pending',
+                marks: {
+                    int: 0,
+                    ext: 0,
+                    total: 0,
+                    status: 'Pending'
+                },
+                previousMarks,
+                examTerm: termKey,
+                appliedAt: application.createdAt || Date.now(),
+                updatedAt: Date.now(),
+                applicationId: application.id,
+                applicationType: application.type
+            };
+
+            await addDoc(collection(this.db, this.supplementaryExamsCollection), suppExam);
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error syncing application:', error);
+        }
     }
 
     // Collections
@@ -1225,10 +1346,10 @@ export class DataService {
                 const subject = subjectMap.get(exam.subjectId);
                 return {
                     ...exam,
-                    studentName: student?.name,
-                    studentAdNo: student?.adNo,
-                    subjectName: subject?.name,
-                    studentClass: student?.className // Added for filtering in UI
+                    studentName: student?.name || (exam as any).studentName || 'Not Registered',
+                    studentAdNo: student?.adNo || (exam as any).studentAdNo || exam.studentId,
+                    subjectName: subject?.name || 'Unknown Subject',
+                    studentClass: student?.currentClass || student?.className || 'Unknown' // Added for filtering in UI
                 };
             });
         } catch (error) {
@@ -1302,6 +1423,91 @@ export class DataService {
         } catch (error) {
             console.error('Error in bulk application sync:', error);
             return 0;
+        }
+    }
+
+    /**
+     * Cleans up rejected/duplicate applications and forcibly brings approved ones into a specified active term target,
+     * overriding their old applied dates to match the new cycle.
+     */
+    async cleanAndSyncApplications(targetTerm: string): Promise<{ synced: number, rejectedDeleted: number, duplicatesDeleted: number, notRegistered: number }> {
+        try {
+            const q = query(collection(this.db, this.applicationsCollection));
+            const snapshot = await getDocs(q);
+            
+            let synced = 0;
+            let rejectedDeleted = 0;
+            let duplicatesDeleted = 0;
+            let notRegistered = 0;
+
+            const apps = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as StudentApplication));
+            
+            // 1. Delete all rejected applications
+            const rejectedApps = apps.filter(a => a.status === 'rejected');
+            for (const app of rejectedApps) {
+                await deleteDoc(doc(this.db, this.applicationsCollection, app.id));
+                rejectedDeleted++;
+            }
+
+            // 2. Identify duplicates among ALL remaining applications (approved + pending)
+            const remainingApps = apps.filter(a => a.status !== 'rejected');
+            // Sort by createdAt descending so we keep the newest
+            remainingApps.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+            const seenKeys = new Set<string>();
+            const validAppsToKeep = [];
+
+            for (const app of remainingApps) {
+                // Determine uniqueness by student, subject, and type
+                const key = `${app.adNo}_${app.subjectId}_${app.type}`;
+                if (seenKeys.has(key)) {
+                    // It's a duplicate (older), delete it
+                    await deleteDoc(doc(this.db, this.applicationsCollection, app.id));
+                    duplicatesDeleted++;
+                } else {
+                    seenKeys.add(key);
+                    validAppsToKeep.push(app);
+                }
+            }
+
+            // 3. Sync the valid approved ones
+            const approvedApps = validAppsToKeep.filter(a => a.status === 'approved');
+            const allStudents = await this.getAllStudents();
+
+            const parts = targetTerm.split('-');
+            const yearStr = `${parts[0]}-${parts[1]}`;
+            const semStr = parts[2] as 'Odd' | 'Even';
+
+            for (const app of approvedApps) {
+                if (['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'].includes(app.type)) {
+                    // Force term alignment for approved applications
+                    await updateDoc(doc(this.db, this.applicationsCollection, app.id), {
+                        appliedYear: yearStr,
+                        appliedSemester: semStr
+                    });
+
+                    app.appliedYear = yearStr;
+                    app.appliedSemester = semStr;
+
+                    // Pre-check student for accurate reporting
+                    let student = allStudents.find(stu => 
+                        (app.studentId && stu.id === app.studentId) || 
+                        stu.adNo.trim().toLowerCase() === app.adNo.trim().toLowerCase()
+                    );
+
+                    // Sync to supplemental Exams - Registry Independent!
+                    await this.syncApplicationToSupplementary(app, student);
+                    
+                    if (!student) notRegistered++;
+                    synced++;
+                }
+            }
+
+            this.invalidateCache();
+            return { synced, rejectedDeleted, duplicatesDeleted, notRegistered };
+        } catch (error) {
+            console.error('Error forcefully cleaning and syncing applications:', error);
+            throw error;
         }
     }
 
@@ -3592,108 +3798,8 @@ export class DataService {
         }
     }
 
-    async getApplicationById(id: string): Promise<StudentApplication | null> {
-        try {
-            const docRef = doc(this.db, this.applicationsCollection, id);
-            const docSnap = await getDoc(docRef);
-            return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as StudentApplication : null;
-        } catch (error) {
-            console.error('Error fetching application:', error);
-            return null;
-        }
-    }
 
-    async getPreviousMarks(studentId: string, subjectId: string): Promise<{ int: number | 'A', ext: number | 'A' } | undefined> {
-        try {
-            const student = await this.getStudentById(studentId);
-            if (!student || !student.academicHistory) return undefined;
 
-            const termKeys = Object.keys(student.academicHistory).sort((a, b) => b.localeCompare(a));
-            const currentTerm = this.getCurrentTermKey();
-
-            for (const termKey of termKeys) {
-                if (termKey === currentTerm) continue;
-
-                const marks = student.academicHistory[termKey].marks[subjectId];
-                if (marks && (marks.int !== undefined || marks.ext !== undefined)) {
-                    return {
-                        int: marks.int,
-                        ext: marks.ext
-                    };
-                }
-            }
-            return undefined;
-        } catch (error) {
-            console.error('Error fetching previous marks:', error);
-            return undefined;
-        }
-    }
-
-    public async syncApplicationToSupplementary(application: StudentApplication): Promise<void> {
-        try {
-            // Find student ID if not present
-            let studentId = application.studentId;
-            if (!studentId) {
-                const student = await this.getStudentByAdNo(application.adNo);
-                if (!student) return;
-                studentId = student.id;
-            }
-
-            // Check for existing record for this specific application or subject/term
-            const q = query(
-                collection(this.db, this.supplementaryExamsCollection),
-                where('studentId', '==', studentId),
-                where('subjectId', '==', application.subjectId),
-                where('examTerm', '==', `${application.appliedYear}-${application.appliedSemester}`)
-            );
-            const snapshot = await getDocs(q);
-            
-            // If already exists, we might need to update the application ID if missing
-            if (!snapshot.empty) {
-                const existingDoc = snapshot.docs[0];
-                const existingData = existingDoc.data() as SupplementaryExam;
-                if (!existingData.applicationId) {
-                    await updateDoc(existingDoc.ref, { 
-                        applicationId: application.id,
-                        applicationType: application.type
-                    });
-                }
-                return;
-            }
-
-            const previousMarks = await this.getPreviousMarks(studentId, application.subjectId);
-            const termKey = `${application.appliedYear}-${application.appliedSemester}`;
-
-            const suppExam: Omit<SupplementaryExam, 'id'> = {
-                studentId: studentId,
-                subjectId: application.subjectId,
-                examType: 'CurrentSemester',
-                attemptNumber: 1, 
-                originalTerm: termKey,
-                originalSemester: application.appliedSemester,
-                originalYear: parseInt(application.appliedYear.split('-')[0]),
-                supplementaryYear: parseInt(application.appliedYear.split('-')[0]),
-                status: 'Pending',
-                marks: {
-                    int: 0,
-                    ext: 0,
-                    total: 0,
-                    status: 'Pending'
-                },
-                previousMarks,
-                examTerm: termKey,
-                appliedAt: application.createdAt || Date.now(),
-                updatedAt: Date.now(),
-                applicationId: application.id,
-                applicationType: application.type
-            };
-
-            await addDoc(collection(this.db, this.supplementaryExamsCollection), suppExam);
-            this.invalidateCache();
-        } catch (error) {
-            console.error('Error syncing application:', error);
-        }
-    }
 
     async updateSupplementaryExamMarks(id: string, marks: SubjectMarks, previousMarks?: { int: number | 'A', ext: number | 'A' }, attemptNumber?: number, originalTerm?: string): Promise<void> {
         try {
@@ -4336,29 +4442,19 @@ export class DataService {
             for (const backupStudent of backupStudents) {
                 let historyEntry = backupStudent.academicHistory?.[termKey];
                 
-                // Legacy Fallback: If no history for this term, but student has top-level marks
-                if (!historyEntry && backupStudent.marks && Object.keys(backupStudent.marks).length > 0) {
-                    const normalizedMarks: Record<string, any> = {};
-                    Object.entries(backupStudent.marks).forEach(([sid, m]: [string, any]) => {
-                        normalizedMarks[sid] = {
-                            ...m,
-                            int: m.int !== undefined ? m.int : (m.ce !== undefined ? m.ce : 0),
-                            ext: m.ext !== undefined ? m.ext : (m.ta !== undefined ? m.ta : 0),
-                        };
+                // Clean and migrate the incoming historyEntry from legacy data
+                if (historyEntry.marks) {
+                    Object.entries(historyEntry.marks).forEach(([sid, m]: [string, any]) => {
+                        if (m.ce !== undefined) {
+                            m.int = m.int !== undefined ? m.int : m.ce;
+                            delete m.ce;
+                        }
+                        if (m.ta !== undefined) {
+                            m.ext = m.ext !== undefined ? m.ext : m.ta;
+                            delete m.ta;
+                        }
                     });
-
-                    historyEntry = {
-                        className: backupStudent.className || backupStudent.currentClass || "",
-                        semester: sem as any,
-                        marks: normalizedMarks,
-                        grandTotal: backupStudent.grandTotal || 0,
-                        average: backupStudent.average || 0,
-                        rank: backupStudent.rank || 0,
-                        performanceLevel: backupStudent.performanceLevel || 'Pending'
-                    };
                 }
-
-                if (!historyEntry) continue; // This student had no data for this term or legacy marks
 
                 const liveStudent = liveStudentsMap[backupStudent.id];
 
@@ -4418,12 +4514,14 @@ export class DataService {
                 
                 const restoredSub = {
                     ...subjectData,
-                    // Intelligent normalization of legacy fields
+                    // Restore and modernize legacy fields safely
                     maxINT: sub.maxINT !== undefined ? sub.maxINT : (sub.maxCE !== undefined ? sub.maxCE : 0),
                     maxEXT: sub.maxEXT !== undefined ? sub.maxEXT : (sub.maxTA !== undefined ? sub.maxTA : 0),
                     academicYear: year, // Force alignment to restoration target
                     activeSemester: sub.activeSemester || sem 
                 };
+                delete restoredSub.maxCE;
+                delete restoredSub.maxTA;
 
                 currentBatch.set(subDocRef, restoredSub);
                 operationCount++;
@@ -4619,6 +4717,178 @@ export class DataService {
             };
         } catch (error) {
             console.error('Error restoring from backup:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Database Utility: 
+     * Iterates over all subjects, groups them by name and classes, heavily deletes duplicates, 
+     * maps legacy fields maxCE->maxINT and ce->int, and aggressively deletes legacy ce/ta fields. 
+     * It also merges student marks that were pointing to deleted subject IDs into the preserved subject ID.
+     */
+    async cleanLegacyDataAndDuplicates(): Promise<void> {
+        try {
+            console.log('Initiating Legacy Cleanup and Deduplication...');
+            
+            let currentBatch = writeBatch(this.db);
+            let operationCount = 0;
+            const MAX_BATCH_SIZE = 400;
+
+            const commitBatchIfNeeded = async () => {
+                if (operationCount >= MAX_BATCH_SIZE) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(this.db);
+                    operationCount = 0;
+                }
+            };
+
+            // 1. Process and deduplicate subjects
+            const subSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            const seenSubjects = new Map<string, string>(); // key -> primary subject ID
+            const duplicateAliasMap = new Map<string, string>(); // deleted duplicate ID -> primary subject ID
+            let deletedDuplicates = 0;
+            
+            for (const doc of subSnap.docs) {
+                const sub = doc.data();
+                
+                // Construct a unique key for deduplication (case-insensitive name)
+                const classesKey = Array.isArray(sub.targetClasses) ? sub.targetClasses.sort().join(',') : '';
+                const uniqueKey = `${(sub.name || '').trim().toLowerCase()}_${classesKey}`;
+
+                if (seenSubjects.has(uniqueKey)) {
+                    // It's a duplicate, delete it and map its ID
+                    const primaryId = seenSubjects.get(uniqueKey)!;
+                    duplicateAliasMap.set(doc.id, primaryId);
+                    currentBatch.delete(doc.ref);
+                    deletedDuplicates++;
+                } else {
+                    seenSubjects.set(uniqueKey, doc.id);
+                    // It's the primary subject, clean legacy fields
+                    const updates: any = {};
+                    let needsUpdate = false;
+                    
+                    if (sub.maxCE !== undefined) {
+                        updates.maxINT = sub.maxINT !== undefined ? sub.maxINT : sub.maxCE;
+                        updates.maxCE = deleteField();
+                        needsUpdate = true;
+                    }
+                    if (sub.maxTA !== undefined) {
+                        updates.maxEXT = sub.maxEXT !== undefined ? sub.maxEXT : sub.maxTA;
+                        updates.maxTA = deleteField();
+                        needsUpdate = true;
+                    }
+                    
+                    if (needsUpdate) {
+                        currentBatch.update(doc.ref, updates);
+                    }
+                }
+                
+                operationCount++;
+                await commitBatchIfNeeded();
+            }
+
+            // 2. Process student marks to securely migrate deleted subject IDs to primary IDs, and clean legacy fields
+            const studentSnap = await getDocs(collection(this.db, this.studentsCollection));
+            let studentsUpdated = 0;
+
+            for (const doc of studentSnap.docs) {
+                const studentData = doc.data();
+                let studentNeedsUpdate = false;
+                const updates: any = {};
+
+                const processMarks = (originalMarks: any) => {
+                    const newMarks = { ...originalMarks };
+                    let changed = false;
+
+                    // Migrate duplicate Subject IDs to Primary Subject ID
+                    Object.entries(newMarks).forEach(([sid, m]: [string, any]) => {
+                        let currentSid = sid;
+                        if (duplicateAliasMap.has(sid)) {
+                            const primarySid = duplicateAliasMap.get(sid)!;
+                            // Move mapping over only if primary doesn't already have better marks/data
+                            if (!newMarks[primarySid]) {
+                                newMarks[primarySid] = m;
+                            } else {
+                                // If they both exist, let's just favor the primary one if it has more total
+                                const existingTotal = newMarks[primarySid].total || 0;
+                                const dupTotal = m.total || 0;
+                                if (dupTotal > existingTotal) {
+                                    newMarks[primarySid] = m;
+                                }
+                            }
+                            delete newMarks[sid];
+                            currentSid = primarySid;
+                            changed = true;
+                        }
+                        
+                        // Clean legacy fields
+                        const targetMark = newMarks[currentSid];
+                        if (targetMark && (targetMark.ce !== undefined || targetMark.ta !== undefined)) {
+                            if (targetMark.ce !== undefined) {
+                                targetMark.int = targetMark.int !== undefined ? targetMark.int : targetMark.ce;
+                                delete targetMark.ce;
+                            }
+                            if (targetMark.ta !== undefined) {
+                                targetMark.ext = targetMark.ext !== undefined ? targetMark.ext : targetMark.ta;
+                                delete targetMark.ta;
+                            }
+                            changed = true;
+                        }
+                    });
+
+                    return { changed, newMarks };
+                };
+
+                // Clean top-level marks if present
+                if (studentData.marks && Object.keys(studentData.marks).length > 0) {
+                    const { changed, newMarks } = processMarks(studentData.marks);
+                    if (changed) {
+                        updates['marks'] = newMarks;
+                        if (!studentData.academicHistory || Object.keys(studentData.academicHistory).length === 0) {
+                            updates[`academicHistory.${this.DEFAULT_ACADEMIC_YEAR}-${this.DEFAULT_SEMESTER}`] = {
+                                className: studentData.currentClass || studentData.className || '',
+                                semester: studentData.semester || this.DEFAULT_SEMESTER,
+                                marks: newMarks,
+                                grandTotal: studentData.grandTotal || 0,
+                                average: studentData.average || 0,
+                                rank: studentData.rank || 0,
+                                performanceLevel: studentData.performanceLevel || 'Pending'
+                            };
+                        }
+                        studentNeedsUpdate = true;
+                    }
+                }
+
+                // Clean academicHistory marks
+                if (studentData.academicHistory && Object.keys(studentData.academicHistory).length > 0) {
+                    Object.entries(studentData.academicHistory).forEach(([termKey, termData]: [string, any]) => {
+                        if (termData.marks) {
+                            const { changed, newMarks } = processMarks(termData.marks);
+                            if (changed) {
+                                updates[`academicHistory.${termKey}.marks`] = newMarks;
+                                studentNeedsUpdate = true;
+                            }
+                        }
+                    });
+                }
+
+                if (studentNeedsUpdate) {
+                    currentBatch.update(doc.ref, updates);
+                    studentsUpdated++;
+                    operationCount++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            if (operationCount > 0) {
+                await currentBatch.commit();
+            }
+
+            console.log(`Cleanup complete! Deleted duplicates: ${deletedDuplicates}, Students updated: ${studentsUpdated}`);
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error in cleanLegacyDataAndDuplicates:', error);
             throw error;
         }
     }

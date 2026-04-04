@@ -10,7 +10,7 @@ interface SettingsManagementProps {
 }
 
 const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNavigate }) => {
-    const { refreshTerms } = useTerm();
+    const { activeTerm, refreshTerms } = useTerm();
     const [isOperating, setIsOperating] = useState(false);
     const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
     const [isDangerZoneUnlocked, setIsDangerZoneUnlocked] = useState(false);
@@ -458,15 +458,6 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                     <h3 className="font-bold text-lg mb-4 text-slate-800">Data Import/Export</h3>
                     <div className="space-y-4">
                         <div>
-                            <p className="text-sm text-slate-600 mb-2">Export all marks to Excel for reporting or backup.</p>
-                            <button
-                                onClick={handleExportMarks}
-                                disabled={isOperating}
-                                className="w-full py-3 bg-blue-50 text-blue-700 rounded-xl font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
-                            >
-                                <i className="fa-solid fa-file-excel"></i>
-                                Export Marks to Excel
-                            </button>
                             <button
                                 onClick={handleMasterBackup}
                                 disabled={isOperating}
@@ -475,64 +466,30 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 <i className="fa-solid fa-database"></i>
                                 Download JSON Master Backup
                             </button>
-
-                            <button
-                                onClick={handleAlignData}
-                                disabled={isOperating || isAligning}
-                                className={`w-full mt-2 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border-2 ${
-                                    isAligning 
-                                        ? 'bg-slate-50 text-slate-400 border-slate-100' 
-                                        : 'bg-white text-indigo-700 border-indigo-100 hover:bg-indigo-50 active:scale-[0.98]'
-                                }`}
-                                title="Aligns untagged Holidays and Special Days to your current active term. Recommended BEFORE taking a master backup."
-                            >
-                                <i className={`fa-solid ${isAligning ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
-                                {isAligning ? 'Aligning Data...' : 'Align Metadata to Current Term'}
-                            </button>
-
-                            <button
-                                onClick={handleSyncYears}
-                                disabled={isOperating}
-                                className="w-full mt-2 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
-                            >
-                                <i className="fa-solid fa-rotate"></i>
-                                Restore Historical Semesters
-                            </button>
                         </div>
-
                         <div className="border-t border-slate-100 pt-4">
-                            <p className="text-sm text-slate-600 mb-2">Import marks from Excel. Existing marks may be updated.</p>
-                            <label className={`w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2 cursor-pointer ${isOperating ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                <i className="fa-solid fa-file-excel"></i>
-                                {isOperating ? 'Importing...' : 'Import Marks from Excel'}
-                                <input
-                                    type="file"
-                                    accept=".xlsx, .xls"
-                                    onChange={handleImportMarks}
-                                    disabled={isOperating}
-                                    className="hidden"
-                                />
-                            </label>
-                            
+                            <p className="text-sm text-slate-600 mb-2">
+                                <strong>Clean & Sync Applications:</strong> Removes duplicates and rejected apps, then brings all approved applications (Improvements, Revaluations, etc.) into the current term.
+                            </p>
                             <button
                                 onClick={async () => {
-                                    if (!confirm('This will find all old supplementary records and link them to the correct semesters. Continue?')) return;
+                                    if (!confirm('This will delete all rejected + duplicate applications, and forcefully bring approved applications into the current term. Continue?')) return;
                                     try {
                                         setIsOperating(true);
-                                        const res = await dataService.migrateLegacySupplementaryData();
-                                        alert(`✅ Migration Complete!\n\n- Legacy Records Fixed: ${res.migrated}\n- Approved Applications Synced: ${res.applicationSync}\n\nTotal Records Scanned: ${res.total}`);
+                                        const result = await dataService.cleanAndSyncApplications(activeTerm);
                                         await onRefresh();
+                                        alert(`✅ Migration Complete!\n- Synced to term: ${result.synced}\n- Duplicates removed: ${result.duplicatesDeleted}\n- Rejected apps removed: ${result.rejectedDeleted}\n- ⚠️ Skipped (No Student Record): ${result.notRegistered}`);
                                     } catch (err) {
-                                        alert('Migration failed. Check console.');
+                                        alert('Action failed. Check console.');
                                     } finally {
                                         setIsOperating(false);
                                     }
                                 }}
                                 disabled={isOperating}
-                                className="w-full mt-2 py-3 bg-orange-50 text-orange-700 rounded-xl font-bold hover:bg-orange-100 transition-all flex items-center justify-center gap-2"
+                                className="w-full mt-2 py-3 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-all flex items-center justify-center gap-2"
                             >
-                                <i className="fa-solid fa-database-arrow-up"></i>
-                                Restore Legacy Supplementary Data
+                                <i className="fa-solid fa-broom"></i>
+                                {isOperating ? 'Cleaning & Syncing...' : 'Clean & Sync Applications'}
                             </button>
                         </div>
 

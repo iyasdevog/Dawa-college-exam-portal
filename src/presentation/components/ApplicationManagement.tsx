@@ -205,15 +205,28 @@ const ApplicationManagement: React.FC = () => {
                             <option value="special-supp">Special Supp</option>
                         </select>
                         <div className="flex bg-white p-1 rounded-xl border border-slate-200 shrink-0">
-                            {(['all', 'pending', 'approved', 'rejected'] as const).map(status => (
-                                <button
-                                    key={status}
-                                    onClick={() => setFilterStatus(status)}
-                                    className={`px-4 py-2 rounded-lg text-xs font-black capitalize transition-all ${filterStatus === status ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    {status}
-                                </button>
-                            ))}
+                            {(['all', 'pending', 'approved', 'rejected'] as const).map(status => {
+                                const baseList = applications.filter(app => 
+                                    (filterClass === 'all' ? true : app.className === filterClass) &&
+                                    (filterType === 'all' ? true : app.type === filterType)
+                                );
+                                const count = status === 'all' 
+                                    ? baseList.filter(app => app.status !== 'approved').length 
+                                    : baseList.filter(app => app.status === status).length;
+
+                                return (
+                                    <button
+                                        key={status}
+                                        onClick={() => setFilterStatus(status)}
+                                        className={`px-4 py-2 rounded-lg text-xs font-black capitalize transition-all flex items-center gap-2 ${filterStatus === status ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <span>{status}</span>
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${filterStatus === status ? 'bg-emerald-200/50 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

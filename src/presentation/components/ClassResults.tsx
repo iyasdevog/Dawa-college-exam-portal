@@ -104,6 +104,20 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 })) return true;
                 return false;
             });
+            
+            // Sort subjects: lower failure rate first (passed subjects mostly)
+            filteredSubjects.sort((a, b) => {
+                let aFailCount = 0;
+                let bFailCount = 0;
+                classStudents.forEach(cs => {
+                    const termMarks = cs.academicHistory?.[activeTerm]?.marks || {};
+                    if (termMarks[a.id]?.status === 'Failed') aFailCount++;
+                    if (termMarks[b.id]?.status === 'Failed') bFailCount++;
+                });
+                if (aFailCount !== bFailCount) return aFailCount - bFailCount;
+                return a.name.localeCompare(b.name);
+            });
+            
             setClassSubjects(filteredSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);
@@ -203,15 +217,6 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                     </button>
                                 </>
                             )}
-                            <button
-                                onClick={handleExport}
-                                title="Export CSV"
-                                className={`${isMobile ? 'w-10 h-10 rounded-lg' : 'px-4 py-2 rounded-xl gap-2'} bg-blue-600 text-white font-bold hover:bg-blue-700 transition-all flex items-center justify-center print:hidden whitespace-nowrap`}
-                                aria-label="Export as CSV"
-                            >
-                                <i className="fa-solid fa-download text-sm"></i>
-                                {!isMobile && <span>Export</span>}
-                            </button>
                             <button
                                 onClick={handlePrint}
                                 title="Print Report"
@@ -434,26 +439,6 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                             <p className="text-slate-600">No students found in class {selectedClass}</p>
                         </div>
                     )}
-                </div>
-            </div>
-
-            {/* Diagnostic Dump */}
-            <div className="bg-slate-900 text-green-400 p-4 rounded-xl text-xs overflow-auto my-4 font-mono print:hidden max-h-64">
-                <h4 className="text-white font-bold mb-2">DIAGNOSTIC DUMP (Please send a screenshot of this)</h4>
-                <p className="mb-2">Total Columns Rendered: {classSubjects.filter(s => s.subjectType !== 'elective').length}</p>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <strong className="text-white block mb-1">UI Columns (classSubjects):</strong>
-                        <pre>{JSON.stringify(classSubjects.map(s => ({name: s.name, id: s.id})), null, 2)}</pre>
-                    </div>
-                    <div>
-                        {students.slice(0, 1).map(student => (
-                            <div key={student.id}>
-                                <strong className="text-white block mb-1">First Student ({student.name}) displayMarks:</strong>
-                                <pre>{JSON.stringify((student as any).displayMarks, null, 2)}</pre>
-                            </div>
-                        ))}
-                    </div>
                 </div>
             </div>
 

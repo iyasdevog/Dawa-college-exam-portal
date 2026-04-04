@@ -41,6 +41,8 @@ export interface SupplementaryExam {
   updatedAt?: number;
   applicationId?: string; // The specific application that triggered this
   applicationType?: ApplicationType; // revaluation, improvement, etc.
+  studentName?: string; // Fallback name from application if student record missing
+  studentAdNo?: string; // Fallback adNo from application if student record missing
 }
 
 export interface TermRecord {

@@ -41,7 +41,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
     const [isOperating, setIsOperating] = useState(false);
     const [showSupplementaryForm, setShowSupplementaryForm] = useState(false);
-    const [activeTab, setActiveTab] = useState<SupplementaryExamType | 'All'>('All');
+    const [activeTab, setActiveTab] = useState<SupplementaryExamType | 'All' | 'revaluation' | 'improvement' | 'external-supp' | 'internal-supp' | 'special-supp'>('All');
     
     // Form state for adding new supplementary
     const [supplementaryForm, setSupplementaryForm] = useState({
@@ -74,16 +74,35 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     });
     const [editingExamHistory, setEditingExamHistory] = useState<SupplementaryExam[]>([]);
 
-    // Summary Statistics
+    // Summary Statistics - Now based on filtered list for better clarity per tab
     const stats = useMemo(() => {
+        // Decide which set to use for stats. If on "All" tab, use everything.
+        // If on a specific tab, use the exams matching THAT tab (before other filters like class/subject)
+        const tabExams = activeTab === 'All' 
+            ? supplementaryExams 
+            : supplementaryExams.filter(exam => {
+                const appType = (exam.applicationType || '').toLowerCase();
+                if (activeTab === 'PreviousYear') return exam.examType === 'PreviousYear';
+                if (activeTab === 'revaluation') return appType === 'revaluation';
+                if (activeTab === 'improvement') return appType === 'improvement';
+                if (activeTab === 'external-supp') return appType === 'external-supp';
+                if (activeTab === 'internal-supp') return appType === 'internal-supp';
+                if (activeTab === 'special-supp') return appType === 'special-supp';
+                if (activeTab === 'CurrentSemester') {
+                    return exam.examType === 'CurrentSemester' && 
+                           !['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'].includes(appType);
+                }
+                return false;
+            });
+
         return {
-            total: supplementaryExams.length,
-            pending: supplementaryExams.filter(e => e.status === 'Pending').length,
-            completed: supplementaryExams.filter(e => e.status === 'Completed').length,
-            passed: supplementaryExams.filter(e => e.marks?.status === 'Passed').length,
-            failed: supplementaryExams.filter(e => e.marks?.status === 'Failed').length
+            total: tabExams.length,
+            pending: tabExams.filter(e => e.status === 'Pending').length,
+            completed: tabExams.filter(e => e.status === 'Completed').length,
+            passed: tabExams.filter(e => e.marks?.status === 'Passed').length,
+            failed: tabExams.filter(e => e.marks?.status === 'Failed').length
         };
-    }, [supplementaryExams]);
+    }, [supplementaryExams, activeTab]);
 
     const handleAddSupplementaryExam = () => {
         setSupplementaryForm({
@@ -225,7 +244,15 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             const matchesTerm = termFilter === 'All' || 
                                (termFilter === 'Active' && exam.examTerm === activeTerm) ||
                                exam.examTerm === termFilter;
-            const matchesTab = activeTab === 'All' || exam.examType === activeTab;
+            const appType = (exam.applicationType || '').toLowerCase();
+            const matchesTab = activeTab === 'All' 
+                || (activeTab === 'PreviousYear' && exam.examType === 'PreviousYear')
+                || (activeTab === 'revaluation' && appType === 'revaluation')
+                || (activeTab === 'improvement' && appType === 'improvement')
+                || (activeTab === 'external-supp' && appType === 'external-supp')
+                || (activeTab === 'internal-supp' && appType === 'internal-supp')
+                || (activeTab === 'special-supp' && appType === 'special-supp')
+                || (activeTab === 'CurrentSemester' && exam.examType === 'CurrentSemester' && !['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'].includes(appType));
             const matchesClass = classFilter === 'All' || exam.studentClass === classFilter;
             const matchesSubject = subjectFilter === 'All' || exam.subjectId === subjectFilter;
             const matchesStatus = statusFilter === 'All' || exam.status === statusFilter;
@@ -377,8 +404,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                     </div>
                 </div>
 
-                <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
-                    {(['All', 'PreviousYear', 'CurrentSemester'] as const).map(tab => (
+                <div className="flex p-1 bg-slate-100 rounded-xl w-fit flex-wrap gap-1">
+                    {(['All', 'CurrentSemester', 'external-supp', 'internal-supp', 'special-supp', 'PreviousYear', 'revaluation', 'improvement'] as const).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -387,7 +414,13 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                 : 'text-slate-600 hover:text-slate-900'
                                 }`}
                         >
-                            {tab === 'All' ? 'All Exams' : tab === 'PreviousYear' ? 'Repeat' : 'Semester'}
+                            {tab === 'All' ? 'All Exams' : 
+                             tab === 'PreviousYear' ? 'Repeat' : 
+                             tab === 'CurrentSemester' ? 'Semester (Supp)' :
+                             tab === 'revaluation' ? 'Revaluation' : 
+                             tab === 'improvement' ? 'Improvement' :
+                             tab === 'external-supp' ? 'External' :
+                             tab === 'internal-supp' ? 'Internal' : 'Special'}
                         </button>
                     ))}
                 </div>
@@ -511,12 +544,38 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                             </tbody>
                         </table>
                     ) : (
-                        <div className="text-center py-12">
-                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                        <div className="text-center py-12 px-4">
+                            <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <i className="fa-solid fa-folder-open text-2xl"></i>
                             </div>
-                            <h3 className="text-slate-900 font-bold">No Records Found</h3>
-                            <p className="text-slate-500 text-sm">No supplementary exams match the current filter.</p>
+                            <h3 className="text-lg font-bold text-slate-900 mb-1">No Records Found</h3>
+                            <p className="text-slate-500 text-sm max-w-xs mx-auto mb-6">
+                                No supplementary exams match the current filter criteria for {activeTab === 'All' ? 'any type' : activeTab}.
+                            </p>
+                            <div className="flex items-center justify-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        setTermFilter('All');
+                                        setClassFilter('All');
+                                        setSubjectFilter('All');
+                                        setStatusFilter('All');
+                                        setAttemptFilter('All');
+                                        setSearchTerm('');
+                                    }}
+                                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm"
+                                >
+                                    <i className="fa-solid fa-filter-circle-xmark mr-2"></i>
+                                    Clear Filters
+                                </button>
+                                {activeTab !== 'All' && (
+                                    <button
+                                        onClick={() => setActiveTab('All')}
+                                        className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-bold hover:bg-emerald-100 transition-all text-sm"
+                                    >
+                                        View All Types
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
