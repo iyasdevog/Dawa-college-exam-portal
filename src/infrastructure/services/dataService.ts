@@ -16,7 +16,7 @@ import {
     deleteField
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
-import { StudentRecord, SubjectConfig, SupplementaryExam, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord, StudentApplication, ApplicationType, ApplicationStatus, AttendanceRecord, TimetableEntry, SpecialDay, ExamTimetableEntry, HallTicketSettings, AcademicCalendarEntry, TimetableGeneratorConfig } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SupplementaryExam, SupplementaryExamType, SubjectMarks, PerformanceLevel, ClassReleaseSettings, GlobalSettings, TermRecord, StudentApplication, ApplicationType, ApplicationStatus, AttendanceRecord, TimetableEntry, SpecialDay, ExamTimetableEntry, HallTicketSettings, AcademicCalendarEntry, TimetableGeneratorConfig } from '../../domain/entities/types';
 import { CLASSES } from '../../domain/entities/constants';
 import { loadExcelLibrary } from './dynamicImports';
 import { normalizeName } from './formatUtils';
@@ -155,12 +155,12 @@ export class DataService {
             const previousMarks = studentId ? await this.getPreviousMarks(studentId, application.subjectId) : undefined;
             const termKey = `${application.appliedYear}-${application.appliedSemester}`;
 
-            const suppExam: Omit<SupplementaryExam, 'id'> = {
-                studentId: studentId || application.adNo, // Fallback to adNo if student record is missing
+            const suppExam: any = {
+                studentId: studentId || application.adNo,
                 studentName: existingStudent?.name || application.studentName || '',
                 studentAdNo: application.adNo,
                 subjectId: application.subjectId,
-                examType: 'CurrentSemester',
+                examType: 'CurrentSemester' as SupplementaryExamType,
                 attemptNumber: 1, 
                 originalTerm: termKey,
                 originalSemester: application.appliedSemester,
@@ -173,13 +173,16 @@ export class DataService {
                     total: 0,
                     status: 'Pending'
                 },
-                previousMarks,
                 examTerm: termKey,
                 appliedAt: application.createdAt || Date.now(),
                 updatedAt: Date.now(),
                 applicationId: application.id,
                 applicationType: application.type
             };
+
+            if (previousMarks) {
+                suppExam.previousMarks = previousMarks;
+            }
 
             await addDoc(collection(this.db, this.supplementaryExamsCollection), suppExam);
             console.log(`[Sync] Created NEW supplementary record for ${application.id}`);
