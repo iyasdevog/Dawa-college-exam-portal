@@ -49,6 +49,7 @@ export interface TermRecord {
   className: string;
   semester: 'Odd' | 'Even';
   marks: Record<string, SubjectMarks>;
+  supplementaryMarks?: Record<string, SubjectMarks>; // Added for separate storage of successes
   grandTotal: number;
   average: number;
   rank: number;

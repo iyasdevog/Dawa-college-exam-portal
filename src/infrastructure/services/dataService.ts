@@ -370,23 +370,31 @@ export class DataService {
     /**
      * Centralized logic to calculate grandTotal, average and performanceLevel for a term.
      */
-    private calculateTermMetrics(marks: Record<string, SubjectMarks>, subjects: SubjectConfig[]): {
+    private calculateTermMetrics(marks: Record<string, SubjectMarks>, subjects: SubjectConfig[], supplementaryMarks?: Record<string, SubjectMarks>): {
         grandTotal: number;
         average: number;
         performanceLevel: PerformanceLevel;
     } {
-        const marksEntries = Object.entries(marks);
+        const combinedMarks: Record<string, SubjectMarks> = { ...marks };
+        
+        // Prioritize supplementary successes for calculations
+        if (supplementaryMarks) {
+            Object.entries(supplementaryMarks).forEach(([subId, suppMark]) => {
+                if (suppMark.status === 'Passed') {
+                    combinedMarks[subId] = suppMark;
+                }
+            });
+        }
+
+        const marksEntries = Object.entries(combinedMarks);
         const grandTotal = marksEntries.reduce((sum, [_, mark]) => sum + this.getMarkValue(mark.total), 0);
 
-        // Track all subjects as normal subjects (1-for-1 counting)
-        // This ensures elective failures and marks are fully integrated into the average
-        const subjectCount = Object.keys(marks).length;
-
+        const subjectCount = Object.keys(combinedMarks).length;
         let average = subjectCount > 0 ? grandTotal / subjectCount : 0;
         if (isNaN(average)) average = 0;
         average = Math.round(average * 100) / 100;
 
-        const performanceLevel = this.calculatePerformanceLevel(marks, subjects);
+        const performanceLevel = this.calculatePerformanceLevel(combinedMarks, subjects);
 
         return { grandTotal, average, performanceLevel };
     }
@@ -4010,15 +4018,21 @@ export class DataService {
                         performanceLevel: 'F (Failed)'
                     };
 
-                    // Inject the new marks
-                    termData.marks[subjectId] = {
+                    // Integration: Use the NEW supplementaryMarks field instead of overwriting original marks
+                    if (!termData.supplementaryMarks) termData.supplementaryMarks = {};
+                    
+                    termData.supplementaryMarks[subjectId] = {
                         ...marks,
                         isSupplementary: true
                     };
 
-                    // Recalculate metrics for this term bucket
+                    // Recalculate metrics for this term bucket using the combined "Best" marks
                     const allSubjects = await this.getRawAllSubjects();
-                    const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(termData.marks, allSubjects);
+                    const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(
+                        termData.marks, 
+                        allSubjects, 
+                        termData.supplementaryMarks
+                    );
                     
                     termData.grandTotal = grandTotal;
                     termData.average = average;
@@ -4029,10 +4043,9 @@ export class DataService {
                     // Update student record
                     const studentUpdates: any = { academicHistory };
                     
-                    // If this is the current active term and the student is currently enrolled in it,
-                    // we might also want to update the root fields for immediate UI visibility.
                     if (termKey === this.getCurrentTermKey()) {
-                        studentUpdates.marks = termData.marks;
+                        // For root level, we generally want to show the BEST/PASSED status
+                        studentUpdates.supplementaryMarks = termData.supplementaryMarks;
                         studentUpdates.grandTotal = grandTotal;
                         studentUpdates.average = average;
                         studentUpdates.performanceLevel = performanceLevel;
