@@ -125,7 +125,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             await dataService.updateGlobalSettings(updatedSettings);
             
             // Force immediate propagation
-            await dataService.clearCache();
+            dataService.invalidateCache();
             await refreshTerms();
             if (onRefresh) await onRefresh();
             
@@ -170,7 +170,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
             const result = await dataService.restoreTermFromBackup(backupJson, restoreTermKey, restoreForceOverwrite);
             setRestoreResult(result);
-            await dataService.clearCache();
+            dataService.invalidateCache();
             await refreshTerms();
             const updated = await dataService.getSemesterSummaries();
             setSemesterSummaries(updated);
@@ -248,7 +248,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             }
 
             // 3. Clear caches to ensure new term is picked up
-            await dataService.clearCache();
+            dataService.invalidateCache();
             await refreshTerms();
             
             alert(`✅ Semester ${targetTermKey} Initialized!\n\nStep 1: Complete. Now routing to Student Management for Promotion/Cleanup...`);
@@ -514,7 +514,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         </div>
 
                         <div className="border-t border-slate-100 pt-4">
-                            <p className="text-sm text-slate-600 mb-2">
+                            <div className="text-sm text-slate-600 mb-2">
                                 <strong>System Optimization:</strong> Run a complete database health check and repair. This will:
                                 <ul className="list-disc list-inside mt-1 ml-1 text-xs text-slate-500">
                                     <li>Standardize all faculty names</li>
@@ -522,7 +522,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                     <li>Recalculate student totals, averages, and ranks</li>
                                     <li>Update performance levels</li>
                                 </ul>
-                            </p>
+                            </div>
                             <button
                                 onClick={async () => {
                                     if (!confirm('This will run a full database optimization and recalculation. It may take a minute or two.\n\nAre you sure you want to continue?')) return;

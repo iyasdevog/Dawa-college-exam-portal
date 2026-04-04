@@ -242,8 +242,10 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
     const filteredExams = useMemo(() => {
         return supplementaryExams.filter(exam => {
-            // Lifecycle Filter: Hide completed/integrated records from active view
-            if (exam.status === 'Completed') return false;
+            // Lifecycle Filter: Only hide records that are truly passed & integrated.
+            // Failed attempts (marks.status !== 'Passed') stay in the listing even if
+            // the exam status was incorrectly set to 'Completed' by legacy data.
+            if (exam.status === 'Completed' && exam.marks?.status === 'Passed') return false;
 
             const matchesTerm = termFilter === 'All' || 
                                (termFilter === 'Active' && exam.examTerm === activeTerm) ||

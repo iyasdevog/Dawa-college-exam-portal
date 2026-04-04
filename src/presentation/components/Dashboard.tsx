@@ -4,8 +4,8 @@ import { CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { debounce, throttle, mobileStorage } from '../../infrastructure/services/mobileUtils';
-import { loadExcelLibrary } from '../../infrastructure/services/dynamicImports';
 import { useTerm } from '../viewmodels/TermContext';
+import { ExcelUtils } from '../../infrastructure/utils/excelUtils';
 
 interface DashboardProps {
     onNavigateToManagement: () => void;
@@ -183,8 +183,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                 message: 'Setting up dashboard components...'
             });
 
-            // Initialize database connection
-            await dataService.initializeDatabase();
+            // Database is auto-initialized on import, but we keep this for compatibility
+            // await dataService.initializeDatabase();
 
             // Stage 2: Loading students
             setLoadingState(prev => ({
@@ -471,13 +471,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     const handleMobileExportExcel = async () => {
         if (!isMobile) return;
 
-        setExportState({
-            isExporting: true,
-            exportType: 'excel',
-            progress: 0,
-            stage: 'preparing'
-        });
-
         setTouchFeedback({
             isVisible: true,
             action: 'exporting',
@@ -485,229 +478,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         });
 
         try {
-            // Dynamically load XLSX library on-demand (saves ~450KB from initial bundle)
-            const XLSX = await loadExcelLibrary();
-
-            // Create workbook with multiple sheets optimized for mobile viewing
-            const wb = XLSX.utils.book_new();
-
-            // Stage 1: Summary sheet
-            setExportState(prev => ({ ...prev, progress: 15, stage: 'generating' }));
-            setTouchFeedback(prev => ({ ...prev, message: 'Creating summary sheet...' }));
+            setTouchFeedback(prev => ({ ...prev, message: 'Generating sheets...' }));
 
             const summaryData = [
                 ['AIC DA\'WA COLLEGE - COMPREHENSIVE DASHBOARD EXPORT'],
                 ['Generated', new Date().toLocaleString()],
                 ['Exported From', 'Mobile Dashboard'],
-                ['Layout Used', mobileLayout.currentLayout.toUpperCase()],
                 [''],
                 ['EXECUTIVE SUMMARY', ''],
-                ['Total Students', students.length],
+                ['Total Students', currentTermStudents.length],
                 ['Total Subjects', subjects.length],
                 ['Overall Average', `${averagePercentage}%`],
-                ['Active Classes', CLASSES.length],
-                [''],
-                ['CLASS BREAKDOWN', 'DETAILS'],
-                ...classStats.map(stat => [
-                    stat.className,
-                    `${stat.studentCount} students | ${stat.average}% avg | Top: ${stat.topStudent?.name || 'N/A'}`
-                ]),
-                [''],
-                ['GRADE DISTRIBUTION', 'COUNT', 'PERCENTAGE'],
-                ...Object.entries(gradeStats).map(([grade, count]) => [
-                    grade,
-                    count,
-                    students.length > 0 ? `${((count / students.length) * 100).toFixed(1)}%` : '0%'
-                ])
+                ['Active Classes', CLASSES.length]
             ];
-
-            const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-
-            // Set column widths for mobile-friendly viewing
-            summaryWs['!cols'] = [
-                { wch: 25 }, // Column A
-                { wch: 30 }, // Column B
-                { wch: 15 }  // Column C
-            ];
-
-            XLSX.utils.book_append_sheet(wb, summaryWs, 'Dashboard Summary');
-
-            // Stage 2: Top performers sheet
-            setExportState(prev => ({ ...prev, progress: 35 }));
-            setTouchFeedback(prev => ({ ...prev, message: 'Adding top performers data...' }));
 
             const topPerformersData = [
-                ['TOP PERFORMERS - DETAILED ANALYSIS'],
-                ['Generated', new Date().toLocaleString()],
-                [''],
-                ['RANK', 'NAME', 'CLASS', 'ADM NO', 'TOTAL MARKS', 'AVERAGE %', 'PERFORMANCE LEVEL'],
-                ...topPerformers.slice(0, 25).map((student, index) => [
-                    index + 1,
-                    student.name,
-                    student.className,
-                    student.adNo,
-                    student.grandTotal,
-                    student.average.toFixed(1),
-                    student.performanceLevel
-                ])
+                ['TOP PERFORMERS'],
+                ['RANK', 'NAME', 'CLASS', 'ADM NO', 'TOTAL', 'AVERAGE %'],
+                ...students
+                    .filter(s => s.academicHistory?.[activeTerm])
+                    .sort((a, b) => (b.average || 0) - (a.average || 0))
+                    .slice(0, 50)
+                    .map((s, i) => [i + 1, s.name, s.currentClass, s.adNo, s.grandTotal, s.average])
             ];
 
-            const topPerformersWs = XLSX.utils.aoa_to_sheet(topPerformersData);
-            topPerformersWs['!cols'] = [
-                { wch: 6 },  // Rank
-                { wch: 20 }, // Name
-                { wch: 8 },  // Class
-                { wch: 10 }, // Adm No
-                { wch: 12 }, // Total
-                { wch: 10 }, // Average
-                { wch: 18 }  // Performance Level
-            ];
-
-            XLSX.utils.book_append_sheet(wb, topPerformersWs, 'Top Performers');
-
-            // Stage 3: Class-wise analysis
-            setExportState(prev => ({ ...prev, progress: 55 }));
-            setTouchFeedback(prev => ({ ...prev, message: 'Analyzing class performance...' }));
-
-            const classAnalysisData = [
-                ['CLASS-WISE PERFORMANCE ANALYSIS'],
-                ['Generated', new Date().toLocaleString()],
-                [''],
-                ['CLASS', 'TOTAL STUDENTS', 'AVERAGE %', 'PASS RATE %', 'HIGHEST SCORE', 'LOWEST SCORE', 'TOP STUDENT']
-            ];
-
-            classStats.forEach(stat => {
-                const classStudents = students.filter(s => s.className === stat.className);
-                const passedStudents = classStudents.filter(s => s.performanceLevel !== 'Failed').length;
-                const passRate = classStudents.length > 0 ? ((passedStudents / classStudents.length) * 100).toFixed(1) : '0';
-                const highestScore = classStudents.length > 0 ? Math.max(...classStudents.map(s => s.grandTotal)) : 'N/A';
-                const lowestScore = classStudents.length > 0 ? Math.min(...classStudents.map(s => s.grandTotal)) : 'N/A';
-
-                classAnalysisData.push([
-                    stat.className,
-                    String(stat.studentCount),
-                    `${stat.average}%`,
-                    `${passRate}%`,
-                    String(highestScore),
-                    String(lowestScore),
-                    stat.topStudent?.name || 'N/A'
-                ]);
-            });
-
-            const classAnalysisWs = XLSX.utils.aoa_to_sheet(classAnalysisData);
-            classAnalysisWs['!cols'] = [
-                { wch: 8 },  // Class
-                { wch: 15 }, // Total Students
-                { wch: 12 }, // Average
-                { wch: 12 }, // Pass Rate
-                { wch: 15 }, // Highest
-                { wch: 15 }, // Lowest
-                { wch: 20 }  // Top Student
-            ];
-
-            XLSX.utils.book_append_sheet(wb, classAnalysisWs, 'Class Analysis');
-
-            // Stage 4: Grade distribution details
-            setExportState(prev => ({ ...prev, progress: 75 }));
-            setTouchFeedback(prev => ({ ...prev, message: 'Compiling grade distribution...' }));
-
-            const gradeDistData = [
-                ['GRADE DISTRIBUTION ANALYSIS'],
-                ['Generated', new Date().toLocaleString()],
-                ['Total Students Analyzed', students.length],
-                [''],
-                ['PERFORMANCE LEVEL', 'STUDENT COUNT', 'PERCENTAGE', 'BENCHMARK'],
-                ...Object.entries(gradeStats).map(([grade, count]) => {
-                    const percentage = students.length > 0 ? ((count / students.length) * 100).toFixed(1) : '0';
-                    const benchmark = grade === 'Excellent' ? '90%+ marks' :
-                        grade === 'Good' ? '75-89% marks' :
-                            grade === 'Average' ? '60-74% marks' :
-                                grade === 'Needs Improvement' ? '40-59% marks' :
-                                    'Below 40% marks';
-
-                    return [grade, count, `${percentage}%`, benchmark];
-                })
-            ];
-
-            const gradeDistWs = XLSX.utils.aoa_to_sheet(gradeDistData);
-            gradeDistWs['!cols'] = [
-                { wch: 20 }, // Performance Level
-                { wch: 15 }, // Count
-                { wch: 12 }, // Percentage
-                { wch: 20 }  // Benchmark
-            ];
-
-            XLSX.utils.book_append_sheet(wb, gradeDistWs, 'Grade Distribution');
-
-            // Stage 5: Mobile metadata sheet
-            setExportState(prev => ({ ...prev, progress: 90, stage: 'downloading' }));
-            setTouchFeedback(prev => ({ ...prev, message: 'Finalizing export...' }));
-
-            const metadataData = [
-                ['EXPORT METADATA'],
-                [''],
-                ['Export Details', 'Value'],
-                ['Generated On', new Date().toLocaleString()],
-                ['Generated By', 'AIC Da\'wa College Examination System'],
-                ['Export Source', 'Mobile Dashboard'],
-                ['Layout Used', mobileLayout.currentLayout],
-                ['File Format', 'Excel Workbook (.xlsx)'],
-                ['Total Sheets', '5'],
-                ['Optimization', 'Mobile-Friendly'],
-                [''],
-                ['Data Summary', ''],
-                ['Students Included', students.length],
-                ['Subjects Analyzed', subjects.length],
-                ['Classes Covered', CLASSES.length],
-                ['Performance Levels', Object.keys(gradeStats).length],
-                [''],
-                ['Contact Information', ''],
-                ['Institution', 'AIC Da\'wa College'],
-                ['Email', 'examinations@aicdawacollege.edu.in'],
-                ['Phone', '+91-483-2734567'],
-                [''],
-                ['File Information', ''],
-                ['Recommended Viewer', 'Excel Mobile App'],
-                ['Compatibility', 'Excel 2016+ / Google Sheets'],
-                ['File Size', 'Optimized for mobile'],
-                ['Last Modified', new Date().toISOString()]
-            ];
-
-            const metadataWs = XLSX.utils.aoa_to_sheet(metadataData);
-            metadataWs['!cols'] = [
-                { wch: 25 }, // Label
-                { wch: 35 }  // Value
-            ];
-
-            XLSX.utils.book_append_sheet(wb, metadataWs, 'Export Info');
-
-            // Generate and download with mobile-optimized settings
-            setExportState(prev => ({ ...prev, progress: 100, stage: 'complete' }));
-            setTouchFeedback(prev => ({ ...prev, message: 'Downloading Excel file...' }));
-
-            const excelBuffer = XLSX.write(wb, {
-                bookType: 'xlsx',
-                type: 'array',
-                compression: true // Enable compression for smaller file size on mobile
-            });
-
-            const blob = new Blob([excelBuffer], {
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            });
-
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `AIC-Dashboard-Comprehensive-${new Date().toISOString().split('T')[0]}.xlsx`;
-
-            // Mobile-friendly download
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            await ExcelUtils.exportToExcel(`AIC-Dashboard-${activeTerm}.xlsx`, [
+                { name: 'Summary', data: summaryData },
+                { name: 'Top Performers', data: topPerformersData }
+            ]);
 
             setTouchFeedback(prev => ({ ...prev, message: 'Excel file downloaded successfully!' }));
-
         } catch (error) {
             console.error('Excel export failed:', error);
             setTouchFeedback(prev => ({
@@ -717,12 +517,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             }));
         } finally {
             setTimeout(() => {
-                setExportState({
-                    isExporting: false,
-                    exportType: null,
-                    progress: 0,
-                    stage: 'preparing'
-                });
                 setTouchFeedback(prev => ({ ...prev, isVisible: false }));
             }, 2000);
         }

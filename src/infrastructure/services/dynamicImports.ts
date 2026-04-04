@@ -8,6 +8,7 @@ export interface ExcelLibrary {
     utils: {
         book_new(): any;
         aoa_to_sheet(data: any[][]): any;
+        json_to_sheet(data: any[]): any;
         book_append_sheet(workbook: any, worksheet: any, name: string): void;
         sheet_to_json(worksheet: any, options?: any): any[];
     };
@@ -94,7 +95,7 @@ export const loadAILibrary = async (): Promise<AILibrary> => {
     try {
         console.log('Loading AI library (Google GenAI)...');
         const genai = await import('@google/genai');
-        aiLibCache = genai as AILibrary;
+        aiLibCache = genai as unknown as AILibrary;
         console.log('AI library loaded successfully');
         return aiLibCache;
     } catch (error) {

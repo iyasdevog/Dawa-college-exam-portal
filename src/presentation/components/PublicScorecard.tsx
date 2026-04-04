@@ -23,7 +23,17 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
         window.print();
     };
 
-    const activeTermRecord = result?.academicHistory?.[activeTerm];
+    // Get the specified term record, or fallback to the most recent one if current is empty
+    let displayTerm = activeTerm;
+    let activeTermRecord = result?.academicHistory?.[activeTerm];
+    
+    if (!activeTermRecord && result?.academicHistory && Object.keys(result.academicHistory).length > 0) {
+        // Fallback to latest available term
+        const terms = Object.keys(result.academicHistory).sort().reverse();
+        displayTerm = terms[0];
+        activeTermRecord = result.academicHistory[displayTerm];
+    }
+
     const displayMarks = activeTermRecord?.marks || {};
     const displayRank = activeTermRecord?.rank || '-';
     // If only supp is released, totals/average might not make sense, maybe we should hide them or recalculate?
@@ -33,7 +43,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
     const displayAverage = isOnlySupp ? '-' : (activeTermRecord?.average || 0);
     const displayPerformance = isOnlySupp ? 'Supplementary Phase' : (activeTermRecord?.performanceLevel || 'Not Assessed');
     const displayClass = activeTermRecord?.className || result?.currentClass || '';
-    const displaySemester = activeTermRecord?.semester || currentSemester;
+    const displaySemester = activeTermRecord?.semester || (displayTerm.endsWith('-Odd') ? 'Odd' : 'Even');
 
     let resultSubjects = result ? subjects.filter(s => {
         const isTargetClass = s.targetClasses?.includes(displayClass);
@@ -149,6 +159,17 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                     </span>
                 </button>
             </div>
+
+            {/* Fallback Data Notice */}
+            {displayTerm !== activeTerm && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-4 text-amber-200 print:hidden">
+                    <i className="fa-solid fa-circle-info text-amber-500 text-xl"></i>
+                    <div className="flex-1">
+                        <p className="font-bold text-sm">Viewing Past Record</p>
+                        <p className="text-xs opacity-80">No results found for <strong>{activeTerm}</strong>. Showing your most recent data from <strong>{displayTerm}</strong>.</p>
+                    </div>
+                </div>
+            )}
 
             {/* The Actual Result Card */}
             <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border print:border-slate-300 print:rounded-none">
