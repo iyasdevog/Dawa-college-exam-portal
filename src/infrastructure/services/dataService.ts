@@ -1323,6 +1323,36 @@ export class DataService {
         }
     }
 
+    async alignSupplementaryExamsToEven(): Promise<number> {
+        try {
+            const colRef = collection(this.db, this.supplementaryExamsCollection);
+            const snapshot = await getDocs(colRef);
+            let updated = 0;
+            const batch = writeBatch(this.db);
+
+            snapshot.docs.forEach(d => {
+                const data = d.data() as SupplementaryExam;
+                if (data.examTerm && data.examTerm.endsWith('-Odd')) {
+                    const newTerm = data.examTerm.replace('-Odd', '-Even');
+                    batch.update(d.ref, { 
+                        examTerm: newTerm,
+                        updatedAt: Date.now()
+                    });
+                    updated++;
+                }
+            });
+
+            if (updated > 0) {
+                await batch.commit();
+            }
+            this.invalidateCache();
+            return updated;
+        } catch (error) {
+            console.error('Error aligning supplementary exams to Even:', error);
+            return 0;
+        }
+    }
+
     async getStudentsWithSupplementaryExams(subjectId: string, year: number): Promise<{ student: StudentRecord, supplementaryExam: SupplementaryExam }[]> {
         try {
             // Get supplementary exams for the subject and year
@@ -1375,7 +1405,9 @@ export class DataService {
                     subjectName: subject?.name || 'Unknown Subject',
                     studentClass: student?.currentClass || student?.className || 'Unknown' // Added for filtering in UI
                 };
-            });
+            })
+            // Filter out "Unknown Subject" records as requested by the user ("remove this unknown subjects")
+            .filter(exam => exam.subjectName !== 'Unknown Subject' && exam.subjectId);
         } catch (error) {
             console.error('Error fetching all supplementary exams:', error);
             return [];
@@ -1534,6 +1566,26 @@ export class DataService {
             }
 
             this.invalidateCache();
+
+            // 4. Final Cleanup: Remove any supplementary records that were synced but have "Unknown Subject" 
+            // (User request: "remove this unknown subjects")
+            const finalSnapshot = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            const cleanupBatch = writeBatch(this.db);
+            let cleanedCount = 0;
+            
+            // Re-fetch raw subjects for verification
+            const rawSubjects = await this.getRawAllSubjects();
+            const subjectIds = new Set(rawSubjects.map(s => s.id));
+
+            for (const d of finalSnapshot.docs) {
+                const data = d.data() as SupplementaryExam;
+                if (!data.subjectId || !subjectIds.has(data.subjectId)) {
+                    cleanupBatch.delete(d.ref);
+                    cleanedCount++;
+                }
+            }
+            if (cleanedCount > 0) await cleanupBatch.commit();
+
             return { synced, rejectedDeleted, duplicatesDeleted, notRegistered };
         } catch (error) {
             console.error('Error forcefully cleaning and syncing applications:', error);

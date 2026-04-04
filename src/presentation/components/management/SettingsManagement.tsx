@@ -491,6 +491,26 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 <i className="fa-solid fa-broom"></i>
                                 {isOperating ? 'Cleaning & Syncing...' : 'Clean & Sync Applications'}
                             </button>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will forcefully change all supplementary exam periods from "Odd" to "Even" specifically for the current management view. Continue?')) return;
+                                    try {
+                                        setIsOperating(true);
+                                        const count = await dataService.alignSupplementaryExamsToEven();
+                                        await onRefresh();
+                                        alert(`✅ Alignment Complete! ${count} records updated to "Even" semester.`);
+                                    } catch (err) {
+                                        alert('Action failed.');
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full mt-2 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 border border-indigo-100"
+                            >
+                                <i className="fa-solid fa-clock"></i>
+                                {isOperating ? 'Aligning...' : 'Correct Supplementary Period (Odd → Even)'}
+                            </button>
                         </div>
 
                         <div className="border-t border-slate-100 pt-4">
