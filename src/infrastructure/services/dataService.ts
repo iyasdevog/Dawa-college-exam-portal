@@ -101,7 +101,12 @@ export class DataService {
         }
     }
 
-    public async syncApplicationToSupplementary(application: StudentApplication, existingStudent?: StudentRecord): Promise<void> {
+    public async syncApplicationToSupplementary(
+        application: StudentApplication, 
+        existingStudent?: StudentRecord,
+        originalYear?: string,
+        originalSemester?: string
+    ): Promise<void> {
         console.log(`[Sync] Processing application ${application.id} (${application.studentName} - ${application.type})`);
         try {
             // Find student ID if not present
@@ -154,6 +159,9 @@ export class DataService {
 
             const previousMarks = studentId ? await this.getPreviousMarks(studentId, application.subjectId) : undefined;
             const termKey = `${application.appliedYear}-${application.appliedSemester}`;
+            const failureTerm = (originalYear && originalSemester) 
+                ? `${originalYear}-${originalSemester}` 
+                : termKey;
 
             const suppExam: any = {
                 studentId: studentId || application.adNo,
@@ -162,9 +170,9 @@ export class DataService {
                 subjectId: application.subjectId,
                 examType: 'CurrentSemester' as SupplementaryExamType,
                 attemptNumber: 1, 
-                originalTerm: termKey,
-                originalSemester: application.appliedSemester,
-                originalYear: parseInt(application.appliedYear.split('-')[0]),
+                originalTerm: failureTerm,
+                originalSemester: originalSemester || application.appliedSemester,
+                originalYear: parseInt((originalYear || application.appliedYear).split('-')[0]),
                 supplementaryYear: parseInt(application.appliedYear.split('-')[0]),
                 status: 'Pending',
                 marks: {
@@ -955,6 +963,16 @@ export class DataService {
         }
     }
 
+    async getRawAllSubjects(): Promise<SubjectConfig[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+        } catch (error) {
+            console.error('Error fetching raw subjects:', error);
+            return [];
+        }
+    }
+
     async getAllSubjects(termKey?: string): Promise<SubjectConfig[]> {
         try {
             const settings = await this.getGlobalSettings();
@@ -1342,7 +1360,7 @@ export class DataService {
             // Enrich with student and subject details
             const [allStudents, allSubjects] = await Promise.all([
                 this.getAllStudents(),
-                this.getAllSubjects()
+                this.getRawAllSubjects() // Use raw to find historical subjects
             ]);
             const studentMap = new Map(allStudents.map(s => [s.id, s]));
             const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
@@ -1487,6 +1505,9 @@ export class DataService {
             for (const app of approvedApps) {
                 // Remove type whitelist - sync ALL approved applications as requested
                 try {
+                    const originalYear = app.appliedYear;
+                    const originalSemester = app.appliedSemester;
+
                     // Force term alignment for approved applications
                     await updateDoc(doc(this.db, this.applicationsCollection, app.id), {
                         appliedYear: yearStr,
@@ -1503,7 +1524,7 @@ export class DataService {
                     );
 
                     // Sync to supplemental Exams - Registry Independent!
-                    await this.syncApplicationToSupplementary(app, student);
+                    await this.syncApplicationToSupplementary(app, student, originalYear, originalSemester);
                     
                     if (!student) notRegistered++;
                     synced++;

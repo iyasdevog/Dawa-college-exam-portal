@@ -89,8 +89,9 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 if (activeTab === 'internal-supp') return appType === 'internal-supp';
                 if (activeTab === 'special-supp') return appType === 'special-supp';
                 if (activeTab === 'CurrentSemester') {
+                    // Inclusion logic: Semester (Supp) now shows everything except Reval/Improvement
                     return exam.examType === 'CurrentSemester' && 
-                           !['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'].includes(appType);
+                           !['revaluation', 'improvement'].includes(appType);
                 }
                 return false;
             });
@@ -252,7 +253,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 || (activeTab === 'external-supp' && appType === 'external-supp')
                 || (activeTab === 'internal-supp' && appType === 'internal-supp')
                 || (activeTab === 'special-supp' && appType === 'special-supp')
-                || (activeTab === 'CurrentSemester' && exam.examType === 'CurrentSemester' && !['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'].includes(appType));
+                || (activeTab === 'CurrentSemester' && exam.examType === 'CurrentSemester' && !['revaluation', 'improvement'].includes(appType));
             const matchesClass = classFilter === 'All' || exam.studentClass === classFilter;
             const matchesSubject = subjectFilter === 'All' || exam.subjectId === subjectFilter;
             const matchesStatus = statusFilter === 'All' || exam.status === statusFilter;
@@ -416,7 +417,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                         >
                             {tab === 'All' ? 'All Exams' : 
                              tab === 'PreviousYear' ? 'Repeat' : 
-                             tab === 'CurrentSemester' ? 'Semester (Supp)' :
+                             tab === 'CurrentSemester' ? 'Regular Supp' :
                              tab === 'revaluation' ? 'Revaluation' : 
                              tab === 'improvement' ? 'Improvement' :
                              tab === 'external-supp' ? 'External' :
