@@ -102,6 +102,7 @@ export class DataService {
     }
 
     public async syncApplicationToSupplementary(application: StudentApplication, existingStudent?: StudentRecord): Promise<void> {
+        console.log(`[Sync] Processing application ${application.id} (${application.studentName} - ${application.type})`);
         try {
             // Find student ID if not present
             let studentId = application.studentId;
@@ -147,6 +148,7 @@ export class DataService {
                     examTerm: `${application.appliedYear}-${application.appliedSemester}`,
                     updatedAt: Date.now()
                 });
+                console.log(`[Sync] Updated existing supplementary record for ${application.id}`);
                 return;
             }
 
@@ -180,6 +182,7 @@ export class DataService {
             };
 
             await addDoc(collection(this.db, this.supplementaryExamsCollection), suppExam);
+            console.log(`[Sync] Created NEW supplementary record for ${application.id}`);
             this.invalidateCache();
         } catch (error) {
             console.error('Error syncing application:', error);
@@ -1479,7 +1482,8 @@ export class DataService {
             const semStr = parts[2] as 'Odd' | 'Even';
 
             for (const app of approvedApps) {
-                if (['revaluation', 'improvement', 'external-supp', 'internal-supp', 'special-supp'].includes(app.type)) {
+                // Remove type whitelist - sync ALL approved applications as requested
+                try {
                     // Force term alignment for approved applications
                     await updateDoc(doc(this.db, this.applicationsCollection, app.id), {
                         appliedYear: yearStr,
@@ -1500,6 +1504,8 @@ export class DataService {
                     
                     if (!student) notRegistered++;
                     synced++;
+                } catch (appErr) {
+                    console.error(`Failed to sync application ${app.id}:`, appErr);
                 }
             }
 
