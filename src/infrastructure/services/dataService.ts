@@ -105,7 +105,8 @@ export class DataService {
         application: StudentApplication, 
         existingStudent?: StudentRecord,
         originalYear?: string,
-        originalSemester?: string
+        originalSemester?: string,
+        examTerm?: string
     ): Promise<void> {
         console.log(`[Sync] Processing application ${application.id} (${application.studentName} - ${application.type})`);
         try {
@@ -181,7 +182,7 @@ export class DataService {
                     total: 0,
                     status: 'Pending'
                 },
-                examTerm: termKey,
+                examTerm: examTerm || termKey,
                 appliedAt: application.createdAt || Date.now(),
                 updatedAt: Date.now(),
                 applicationId: application.id,
@@ -1323,6 +1324,28 @@ export class DataService {
         }
     }
 
+    getNextAcademicTerm(currentTerm: string): string {
+        if (!currentTerm) return currentTerm;
+        const parts = currentTerm.split('-');
+        if (!currentTerm.endsWith('-Odd')) return currentTerm; // Only handle Odd to Even transitions for now
+        
+        // Remove 'Odd'
+        parts.pop(); 
+        
+        if (parts.length === 2) {
+            // Case: YYYY-YYYY-Odd (Existing students) -> YYYY(Second)-Even
+            // e.g. 2025-2026-Odd -> 2026-Even
+            return `${parts[1]}-Even`;
+        } else if (parts.length === 1) {
+            // Case: YYYY-Odd (New students) -> YYYY-YYYY+1-Even
+            // e.g. 2026-Odd -> 2026-2027-Even
+            const year = parseInt(parts[0]);
+            return `${year}-${year + 1}-Even`;
+        }
+        
+        return `${parts.join('-')}-Even`; // Fallback
+    }
+
     async alignSupplementaryExamsToEven(): Promise<number> {
         try {
             const colRef = collection(this.db, this.supplementaryExamsCollection);
@@ -1333,7 +1356,7 @@ export class DataService {
             snapshot.docs.forEach(d => {
                 const data = d.data() as SupplementaryExam;
                 if (data.examTerm && data.examTerm.endsWith('-Odd')) {
-                    const newTerm = data.examTerm.replace('-Odd', '-Even');
+                    const newTerm = this.getNextAcademicTerm(data.examTerm);
                     batch.update(d.ref, { 
                         examTerm: newTerm,
                         updatedAt: Date.now()
@@ -1533,6 +1556,12 @@ export class DataService {
             const parts = targetTerm.split('-');
             const yearStr = `${parts[0]}-${parts[1]}`;
             const semStr = parts[2] as 'Odd' | 'Even';
+            
+            // Smarter term period for supplementary sync
+            let supplementaryExamTerm = targetTerm;
+            if (targetTerm.endsWith('-Odd')) {
+               supplementaryExamTerm = this.getNextAcademicTerm(targetTerm);
+            }
 
             for (const app of approvedApps) {
                 // Remove type whitelist - sync ALL approved applications as requested
@@ -1555,8 +1584,10 @@ export class DataService {
                         stu.adNo.trim().toLowerCase() === app.adNo.trim().toLowerCase()
                     );
 
+
                     // Sync to supplemental Exams - Registry Independent!
-                    await this.syncApplicationToSupplementary(app, student, originalYear, originalSemester);
+                    // Pass the smarter supplementaryExamTerm (which might be 2026-Even even if failure was 2025-2026-Odd)
+                    await this.syncApplicationToSupplementary(app, student, originalYear, originalSemester, supplementaryExamTerm);
                     
                     if (!student) notRegistered++;
                     synced++;
