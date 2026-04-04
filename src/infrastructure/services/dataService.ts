@@ -118,11 +118,11 @@ export class DataService {
                 }
 
                 if (!student) {
-                    console.warn(`Sync skipped: Student with AdNo ${application.adNo} not found in database.`);
-                    return;
+                    console.log(`Sync proceeding without registry record for AdNo ${application.adNo}. Using application data.`);
+                } else {
+                    studentId = student.id;
+                    existingStudent = student;
                 }
-                studentId = student.id;
-                existingStudent = student;
             } else if (existingStudent) {
                 studentId = existingStudent.id;
             }
