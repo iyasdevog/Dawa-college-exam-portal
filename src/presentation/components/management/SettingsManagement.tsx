@@ -493,12 +493,12 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                             </button>
                             <button
                                 onClick={async () => {
-                                    if (!confirm('This will forcefully change all supplementary exam periods from "Odd" to "Even" specifically for the current management view. Continue?')) return;
+                                    if (!confirm('This will repair missing historical marks, backfill "Failed In" metadata, and apply smart semester transitions. Continue?')) return;
                                     try {
                                         setIsOperating(true);
-                                        const count = await dataService.alignSupplementaryExamsToEven();
+                                        const result = await dataService.repairAndAlignSupplementaryExams();
                                         await onRefresh();
-                                        alert(`✅ Alignment Complete! ${count} records updated to "Even" semester.`);
+                                        alert(`✅ Repair & Alignment Complete!\n- Semesters Aligned: ${result.updated}\n- Records Enriched (Marks/Metadata): ${result.repaired}`);
                                     } catch (err) {
                                         alert('Action failed.');
                                     } finally {
@@ -508,8 +508,8 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 disabled={isOperating}
                                 className="w-full mt-2 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 border border-indigo-100"
                             >
-                                <i className="fa-solid fa-clock"></i>
-                                {isOperating ? 'Aligning...' : 'Correct Supplementary Period (Odd → Even)'}
+                                <i className="fa-solid fa-wand-magic-sparkles"></i>
+                                {isOperating ? 'Repairing & Aligning...' : 'Repair & Align Supplementary Data'}
                             </button>
                         </div>
 

@@ -141,20 +141,35 @@ export class DataService {
             );
             const snapshot = await getDocs(q);
             
-            // If already exists, we must ensure it's updated with latest application data
+            // If already exists, we must ensure it's updated with latest application data and enriched with missing marks
             if (!snapshot.empty) {
                 const existingDoc = snapshot.docs[0];
-                await updateDoc(existingDoc.ref, { 
+                const existingData = existingDoc.data() as SupplementaryExam;
+                
+                const previousMarks = studentId ? await this.getPreviousMarks(studentId, application.subjectId) : undefined;
+                const termKey = `${application.appliedYear}-${application.appliedSemester}`;
+                const failureTerm = (originalYear && originalSemester) 
+                    ? `${originalYear}-${originalSemester}` 
+                    : (existingData.originalTerm || termKey);
+
+                const updates: any = { 
                     studentId: studentId || application.adNo, // Fallback to adNo
                     studentName: existingStudent?.name || application.studentName || '',
                     studentAdNo: application.adNo,
                     applicationId: application.id,
                     applicationType: application.type,
                     subjectId: application.subjectId,
-                    examTerm: `${application.appliedYear}-${application.appliedSemester}`,
+                    examTerm: examTerm || termKey,
+                    originalTerm: failureTerm,
                     updatedAt: Date.now()
-                });
-                console.log(`[Sync] Updated existing supplementary record for ${application.id}`);
+                };
+
+                if (previousMarks && !existingData.previousMarks) {
+                    updates.previousMarks = previousMarks;
+                }
+
+                await updateDoc(existingDoc.ref, updates);
+                console.log(`[Sync] Updated and enriched existing supplementary record for ${application.id}`);
                 return;
             }
 
@@ -1346,33 +1361,69 @@ export class DataService {
         return `${parts.join('-')}-Even`; // Fallback
     }
 
-    async alignSupplementaryExamsToEven(): Promise<number> {
+    async repairAndAlignSupplementaryExams(): Promise<{ updated: number, repaired: number }> {
         try {
             const colRef = collection(this.db, this.supplementaryExamsCollection);
             const snapshot = await getDocs(colRef);
             let updated = 0;
+            let repaired = 0;
             const batch = writeBatch(this.db);
+            
+            // Fetch all students once for performance during enrichment
+            const allStudents = await this.getAllStudents();
 
-            snapshot.docs.forEach(d => {
+            for (const d of snapshot.docs) {
                 const data = d.data() as SupplementaryExam;
+                const updates: any = {};
+                let needsUpdate = false;
+
+                // 1. Repair missing previousMarks (Historical Internal/External)
+                if (!data.previousMarks && data.studentId && data.subjectId) {
+                    // Find actual student document ID (might be stored as AdNo in some early records)
+                    let studentId = data.studentId;
+                    const student = allStudents.find(s => s.id === data.studentId || s.adNo === data.studentId);
+                    if (student) studentId = student.id;
+
+                    const marks = await this.getPreviousMarks(studentId, data.subjectId);
+                    if (marks) {
+                        updates.previousMarks = marks;
+                        needsUpdate = true;
+                        repaired++;
+                    }
+                }
+
+                // 2. Repair missing originalTerm (Failed In)
+                if (!data.originalTerm && data.examTerm) {
+                    // If missing, assume it failed in the term BEFORE current attempt or just use the current attempt if unknown
+                    // but we can try to guess or use the 'Odd' record if it's currently tagged as ODD
+                    updates.originalTerm = data.examTerm; 
+                    needsUpdate = true;
+                }
+
+                // 3. Apply Smart Alignment (Odd to Even Transition)
                 if (data.examTerm && data.examTerm.endsWith('-Odd')) {
                     const newTerm = this.getNextAcademicTerm(data.examTerm);
-                    batch.update(d.ref, { 
-                        examTerm: newTerm,
-                        updatedAt: Date.now()
-                    });
-                    updated++;
+                    if (newTerm !== data.examTerm) {
+                        updates.examTerm = newTerm;
+                        needsUpdate = true;
+                        updated++;
+                    }
                 }
-            });
 
-            if (updated > 0) {
+                if (needsUpdate) {
+                    updates.updatedAt = Date.now();
+                    batch.update(d.ref, updates);
+                }
+            }
+
+            if (updated > 0 || repaired > 0) {
                 await batch.commit();
             }
             this.invalidateCache();
-            return updated;
+            return { updated, repaired };
         } catch (error) {
-            console.error('Error aligning supplementary exams to Even:', error);
-            return 0;
+            console.error('Error repairing and aligning supplementary exams:', error);
+            return { updated: 0, repaired: 0 };
         }
     }
 
