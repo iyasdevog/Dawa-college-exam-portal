@@ -242,6 +242,9 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
     const filteredExams = useMemo(() => {
         return supplementaryExams.filter(exam => {
+            // Lifecycle Filter: Hide completed/integrated records from active view
+            if (exam.status === 'Completed') return false;
+
             const matchesTerm = termFilter === 'All' || 
                                (termFilter === 'Active' && exam.examTerm === activeTerm) ||
                                exam.examTerm === termFilter;

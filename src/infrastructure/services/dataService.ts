@@ -3968,6 +3968,10 @@ export class DataService {
     async updateSupplementaryExamMarks(id: string, marks: SubjectMarks, previousMarks?: { int: number | 'A', ext: number | 'A' }, attemptNumber?: number, originalTerm?: string): Promise<void> {
         try {
             const docRef = doc(this.db, this.supplementaryExamsCollection, id);
+            const suppSnap = await getDoc(docRef);
+            if (!suppSnap.exists()) throw new Error('Supplementary exam not found');
+            const suppData = suppSnap.data() as SupplementaryExam;
+
             const updates: any = {
                 marks,
                 status: 'Completed',
@@ -3982,7 +3986,63 @@ export class DataService {
             if (originalTerm !== undefined) {
                 updates.originalTerm = originalTerm;
             }
+
+            // 1. Update the supplementary record itself
             await updateDoc(docRef, updates);
+
+            // 2. Integration: If passed, put it in the "term data bucket" (academicHistory)
+            if (marks.status === 'Passed' && suppData.studentId && suppData.subjectId && suppData.examTerm) {
+                const studentId = suppData.studentId;
+                const subjectId = suppData.subjectId;
+                const termKey = suppData.examTerm;
+
+                const studentDoc = await getDoc(doc(this.db, this.studentsCollection, studentId));
+                if (studentDoc.exists()) {
+                    const student = studentDoc.data() as StudentRecord;
+                    const academicHistory = student.academicHistory || {};
+                    const termData: TermRecord = academicHistory[termKey] || { 
+                        marks: {}, 
+                        semester: termKey.split('-').pop() as 'Odd' | 'Even' || 'Odd',
+                        className: student.className || '',
+                        grandTotal: 0,
+                        average: 0,
+                        rank: 0,
+                        performanceLevel: 'F (Failed)'
+                    };
+
+                    // Inject the new marks
+                    termData.marks[subjectId] = {
+                        ...marks,
+                        isSupplementary: true
+                    };
+
+                    // Recalculate metrics for this term bucket
+                    const allSubjects = await this.getRawAllSubjects();
+                    const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(termData.marks, allSubjects);
+                    
+                    termData.grandTotal = grandTotal;
+                    termData.average = average;
+                    termData.performanceLevel = performanceLevel;
+
+                    academicHistory[termKey] = termData;
+
+                    // Update student record
+                    const studentUpdates: any = { academicHistory };
+                    
+                    // If this is the current active term and the student is currently enrolled in it,
+                    // we might also want to update the root fields for immediate UI visibility.
+                    if (termKey === this.getCurrentTermKey()) {
+                        studentUpdates.marks = termData.marks;
+                        studentUpdates.grandTotal = grandTotal;
+                        studentUpdates.average = average;
+                        studentUpdates.performanceLevel = performanceLevel;
+                    }
+
+                    await updateDoc(doc(this.db, this.studentsCollection, studentId), studentUpdates);
+                    console.log(`[Lifecycle] Integrated passed supplementary marks into student ${studentId} history for ${termKey}`);
+                }
+            }
+
             this.invalidateCache();
         } catch (error) {
             console.error('Error updating supplementary marks:', error);
