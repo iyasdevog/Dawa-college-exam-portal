@@ -33,6 +33,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
     const [generatedTimetable, setGeneratedTimetable] = useState<TimetableEntry[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [viewMode, setViewMode] = useState<'class' | 'subject'>('class');
+    const [otherTimetables, setOtherTimetables] = useState<TimetableEntry[]>([]);
 
     const classes = [...new Set(students.map(s => s.className))];
     const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
@@ -40,8 +41,43 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
     useEffect(() => {
         if (selectedClass && selectedSemester) {
             loadConfig();
+            loadGlobalTimetables();
         }
     }, [selectedClass, selectedSemester]);
+
+    const loadGlobalTimetables = async () => {
+        const allSystemTimetables = await dataService.getAllTimetables();
+        setOtherTimetables(allSystemTimetables.filter(t => t.className !== selectedClass && t.semester === selectedSemester));
+    };
+
+    const isFacultyBusy = (facultyName: string | undefined, day: string, startTime: string, endTime: string) => {
+        if (!facultyName || day === 'All') return false;
+        return otherTimetables.some(t => {
+            const sub = subjects.find(s => s.id === t.subjectId);
+            if (sub?.facultyName !== facultyName) return false;
+            if (t.day !== day) return false;
+            if (!t.startTime || !startTime) return false;
+            return (startTime < t.endTime && endTime > t.startTime);
+        });
+    };
+
+    const getFacultyDailyCount = (facultyName: string | undefined, day: string, currentGrid?: Record<string, Record<number, TimetableEntry | null>>) => {
+        if (!facultyName || day === 'All') return 0;
+        let count = otherTimetables.filter(t => {
+            if (t.day !== day) return false;
+            const sub = subjects.find(s => s.id === t.subjectId);
+            return sub?.facultyName === facultyName;
+        }).length;
+        if (currentGrid && currentGrid[day]) {
+            Object.values(currentGrid[day]).forEach(entry => {
+                if (entry) {
+                    const sub = subjects.find(s => s.id === entry.subjectId);
+                    if (sub?.facultyName === facultyName) count++;
+                }
+            });
+        }
+        return count;
+    };
 
     const loadConfig = async () => {
         const savedConfig = await dataService.getGeneratorConfig(selectedClass, selectedSemester);
@@ -77,22 +113,21 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         alert('Generator configuration saved!');
     };
 
-    const generateTimetable = () => {
+    const generateTimetable = async () => {
         setIsGenerating(true);
-        setTimeout(() => {
-            try {
-                const days = config.workingDays;
-                const periods = Array.from({ length: config.periodsPerDay }, (_, i) => i);
+        try {
+            const days = config.workingDays;
+            const periods = Array.from({ length: config.periodsPerDay }, (_, i) => i);
 
-                // 1. Initialize grid
-                const grid: Record<string, Record<number, TimetableEntry | null>> = {};
-                days.forEach(day => {
-                    grid[day] = {};
-                    periods.forEach(p => grid[day][p] = null);
-                });
+            // 1. Initialize grid
+            const grid: Record<string, Record<number, TimetableEntry | null>> = {};
+            days.forEach(day => {
+                grid[day] = {};
+                periods.forEach(p => grid[day][p] = null);
+            });
 
-                const subjectUsage: Record<string, number> = {};
-                Object.keys(config.subjectWeeklyHours).forEach(id => subjectUsage[id] = 0);
+            const subjectUsage: Record<string, number> = {};
+            Object.keys(config.subjectWeeklyHours).forEach(id => subjectUsage[id] = 0);
 
                 // 2. Apply FixedSlot rules first
                 config.rules?.forEach(rule => {
@@ -104,6 +139,16 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                         targetDays.forEach(day => {
                             if (grid[day] && grid[day][rule.periodIndex] === null && !config.breakSlots?.includes(rule.periodIndex)) {
                                 const slotTime = config.timeSlots?.[rule.periodIndex];
+                                const facName = subject.facultyName;
+                                if (slotTime?.startTime && slotTime?.endTime && isFacultyBusy(facName, day as string, slotTime.startTime, slotTime.endTime)) {
+                                    console.warn(`Conflict: Faculty ${facName} is busy on ${day}. Skipping FixedSlot rule.`);
+                                    return;
+                                }
+                                if (getFacultyDailyCount(facName, day as string, grid) >= 4) {
+                                    console.warn(`Limit: Faculty ${facName} already has >= 4 classes on ${day}. Skipping FixedSlot rule.`);
+                                    return;
+                                }
+
                                 grid[day][rule.periodIndex] = {
                                     id: Math.random().toString(36).substr(2, 9),
                                     day: day as any,
@@ -127,6 +172,16 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                         targetDays.forEach(day => {
                             if (grid[day] && grid[day][rule.periodIndex] === null && !config.breakSlots?.includes(rule.periodIndex)) {
                                 const slotTime = config.timeSlots?.[rule.periodIndex];
+                                const facName = facultySubject.facultyName;
+                                if (slotTime?.startTime && slotTime?.endTime && isFacultyBusy(facName, day as string, slotTime.startTime, slotTime.endTime)) {
+                                    console.warn(`Conflict: Faculty ${facName} is busy on ${day}. Skipping FixedFaculty rule.`);
+                                    return;
+                                }
+                                if (getFacultyDailyCount(facName, day as string, grid) >= 4) {
+                                    console.warn(`Limit: Faculty ${facName} already has >= 4 classes on ${day}. Skipping FixedFaculty rule.`);
+                                    return;
+                                }
+
                                 grid[day][rule.periodIndex] = {
                                     id: Math.random().toString(36).substr(2, 9),
                                     day: day as any,
@@ -150,6 +205,16 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                         targetDays.forEach(day => {
                             if (grid[day] && grid[day][rule.periodIndex] === null && !config.breakSlots?.includes(rule.periodIndex)) {
                                 const slotTime = config.timeSlots?.[rule.periodIndex];
+                                const facName = subject.facultyName;
+                                if (slotTime?.startTime && slotTime?.endTime && isFacultyBusy(facName, day as string, slotTime.startTime, slotTime.endTime)) {
+                                    console.warn(`Conflict: Faculty ${facName} is busy on ${day}. Skipping FixedClass rule.`);
+                                    return;
+                                }
+                                if (getFacultyDailyCount(facName, day as string, grid) >= 4) {
+                                    console.warn(`Limit: Faculty ${facName} already has >= 4 classes on ${day}. Skipping FixedClass rule.`);
+                                    return;
+                                }
+
                                 grid[day][rule.periodIndex] = {
                                     id: Math.random().toString(36).substr(2, 9),
                                     day: day as any,
@@ -190,11 +255,26 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                         const restriction = config.rules?.find(r => r.type === 'DayRestriction' && r.day === day);
                         const allowedIds = (restriction && restriction.type === 'DayRestriction') ? restriction.restrictedToSubjectIds : null;
 
+                        const slotTime = config.timeSlots?.[p];
                         // Find first available subject that fits rule
-                        const matchIndex = pool.findIndex(s => !allowedIds || allowedIds.includes(s.subjectId));
+                        const matchIndex = pool.findIndex(s => {
+                            if (allowedIds && !allowedIds.includes(s.subjectId)) return false;
+                            
+                            const subject = subjects.find(sub => sub.id === s.subjectId);
+                            const facName = subject?.facultyName;
+                            
+                            if (slotTime?.startTime && slotTime?.endTime && isFacultyBusy(facName, day as string, slotTime.startTime, slotTime.endTime)) {
+                                return false;
+                            }
+                            
+                            if (getFacultyDailyCount(facName, day as string, grid) >= 4) {
+                                return false;
+                            }
+                            
+                            return true;
+                        });
 
                         if (matchIndex !== -1) {
-                            const slotTime = config.timeSlots?.[p];
                             grid[day][p] = {
                                 id: Math.random().toString(36).substr(2, 9),
                                 day: day as any,
@@ -224,7 +304,6 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
             } finally {
                 setIsGenerating(false);
             }
-        }, 1000);
     };
 
     const handleApplyTimetable = async () => {
@@ -459,14 +538,40 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                 <div>
                                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Special Rules</h5>
                                     <div className="space-y-3">
-                                        {config.rules?.map((rule, idx) => (
-                                            <div key={rule.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 relative group/rule">
+                                        {config.rules?.map((rule, idx) => {
+                                            let hasConflict = false;
+                                            let hasLimit = false;
+                                            let conflictReason = '';
+
+                                            if (rule.type !== 'DayRestriction' && rule.day !== 'All') {
+                                                const slotTime = config.timeSlots?.[rule.periodIndex];
+                                                let facName = '';
+                                                if (rule.type === 'FixedSlot' || rule.type === 'FixedClass') {
+                                                    const sub = subjects.find(s => s.id === rule.subjectId);
+                                                    facName = sub?.facultyName || '';
+                                                } else if (rule.type === 'FixedFaculty') {
+                                                    facName = rule.facultyName || '';
+                                                }
+
+                                                if (facName && slotTime?.startTime && slotTime?.endTime) {
+                                                    if (isFacultyBusy(facName, rule.day as string, slotTime.startTime, slotTime.endTime)) {
+                                                        hasConflict = true;
+                                                        conflictReason = `Conflict: ${facName} is assigned elsewhere during this period.`;
+                                                    } else if (getFacultyDailyCount(facName, rule.day as string) >= 4) {
+                                                        hasLimit = true;
+                                                        conflictReason = `Limit: ${facName} already has ≥4 classes on this day.`;
+                                                    }
+                                                }
+                                            }
+
+                                            return (
+                                            <div key={rule.id} className={`p-3 rounded-xl border relative group/rule transition-all ${hasConflict ? 'bg-red-50 border-red-200' : hasLimit ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                                                 <button
                                                     onClick={() => {
                                                         const updated = config.rules?.filter((_, i) => i !== idx);
                                                         setConfig({ ...config, rules: updated });
                                                     }}
-                                                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center opacity-0 group-hover/rule:opacity-100 transition-opacity"
+                                                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center opacity-0 group-hover/rule:opacity-100 transition-opacity z-10 shadow-sm"
                                                 >
                                                     <i className="fa-solid fa-xmark text-[10px]"></i>
                                                 </button>
@@ -474,8 +579,15 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                                 <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${rule.type === 'FixedSlot' ? 'bg-blue-100 text-blue-600' : rule.type === 'FixedFaculty' ? 'bg-amber-100 text-amber-600' : rule.type === 'FixedClass' ? 'bg-teal-100 text-teal-600' : 'bg-purple-100 text-purple-600'}`}>
                                                         {rule.type === 'FixedSlot' ? 'Fixed Slot' : rule.type === 'FixedFaculty' ? 'Fixed Faculty' : rule.type === 'FixedClass' ? 'Fixed Class' : 'Restricted'}
                                                     </span>
-                                                    <span className="text-[10px] font-bold text-slate-600">{rule.day}</span>
+                                                    <span className={`text-[10px] font-bold ${hasConflict || hasLimit ? 'text-red-700' : 'text-slate-600'}`}>{rule.day}</span>
                                                 </div>
+
+                                                {(hasConflict || hasLimit) && (
+                                                    <div className={`mt-1 mb-2 flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] font-bold ${hasConflict ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-orange-100 text-orange-700 border border-orange-200'}`}>
+                                                        <i className="fa-solid fa-triangle-exclamation"></i>
+                                                        <span>{conflictReason}</span>
+                                                    </div>
+                                                )}
 
                                                 <div className="space-y-2 mt-2">
                                                     {rule.type === 'FixedSlot' ? (
@@ -646,7 +758,8 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                                     )}
                                                 </div>
                                             </div>
-                                        ))}
+                                            );
+                                        })}
 
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
