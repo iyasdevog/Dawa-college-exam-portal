@@ -9,7 +9,8 @@ export class Subject {
         public readonly facultyName: string | undefined,
         public readonly targetClasses: string[],
         public readonly subjectType: 'general' | 'elective',
-        public readonly enrolledStudents: string[] = []
+        public readonly enrolledStudents: string[] = [],
+        public readonly details?: any // Using any to avoid importing all interfaces, or we can use SubjectDetails from types if imported
     ) { }
 
     static create(data: {
@@ -23,6 +24,7 @@ export class Subject {
         targetClasses: string[];
         subjectType: 'general' | 'elective';
         enrolledStudents?: string[];
+        details?: any;
     }): Subject {
         return new Subject(
             data.id,
@@ -34,7 +36,8 @@ export class Subject {
             data.facultyName,
             data.targetClasses,
             data.subjectType,
-            data.enrolledStudents || []
+            data.enrolledStudents || [],
+            data.details
         );
     }
 
@@ -81,7 +84,8 @@ export class Subject {
             this.facultyName,
             this.targetClasses,
             this.subjectType,
-            [...this.enrolledStudents, studentId]
+            [...this.enrolledStudents, studentId],
+            this.details
         );
     }
 
@@ -96,7 +100,8 @@ export class Subject {
             this.facultyName,
             this.targetClasses,
             this.subjectType,
-            this.enrolledStudents.filter(id => id !== studentId)
+            this.enrolledStudents.filter(id => id !== studentId),
+            this.details
         );
     }
 }
@@ -113,4 +118,5 @@ export interface SubjectConfig {
     targetClasses: string[];
     subjectType: 'general' | 'elective';
     enrolledStudents?: string[];
+    details?: any;
 }

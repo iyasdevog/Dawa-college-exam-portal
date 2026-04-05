@@ -81,7 +81,8 @@ export class FirebaseSubjectRepository implements ISubjectRepository {
                 facultyName: subject.facultyName,
                 targetClasses: subject.targetClasses,
                 subjectType: subject.subjectType,
-                enrolledStudents: subject.enrolledStudents
+                enrolledStudents: subject.enrolledStudents,
+                ...(subject.details && { details: subject.details })
             };
 
             const docRef = await addDoc(collection(this.db, this.collectionName), subjectData);

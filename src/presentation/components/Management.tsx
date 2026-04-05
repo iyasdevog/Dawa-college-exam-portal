@@ -153,6 +153,7 @@ const Management: React.FC = () => {
             <SubjectManagement
               subjects={subjects}
               students={students}
+              activeTerm={activeTerm}
               onRefresh={handleRefresh}
               isLoading={isDataActionLoading}
             />

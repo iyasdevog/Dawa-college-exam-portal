@@ -3,10 +3,13 @@ import { SubjectConfig, StudentRecord } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { normalizeName, shortenSubjectName } from '../../../infrastructure/services/formatUtils';
+import { SubjectDetailsModal } from './SubjectDetailsModal';
+import { SubjectDetails } from '../../../domain/entities/types';
 
 interface SubjectManagementProps {
     subjects: SubjectConfig[];
     students: StudentRecord[];
+    activeTerm: string;
     onRefresh: () => Promise<void>;
     isLoading: boolean;
 }
@@ -44,7 +47,7 @@ const SubjectRow = React.memo(({ subject, index, onEdit, onDelete, onManageEnrol
                 {subject.subjectType === 'elective' && (
                     <button onClick={() => onManageEnrollment(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users"></i></button>
                 )}
-                <button onClick={() => onEdit(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit"><i className="fa-solid fa-pen"></i></button>
+                <button onClick={() => onEdit(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit Properties"><i className="fa-solid fa-pen"></i></button>
                 {!Array.isArray(subject.specificClass) ? (
                     <button onClick={() => onDelete(subject, subject.specificClass as string)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Remove from this class"><i className="fa-solid fa-trash"></i></button>
                 ) : (
@@ -92,7 +95,7 @@ const FacultyCard = React.memo(({ faculty, facultySubjects }: { faculty: string,
     );
 });
 
-const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, students, onRefresh, isLoading }) => {
+const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, students, activeTerm, onRefresh, isLoading }) => {
     const { isMobile } = useMobile();
     const [isOperating, setIsOperating] = useState(false);
 
@@ -113,6 +116,28 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         academicYear: ''
     });
 
+    // Subject Details state
+    const [showSubjectDetailsModal, setShowSubjectDetailsModal] = useState(false);
+    const [selectedSubjectForDetails, setSelectedSubjectForDetails] = useState<SubjectConfig | null>(null);
+
+    const handleEditDetails = (subject: SubjectConfig) => {
+        setSelectedSubjectForDetails(subject);
+        setShowSubjectDetailsModal(true);
+    };
+
+    const handleSaveSubjectDetails = async (subjectId: string, details: SubjectDetails) => {
+        setIsOperating(true);
+        try {
+            await dataService.updateSubject(subjectId, { details });
+            await onRefresh();
+        } catch (error) {
+            console.error('Error saving subject details:', error);
+            throw error;
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
     // Enrollment state
     const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
     const [selectedSubjectForEnrollment, setSelectedSubjectForEnrollment] = useState<SubjectConfig | null>(null);
@@ -127,9 +152,22 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const uniqueClasses = Array.from(new Set(students.map(s => s.className))).sort();
 
     const handleAddSubject = async () => {
-        const settings = await dataService.getGlobalSettings();
         setEditingSubject(null);
         setIsCreatingNewFaculty(false);
+        
+        let defaultYear = '';
+        let defaultSem = 'Both' as 'Odd' | 'Even' | 'Both';
+        
+        if (activeTerm) {
+            const parts = activeTerm.split('-');
+            const sem = parts.pop() as 'Odd' | 'Even';
+            defaultYear = parts.join('-');
+            defaultSem = sem;
+        } else {
+            const settings = await dataService.getGlobalSettings();
+            defaultYear = settings.currentAcademicYear || '';
+        }
+
         setSubjectForm({
             name: '',
             arabicName: '',
@@ -140,8 +178,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             targetClasses: [],
             subjectType: 'general',
             enrolledStudents: [],
-            activeSemester: 'Both',
-            academicYear: settings.currentAcademicYear || ''
+            activeSemester: defaultSem,
+            academicYear: defaultYear
         });
         setShowSubjectForm(true);
     };
@@ -166,7 +204,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     };
 
     // State for tabs
-    const [activeTab, setActiveTab] = useState<'subjects' | 'faculty'>('subjects');
+    const [activeTab, setActiveTab] = useState<'subjects' | 'faculty' | 'details'>('subjects');
 
     const toSentenceCase = (str: string) => {
         if (!str) return '';
@@ -523,6 +561,43 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         });
     }, [subjects, subjectFacultyFilter]);
 
+    // Syllabus Details Filters
+    const [detailsNameFilter, setDetailsNameFilter] = useState('All');
+    const [detailsFacultyFilter, setDetailsFacultyFilter] = useState('All');
+    const [detailsClassFilter, setDetailsClassFilter] = useState('All');
+
+    const uniqueSubjectNames = React.useMemo(() => {
+        const names = new Set(subjects.map(s => s.name));
+        return Array.from(names).sort((a, b) => a.localeCompare(b));
+    }, [subjects]);
+
+    const filteredDetailsSubjects = React.useMemo(() => {
+        let list = flattenedSubjectList; // Reuse flattened list with 'All' faculty bypass
+        
+        // Remove the top-level flattened subject filter if we want details tab standalone filtering
+        const rawFlattened = flattenedSubjectList.length > 0 ? flattenedSubjectList : subjects.map(s => ({
+            ...s,
+            specificClass: s.targetClasses && s.targetClasses.length > 0 ? s.targetClasses.join(', ') : 'No Class'
+        }));
+
+        list = rawFlattened;
+
+        if (detailsNameFilter !== 'All') {
+            list = list.filter(s => s.name === detailsNameFilter);
+        }
+        if (detailsFacultyFilter !== 'All') {
+            list = list.filter(s => (s.facultyName || 'Unassigned') === detailsFacultyFilter);
+        }
+        if (detailsClassFilter !== 'All') {
+            list = list.filter(s => {
+                const classStr = Array.isArray(s.specificClass) ? s.specificClass.join(',') : s.specificClass;
+                return classStr.includes(detailsClassFilter);
+            });
+        }
+        
+        return list;
+    }, [flattenedSubjectList, subjects, detailsNameFilter, detailsFacultyFilter, detailsClassFilter]);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -538,22 +613,28 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-4 border-b border-slate-200">
+            <div className="flex gap-4 border-b border-slate-200 overflow-x-auto no-scrollbar">
                 <button
                     onClick={() => setActiveTab('subjects')}
-                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeTab === 'subjects' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`pb-2 px-4 whitespace-nowrap font-bold border-b-2 transition-colors ${activeTab === 'subjects' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     Subject List
                 </button>
                 <button
                     onClick={() => setActiveTab('faculty')}
-                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeTab === 'faculty' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`pb-2 px-4 whitespace-nowrap font-bold border-b-2 transition-colors ${activeTab === 'faculty' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     Faculty Overview
                 </button>
+                <button
+                    onClick={() => setActiveTab('details')}
+                    className={`pb-2 px-4 whitespace-nowrap font-bold border-b-2 transition-colors ${activeTab === 'details' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    Detailed Syllabus
+                </button>
             </div>
 
-            {activeTab === 'subjects' ? (
+            {activeTab === 'subjects' && (
                 <div className="space-y-4">
                     <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
                         <div className="flex items-center gap-2">
@@ -609,7 +690,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                         )}
                     </div>
                 </div>
-            ) : (
+            )}
+            
+            {activeTab === 'faculty' && (
                 <div className="space-y-6">
                     {subjectsByFaculty.map(([faculty, facultySubjects]) => (
                         <FacultyCard
@@ -621,6 +704,86 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                     {subjectsByFaculty.length === 0 && (
                         <div className="text-center p-8 text-slate-500">No faculty assignments found.</div>
                     )}
+                </div>
+            )}
+
+            {activeTab === 'details' && (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="flex flex-col gap-1">
+                            <label className="font-bold text-xs text-slate-500 uppercase tracking-wider">Subject Name</label>
+                            <select
+                                value={detailsNameFilter}
+                                onChange={e => setDetailsNameFilter(e.target.value)}
+                                className="p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none pr-8"
+                            >
+                                <option value="All">All Subjects</option>
+                                {uniqueSubjectNames.map(name => <option key={name} value={name}>{name}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="font-bold text-xs text-slate-500 uppercase tracking-wider">Filter Faculty</label>
+                            <select
+                                value={detailsFacultyFilter}
+                                onChange={e => setDetailsFacultyFilter(e.target.value)}
+                                className="p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+                            >
+                                <option value="All">All Faculties</option>
+                                {uniqueFaculties.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="font-bold text-xs text-slate-500 uppercase tracking-wider">Filter Class</label>
+                            <select
+                                value={detailsClassFilter}
+                                onChange={e => setDetailsClassFilter(e.target.value)}
+                                className="p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+                            >
+                                <option value="All">All Classes</option>
+                                {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredDetailsSubjects.map(subject => (
+                            <div key={subject.id} className="bg-white border text-sm rounded-xl p-5 hover:shadow-md transition-shadow relative shadow-sm">
+                                <div className="flex justify-between items-start mb-4">
+                                    <h3 className="font-bold text-lg text-slate-800 leading-tight">{subject.name}</h3>
+                                    <span className={`px-2 py-0.5 whitespace-nowrap text-[10px] rounded-full uppercase font-bold shadow-sm ${subject.details ? 'bg-teal-100 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                                        {subject.details ? 'Syllabus Set' : 'Pending'}
+                                    </span>
+                                </div>
+                                <div className="space-y-3 mb-6">
+                                    <div className="flex items-center text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                        <i className="fa-solid fa-user-tie w-6 text-slate-400"></i>
+                                        <span className="truncate flex-1 font-medium">{subject.facultyName || 'Unassigned'}</span>
+                                    </div>
+                                    <div className="flex items-center text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                        <i className="fa-solid fa-users w-6 text-slate-400"></i>
+                                        <span className="truncate flex-1 font-medium">{Array.isArray(subject.specificClass) ? subject.specificClass.join(', ') : subject.specificClass}</span>
+                                    </div>
+                                    <div className="flex items-center text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                        <i className="fa-solid fa-book w-6 text-slate-400"></i>
+                                        <span className="font-medium text-xs rounded-full bg-slate-200 px-2 text-slate-600 uppercase">{subject.subjectType || 'General'}</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => handleEditDetails(subject as unknown as SubjectConfig)}
+                                    className="w-full py-2.5 bg-white border-2 border-teal-100 text-teal-600 focus:ring-4 focus:ring-teal-50 font-bold rounded-lg hover:bg-teal-50 transition-colors shadow-sm"
+                                >
+                                    <i className="fa-solid fa-pen-to-square mr-2"></i>
+                                    {subject.details ? 'Edit Syllabus' : 'Add Syllabus'}
+                                </button>
+                            </div>
+                        ))}
+                        {filteredDetailsSubjects.length === 0 && (
+                            <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
+                                <i className="fa-solid fa-file-excel text-4xl mb-3 opacity-30"></i>
+                                <p>No subjects matching these filters.</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -793,6 +956,15 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Subject Details Modal */}
+            {showSubjectDetailsModal && selectedSubjectForDetails && (
+                <SubjectDetailsModal
+                    subject={selectedSubjectForDetails}
+                    onClose={() => setShowSubjectDetailsModal(false)}
+                    onSave={handleSaveSubjectDetails}
+                />
             )}
 
             {/* Enrollment Modal */}

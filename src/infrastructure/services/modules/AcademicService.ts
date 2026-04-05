@@ -183,6 +183,35 @@ export class AcademicService extends BaseDataService {
         return subjects.filter(s => s.targetClasses?.includes(className));
     }
 
+    public async enrollStudentInSubject(subjectId: string, studentId: string): Promise<void> {
+        try {
+            const subject = await this.getSubjectById(subjectId);
+            if (subject) {
+                const enrolled = subject.enrolledStudents || [];
+                if (!enrolled.includes(studentId)) {
+                    await this.updateSubject(subjectId, { enrolledStudents: [...enrolled, studentId] });
+                }
+            }
+        } catch (error) {
+            console.error('Error enrolling student in subject:', error);
+            throw error;
+        }
+    }
+
+    public async unenrollStudentFromSubject(subjectId: string, studentId: string): Promise<void> {
+        try {
+            const subject = await this.getSubjectById(subjectId);
+            if (subject) {
+                const enrolled = subject.enrolledStudents || [];
+                const updated = enrolled.filter(id => id !== studentId);
+                await this.updateSubject(subjectId, { enrolledStudents: updated });
+            }
+        } catch (error) {
+            console.error('Error unenrolling student from subject:', error);
+            throw error;
+        }
+    }
+
     public async updateMarks(studentId: string, subjectId: string, marks: Partial<SubjectMarks>, termKey?: string): Promise<void> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();

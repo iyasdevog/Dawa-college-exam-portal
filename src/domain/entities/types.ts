@@ -94,6 +94,51 @@ export interface GlobalSettings {
   semesters?: SemesterConfig[]; // History of explicit semester metadata
 }
 
+export interface CourseOutcome {
+  id: string; // Add random ID for React keys mapping
+  description: string;
+  learningDomains: string;
+  psoNo: string;
+}
+
+export interface CourseContentUnit {
+  id: string;
+  unit: string;
+  description: string;
+  hours: string | number;
+  codeNumber: string;
+}
+
+export interface CIAComponent {
+  id: string;
+  type: 'Writing' | 'Individual Presentation' | 'Group Presentation' | 'Class Test' | 'Other';
+  details: string;
+  units: string;
+  timePeriod: string;
+}
+
+export interface AssessmentDetails {
+  ciaComponents: CIAComponent[];
+  semesterEndExamDetails: string;
+}
+
+export interface SubjectDetails {
+  department: string;
+  stage: string;
+  courseName: string;
+  courseType: string;
+  courseLevel: string;
+  semester: string;
+  totalHours: string;
+  totalStudentLearningTime: string;
+  summaryAndJustification: string;
+  prerequisites: string;
+  courseOutcomes: CourseOutcome[];
+  courseContent: CourseContentUnit[];
+  teachingAndLearningApproach: string;
+  assessment: AssessmentDetails;
+}
+
 export interface SubjectConfig {
   id: string;
   name: string;
@@ -107,6 +152,7 @@ export interface SubjectConfig {
   enrolledStudents?: string[]; // Student IDs for elective subjects
   activeSemester?: 'Odd' | 'Even' | 'Both';
   academicYear?: string;
+  details?: SubjectDetails;
 }
 
 export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public' | 'attendance' | 'attendance-public' | 'student-attendance-portal';

@@ -345,6 +345,14 @@ export class DataService extends BaseDataService {
         return allStudents.filter(s => studentIds.includes(s.id));
     }
 
+    async enrollStudentInSubject(subjectId: string, studentId: string): Promise<void> {
+        return this.academicService.enrollStudentInSubject(subjectId, studentId);
+    }
+
+    async unenrollStudentFromSubject(subjectId: string, studentId: string): Promise<void> {
+        return this.academicService.unenrollStudentFromSubject(subjectId, studentId);
+    }
+
     async calculateAttendancePercentage(studentId: string, subjectId: string, termKey?: string): Promise<number> {
         return this.attendanceService.calculateAttendancePercentage(studentId, subjectId, termKey);
     }
