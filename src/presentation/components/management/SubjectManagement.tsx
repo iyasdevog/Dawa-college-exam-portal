@@ -500,7 +500,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         return Array.from(uniqueMap.values()).sort();
     }, [subjects]);
 
-    const flattenedSubjectList = React.useMemo(() => {
+    const baseFlattenedSubjectList = React.useMemo(() => {
         const electiveGroups: Record<string, SubjectConfig & { specificClass: string[], relatedIds: string[] }> = {};
         const flattened: (SubjectConfig & { specificClass: string | string[], relatedIds?: string[] })[] = [];
 
@@ -547,11 +547,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             });
         });
 
-        const filtered = subjectFacultyFilter === 'All'
-            ? flattened
-            : flattened.filter(s => (s.facultyName || 'Unassigned') === subjectFacultyFilter);
-
-        return filtered.sort((a, b) => {
+        return flattened.sort((a, b) => {
             const nameCompare = a.name.localeCompare(b.name);
             if (nameCompare !== 0) return nameCompare;
 
@@ -559,7 +555,15 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             const classB = Array.isArray(b.specificClass) ? b.specificClass.join(',') : b.specificClass;
             return classA.localeCompare(classB);
         });
-    }, [subjects, subjectFacultyFilter]);
+    }, [subjects]);
+
+    const flattenedSubjectList = React.useMemo(() => {
+        const filtered = subjectFacultyFilter === 'All'
+            ? baseFlattenedSubjectList
+            : baseFlattenedSubjectList.filter(s => (s.facultyName || 'Unassigned') === subjectFacultyFilter);
+
+        return filtered;
+    }, [baseFlattenedSubjectList, subjectFacultyFilter]);
 
     // Syllabus Details Filters
     const [detailsNameFilter, setDetailsNameFilter] = useState('All');
@@ -572,15 +576,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     }, [subjects]);
 
     const filteredDetailsSubjects = React.useMemo(() => {
-        let list = flattenedSubjectList; // Reuse flattened list with 'All' faculty bypass
-        
-        // Remove the top-level flattened subject filter if we want details tab standalone filtering
-        const rawFlattened = flattenedSubjectList.length > 0 ? flattenedSubjectList : subjects.map(s => ({
-            ...s,
-            specificClass: s.targetClasses && s.targetClasses.length > 0 ? s.targetClasses.join(', ') : 'No Class'
-        }));
-
-        list = rawFlattened;
+        let list = baseFlattenedSubjectList;
 
         if (detailsNameFilter !== 'All') {
             list = list.filter(s => s.name === detailsNameFilter);
@@ -591,12 +587,13 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         if (detailsClassFilter !== 'All') {
             list = list.filter(s => {
                 const classStr = Array.isArray(s.specificClass) ? s.specificClass.join(',') : s.specificClass;
+                if (classStr === 'No Class' || classStr === '-') return false;
                 return classStr.includes(detailsClassFilter);
             });
         }
         
         return list;
-    }, [flattenedSubjectList, subjects, detailsNameFilter, detailsFacultyFilter, detailsClassFilter]);
+    }, [baseFlattenedSubjectList, detailsNameFilter, detailsFacultyFilter, detailsClassFilter]);
 
     return (
         <div className="space-y-6">
