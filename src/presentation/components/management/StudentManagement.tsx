@@ -568,7 +568,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                     onChange={e => setStudentForm(prev => ({ ...prev, className: e.target.value }))}
                                     className="w-full p-3 border rounded-xl"
                                 >
-                                    {['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map(c => <option key={c} value={c}>{c}</option>)}
+                                    {Array.from(new Set([...students.map(s => s.className), 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])).sort().map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
                             <div className="flex gap-3 pt-4">
