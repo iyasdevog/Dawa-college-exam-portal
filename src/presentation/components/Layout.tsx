@@ -4,6 +4,7 @@ import HamburgerMenu from './HamburgerMenu';
 import { User } from '../../domain/entities/User';
 import { useMobile, useMobileNavigation } from '../hooks/useMobile';
 import { TermSelector } from './TermSelector';
+import BottomNavigationBar from './BottomNavigationBar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -115,12 +116,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
       {!isMobile && <DesktopSidebar />}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <MobileHeader />
-        <div className={`flex-1 overflow-y-auto ${isMobile ? 'p-4' : isTablet ? 'p-6' : 'p-6 lg:p-10'}`}>
+        <div className={`flex-1 overflow-y-auto pb-16 ${isMobile ? 'p-4' : isTablet ? 'p-6' : 'p-6 lg:p-10'}`}>
           <div className={`${isMobile ? 'space-y-4' : 'space-y-6'} max-w-full`}>
             {children}
           </div>
         </div>
       </main>
+      {isMobile && (
+        <BottomNavigationBar
+          activeView={activeView}
+          setView={setView}
+          currentUser={currentUser}
+        />
+      )}
     </div>
   );
 };
