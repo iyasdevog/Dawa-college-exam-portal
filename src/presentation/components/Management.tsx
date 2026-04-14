@@ -9,6 +9,7 @@ import SupplementaryManagement from './management/SupplementaryManagement';
 import ClassManagement from './management/ClassManagement';
 import SettingsManagement from './management/SettingsManagement';
 import AttendanceManagement from './management/AttendanceManagement';
+import CurriculumManagement from './management/CurriculumManagement';
 import { useTerm } from '../viewmodels/TermContext';
 
 const Management: React.FC = () => {
@@ -22,12 +23,14 @@ const Management: React.FC = () => {
   const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
   const [supplementaryExams, setSupplementaryExams] = useState<any[]>([]);
   const [customClasses, setCustomClasses] = useState<string[]>([]);
+  const [curriculum, setCurriculum] = useState<any[]>([]);
   const [loadedData, setLoadedData] = useState<Set<string>>(new Set());
   const [isDataActionLoading, setIsDataActionLoading] = useState(false);
 
   const tabs = [
     { id: 'students', label: 'Students', icon: 'fa-users' },
     { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
+    { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' },
     { id: 'supplementary', label: 'Supplementary', icon: 'fa-redo' },
     { id: 'classes', label: 'Classes', icon: 'fa-chalkboard' },
     { id: 'settings', label: 'Settings', icon: 'fa-cog' },
@@ -51,6 +54,11 @@ const Management: React.FC = () => {
       if (tabId === 'supplementary') {
         const suppData = await dataService.getAllSupplementaryExams(activeTerm);
         setSupplementaryExams(suppData);
+      }
+
+      if (tabId === 'curriculum') {
+        const currData = await dataService.getAllCurriculum();
+        setCurriculum(currData);
       }
 
       setLoadedData(prev => new Set(prev).add(tabId));
@@ -154,6 +162,14 @@ const Management: React.FC = () => {
               subjects={subjects}
               students={students}
               activeTerm={activeTerm}
+              onRefresh={handleRefresh}
+              isLoading={isDataActionLoading}
+            />
+          )}
+
+          {activeTab === 'curriculum' && (
+            <CurriculumManagement
+              curriculum={curriculum}
               onRefresh={handleRefresh}
               isLoading={isDataActionLoading}
             />

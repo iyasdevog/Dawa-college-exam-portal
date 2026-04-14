@@ -280,3 +280,13 @@ export interface TimetableGeneratorConfig {
   timeSlots?: PeriodTimeSlot[]; // Granular control over slots
   rules?: TimetableRule[];
 }
+
+export interface CurriculumEntry {
+  id: string;
+  stream: '3-Year' | '5-Year';
+  semester: number; // e.g., 1 to 10
+  subjectName: string;
+  learningPeriod: string; // e.g., "60 hours" or "Jan - Jun"
+  portions: string; // e.g., "Unit 1-4"
+}
+

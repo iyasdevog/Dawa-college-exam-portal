@@ -9,6 +9,7 @@ import { mobileStorage, preventIOSZoom } from '../../infrastructure/services/mob
 import ClassResults from './ClassResults';
 import ApplicationPortal from './ApplicationPortal';
 import { TermSelector } from './TermSelector';
+import CurriculumOverview from './CurriculumOverview';
 import { useTerm } from '../viewmodels/TermContext';
 
 const PublicScorecard = React.lazy(() => import('./PublicScorecard'));
@@ -31,7 +32,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [showAppPortal, setShowAppPortal] = useState(false); // Added state
 
     // Tabs state
-    const [subView, setSubView] = useState<'results' | 'attendance' | 'live' | 'hall-ticket'>('results');
+    const [subView, setSubView] = useState<'results' | 'attendance' | 'live' | 'hall-ticket' | 'curriculum'>('curriculum');
 
     // Hall Ticket States
     const [htAdNo, setHtAdNo] = useState('');
@@ -143,7 +144,8 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
         if (hasSearched && searchAdNo) {
             handleSearch();
         }
-    }, [activeTerm, handleSearch]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTerm]);
 
     const handleHtSearch = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -233,13 +235,14 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     {[
                         { id: 'results', label: 'Scorecards', icon: 'fa-file-invoice' },
                         { id: 'hall-ticket', label: 'Hall Ticket', icon: 'fa-id-card-clip' },
-                        { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' }
+                        { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' },
+                        { id: 'curriculum', label: 'Curriculum Map', icon: 'fa-sitemap' }
                     ].map(tab => (
                         <button
                             key={tab.id}
                             type="button"
                             onClick={() => {
-                                setSubView(tab.id as 'results' | 'attendance' | 'live' | 'hall-ticket');
+                                setSubView(tab.id as any);
                                 if (tab.id !== 'results') {
                                     setHasSearched(false);
                                     setResult(null);
@@ -257,6 +260,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 </div>
 
                 {subView === 'attendance' && <StudentAttendancePortal />}
+                {subView === 'curriculum' && <CurriculumOverview />}
                 {subView === 'hall-ticket' && (
                     <div className="w-full max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
                         {/* Hall Ticket Search Form */}

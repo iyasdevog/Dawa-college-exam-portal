@@ -5,6 +5,7 @@ import { SupplementaryService } from './modules/SupplementaryService';
 import { SettingsService } from './modules/SettingsService';
 import { AttendanceService } from './modules/AttendanceService';
 import { AdministrativeService } from './modules/AdministrativeService';
+import { CurriculumService } from './modules/CurriculumService';
 
 import { 
     StudentRecord, 
@@ -18,7 +19,8 @@ import {
     PerformanceLevel,
     SubjectMarks,
     SpecialDay,
-    ClassReleaseSettings
+    ClassReleaseSettings,
+    CurriculumEntry
 } from '../../domain/entities/types';
 
 export class DataService extends BaseDataService {
@@ -28,6 +30,7 @@ export class DataService extends BaseDataService {
     private settingsService: SettingsService;
     private attendanceService: AttendanceService;
     private administrativeService: AdministrativeService;
+    private curriculumService: CurriculumService;
 
     constructor() {
         super();
@@ -37,6 +40,24 @@ export class DataService extends BaseDataService {
         this.settingsService = new SettingsService(this.studentService);
         this.attendanceService = new AttendanceService(this.academicService);
         this.administrativeService = new AdministrativeService(this.supplementaryService, this.studentService);
+        this.curriculumService = new CurriculumService();
+    }
+
+    // --- Curriculum Domain ---
+    async getAllCurriculum(): Promise<CurriculumEntry[]> {
+        return this.curriculumService.getAllCurriculum();
+    }
+
+    async addCurriculumEntry(entry: Omit<CurriculumEntry, 'id'>): Promise<string> {
+        return this.curriculumService.addCurriculumEntry(entry);
+    }
+
+    async updateCurriculumEntry(id: string, updates: Partial<CurriculumEntry>): Promise<void> {
+        return this.curriculumService.updateCurriculumEntry(id, updates);
+    }
+
+    async deleteCurriculumEntry(id: string): Promise<void> {
+        return this.curriculumService.deleteCurriculumEntry(id);
     }
 
     // --- Student Domain ---

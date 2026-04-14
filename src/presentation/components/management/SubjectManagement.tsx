@@ -149,7 +149,16 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const [studentSearchQuery, setStudentSearchQuery] = useState('');
     const [isCreatingNewFaculty, setIsCreatingNewFaculty] = useState(false);
 
-    const uniqueClasses = Array.from(new Set(students.map(s => s.className))).sort();
+    const uniqueClasses = React.useMemo(() => {
+        const classes = new Set<string>();
+        students.forEach(s => {
+            if (s.className) classes.add(s.className);
+        });
+        subjects.forEach(s => {
+            if (s.targetClasses) s.targetClasses.forEach(c => classes.add(c));
+        });
+        return Array.from(classes).sort();
+    }, [students, subjects]);
 
     const handleAddSubject = async () => {
         setEditingSubject(null);
@@ -473,6 +482,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
 
     // Flatten subjects for the list tab
     const [subjectFacultyFilter, setSubjectFacultyFilter] = useState<string>('All');
+    const [subjectClassFilter, setSubjectClassFilter] = useState<string>('All');
+    const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
 
     // Get unique faculties for filter
     const uniqueFaculties = React.useMemo(() => {
@@ -558,12 +569,31 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     }, [subjects]);
 
     const flattenedSubjectList = React.useMemo(() => {
-        const filtered = subjectFacultyFilter === 'All'
-            ? baseFlattenedSubjectList
-            : baseFlattenedSubjectList.filter(s => (s.facultyName || 'Unassigned') === subjectFacultyFilter);
+        let list = baseFlattenedSubjectList;
+        
+        if (subjectFacultyFilter !== 'All') {
+            list = list.filter(s => (s.facultyName || 'Unassigned') === subjectFacultyFilter);
+        }
+        
+        if (subjectClassFilter !== 'All') {
+            list = list.filter(s => {
+                if (Array.isArray(s.specificClass)) {
+                    return s.specificClass.includes(subjectClassFilter);
+                }
+                return s.specificClass === subjectClassFilter;
+            });
+        }
+        
+        if (subjectSearchQuery.trim() !== '') {
+            const query = subjectSearchQuery.toLowerCase();
+            list = list.filter(s => 
+                s.name.toLowerCase().includes(query) || 
+                (s.facultyName || '').toLowerCase().includes(query)
+            );
+        }
 
-        return filtered;
-    }, [baseFlattenedSubjectList, subjectFacultyFilter]);
+        return list;
+    }, [baseFlattenedSubjectList, subjectFacultyFilter, subjectClassFilter, subjectSearchQuery]);
 
     // Syllabus Details Filters
     const [detailsNameFilter, setDetailsNameFilter] = useState('All');
@@ -571,9 +601,14 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const [detailsClassFilter, setDetailsClassFilter] = useState('All');
 
     const uniqueSubjectNames = React.useMemo(() => {
-        const names = new Set(subjects.map(s => s.name));
+        let list = baseFlattenedSubjectList;
+        if (detailsFacultyFilter !== 'All') list = list.filter(s => (s.facultyName || 'Unassigned') === detailsFacultyFilter);
+        if (detailsClassFilter !== 'All') {
+            list = list.filter(s => Array.isArray(s.specificClass) ? s.specificClass.includes(detailsClassFilter) : s.specificClass === detailsClassFilter);
+        }
+        const names = new Set(list.map(s => s.name));
         return Array.from(names).sort((a, b) => a.localeCompare(b));
-    }, [subjects]);
+    }, [baseFlattenedSubjectList, detailsFacultyFilter, detailsClassFilter]);
 
     const filteredDetailsSubjects = React.useMemo(() => {
         let list = baseFlattenedSubjectList;
@@ -586,9 +621,10 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         }
         if (detailsClassFilter !== 'All') {
             list = list.filter(s => {
-                const classStr = Array.isArray(s.specificClass) ? s.specificClass.join(',') : s.specificClass;
-                if (classStr === 'No Class' || classStr === '-') return false;
-                return classStr.includes(detailsClassFilter);
+                if (Array.isArray(s.specificClass)) {
+                    return s.specificClass.includes(detailsClassFilter);
+                }
+                return s.specificClass === detailsClassFilter;
             });
         }
         
@@ -633,10 +669,10 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
 
             {activeTab === 'subjects' && (
                 <div className="space-y-4">
-                    <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
                         <div className="flex items-center gap-2">
                             <i className="fa-solid fa-filter text-slate-400"></i>
-                            <label className="font-bold text-sm text-slate-700">Filter by Faculty:</label>
+                            <label className="font-bold text-sm text-slate-700">Filters:</label>
                         </div>
                         <select
                             value={subjectFacultyFilter}
@@ -648,7 +684,27 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 <option key={f} value={f}>{f}</option>
                             ))}
                         </select>
-                        <span className="text-xs text-slate-400 ml-auto font-medium">
+                        <select
+                            value={subjectClassFilter}
+                            onChange={(e) => setSubjectClassFilter(e.target.value)}
+                            className="p-2 pl-3 pr-8 border rounded-lg bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                            <option value="All">All Classes</option>
+                            {uniqueClasses.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+                        <div className="flex-1 min-w-[200px] relative">
+                            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input
+                                type="text"
+                                placeholder="Search by subject or faculty name..."
+                                value={subjectSearchQuery}
+                                onChange={(e) => setSubjectSearchQuery(e.target.value)}
+                                className="w-full p-2 pl-9 border rounded-lg bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                        </div>
+                        <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
                             {flattenedSubjectList.length} assignments found
                         </span>
                     </div>

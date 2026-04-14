@@ -38,6 +38,7 @@ export abstract class BaseDataService {
     protected readonly hallTicketSettingsCollection = 'hallTicketSettings';
     protected readonly academicCalendarCollection = 'academicCalendar';
     protected readonly generatorConfigsCollection = 'generatorConfigs';
+    protected readonly curriculumCollection = 'curriculum';
 
     // Cache
     protected studentsCache = new Map<string, StudentRecord[]>();

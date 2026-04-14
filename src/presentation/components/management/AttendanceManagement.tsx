@@ -42,9 +42,31 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const [allTimetables, setAllTimetables] = useState<TimetableEntry[]>([]);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
 
+    const [searchQuery, setSearchQuery] = useState('');
+
     const classes = useMemo(() => [...new Set(students.map(s => s.className))], [students]);
     const filteredSubjects = useMemo(() => subjects.filter(s => s.targetClasses.includes(selectedClass)), [subjects, selectedClass]);
-    const filteredStudents = useMemo(() => students.filter(s => s.className === selectedClass), [students, selectedClass]);
+    
+    const filteredStudents = useMemo(() => {
+        let list = students.filter(s => s.className === selectedClass);
+        
+        // Optimize for elective subjects: strictly show only enrolled students
+        const subject = subjects.find(s => s.id === selectedSubject);
+        if (subject && subject.subjectType === 'elective' && subject.enrolledStudents) {
+            list = list.filter(s => subject.enrolledStudents.includes(s.id));
+        }
+
+        // Apply quick search
+        if (searchQuery.trim() !== '') {
+            const query = searchQuery.toLowerCase();
+            list = list.filter(s => 
+                s.name.toLowerCase().includes(query) || 
+                (s.adNo && s.adNo.toLowerCase().includes(query))
+            );
+        }
+
+        return list;
+    }, [students, selectedClass, selectedSubject, subjects, searchQuery]);
 
     useEffect(() => {
         const loadAllTimetables = async () => {
@@ -103,6 +125,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         setSelectedClass(entry.className);
         setSelectedSubject(entry.subjectId);
         setSelectedDate(new Date().toISOString().split('T')[0]);
+        setSearchQuery('');
         setIsSpecialDayMode(false);
     };
 
@@ -318,9 +341,23 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 </div>
             ) : selectedClass && selectedSubject ? (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
-                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-3 sticky top-0 z-10">
-                        <h3 className="font-bold text-slate-900">Mark Attendance: {filteredStudents.length} Students</h3>
-                        <div className="flex gap-2 w-full sm:w-auto justify-between sm:justify-end bg-white sm:bg-transparent p-2 sm:p-0 rounded-lg border sm:border-none border-slate-200">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col items-start gap-3 sticky top-0 z-10">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full gap-3">
+                            <h3 className="font-bold text-slate-900">
+                                Mark Attendance: {filteredStudents.length} Students
+                            </h3>
+                            <div className="relative w-full sm:w-64">
+                                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input 
+                                    type="text" 
+                                    placeholder="Search student..." 
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full text-sm pl-9 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 w-full justify-between sm:justify-end bg-white sm:bg-transparent p-2 sm:p-0 rounded-lg border sm:border-none border-slate-200">
                             <button onClick={() => {
                                 const allPresent = { ...attendanceData };
                                 filteredStudents.forEach(s => allPresent[s.id] = true);
