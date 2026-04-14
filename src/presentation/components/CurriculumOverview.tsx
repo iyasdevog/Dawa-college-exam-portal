@@ -143,7 +143,21 @@ export const CurriculumOverview: React.FC = () => {
                                     {entries.map(entry => (
                                         <div key={entry.id} className="bg-slate-900/40 border border-white/10 rounded-2xl p-5 hover:border-emerald-500/50 transition-colors">
                                             <div className="flex justify-between items-start mb-3 gap-2">
-                                                <h4 className="font-bold text-white text-lg">{entry.subjectName}</h4>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        {entry.subjectType && (
+                                                            <span className="text-[9px] font-bold bg-white/10 text-slate-300 px-2 py-0.5 rounded-full uppercase tracking-widest border border-white/20">
+                                                                {entry.subjectType}
+                                                            </span>
+                                                        )}
+                                                        {entry.subjectCode && (
+                                                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                                                                {entry.subjectCode}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <h4 className="font-bold text-white text-lg">{entry.subjectName}</h4>
+                                                </div>
                                                 <span className="bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap self-start">
                                                     <i className="fa-solid fa-hourglass-half mr-1"></i> {entry.learningPeriod}
                                                 </span>

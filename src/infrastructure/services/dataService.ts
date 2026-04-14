@@ -111,7 +111,72 @@ export class DataService extends BaseDataService {
     }
 
     async updateSubject(id: string, updates: Partial<SubjectConfig>): Promise<void> {
-        return this.academicService.updateSubject(id, updates);
+        await this.academicService.updateSubject(id, updates);
+
+        // Auto-sync Curriculum when Subject Details are updated
+        if (updates.details) {
+            try {
+                let subjectConfigName = updates.name || '';
+                let subjectType = updates.subjectType || 'general';
+                if (!subjectConfigName) {
+                    const allSubs = await this.getAllSubjects();
+                    const sub = allSubs.find(s => s.id === id);
+                    if (sub) {
+                        subjectConfigName = sub.name;
+                        subjectType = sub.subjectType;
+                    }
+                }
+
+                // Infer curriculum stage & stream
+                const stageStr = (updates.details.stage || '').toLowerCase();
+                let curStage: 'Foundational' | 'Undergraduate' | 'Post Graduate' = 'Foundational';
+                if (stageStr.includes('undergraduate')) curStage = 'Undergraduate';
+                else if (stageStr.includes('post')) curStage = 'Post Graduate';
+
+                let stream: '3-Year' | '5-Year' | 'None' = 'None';
+                const semText = String(updates.details.semester || '').trim();
+                const semNum = parseInt(semText) || 1;
+
+                if (curStage === 'Foundational') {
+                    stream = '3-Year';
+                    if (stageStr.includes('5') || semText.includes('5') || ['7','8','9','10'].includes(semText)) {
+                        stream = '5-Year';
+                    }
+                }
+
+                // Format curriculum portions from course units
+                let portionsStr = (updates.details.courseContent || [])
+                    .map(c => `Unit ${c.unit}: ${c.description || ''}`.trim())
+                    .filter(c => c !== 'Unit :')
+                    .join('\n\n');
+                
+                if (!portionsStr) {
+                    portionsStr = updates.details.summaryAndJustification || 'No syllabus available.';
+                }
+
+                const curriculumData = {
+                    stage: curStage,
+                    stream: stream,
+                    semester: semNum,
+                    subjectCode: id, // Typically acts as code
+                    subjectName: subjectConfigName || updates.details.courseName || 'Unknown Subject',
+                    subjectType: subjectType,
+                    learningPeriod: updates.details.totalHours || 'TBD',
+                    portions: portionsStr.trim()
+                };
+
+                const curricula = await this.getAllCurriculum();
+                const existing = curricula.find(c => c.subjectCode === id || c.subjectName === curriculumData.subjectName);
+
+                if (existing) {
+                    await this.updateCurriculumEntry(existing.id, curriculumData);
+                } else {
+                    await this.addCurriculumEntry(curriculumData);
+                }
+            } catch (err) {
+                console.error("Auto Sync Curriculum Error:", err);
+            }
+        }
     }
 
     async deleteSubject(id: string): Promise<void> {

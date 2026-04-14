@@ -288,7 +288,9 @@ export interface CurriculumEntry {
   stage: CurriculumStage;
   stream: '3-Year' | '5-Year' | 'None';
   semester: number; // e.g., 1 to 10
+  subjectCode?: string; // Optional for backward compatibility
   subjectName: string;
+  subjectType?: 'general' | 'elective' | string;
   learningPeriod: string; // e.g., "60 hours" or "Jan - Jun"
   portions: string; // e.g., "Unit 1-4"
 }

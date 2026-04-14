@@ -19,7 +19,9 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
         stage: 'Foundational',
         stream: '3-Year',
         semester: 1,
+        subjectCode: '',
         subjectName: '',
+        subjectType: 'general',
         learningPeriod: '',
         portions: ''
     });
@@ -33,7 +35,9 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
             stage: activeStage,
             stream: activeStage === 'Foundational' ? activeStream : 'None',
             semester: 1,
+            subjectCode: '',
             subjectName: '',
+            subjectType: 'general',
             learningPeriod: '',
             portions: ''
         });
@@ -46,7 +50,9 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
             stage: entry.stage,
             stream: entry.stream,
             semester: entry.semester,
+            subjectCode: entry.subjectCode || '',
             subjectName: entry.subjectName,
+            subjectType: entry.subjectType || 'general',
             learningPeriod: entry.learningPeriod,
             portions: entry.portions
         });
@@ -210,16 +216,39 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
                                         />
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Subject Name</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={form.subjectName}
-                                        onChange={e => setForm({ ...form, subjectName: e.target.value })}
-                                        className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
-                                        placeholder="e.g. Advanced Mathematics"
-                                    />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Subject Code</label>
+                                        <input
+                                            type="text"
+                                            value={form.subjectCode || ''}
+                                            onChange={e => setForm({ ...form, subjectCode: e.target.value })}
+                                            placeholder="e.g. AR101"
+                                            className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Subject Type</label>
+                                        <select
+                                            value={form.subjectType || 'general'}
+                                            onChange={e => setForm({ ...form, subjectType: e.target.value })}
+                                            className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
+                                        >
+                                            <option value="general">General</option>
+                                            <option value="elective">Elective</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Subject Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={form.subjectName}
+                                            onChange={e => setForm({ ...form, subjectName: e.target.value })}
+                                            className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
+                                            placeholder="e.g. Advanced Mathematics"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Learning Period / Time</label>
@@ -292,7 +321,21 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
                                     <div key={entry.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col md:flex-row gap-6">
                                         <div className="flex-1 space-y-2">
                                             <div className="flex justify-between items-start">
-                                                <h4 className="font-bold text-slate-900 text-lg">{entry.subjectName}</h4>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        {entry.subjectType && (
+                                                            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-widest border border-slate-200">
+                                                                {entry.subjectType}
+                                                            </span>
+                                                        )}
+                                                        {entry.subjectCode && (
+                                                            <span className="text-[10px] font-bold text-emerald-600 border border-emerald-200 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                                                                {entry.subjectCode}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <h4 className="font-bold text-slate-900 text-lg">{entry.subjectName}</h4>
+                                                </div>
                                                 <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1">
                                                     <i className="fa-regular fa-clock"></i> {entry.learningPeriod}
                                                 </span>
