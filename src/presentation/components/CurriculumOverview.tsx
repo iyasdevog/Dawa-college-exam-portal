@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { CurriculumEntry } from '../../domain/entities/types';
+import { CurriculumEntry, CurriculumStage } from '../../domain/entities/types';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 
 export const CurriculumOverview: React.FC = () => {
     const { isMobile } = useMobile();
-    const [activeTab, setActiveTab] = useState<'3-Year' | '5-Year'>('5-Year');
+    const [activeStage, setActiveStage] = useState<CurriculumStage>('Foundational');
+    const [activeStream, setActiveStream] = useState<'3-Year' | '5-Year'>('5-Year');
     const [curriculum, setCurriculum] = useState<CurriculumEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -24,7 +25,7 @@ export const CurriculumOverview: React.FC = () => {
     }, []);
 
     const filteredCurriculum = curriculum
-        .filter(c => c.stream === activeTab)
+        .filter(c => c.stage === activeStage && (activeStage !== 'Foundational' || c.stream === activeStream))
         .sort((a, b) => a.semester - b.semester || a.subjectName.localeCompare(b.subjectName));
 
     const groupedBySemester = filteredCurriculum.reduce((acc, entry) => {
@@ -53,29 +54,49 @@ export const CurriculumOverview: React.FC = () => {
                 </p>
             </div>
 
-            {/* Stream Selector */}
-            <div className="flex justify-center mb-8">
-                <div className="bg-white/10 backdrop-blur-md p-1 rounded-2xl flex gap-1 border border-white/20 shadow-xl">
-                    <button
-                        onClick={() => setActiveTab('3-Year')}
-                        className={`px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all ${activeTab === '3-Year'
-                            ? 'bg-emerald-500 text-white shadow-md'
-                            : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                        }`}
-                    >
-                        3-Year Stream
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('5-Year')}
-                        className={`px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all ${activeTab === '5-Year'
-                            ? 'bg-emerald-500 text-white shadow-md'
-                            : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                        }`}
-                    >
-                        5-Year Stream
-                    </button>
+            {/* Stage Selector */}
+            <div className="flex justify-center mb-6">
+                <div className="bg-white/10 backdrop-blur-md p-1.5 rounded-2xl flex flex-wrap justify-center gap-2 border border-white/20 shadow-xl w-full max-w-2xl mx-auto">
+                    {(['Foundational', 'Undergraduate', 'Post Graduate'] as CurriculumStage[]).map(stage => (
+                        <button
+                            key={stage}
+                            onClick={() => setActiveStage(stage)}
+                            className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold uppercase tracking-widest text-xs transition-all ${activeStage === stage
+                                ? 'bg-emerald-500 text-white shadow-lg scale-105'
+                                : 'text-slate-300 hover:bg-white/10 hover:text-white hover:scale-105'
+                            }`}
+                        >
+                            {stage}
+                        </button>
+                    ))}
                 </div>
             </div>
+
+            {/* Stream Selector (Only for Foundational) */}
+            {activeStage === 'Foundational' && (
+                <div className="flex justify-center mb-8 animate-in fade-in slide-in-from-top-2">
+                    <div className="bg-white/10 backdrop-blur-md p-1 rounded-full flex gap-1 border border-white/20 shadow-md">
+                        <button
+                            onClick={() => setActiveStream('3-Year')}
+                            className={`px-5 py-2.5 rounded-full font-bold uppercase tracking-widest text-[10px] transition-all ${activeStream === '3-Year'
+                                ? 'bg-emerald-500/80 text-white shadow-md backdrop-blur-md border border-emerald-400/50'
+                                : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                            }`}
+                        >
+                            3-Year Stream
+                        </button>
+                        <button
+                            onClick={() => setActiveStream('5-Year')}
+                            className={`px-5 py-2.5 rounded-full font-bold uppercase tracking-widest text-[10px] transition-all ${activeStream === '5-Year'
+                                ? 'bg-emerald-500/80 text-white shadow-md backdrop-blur-md border border-emerald-400/50'
+                                : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                            }`}
+                        >
+                            5-Year Stream
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {Object.keys(groupedBySemester).length === 0 ? (
                 <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 p-12 text-center shadow-2xl">
@@ -84,7 +105,7 @@ export const CurriculumOverview: React.FC = () => {
                     </div>
                     <h3 className="text-2xl font-black text-white mb-2">Curriculum Updates in Progress</h3>
                     <p className="text-slate-300 max-w-sm mx-auto">
-                        The detailed syllabus for the {activeTab} stream is currently being updated. Please check back later.
+                        The detailed syllabus for {activeStage} {activeStage === 'Foundational' ? `(${activeStream})` : ''} is currently being updated. Please check back later.
                     </p>
                 </div>
             ) : (

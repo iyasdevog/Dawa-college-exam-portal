@@ -281,9 +281,12 @@ export interface TimetableGeneratorConfig {
   rules?: TimetableRule[];
 }
 
+export type CurriculumStage = 'Foundational' | 'Undergraduate' | 'Post Graduate';
+
 export interface CurriculumEntry {
   id: string;
-  stream: '3-Year' | '5-Year';
+  stage: CurriculumStage;
+  stream: '3-Year' | '5-Year' | 'None';
   semester: number; // e.g., 1 to 10
   subjectName: string;
   learningPeriod: string; // e.g., "60 hours" or "Jan - Jun"

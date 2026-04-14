@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CurriculumEntry } from '../../../domain/entities/types';
+import { CurriculumEntry, CurriculumStage } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 
@@ -16,6 +16,7 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
     const [editingEntry, setEditingEntry] = useState<CurriculumEntry | null>(null);
 
     const [form, setForm] = useState<Omit<CurriculumEntry, 'id'>>({
+        stage: 'Foundational',
         stream: '3-Year',
         semester: 1,
         subjectName: '',
@@ -23,12 +24,14 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
         portions: ''
     });
 
-    const [activeTab, setActiveTab] = useState<'3-Year' | '5-Year'>('3-Year');
+    const [activeStage, setActiveStage] = useState<CurriculumStage>('Foundational');
+    const [activeStream, setActiveStream] = useState<'3-Year' | '5-Year'>('3-Year');
 
     const handleAdd = () => {
         setEditingEntry(null);
         setForm({
-            stream: activeTab,
+            stage: activeStage,
+            stream: activeStage === 'Foundational' ? activeStream : 'None',
             semester: 1,
             subjectName: '',
             learningPeriod: '',
@@ -40,6 +43,7 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
     const handleEdit = (entry: CurriculumEntry) => {
         setEditingEntry(entry);
         setForm({
+            stage: entry.stage,
             stream: entry.stream,
             semester: entry.semester,
             subjectName: entry.subjectName,
@@ -81,7 +85,7 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
     };
 
     const filteredCurriculum = curriculum
-        .filter(c => c.stream === activeTab)
+        .filter(c => c.stage === activeStage && (activeStage !== 'Foundational' || c.stream === activeStream))
         .sort((a, b) => a.semester - b.semester || a.subjectName.localeCompare(b.subjectName));
 
     // Group by semester
@@ -105,21 +109,45 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
                 </button>
             </div>
 
-            {/* Stream Tabs */}
+            {/* Stage Tabs */}
             <div className="flex gap-4 border-b border-slate-200">
                 <button
-                    onClick={() => setActiveTab('3-Year')}
-                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeTab === '3-Year' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveStage('Foundational')}
+                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeStage === 'Foundational' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
-                    3-Year Stream
+                    Foundational
                 </button>
                 <button
-                    onClick={() => setActiveTab('5-Year')}
-                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeTab === '5-Year' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveStage('Undergraduate')}
+                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeStage === 'Undergraduate' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
-                    5-Year Stream
+                    Undergraduate
+                </button>
+                <button
+                    onClick={() => setActiveStage('Post Graduate')}
+                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeStage === 'Post Graduate' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    Post Graduate
                 </button>
             </div>
+
+            {/* Stream Tabs (only for Foundational) */}
+            {activeStage === 'Foundational' && (
+                <div className="flex gap-4 pl-4">
+                    <button
+                        onClick={() => setActiveStream('3-Year')}
+                        className={`py-1 px-4 text-sm font-bold rounded-full transition-colors ${activeStream === '3-Year' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >
+                        3-Year Stream
+                    </button>
+                    <button
+                        onClick={() => setActiveStream('5-Year')}
+                        className={`py-1 px-4 text-sm font-bold rounded-full transition-colors ${activeStream === '5-Year' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >
+                        5-Year Stream
+                    </button>
+                </div>
+            )}
 
             {showForm && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -134,17 +162,42 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
                             <form id="curriculum-form" onSubmit={handleSave} className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Stream</label>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Stage</label>
                                         <select
-                                            value={form.stream}
-                                            onChange={e => setForm({ ...form, stream: e.target.value as any })}
+                                            value={form.stage}
+                                            onChange={e => {
+                                                const newStage = e.target.value as CurriculumStage;
+                                                setForm({ 
+                                                    ...form, 
+                                                    stage: newStage, 
+                                                    stream: newStage === 'Foundational' ? '3-Year' : 'None' 
+                                                });
+                                            }}
                                             className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
                                         >
-                                            <option value="3-Year">3-Year Stream</option>
-                                            <option value="5-Year">5-Year Stream</option>
+                                            <option value="Foundational">Foundational</option>
+                                            <option value="Undergraduate">Undergraduate</option>
+                                            <option value="Post Graduate">Post Graduate</option>
                                         </select>
                                     </div>
                                     <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Stream</label>
+                                        <select
+                                            value={form.stream}
+                                            disabled={form.stage !== 'Foundational'}
+                                            onChange={e => setForm({ ...form, stream: e.target.value as any })}
+                                            className={`w-full p-3 border-2 rounded-xl font-bold outline-none ${form.stage !== 'Foundational' ? 'bg-slate-100 border-slate-100 text-slate-400' : 'border-slate-200 text-slate-700 focus:border-emerald-500'}`}
+                                        >
+                                            <option value="None">None</option>
+                                            {form.stage === 'Foundational' && (
+                                                <>
+                                                    <option value="3-Year">3-Year Stream</option>
+                                                    <option value="5-Year">5-Year Stream</option>
+                                                </>
+                                            )}
+                                        </select>
+                                    </div>
+                                    <div className="col-span-2">
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Semester (1 to 10)</label>
                                         <input
                                             type="number"
@@ -216,8 +269,8 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
             {Object.keys(groupedBySemester).length === 0 ? (
                 <div className="text-center p-12 text-slate-400 bg-slate-50 border border-slate-200 rounded-3xl">
                     <i className="fa-solid fa-book-open text-4xl mb-3 opacity-20"></i>
-                    <p className="font-medium text-lg">No curriculum data for {activeTab}.</p>
-                    <p className="text-sm mt-1">Click 'Add Entry' to configure what is taught in this stream.</p>
+                        <p className="font-medium text-lg">No curriculum data for {activeStage} {activeStage === 'Foundational' ? `(${activeStream})` : ''}.</p>
+                        <p className="text-sm mt-1">Click 'Add Entry' to configure what is taught in this stage.</p>
                 </div>
             ) : (
                 <div className="space-y-8">
