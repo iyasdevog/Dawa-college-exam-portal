@@ -36,10 +36,15 @@ export interface AILibrary {
     GoogleGenerativeAI: new (apiKey: string) => any;
 }
 
+export interface OpenAILibrary {
+    OpenAI: any;
+}
+
 // Dynamic import functions with error handling and caching
 let excelLibCache: ExcelLibrary | null = null;
 let chartsLibCache: ChartsLibrary | null = null;
 let aiLibCache: AILibrary | null = null;
+let openaiLibCache: OpenAILibrary | null = null;
 
 /**
  * Dynamically imports the XLSX library for Excel operations
@@ -94,13 +99,35 @@ export const loadAILibrary = async (): Promise<AILibrary> => {
 
     try {
         console.log('Loading AI library (Google GenAI)...');
-        const genai = await import('@google/genai');
+        const genai = await import('@google/generative-ai');
         aiLibCache = genai as unknown as AILibrary;
         console.log('AI library loaded successfully');
         return aiLibCache;
     } catch (error) {
         console.error('Failed to load AI library:', error);
         throw new Error('AI functionality is not available. Please refresh and try again.');
+    }
+};
+
+/**
+ * Dynamically imports the OpenAI SDK
+ * Used as an alternative AI provider
+ */
+export const loadOpenAILibrary = async (): Promise<OpenAILibrary> => {
+    if (openaiLibCache) {
+        return openaiLibCache;
+    }
+
+    try {
+        console.log('Loading OpenAI library...');
+        const openai = await import('openai');
+        // openai package exports a default or named OpenAI class depending on the resolution
+        openaiLibCache = { OpenAI: openai.OpenAI || openai.default };
+        console.log('OpenAI library loaded successfully');
+        return openaiLibCache;
+    } catch (error) {
+        console.error('Failed to load OpenAI library:', error);
+        throw new Error('OpenAI functionality is not available. Please refresh and try again.');
     }
 };
 

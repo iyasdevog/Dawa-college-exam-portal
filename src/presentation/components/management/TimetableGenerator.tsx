@@ -94,16 +94,23 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                 className: selectedClass,
                 semester: selectedSemester,
                 workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-                periodsPerDay: 4,
+                periodsPerDay: 12,
                 periodDurationMins: 60,
                 subjectWeeklyHours: initialHours,
-                breakSlots: [2],
+                breakSlots: [2, 5, 8, 10],
                 timeSlots: [
+                    { startTime: '06:30', endTime: '07:30' },
+                    { startTime: '07:30', endTime: '08:30' },
+                    { startTime: '08:30', endTime: '09:00' }, // Break
                     { startTime: '09:00', endTime: '10:00' },
-                    { startTime: '10:00', endTime: '11:00' },
-                    { startTime: '11:00', endTime: '11:30' },
-                    { startTime: '11:30', endTime: '12:30' },
-                    { startTime: '12:30', endTime: '01:30' },
+                    { startTime: '10:00', endTime: '10:55' },
+                    { startTime: '10:55', endTime: '11:05' }, // Break
+                    { startTime: '11:05', endTime: '12:00' },
+                    { startTime: '12:00', endTime: '13:00' },
+                    { startTime: '13:00', endTime: '14:00' }, // Break
+                    { startTime: '14:00', endTime: '14:55' },
+                    { startTime: '14:55', endTime: '15:05' }, // Break
+                    { startTime: '15:05', endTime: '16:00' },
                 ],
                 rules: []
             });
@@ -113,6 +120,40 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
     const handleSaveConfig = async () => {
         await dataService.saveGeneratorConfig(config);
         alert('Generator configuration saved!');
+    };
+
+    const handleResetConfig = () => {
+        if (window.confirm('Reset all time slots and rules to factory defaults? This will erase your current custom schedule for this class.')) {
+            const initialHours: Record<string, number> = {};
+            filteredSubjects.forEach(s => initialHours[s.id] = 4);
+            const defaultConfig = {
+                id: `${selectedClass}-${selectedSemester}`,
+                className: selectedClass,
+                semester: selectedSemester,
+                workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as any[],
+                periodsPerDay: 12,
+                periodDurationMins: 60,
+                subjectWeeklyHours: initialHours,
+                breakSlots: [2, 5, 8, 10],
+                timeSlots: [
+                    { startTime: '06:30', endTime: '07:30' },
+                    { startTime: '07:30', endTime: '08:30' },
+                    { startTime: '08:30', endTime: '09:00' }, // Break
+                    { startTime: '09:00', endTime: '10:00' },
+                    { startTime: '10:00', endTime: '10:55' },
+                    { startTime: '10:55', endTime: '11:05' }, // Break
+                    { startTime: '11:05', endTime: '12:00' },
+                    { startTime: '12:00', endTime: '13:00' },
+                    { startTime: '13:00', endTime: '14:00' }, // Break
+                    { startTime: '14:00', endTime: '14:55' },
+                    { startTime: '14:55', endTime: '15:05' }, // Break
+                    { startTime: '15:05', endTime: '16:00' },
+                ],
+                rules: []
+            };
+            setConfig(defaultConfig);
+            alert('Default schedule restored! Click "Save Params" to keep it.');
+        }
     };
 
     const generateTimetable = async () => {
@@ -146,8 +187,8 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                     console.warn(`Conflict: Faculty ${facName} is busy on ${day}. Skipping FixedSlot rule.`);
                                     return;
                                 }
-                                if (getFacultyDailyCount(facName, day as string, grid) >= 4) {
-                                    console.warn(`Limit: Faculty ${facName} already has >= 4 classes on ${day}. Skipping FixedSlot rule.`);
+                                if (getFacultyDailyCount(facName, day as string, grid) >= 6) {
+                                    console.warn(`Limit: Faculty ${facName} already has >= 6 classes on ${day}. Skipping FixedSlot rule.`);
                                     return;
                                 }
 
@@ -179,8 +220,8 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                     console.warn(`Conflict: Faculty ${facName} is busy on ${day}. Skipping FixedFaculty rule.`);
                                     return;
                                 }
-                                if (getFacultyDailyCount(facName, day as string, grid) >= 4) {
-                                    console.warn(`Limit: Faculty ${facName} already has >= 4 classes on ${day}. Skipping FixedFaculty rule.`);
+                                if (getFacultyDailyCount(facName, day as string, grid) >= 6) {
+                                    console.warn(`Limit: Faculty ${facName} already has >= 6 classes on ${day}. Skipping FixedFaculty rule.`);
                                     return;
                                 }
 
@@ -212,8 +253,8 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                     console.warn(`Conflict: Faculty ${facName} is busy on ${day}. Skipping FixedClass rule.`);
                                     return;
                                 }
-                                if (getFacultyDailyCount(facName, day as string, grid) >= 4) {
-                                    console.warn(`Limit: Faculty ${facName} already has >= 4 classes on ${day}. Skipping FixedClass rule.`);
+                                if (getFacultyDailyCount(facName, day as string, grid) >= 6) {
+                                    console.warn(`Limit: Faculty ${facName} already has >= 6 classes on ${day}. Skipping FixedClass rule.`);
                                     return;
                                 }
 
@@ -364,52 +405,57 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         document.body.removeChild(link);
     };
 
-    const handleFileExtraction = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+    const handleManualSlotUpdate = (day: string, effectivePIndex: number, subjectId: string) => {
+        setGeneratedTimetable(prev => {
+            let dayEntries = prev.filter(e => e.day === day);
+            const otherDays = prev.filter(e => e.day !== day);
 
-        setIsExtracting(true);
-        try {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async () => {
-                const base64Data = (reader.result as string).split(',')[1];
-                const mimeType = file.type;
+            // Pad day entries if it's too short
+            const maxExpected = config.periodsPerDay - (config.breakSlots?.length || 0);
+            while (dayEntries.length < maxExpected) {
+                dayEntries.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    day,
+                    subjectId: '',
+                    subjectName: '',
+                    className: selectedClass,
+                    startTime: '',
+                    endTime: ''
+                });
+            }
 
-                try {
-                    const extractedEntries = await aiService.extractTimetableFromMedia(base64Data, mimeType, filteredSubjects);
-                    
-                    const newEntries = extractedEntries.map((e: any) => ({
-                        id: Math.random().toString(36).substr(2, 9),
-                        day: e.day,
-                        subjectId: e.subjectId,
-                        subjectName: filteredSubjects.find(s => s.id === e.subjectId)?.name || 'Unknown',
-                        className: selectedClass,
-                        startTime: e.startTime,
-                        endTime: e.endTime,
-                    }));
-
-                    setGeneratedTimetable(newEntries);
-                    alert('Timetable extracted successfully! Review the output below.');
-                } catch (error) {
-                    console.error('AI Processing error:', error);
-                    alert('AI Processing failed. Make sure your Gemini API key is configured correctly and the file is legible.');
-                } finally {
-                    setIsExtracting(false);
-                }
+            const subject = subjects.find(s => s.id === subjectId);
+            dayEntries[effectivePIndex] = {
+                ...dayEntries[effectivePIndex],
+                subjectId: subjectId,
+                subjectName: subject?.name || '',
+                className: selectedClass,
+                startTime: config.timeSlots?.[effectivePIndex]?.startTime || dayEntries[effectivePIndex].startTime,
+                endTime: config.timeSlots?.[effectivePIndex]?.endTime || dayEntries[effectivePIndex].endTime,
             };
-            reader.onerror = error => {
-                console.error('File reading failed:', error);
-                alert('Failed to read file.');
-                setIsExtracting(false);
-            };
-        } catch (error) {
-            console.error('Extraction failed:', error);
-            alert('Failed to extract timetable from media.');
-            setIsExtracting(false);
-        }
+
+            return [...otherDays, ...dayEntries];
+        });
     };
 
+    const initializeBlankTimetable = () => {
+        let initialEntries: any[] = [];
+        config.workingDays.forEach(day => {
+            const maxExpected = config.periodsPerDay - (config.breakSlots?.length || 0);
+            for (let i = 0; i < maxExpected; i++) {
+                initialEntries.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    day,
+                    subjectId: '',
+                    subjectName: '',
+                    className: selectedClass,
+                    startTime: '',
+                    endTime: ''
+                });
+            }
+        });
+        setGeneratedTimetable(initialEntries);
+    };
     return (
         <div className="space-y-6">
             <style dangerouslySetInnerHTML={{
@@ -433,7 +479,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                 }
                 .print-only { display: none; }
             `}} />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                     <label className="block text-sm font-bold text-slate-700 mb-2">Class Selection</label>
                     <select
@@ -458,33 +504,6 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                             </button>
                         ))}
                     </div>
-                </div>
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col justify-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-2 text-purple-200 opaciy-50">
-                        <i className="fa-solid fa-wand-magic-sparkles text-4xl transform -rotate-12 translate-x-2 -translate-y-2"></i>
-                    </div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2 relative z-10">Auto AI Extraction</label>
-                    <div className="relative w-full z-10">
-                        <input
-                            type="file"
-                            accept="image/*,application/pdf"
-                            onChange={handleFileExtraction}
-                            disabled={isExtracting || !selectedClass}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                            title={!selectedClass ? "Select a class first" : "Upload File"}
-                        />
-                        <button 
-                            disabled={isExtracting || !selectedClass}
-                            className={`w-full py-4 rounded-xl font-bold border transition-all flex items-center justify-center gap-2 ${isExtracting ? 'bg-slate-300 text-slate-500' : 'bg-purple-600 text-white shadow-lg hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400'}`}
-                        >
-                            {isExtracting ? (
-                                <><i className="fa-solid fa-spinner fa-spin"></i> Extracting...</>
-                            ) : (
-                                <><i className="fa-solid fa-file-import"></i> Extract from Image / PDF</>
-                            )}
-                        </button>
-                    </div>
-                    {!selectedClass && <span className="text-[10px] text-orange-500 font-bold mt-2 text-center select-none">Select class to enable</span>}
                 </div>
             </div>
 
@@ -632,9 +651,9 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                                     if (isFacultyBusy(facName, rule.day as string, slotTime.startTime, slotTime.endTime)) {
                                                         hasConflict = true;
                                                         conflictReason = `Conflict: ${facName} is assigned elsewhere during this period.`;
-                                                    } else if (getFacultyDailyCount(facName, rule.day as string) >= 4) {
+                                                    } else if (getFacultyDailyCount(facName, rule.day as string) >= 6) {
                                                         hasLimit = true;
-                                                        conflictReason = `Limit: ${facName} already has ≥4 classes on this day.`;
+                                                        conflictReason = `Limit: ${facName} already has ≥6 classes on this day.`;
                                                     }
                                                 }
                                             }
@@ -915,10 +934,18 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
 
                                 <div className="pt-4 flex gap-2">
                                     <button
+                                        onClick={handleResetConfig}
+                                        className="flex-1 py-3 bg-red-50 text-red-700 border border-red-100 rounded-xl text-xs font-black hover:bg-red-100 transition-all uppercase tracking-wider"
+                                        title="Restore 6:30 AM - 4:00 PM defaults"
+                                    >
+                                        <i className="fa-solid fa-rotate-left mr-2"></i>
+                                        Reset
+                                    </button>
+                                    <button
                                         onClick={handleSaveConfig}
                                         className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl text-xs font-black hover:bg-slate-200 transition-all uppercase tracking-wider"
                                     >
-                                        Save Params
+                                        Save
                                     </button>
                                     <button
                                         onClick={generateTimetable}
@@ -1007,15 +1034,38 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
 
                                                             return (
                                                                 <td key={pIndex} className="p-4 border-b border-slate-100 min-w-[120px]">
-                                                                    {slotEntry ? (
-                                                                        <div className="bg-emerald-50 text-emerald-700 p-3 rounded-2xl border border-emerald-100 animate-in fade-in zoom-in-95 shadow-sm">
+                                                                    {slotEntry && slotEntry.subjectId ? (
+                                                                        <div className="bg-emerald-50 text-emerald-700 p-3 rounded-2xl border border-emerald-100 relative group animate-in fade-in zoom-in-95 shadow-sm">
                                                                             <span className="text-[10px] font-black block leading-tight">{slotEntry.subjectName}</span>
                                                                             <span className="text-[8px] font-bold text-emerald-600/50 uppercase tracking-tighter mt-1 block">
                                                                                 {subjects.find(s => s.id === slotEntry.subjectId)?.facultyName || 'Staff'}
                                                                             </span>
+                                                                            <div className="absolute inset-0 bg-black/5 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+                                                                                <i className="fa-solid fa-pen text-emerald-800 text-xs"></i>
+                                                                            </div>
+                                                                            <select 
+                                                                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                                               value={slotEntry.subjectId}
+                                                                               onChange={(e) => handleManualSlotUpdate(day, effectivePIndex, e.target.value)}
+                                                                            >
+                                                                               <option value="">Clear Slot</option>
+                                                                               {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                                            </select>
                                                                         </div>
                                                                     ) : (
-                                                                        <div className="h-10 border-2 border-dashed border-slate-50 rounded-2xl"></div>
+                                                                        <div className="h-10 border-2 border-dashed border-slate-200 rounded-2xl relative hover:border-emerald-400 hover:bg-emerald-50/10 cursor-pointer overflow-hidden transition-all group">
+                                                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                                                <i className="fa-solid fa-plus text-slate-400 text-xs"></i>
+                                                                            </div>
+                                                                            <select 
+                                                                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                                               value=""
+                                                                               onChange={(e) => handleManualSlotUpdate(day, effectivePIndex, e.target.value)}
+                                                                            >
+                                                                               <option value="" disabled>Add Class</option>
+                                                                               {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                                            </select>
+                                                                        </div>
                                                                     )}
                                                                 </td>
                                                             );
@@ -1029,7 +1079,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                     <div className="mt-8 pt-8 border-t border-slate-50 flex justify-between items-center no-print">
                                         <div className="text-[10px] font-bold text-slate-400">
                                             <i className="fa-solid fa-circle-info mr-2"></i>
-                                            Faculty names are automatically attached to subject blocks in the print view.
+                                            Faculty names are automatically attached to subject blocks in the print view. You can also manually adjust any slot by clicking on it.
                                         </div>
                                     </div>
                                 </div>
@@ -1038,7 +1088,22 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                             <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] p-24 text-center no-print">
                                 <i className="fa-solid fa-wand-magic-sparkles text-6xl text-slate-200 mb-6 font-thin"></i>
                                 <h3 className="text-slate-400 font-black uppercase tracking-widest text-sm">Waiting to Generate</h3>
-                                <p className="text-slate-300 text-xs mt-2 font-bold italic tracking-tight">Adjust parameters on the left and start the engine</p>
+                                <p className="text-slate-300 text-xs mt-2 mb-6 font-bold tracking-tight">Adjust parameters on the left and start the engine</p>
+                                <div className="flex justify-center gap-4">
+                                    <button 
+                                       onClick={generateTimetable}
+                                       disabled={isGenerating}
+                                       className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black shadow-md hover:bg-emerald-700 transition-all uppercase tracking-wider disabled:opacity-50"
+                                    >
+                                        <i className="fa-solid fa-robot mr-2"></i> Auto Generate
+                                    </button>
+                                    <button 
+                                       onClick={initializeBlankTimetable}
+                                       className="px-6 py-3 bg-slate-200 text-slate-700 rounded-xl text-xs font-black hover:bg-slate-300 shadow-sm transition-all uppercase tracking-wider"
+                                    >
+                                        <i className="fa-solid fa-pen-to-square mr-2"></i> Manual Entry
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>

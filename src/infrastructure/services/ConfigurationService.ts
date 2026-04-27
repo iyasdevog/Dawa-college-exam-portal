@@ -11,6 +11,9 @@ export interface AppConfig {
     gemini?: {
         apiKey: string;
     };
+    openai?: {
+        apiKey: string;
+    };
     environment: 'development' | 'production' | 'test';
     features: {
         offlineMode: boolean;
@@ -48,14 +51,16 @@ export class ConfigurationService {
             };
 
             const geminiApiKey = this.getEnvVar('VITE_GEMINI_API_KEY', '', false);
+            const openAIApiKey = this.getEnvVar('VITE_OPENAI_API_KEY', '', false);
 
             this.config = {
                 firebase: firebaseConfig,
                 gemini: geminiApiKey ? { apiKey: geminiApiKey } : undefined,
+                openai: openAIApiKey ? { apiKey: openAIApiKey } : undefined,
                 environment: this.determineEnvironment(),
                 features: {
                     offlineMode: this.getBooleanEnvVar('VITE_OFFLINE_MODE', true),
-                    aiAnalysis: !!geminiApiKey,
+                    aiAnalysis: !!geminiApiKey || !!openAIApiKey,
                     realTimeSync: this.getBooleanEnvVar('VITE_REALTIME_SYNC', true),
                     pwaEnabled: this.getBooleanEnvVar('VITE_PWA_ENABLED', true)
                 },
@@ -153,6 +158,10 @@ export class ConfigurationService {
 
     getGeminiConfig() {
         return this.getConfig().gemini;
+    }
+
+    getOpenAIConfig() {
+        return this.getConfig().openai;
     }
 
     isProduction(): boolean {

@@ -28,32 +28,48 @@ export interface StudentPerformanceData {
 export class AIService {
     private genAI: any = null;
     private model: any = null;
+    private openai: any = null;
 
     constructor() {
         // Don't initialize immediately - use lazy loading
     }
 
     private async initializeAI(): Promise<void> {
-        if (this.genAI) {
+        if (this.genAI || this.openai) {
             return; // Already initialized
         }
 
         try {
             const geminiConfig = configurationService.getGeminiConfig();
-            if (!geminiConfig?.apiKey) {
-                console.warn('Gemini API key not configured. AI features will be disabled.');
+            const openAIConfig = configurationService.getOpenAIConfig();
+
+            if (!geminiConfig?.apiKey && !openAIConfig?.apiKey) {
+                console.warn('No AI API keys configured. AI features will be disabled.');
                 return;
             }
 
-            // Load AI library dynamically
-            const { GoogleGenerativeAI } = await loadAILibrary();
-            this.genAI = new GoogleGenerativeAI(geminiConfig.apiKey);
-            this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
-            console.log('AI service initialized successfully');
+            if (openAIConfig?.apiKey) {
+                const { loadOpenAILibrary } = await import('./dynamicImports');
+                const { OpenAI } = await loadOpenAILibrary();
+                this.openai = new OpenAI({ apiKey: openAIConfig.apiKey, dangerouslyAllowBrowser: true });
+                console.log('OpenAI service initialized successfully');
+            }
+
+            if (geminiConfig?.apiKey) {
+                const { loadAILibrary } = await import('./dynamicImports');
+                const { GoogleGenerativeAI } = await loadAILibrary();
+                this.genAI = new GoogleGenerativeAI(geminiConfig.apiKey);
+                this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+                console.log('Gemini service initialized successfully');
+            }
         } catch (error) {
             console.error('Failed to initialize AI service:', error);
             throw error;
         }
+    }
+
+    public isAvailable(): boolean {
+        return !!this.genAI || !!this.openai;
     }
 
     async analyzeStudentPerformance(studentData: StudentPerformanceData): Promise<AIAnalysisResult> {
@@ -154,7 +170,7 @@ export class AIService {
                 throw new Error('AI Service not available');
             }
 
-            const visionModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+            const visionModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
             const subjectsList = subjects.map(s => `"${s.name}" (ID: ${s.id})`).join(', ');
             const prompt = `
@@ -169,16 +185,68 @@ export class AIService {
                 5. If a subject name is close to one in the list, use that ID.
             `;
 
-            const documentPart = {
-                inlineData: {
-                    data: base64Data,
-                    mimeType
+            let text = '';
+            try {
+                if (this.genAI) {
+                    try {
+                        const documentPart = {
+                            inlineData: {
+                                data: base64Data,
+                                mimeType
+                            }
+                        };
+                        const visionModel = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+                        const result = await visionModel.generateContent([prompt, documentPart]);
+                        const response = await result.response;
+                        text = response.text().trim();
+                    } catch (geminiError: any) {
+                        if (this.openai) {
+                            console.warn('Gemini failed, falling back to OpenAI:', geminiError.message);
+                            const response = await this.openai.chat.completions.create({
+                                model: 'gpt-4o',
+                                messages: [
+                                    {
+                                        role: "user",
+                                        content: [
+                                            { type: "text", text: prompt },
+                                            {
+                                                type: "image_url",
+                                                image_url: { url: `data:${mimeType};base64,${base64Data}` }
+                                            }
+                                        ]
+                                    }
+                                ],
+                                max_tokens: 2000
+                            });
+                            text = response.choices[0]?.message?.content || "";
+                        } else {
+                            throw geminiError;
+                        }
+                    }
+                } else if (this.openai) {
+                    const response = await this.openai.chat.completions.create({
+                        model: 'gpt-4o',
+                        messages: [
+                            {
+                                role: "user",
+                                content: [
+                                    { type: "text", text: prompt },
+                                    {
+                                        type: "image_url",
+                                        image_url: { url: `data:${mimeType};base64,${base64Data}` }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens: 2000
+                    });
+                    text = response.choices[0]?.message?.content || "";
+                } else {
+                    throw new Error("No AI Client available");
                 }
-            };
-
-            const result = await visionModel.generateContent([prompt, documentPart]);
-            const response = await result.response;
-            const text = response.text().trim();
+            } catch (err: any) {
+                throw new Error(`AI Model execution error: ${err.message}`);
+            }
 
             const jsonMatch = text.match(/\[.*\]/s);
             if (jsonMatch) {
