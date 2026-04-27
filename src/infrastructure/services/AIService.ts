@@ -146,6 +146,52 @@ export class AIService {
         }
     }
 
+    async extractTimetableFromMedia(base64Data: string, mimeType: string, subjects: Array<{ id: string; name: string }>): Promise<any[]> {
+        try {
+            await this.initializeAI();
+
+            if (!this.isAvailable()) {
+                throw new Error('AI Service not available');
+            }
+
+            const visionModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+
+            const subjectsList = subjects.map(s => `"${s.name}" (ID: ${s.id})`).join(', ');
+            const prompt = `
+                Extract a structured timetable from the provided document/image. 
+                Available Subjects: ${subjectsList}
+                
+                Rules:
+                1. Identify the day of the week (Monday, Tuesday, etc.)
+                2. Identify the subject and map it to one of the provided Subject IDs.
+                3. Identify start and end times in 24h format (HH:mm).
+                4. Return ONLY a JSON array of objects with keys: day, subjectId, startTime, endTime.
+                5. If a subject name is close to one in the list, use that ID.
+            `;
+
+            const documentPart = {
+                inlineData: {
+                    data: base64Data,
+                    mimeType
+                }
+            };
+
+            const result = await visionModel.generateContent([prompt, documentPart]);
+            const response = await result.response;
+            const text = response.text().trim();
+
+            const jsonMatch = text.match(/\[.*\]/s);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
+            throw new Error('Could not parse AI response as JSON');
+        } catch (error) {
+            console.error('AI Timetable extraction from media failed:', error);
+            throw error;
+        }
+    }
+
+
     async generateMotivationalMessage(
         studentName: string,
         performanceLevel: string,

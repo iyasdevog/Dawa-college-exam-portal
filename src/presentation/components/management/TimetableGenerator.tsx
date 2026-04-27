@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SubjectConfig, TimetableGeneratorConfig, TimetableEntry, StudentRecord, TimetableRule } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
+import { aiService } from '../../../infrastructure/services/AIService';
 import { DAYS } from '../../../domain/entities/constants';
 
 interface TimetableGeneratorProps {
@@ -32,6 +33,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
 
     const [generatedTimetable, setGeneratedTimetable] = useState<TimetableEntry[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isExtracting, setIsExtracting] = useState(false);
     const [viewMode, setViewMode] = useState<'class' | 'subject'>('class');
     const [otherTimetables, setOtherTimetables] = useState<TimetableEntry[]>([]);
 
@@ -362,6 +364,52 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         document.body.removeChild(link);
     };
 
+    const handleFileExtraction = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsExtracting(true);
+        try {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                const base64Data = (reader.result as string).split(',')[1];
+                const mimeType = file.type;
+
+                try {
+                    const extractedEntries = await aiService.extractTimetableFromMedia(base64Data, mimeType, filteredSubjects);
+                    
+                    const newEntries = extractedEntries.map((e: any) => ({
+                        id: Math.random().toString(36).substr(2, 9),
+                        day: e.day,
+                        subjectId: e.subjectId,
+                        subjectName: filteredSubjects.find(s => s.id === e.subjectId)?.name || 'Unknown',
+                        className: selectedClass,
+                        startTime: e.startTime,
+                        endTime: e.endTime,
+                    }));
+
+                    setGeneratedTimetable(newEntries);
+                    alert('Timetable extracted successfully! Review the output below.');
+                } catch (error) {
+                    console.error('AI Processing error:', error);
+                    alert('AI Processing failed. Make sure your Gemini API key is configured correctly and the file is legible.');
+                } finally {
+                    setIsExtracting(false);
+                }
+            };
+            reader.onerror = error => {
+                console.error('File reading failed:', error);
+                alert('Failed to read file.');
+                setIsExtracting(false);
+            };
+        } catch (error) {
+            console.error('Extraction failed:', error);
+            alert('Failed to extract timetable from media.');
+            setIsExtracting(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <style dangerouslySetInnerHTML={{
@@ -385,7 +433,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                 }
                 .print-only { display: none; }
             `}} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                     <label className="block text-sm font-bold text-slate-700 mb-2">Class Selection</label>
                     <select
@@ -410,6 +458,33 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                             </button>
                         ))}
                     </div>
+                </div>
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col justify-center relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 text-purple-200 opaciy-50">
+                        <i className="fa-solid fa-wand-magic-sparkles text-4xl transform -rotate-12 translate-x-2 -translate-y-2"></i>
+                    </div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 relative z-10">Auto AI Extraction</label>
+                    <div className="relative w-full z-10">
+                        <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleFileExtraction}
+                            disabled={isExtracting || !selectedClass}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                            title={!selectedClass ? "Select a class first" : "Upload File"}
+                        />
+                        <button 
+                            disabled={isExtracting || !selectedClass}
+                            className={`w-full py-4 rounded-xl font-bold border transition-all flex items-center justify-center gap-2 ${isExtracting ? 'bg-slate-300 text-slate-500' : 'bg-purple-600 text-white shadow-lg hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400'}`}
+                        >
+                            {isExtracting ? (
+                                <><i className="fa-solid fa-spinner fa-spin"></i> Extracting...</>
+                            ) : (
+                                <><i className="fa-solid fa-file-import"></i> Extract from Image / PDF</>
+                            )}
+                        </button>
+                    </div>
+                    {!selectedClass && <span className="text-[10px] text-orange-500 font-bold mt-2 text-center select-none">Select class to enable</span>}
                 </div>
             </div>
 
