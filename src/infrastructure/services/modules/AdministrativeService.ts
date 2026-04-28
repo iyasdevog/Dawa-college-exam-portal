@@ -229,9 +229,11 @@ export class AdministrativeService extends BaseDataService {
         });
 
         const disabled = settings?.disabledClasses || [];
-        const discovered = Array.from(activeClassesSet)
-            .filter(c => c && c !== '-' && !disabled.includes(c))
-            .map(c => this.getHistoricalClassName(requestedTermKey, c))
+        const discoveredRaw = Array.from(activeClassesSet)
+            .filter(c => c && c !== '-' && !disabled.includes(c));
+        
+        // Map to historical names and deduplicate (e.g. HS2 -> P1, and if P1 already exists, merge)
+        const discovered = Array.from(new Set(discoveredRaw.map(c => this.getHistoricalClassName(requestedTermKey, c))))
             .sort();
 
         // Fallback to settings or defaults if discovery yields nothing (bootstrap phase)

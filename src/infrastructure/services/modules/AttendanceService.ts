@@ -53,6 +53,7 @@ export class AttendanceService extends BaseDataService {
     public async getOverallAttendance(studentId: string, className: string, termKey?: string): Promise<number> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();
+            const dbClassName = this.getDatabaseClassName(activeTerm, className);
             const subjects = await this.academicService.getAllSubjects(activeTerm);
             const classSubjects = subjects.filter(s => s.targetClasses?.includes(className));
             
@@ -61,7 +62,7 @@ export class AttendanceService extends BaseDataService {
             // Fetch all daily docs for this class in the term (much fewer reads)
             const q = query(
                 collection(this.db!, this.attendanceCollection),
-                where('className', '==', className),
+                where('className', '==', dbClassName),
                 where('termKey', '==', activeTerm)
             );
             const snapshot = await getDocs(q);
@@ -220,7 +221,9 @@ export class AttendanceService extends BaseDataService {
      */
     public async getAttendanceByClassAndDate(className: string, date: string): Promise<AttendanceRecord[]> {
         try {
-            const docId = this.getDailyDocId(className, date);
+            const activeTerm = this.getCurrentTermKey(className);
+            const dbClassName = this.getDatabaseClassName(activeTerm, className);
+            const docId = this.getDailyDocId(dbClassName, date);
             const docSnap = await getDoc(doc(this.db!, this.attendanceCollection, docId));
 
             if (!docSnap.exists()) return [];
@@ -256,11 +259,10 @@ export class AttendanceService extends BaseDataService {
      */
     public async markAttendance(record: Omit<AttendanceRecord, 'id'>): Promise<string> {
         try {
-            const docId = this.getDailyDocId(record.className, record.date);
-            const docRef = doc(this.db!, this.attendanceCollection, docId);
-            
-            // Resolve term key for THIS specific class to support per-class semester shifts
             const termKey = this.getCurrentTermKey(record.className);
+            const dbClassName = this.getDatabaseClassName(termKey, record.className);
+            const docId = this.getDailyDocId(dbClassName, record.date);
+            const docRef = doc(this.db!, this.attendanceCollection, docId);
             
             const parts = termKey.split('-');
             const sem = parts.pop() as 'Odd' | 'Even';
@@ -268,7 +270,7 @@ export class AttendanceService extends BaseDataService {
 
             // 1. Ensure the base daily document exists with correct metadata
             await setDoc(docRef, this.sanitize({
-                className: record.className,
+                className: dbClassName,
                 date: record.date,
                 termKey,
                 academicYear: year,
