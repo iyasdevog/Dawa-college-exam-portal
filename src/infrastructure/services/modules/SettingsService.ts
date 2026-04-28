@@ -79,11 +79,15 @@ export class SettingsService extends BaseDataService {
 
             students.forEach(s => {
                 if (s.academicHistory) {
-                    Object.keys(s.academicHistory).forEach(termKey => {
-                        // Support both 2025-2026 and 2026 formats
-                        const yearMatch = termKey.match(/^(\d{4}(?:-\d{4})?)/);
-                        if (yearMatch && allowedYears.has(yearMatch[1])) {
-                            terms.add(termKey);
+                    Object.keys(s.academicHistory).forEach(tk => {
+                        const lastHyphenIndex = tk.lastIndexOf('-');
+                        if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
+                            const year = tk.substring(0, lastHyphenIndex);
+                            if (allowedYears.has(year)) {
+                                terms.add(year);
+                            }
+                        } else if (allowedYears.has(tk)) {
+                            terms.add(tk);
                         }
                     });
                 }
@@ -111,10 +115,15 @@ export class SettingsService extends BaseDataService {
                 if (s.academicHistory) {
                     Object.keys(s.academicHistory).forEach(tk => {
                         if (s.academicHistory![tk] === null) return;
-                        const parts = tk.split('-');
-                        const yearPart = parts.length > 1 ? parts.slice(0, -1).join('-') : parts[0];
-                        if (yearPart && yearPart.match(/^\d{4}(?:-\d{4})?$/)) {
-                            discoveredYears.add(yearPart);
+                        
+                        // Robust discovery: Year is everything before the last hyphen
+                        const lastHyphenIndex = tk.lastIndexOf('-');
+                        if (lastHyphenIndex !== -1) {
+                            const yearPart = tk.substring(0, lastHyphenIndex);
+                            // Only add if it looks like a year (YYYY or YYYY-YYYY)
+                            if (yearPart.match(/^\d{4}(?:-\d{4})?$/)) {
+                                discoveredYears.add(yearPart);
+                            }
                         }
                     });
                 }

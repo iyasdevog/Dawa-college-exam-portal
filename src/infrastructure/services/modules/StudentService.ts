@@ -135,6 +135,11 @@ export class StudentService extends BaseDataService {
                     updated++;
                 } else if (op.type === 'create') {
                     const newStudentRef = doc(collection(this.db!, this.studentsCollection));
+                    let rawSem = op.data.semester?.toString() || '';
+                    let normalizedSem: 'Odd' | 'Even' = 'Odd';
+                    if (rawSem.toLowerCase().includes('even') || rawSem.includes('2')) normalizedSem = 'Even';
+                    else if (rawSem.toLowerCase().includes('odd') || rawSem.includes('1')) normalizedSem = 'Odd';
+
                     const newStudent = {
                         adNo: op.data.adNo?.toString(),
                         name: op.data.name,
@@ -143,7 +148,7 @@ export class StudentService extends BaseDataService {
                         academicHistory: {
                             [termKey]: {
                                 className: op.data.className,
-                                semester: op.data.semester,
+                                semester: normalizedSem,
                                 marks: {},
                                 grandTotal: 0,
                                 average: 0,

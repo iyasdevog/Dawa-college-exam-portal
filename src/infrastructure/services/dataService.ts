@@ -443,19 +443,54 @@ export class DataService extends BaseDataService {
         const settings = await this.getGlobalSettings();
         const currentTermKey = this.getCurrentTermKey();
 
+        // Fetch all subjects at once to compute per-term counts efficiently
+        const allSubjects = await this.academicService.getRawAllSubjects();
+        const subjectsByTerm: Record<string, { subjects: Set<string>; teachers: Set<string>; classes: Set<string> }> = {};
+        allSubjects.forEach(sub => {
+            const rawSub = sub as any;
+            const termKey = rawSub.academicYear
+                ? `${rawSub.academicYear}-${rawSub.semester || settings.currentSemester || 'Odd'}`
+                : currentTermKey;
+            if (!subjectsByTerm[termKey]) {
+                subjectsByTerm[termKey] = { subjects: new Set(), teachers: new Set(), classes: new Set() };
+            }
+            subjectsByTerm[termKey].subjects.add(sub.id);
+            if (sub.facultyName) subjectsByTerm[termKey].teachers.add(sub.facultyName.trim().toLowerCase());
+            // targetClasses is an array of class names the subject covers
+            (sub.targetClasses || []).forEach((cls: string) => subjectsByTerm[termKey].classes.add(cls));
+        });
+
+        // For the active term, count students by currentClass (enrolled students, not just historical)
+        let currentTermStudentCount = 0;
+        let currentTermClassCount = 0;
+        try {
+            const allStudents = await this.getAllStudents();
+            const activeStudents = allStudents.filter(s =>
+                s.academicHistory?.[currentTermKey] || s.currentClass
+            );
+            currentTermStudentCount = activeStudents.length;
+            const currentClasses = new Set(activeStudents.map(s => s.currentClass || s.className).filter(Boolean));
+            currentTermClassCount = currentClasses.size;
+        } catch { /* fallback to history-based count */ }
+
         let hasCurrent = false;
 
         const mapped = summaries.map(s => {
             const isCurrent = s.termKey === currentTermKey;
             if (isCurrent) hasCurrent = true;
+            const termSubData = subjectsByTerm[s.termKey];
             return {
                 ...s,
-                isCurrent
+                isCurrent,
+                subjectCount: termSubData?.subjects.size ?? 0,
+                teacherCount: termSubData?.teachers.size ?? 0,
+                classCount: isCurrent ? currentTermClassCount : (termSubData?.classes.size ?? 0),
+                studentCount: isCurrent ? currentTermStudentCount : s.studentCount,
+                attendanceCount: 0,
             };
         });
 
         if (!hasCurrent && settings.currentAcademicYear) {
-            // Inject empty current term so it always shows up
             const parts = currentTermKey.split('-');
             let academicYear = '';
             let semester = '';
@@ -468,12 +503,16 @@ export class DataService extends BaseDataService {
             } else {
                 academicYear = currentTermKey;
             }
-
+            const termSubData = subjectsByTerm[currentTermKey];
             mapped.unshift({
                 termKey: currentTermKey,
                 academicYear,
                 semester,
-                studentCount: 0,
+                studentCount: currentTermStudentCount,
+                classCount: currentTermClassCount,
+                subjectCount: termSubData?.subjects.size ?? 0,
+                teacherCount: termSubData?.teachers.size ?? 0,
+                attendanceCount: 0,
                 passPercentage: 0,
                 averageScore: 0,
                 isCurrent: true

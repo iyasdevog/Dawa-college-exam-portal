@@ -39,34 +39,42 @@ export const TermSelector: React.FC<TermSelectorProps> = ({
                     if (controlledOnChange) {
                         controlledOnChange(val);
                     } else {
-                        const parts = val.split('-');
-                        if (parts.length >= 3) {
-                            setTerm(`${parts[0]}-${parts[1]}`, parts[2] as 'Odd' | 'Even');
-                        } else if (parts.length === 2) {
-                            setTerm(parts[0], parts[1] as 'Odd' | 'Even');
+                        // Better split logic: The semester is always the last part after the last hyphen
+                        const lastHyphenIndex = val.lastIndexOf('-');
+                        if (lastHyphenIndex !== -1) {
+                            const year = val.substring(0, lastHyphenIndex);
+                            const sem = val.substring(lastHyphenIndex + 1);
+                            setTerm(year, sem as 'Odd' | 'Even');
                         } else {
                             setTerm(val, 'Odd');
                         }
                     }
                 }}
             >
-                {termOptions.map((termKey) => {
-                    const parts = termKey.split('-');
-                    let year, semester;
-                    if (parts.length >= 3) {
-                        year = `${parts[0]}-${parts[1]}`;
-                        semester = parts[2];
-                    } else if (parts.length === 2) {
-                        year = parts[0];
-                        semester = parts[1];
-                    } else {
-                        year = termKey;
-                        semester = '';
+                {/* 
+                    Consistent Term Selection:
+                    We iterate over 'availableYears' (e.g., ["2025-2026", "2026"]) 
+                    and show both semesters for each year. 
+                */}
+                {termOptions.map((yearOrTerm) => {
+                    // Robust extraction of the Year part
+                    const lastHyphenIndex = yearOrTerm.lastIndexOf('-');
+                    let year = yearOrTerm;
+                    
+                    // If it's a full key (has suffix), extract base year
+                    if (yearOrTerm.endsWith('-Odd') || yearOrTerm.endsWith('-Even')) {
+                        year = yearOrTerm.substring(0, lastHyphenIndex);
                     }
+
                     return (
-                        <option key={termKey} value={termKey} className="bg-slate-800 text-white">
-                            {semester ? `${year} - ${semester}` : year}
-                        </option>
+                        <React.Fragment key={year}>
+                            <option value={`${year}-Odd`} className="bg-slate-800 text-white">
+                                {year} - Odd Semester
+                            </option>
+                            <option value={`${year}-Even`} className="bg-slate-800 text-white">
+                                {year} - Even Semester
+                            </option>
+                        </React.Fragment>
                     );
                 })}
             </select>

@@ -782,8 +782,8 @@ export class AdministrativeService extends BaseDataService {
                 }
             });
 
-            // Standard format: YYYY-YYYY-Semester
-            const standardPattern = /^\d{4}-\d{4}-(Odd|Even)$/;
+            // Standard format: YYYY-Semester or YYYY-YYYY-Semester
+            const standardPattern = /^(\d{4}(?:-\d{4})?)-(Odd|Even)$/;
             const inconsistent = Array.from(foundKeys).filter(key => {
                 // If it doesn't match standard, it's inconsistent
                 return !standardPattern.test(key);
@@ -894,9 +894,9 @@ export class AdministrativeService extends BaseDataService {
                 return data.termKey === oldKey || (`${data.academicYear}-${data.activeSemester}` === oldKey);
             });
 
-            const [newYear, newSem] = newKey.split('-').length >= 3 
-                ? [newKey.split('-').slice(0, 2).join('-'), newKey.split('-').pop()]
-                : [newKey.split('-')[0], newKey.split('-')[1]];
+            const lastHyphenIndex = newKey.lastIndexOf('-');
+            const newYear = lastHyphenIndex !== -1 ? newKey.substring(0, lastHyphenIndex) : newKey;
+            const newSem = lastHyphenIndex !== -1 ? newKey.substring(lastHyphenIndex + 1) : '';
 
             await this.runBatchedOperation(subjectsToUpdate, (batch, d) => {
                 batch.update(d.ref, {

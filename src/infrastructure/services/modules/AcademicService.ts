@@ -99,17 +99,28 @@ export class AcademicService extends BaseDataService {
     public async getAllSubjects(termKey?: string): Promise<SubjectConfig[]> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();
-            const parts = activeTerm.split('-');
-            let targetSem = parts.pop() as 'Odd' | 'Even';
-            let targetYear = parts.join('-');
+            
+            // Robust parsing: Semester is the part after the LAST hyphen
+            const lastHyphenIndex = activeTerm.lastIndexOf('-');
+            let targetYear = '';
+            let targetSem = '';
+            
+            if (lastHyphenIndex !== -1) {
+                targetYear = activeTerm.substring(0, lastHyphenIndex);
+                targetSem = activeTerm.substring(lastHyphenIndex + 1);
+            } else {
+                targetYear = activeTerm;
+                targetSem = '';
+            }
 
             const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
             const allSubjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
             
             return allSubjects.filter(subject => {
                 const subjectYear = subject.academicYear;
-                const isYearMatch = !subjectYear || subjectYear === targetYear || 
-                                   (subjectYear && targetYear && (subjectYear.includes(targetYear) || targetYear.includes(subjectYear)));
+                
+                // Use strict matching for year to prevent "2026" matching "2025-2026"
+                const isYearMatch = !subjectYear || subjectYear === targetYear;
 
                 if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
                     return false;
@@ -344,15 +355,22 @@ export class AcademicService extends BaseDataService {
             });
 
             return Object.entries(termStats).map(([termKey, stats]) => {
-                const parts = termKey.split('-');
-                let academicYear = '';
+                const lastHyphenIndex = termKey.lastIndexOf('-');
+                let academicYear = termKey;
                 let semester = '';
-                if (parts.length >= 3) {
-                    academicYear = `${parts[0]}-${parts[1]}`;
-                    semester = parts[2];
-                } else if (parts.length === 2) {
-                    academicYear = parts[0];
-                    semester = parts[1];
+
+                if (lastHyphenIndex !== -1) {
+                    academicYear = termKey.substring(0, lastHyphenIndex);
+                    semester = termKey.substring(lastHyphenIndex + 1);
+                    
+                    // Further check: If the 'semester' part doesn't look like Odd/Even, 
+                    // it might be part of a YYYY-YYYY year.
+                    if (semester !== 'Odd' && semester !== 'Even') {
+                        academicYear = termKey;
+                        semester = 'Inconsistent';
+                    }
+                } else {
+                    semester = 'Inconsistent';
                 }
 
                 return {

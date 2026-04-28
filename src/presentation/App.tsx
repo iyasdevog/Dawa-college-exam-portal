@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ApplicationErrorBoundary, FeatureErrorBoundary } from './components/ErrorBoundary';
-import ApplicationManagement from './components/ApplicationManagement';
 import { MobileProvider } from './viewmodels/MobileContext';
 import { TermProvider } from './viewmodels/TermContext';
 import { ViewType, StudentRecord } from '../domain/entities/types';
@@ -10,6 +9,7 @@ import { ErrorReportingService } from '../infrastructure/services/ErrorReporting
 import { configurationService } from '../infrastructure/services/ConfigurationService';
 
 // Lazy load components for code splitting
+const ApplicationManagement = lazy(() => import('./components/ApplicationManagement'));
 const Layout = lazy(() => import('./components/Layout'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const FacultyEntry = lazy(() => import('./components/FacultyEntry'));

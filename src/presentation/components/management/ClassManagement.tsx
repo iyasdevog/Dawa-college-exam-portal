@@ -167,10 +167,10 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
             const newMap = { ...currentMap, [className]: semester };
             
             await dataService.updateGlobalSettings({ classSemesters: newMap });
-            setClassSemesters(newMap);
-            
+            setClassSemesters(newMap); // Update local state immediately - no refresh needed
             dataService.invalidateCache();
-            if (onRefresh) await onRefresh();
+            // Don't call onRefresh() here — it reloads students which triggers the useEffect
+            // and can overwrite classSemesters from a now-stale settings cache.
         } catch (error) {
             console.error('Error updating class semester:', error);
             alert('Failed to update class semester');
@@ -392,48 +392,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
             </div>
 
             {/* Maintenance & Tools Section */}
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 border-2 border-slate-800 shadow-xl relative overflow-hidden group mt-10">
-                <div className="absolute top-0 right-0 p-8 opacity-10">
-                    <i className="fa-solid fa-screwdriver-wrench text-8xl text-white"></i>
-                </div>
-                
-                <div className="relative z-10">
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/20">
-                            <i className="fa-solid fa-broom-ball"></i>
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-black text-white">Maintenance & Reconciliation</h3>
-                            <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest">Nomenclature Integrity Tools</p>
-                        </div>
-                    </div>
 
-                    <div className="flex flex-col md:flex-row items-center gap-6 bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50">
-                        <div className="flex-1">
-                            <h4 className="text-white font-bold mb-1">Class Identity Alignment</h4>
-                            <p className="text-slate-400 text-sm leading-relaxed">
-                                Scans all student records to detect legacy names like <code className="text-emerald-400 font-bold">S1, S2, P1, P2</code> and force-migrates them to the current standard (<code className="text-emerald-400 font-bold">FS2, FS3, HS2, HS3</code>). 
-                                Fixes issues where students appear in multiple class filters.
-                            </p>
-                        </div>
-                        <button
-                            onClick={handleReconcileClasses}
-                            disabled={isReconciling}
-                            className={`whitespace-nowrap px-8 py-4 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center gap-3 ${
-                                isReconciling 
-                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed' 
-                                : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/40 active:scale-95'
-                            }`}
-                        >
-                            {isReconciling ? (
-                                <><i className="fa-solid fa-spinner fa-spin"></i> Processing...</>
-                            ) : (
-                                <><i className="fa-solid fa-wand-magic-sparkles"></i> Run Reconciliation</>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            </div>
 
             {/* Modals ... */}
             {showClassForm && (

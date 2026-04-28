@@ -57,7 +57,15 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 // If settings has availableYears, sync it locally too
                 if (settings.availableYears) {
-                    setTermOptions(settings.availableYears);
+                    // Normalize to unique years (e.g. "2025-2026-Odd" -> "2025-2026")
+                    const uniqueYears = Array.from(new Set(settings.availableYears.map(tk => {
+                        const lastHyphenIndex = tk.lastIndexOf('-');
+                        if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
+                            return tk.substring(0, lastHyphenIndex);
+                        }
+                        return tk;
+                    }))).sort().reverse();
+                    setTermOptions(uniqueYears);
                 }
             }
             setIsLoading(false);
