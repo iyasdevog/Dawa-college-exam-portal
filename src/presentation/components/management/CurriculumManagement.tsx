@@ -145,39 +145,38 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
             </div>
 
             {/* Stage Tabs */}
-            <div className="flex gap-4 border-b border-slate-200">
-                <button
-                    onClick={() => setActiveStage('Foundational')}
-                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeStage === 'Foundational' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Foundational
-                </button>
-                <button
-                    onClick={() => setActiveStage('Undergraduate')}
-                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeStage === 'Undergraduate' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Undergraduate
-                </button>
-                <button
-                    onClick={() => setActiveStage('Post Graduate')}
-                    className={`pb-2 px-4 font-bold border-b-2 transition-colors ${activeStage === 'Post Graduate' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Post Graduate
-                </button>
+            <div className="flex gap-2 sm:gap-4 border-b border-slate-200 overflow-x-auto no-scrollbar scroll-smooth px-1">
+                {[
+                    { id: 'Foundational', label: 'Foundational' },
+                    { id: 'Undergraduate', label: 'Undergraduate' },
+                    { id: 'Post Graduate', label: 'Post Graduate' }
+                ].map(stage => (
+                    <button
+                        key={stage.id}
+                        onClick={() => setActiveStage(stage.id as CurriculumStage)}
+                        className={`pb-2 px-3 sm:px-4 whitespace-nowrap font-bold border-b-2 transition-all text-xs sm:text-sm ${
+                            activeStage === stage.id 
+                            ? 'border-emerald-500 text-emerald-600' 
+                            : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        {stage.label}
+                    </button>
+                ))}
             </div>
 
             {/* Stream Tabs (only for Foundational) */}
             {activeStage === 'Foundational' && (
-                <div className="flex gap-4 pl-4">
+                <div className="flex gap-2 p-2 bg-slate-50 rounded-xl mx-1 overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setActiveStream('3-Year')}
-                        className={`py-1 px-4 text-sm font-bold rounded-full transition-colors ${activeStream === '3-Year' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        className={`whitespace-nowrap py-1.5 px-4 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${activeStream === '3-Year' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         3-Year Stream
                     </button>
                     <button
                         onClick={() => setActiveStream('5-Year')}
-                        className={`py-1 px-4 text-sm font-bold rounded-full transition-colors ${activeStream === '5-Year' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        className={`whitespace-nowrap py-1.5 px-4 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${activeStream === '5-Year' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         5-Year Stream
                     </button>

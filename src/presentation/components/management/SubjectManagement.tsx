@@ -43,17 +43,17 @@ const SubjectRow = React.memo(({ subject, index, onEdit, onDelete, onManageEnrol
                 </span>
             </td>
             <td className="p-2 sm:p-4">
-                <div className="flex justify-center gap-1 sm:gap-2">
+                <div className="flex justify-center gap-2 sm:gap-3">
                     {subject.subjectType === 'elective' && (
-                        <button onClick={() => onManageEnrollment(subject)} className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users text-xs"></i></button>
+                        <button onClick={() => onManageEnrollment(subject)} className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users text-sm"></i></button>
                     )}
-                    <button onClick={() => onEdit(subject)} className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit Properties"><i className="fa-solid fa-pen text-xs"></i></button>
+                    <button onClick={() => onEdit(subject)} className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit Properties"><i className="fa-solid fa-pen text-sm"></i></button>
                     <button 
                         onClick={() => onDelete(subject, !Array.isArray(subject.specificClass) ? (subject.specificClass as string) : undefined)} 
-                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" 
+                        className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" 
                         title="Delete"
                     >
-                        <i className="fa-solid fa-trash text-xs"></i>
+                        <i className="fa-solid fa-trash text-sm"></i>
                     </button>
                 </div>
             </td>

@@ -816,11 +816,11 @@ const StudentCard = memo(({ student, onEdit, onArchive, onDelete, onViewTranscri
                 <h3 className="font-bold text-slate-800">{student.name}</h3>
                 <p className="text-xs font-black text-slate-500 uppercase tracking-tighter">{student.adNo} • {student.className}</p>
             </div>
-            <div className="flex gap-2">
-                <button onClick={() => onViewTranscript(student)} className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-all font-bold" title="View Transcript"><i className="fa-solid fa-layer-group text-xs"></i></button>
-                <button onClick={() => onEdit(student)} className="w-8 h-8 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all font-bold" title="Edit Student"><i className="fa-solid fa-edit text-xs"></i></button>
-                <button onClick={() => onArchive(student)} className="w-8 h-8 flex items-center justify-center bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all font-bold" title="Archive Student"><i className="fa-solid fa-box-archive text-xs"></i></button>
-                <button onClick={() => onDelete(student)} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all font-bold" title="Delete Student"><i className="fa-solid fa-trash text-xs"></i></button>
+            <div className="flex gap-2 p-3 bg-slate-50 rounded-2xl">
+                <button onClick={() => onViewTranscript(student)} className="flex-1 h-10 flex items-center justify-center bg-white text-emerald-600 rounded-xl border border-slate-200 shadow-sm active:bg-emerald-50 transition-all" title="View Transcript"><i className="fa-solid fa-layer-group"></i></button>
+                <button onClick={() => onEdit(student)} className="flex-1 h-10 flex items-center justify-center bg-white text-blue-600 rounded-xl border border-slate-200 shadow-sm active:bg-blue-50 transition-all" title="Edit Student"><i className="fa-solid fa-edit"></i></button>
+                <button onClick={() => onArchive(student)} className="flex-1 h-10 flex items-center justify-center bg-white text-amber-600 rounded-xl border border-slate-200 shadow-sm active:bg-amber-50 transition-all" title="Archive Student"><i className="fa-solid fa-box-archive"></i></button>
+                <button onClick={() => onDelete(student)} className="flex-1 h-10 flex items-center justify-center bg-white text-red-600 rounded-xl border border-slate-200 shadow-sm active:bg-red-50 transition-all" title="Delete Student"><i className="fa-solid fa-trash"></i></button>
             </div>
         </div>
     </div>
@@ -840,12 +840,12 @@ const StudentRow = memo(({ student, index, onEdit, onArchive, onDelete, onViewTr
         <td className="p-4 text-sm font-bold text-slate-600">
             <span className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] uppercase">{student.className}</span>
         </td>
-        <td className="p-4">
-            <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => onViewTranscript(student)} className="text-emerald-600 hover:text-emerald-800 transition-colors" title="View Transcript"><i className="fa-solid fa-layer-group"></i></button>
-                <button onClick={() => onEdit(student)} className="text-blue-600 hover:text-blue-800 transition-colors" title="Edit Student"><i className="fa-solid fa-edit"></i></button>
-                <button onClick={() => onArchive(student)} className="text-amber-600 hover:text-amber-800 transition-colors" title="Archive Student"><i className="fa-solid fa-box-archive"></i></button>
-                <button onClick={() => onDelete(student)} className="text-red-600 hover:text-red-800 transition-colors" title="Delete Student"><i className="fa-solid fa-trash"></i></button>
+        <td className="p-2 sm:p-4 text-center">
+            <div className="flex justify-center gap-2 sm:gap-3 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <button onClick={() => onViewTranscript(student)} className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors" title="View Transcript"><i className="fa-solid fa-layer-group"></i></button>
+                <button onClick={() => onEdit(student)} className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit Student"><i className="fa-solid fa-edit"></i></button>
+                <button onClick={() => onArchive(student)} className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors" title="Archive Student"><i className="fa-solid fa-box-archive"></i></button>
+                <button onClick={() => onDelete(student)} className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Delete Student"><i className="fa-solid fa-trash"></i></button>
             </div>
         </td>
     </tr>

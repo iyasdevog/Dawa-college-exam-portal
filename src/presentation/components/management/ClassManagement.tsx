@@ -242,7 +242,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
                         {className}
                         {!isActive && <span className="text-[10px] uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">Unused</span>}
                     </h3>
-                    <div className="flex gap-2 opacity-50 hover:opacity-100 transition-opacity">
+                    <div className="flex gap-2 sm:opacity-50 sm:hover:opacity-100 transition-opacity">
                         <button 
                             onClick={() => handleStartRename(className)}
                             className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all"
