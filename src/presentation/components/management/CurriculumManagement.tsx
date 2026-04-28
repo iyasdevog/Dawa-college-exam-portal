@@ -112,25 +112,24 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
     }, {} as Record<number, CurriculumEntry[]>);
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-black text-slate-900">Curriculum &amp; Syllabus</h2>
+        <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Curriculum &amp; Syllabus</h2>
                     {activeTerm && (
                         <div className="flex items-center gap-2">
-                            <span className={`text-xs px-3 py-1 rounded-full font-bold border ${
+                            <span className={`text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-bold border ${
                                 showAllTerms 
                                     ? 'bg-slate-100 text-slate-500 border-slate-200' 
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm'
                             }`}>
                                 {showAllTerms ? 'All Terms' : activeTerm}
                             </span>
                             <button
                                 onClick={() => setShowAllTerms(p => !p)}
-                                title={showAllTerms ? 'Filter by active term' : 'Show all terms'}
-                                className="text-xs text-slate-400 hover:text-slate-600 underline"
+                                className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline decoration-slate-300 underline-offset-2"
                             >
-                                {showAllTerms ? 'Filter by term' : 'Show all'}
+                                {showAllTerms ? 'Current' : 'Show All'}
                             </button>
                         </div>
                     )}
@@ -138,10 +137,10 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
                 <button
                     onClick={handleAdd}
                     disabled={isOperating}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2"
+                    className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
-                    <i className="fa-solid fa-plus"></i>
-                    Add Entry
+                    <i className="fa-solid fa-plus text-xs"></i>
+                    <span>Add Entry</span>
                 </button>
             </div>
 

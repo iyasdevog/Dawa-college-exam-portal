@@ -441,41 +441,38 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
     }, [students, mobileAdminState.filterBy, mobileAdminState.sortBy, mobileAdminState.sortOrder]);
 
     return (
-        <div className="space-y-6">
-            <div className={`flex items-center justify-between flex-wrap gap-4 ${isMobile ? 'flex-col' : ''}`}>
-                <div className="flex items-center gap-3">
-                    <h2 className={`font-black text-slate-900 ${isMobile ? 'text-lg text-center' : 'text-xl'}`}>Student Management</h2>
+        <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Student Management</h2>
                     {activeTerm && (
-                        <span className="text-xs px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
+                        <span className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
                             {activeTerm}
                         </span>
                     )}
                 </div>
-                <div className={`flex gap-3 ${isMobile ? 'w-full flex-col' : ''}`}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
                     <button
                         onClick={() => setShowPromoteModal(true)}
-                        className={`px-4 py-2 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition-all flex items-center gap-2 ${isMobile ? 'justify-center' : ''}`}
-                        style={{ minHeight: '44px' }}
+                        className="px-3 py-2 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm"
                     >
                         <i className="fa-solid fa-arrow-trend-up"></i>
-                        Promote Class
+                        <span>Promote</span>
                     </button>
                     <button
                         onClick={() => setShowBulkImport(true)}
-                        className={`px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2 ${isMobile ? 'justify-center' : ''}`}
-                        style={{ minHeight: '44px' }}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm"
                     >
                         <i className="fa-solid fa-upload"></i>
-                        Bulk Import
+                        <span>Import</span>
                     </button>
                     <button
                         onClick={handleAddStudent}
                         disabled={isOperating}
-                        className={`px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2 ${isMobile ? 'justify-center' : ''}`}
-                        style={{ minHeight: '44px' }}
+                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm"
                     >
                         <i className="fa-solid fa-plus"></i>
-                        Add Student
+                        <span>Add Student</span>
                     </button>
                 </div>
             </div>

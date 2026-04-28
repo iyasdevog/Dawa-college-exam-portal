@@ -154,7 +154,7 @@ const Management: React.FC = () => {
           )}
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {activeTab === 'students' && (
             <StudentManagement
               students={students}

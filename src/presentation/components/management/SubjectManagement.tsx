@@ -23,37 +23,39 @@ const SubjectRow = React.memo(({ subject, index, onEdit, onDelete, onManageEnrol
     onManageEnrollment: (s: any) => void
 }) => {
     return (
-        <tr key={`${subject.id}-${Array.isArray(subject.specificClass) ? 'all' : subject.specificClass}-${index}`} className="bg-white hover:bg-slate-50 transition-colors">
-            <td className="p-4 font-bold text-slate-800">{shortenSubjectName(subject.name)}</td>
-            <td className="p-4 text-slate-600">{subject.facultyName || '-'}</td>
-            <td className="p-4 text-center">
-                <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
+        <tr key={`${subject.id}-${Array.isArray(subject.specificClass) ? 'all' : subject.specificClass}-${index}`} className="bg-white hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+            <td className="p-2 sm:p-4 pr-1">
+                <div className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-1">{shortenSubjectName(subject.name)}</div>
+                <div className="text-[10px] text-slate-400 sm:hidden">{subject.facultyName || '-'}</div>
+            </td>
+            <td className="hidden sm:table-cell p-4 text-slate-600 text-sm">{subject.facultyName || '-'}</td>
+            <td className="p-2 sm:p-4 text-center">
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] uppercase font-bold tracking-wider ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
                     {subject.subjectType || 'general'}
                 </span>
-                {subject.subjectType === 'elective' && (
-                    <div className="text-[10px] text-slate-400 mt-1 font-medium">{(subject.enrolledStudents || []).length} enrolled</div>
-                )}
             </td>
-            <td className="p-4 text-center font-mono text-xs text-slate-500">{subject.maxEXT} / {subject.maxINT}</td>
-            <td className="p-4 text-center">
-                {Array.isArray(subject.specificClass) ? (
-                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">
-                        {subject.specificClass.join(', ')}
-                    </span>
-                ) : (
-                    <span className="bg-slate-800 text-white text-xs px-3 py-1 rounded-lg font-bold shadow-sm">{subject.specificClass}</span>
-                )}
+            <td className="p-2 sm:p-4 text-center font-mono text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">
+                {subject.maxEXT}<span className="text-slate-300 mx-0.5">/</span>{subject.maxINT}
             </td>
-            <td className="p-4 text-center flex justify-center gap-2">
-                {subject.subjectType === 'elective' && (
-                    <button onClick={() => onManageEnrollment(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users"></i></button>
-                )}
-                <button onClick={() => onEdit(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit Properties"><i className="fa-solid fa-pen"></i></button>
-                {!Array.isArray(subject.specificClass) ? (
-                    <button onClick={() => onDelete(subject, subject.specificClass as string)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Remove from this class"><i className="fa-solid fa-trash"></i></button>
-                ) : (
-                    <button onClick={() => onDelete(subject)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title="Delete Subject"><i className="fa-solid fa-trash"></i></button>
-                )}
+            <td className="p-2 sm:p-4 text-center">
+                <span className="bg-slate-800 text-white text-[9px] sm:text-xs px-2 py-0.5 rounded font-bold shadow-sm inline-block max-w-[60px] sm:max-w-none truncate">
+                    {Array.isArray(subject.specificClass) ? subject.specificClass.join(', ') : subject.specificClass}
+                </span>
+            </td>
+            <td className="p-2 sm:p-4">
+                <div className="flex justify-center gap-1 sm:gap-2">
+                    {subject.subjectType === 'elective' && (
+                        <button onClick={() => onManageEnrollment(subject)} className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" title="Manage Enrollment"><i className="fa-solid fa-users text-xs"></i></button>
+                    )}
+                    <button onClick={() => onEdit(subject)} className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit Properties"><i className="fa-solid fa-pen text-xs"></i></button>
+                    <button 
+                        onClick={() => onDelete(subject, !Array.isArray(subject.specificClass) ? (subject.specificClass as string) : undefined)} 
+                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" 
+                        title="Delete"
+                    >
+                        <i className="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </div>
             </td>
         </tr>
     );
@@ -647,12 +649,12 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     }, [baseFlattenedSubjectList, detailsNameFilter, detailsFacultyFilter, detailsClassFilter]);
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-black text-slate-900">Subject Management</h2>
+        <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Subject Management</h2>
                     {activeTerm && (
-                        <span className="text-xs px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
+                        <span className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
                             {activeTerm}
                         </span>
                     )}
@@ -660,73 +662,75 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                 <button
                     onClick={handleAddSubject}
                     disabled={isOperating}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
                 >
-                    <i className="fa-solid fa-plus"></i>
-                    Add Subject
+                    <i className="fa-solid fa-plus text-xs"></i>
+                    <span className="block sm:hidden">Add</span>
+                    <span className="hidden sm:block">Add Subject</span>
                 </button>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-4 border-b border-slate-200 overflow-x-auto no-scrollbar">
-                <button
-                    onClick={() => setActiveTab('subjects')}
-                    className={`pb-2 px-4 whitespace-nowrap font-bold border-b-2 transition-colors ${activeTab === 'subjects' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Subject List
-                </button>
-                <button
-                    onClick={() => setActiveTab('faculty')}
-                    className={`pb-2 px-4 whitespace-nowrap font-bold border-b-2 transition-colors ${activeTab === 'faculty' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Faculty Overview
-                </button>
-                <button
-                    onClick={() => setActiveTab('details')}
-                    className={`pb-2 px-4 whitespace-nowrap font-bold border-b-2 transition-colors ${activeTab === 'details' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Detailed Syllabus
-                </button>
+            <div className="flex gap-2 sm:gap-4 border-b border-slate-200 overflow-x-auto no-scrollbar scroll-smooth">
+                {[
+                    { id: 'subjects', label: 'Subject List' },
+                    { id: 'faculty', label: 'Faculty Overview' },
+                    { id: 'details', label: 'Detailed Syllabus' }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`pb-2 px-3 sm:px-4 whitespace-nowrap font-bold border-b-2 transition-all text-xs sm:text-sm ${
+                            activeTab === tab.id 
+                            ? 'border-emerald-500 text-emerald-600' 
+                            : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
             {activeTab === 'subjects' && (
                 <div className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                        <div className="flex items-center gap-2">
-                            <i className="fa-solid fa-filter text-slate-400"></i>
-                            <label className="font-bold text-sm text-slate-700">Filters:</label>
+                    <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 sm:gap-4 bg-slate-50 p-2 sm:p-3 rounded-2xl border border-slate-200">
+                        <div className="flex items-center gap-2 px-1">
+                            <i className="fa-solid fa-filter text-slate-400 text-xs"></i>
+                            <label className="font-bold text-xs text-slate-500 uppercase tracking-wider">Filters</label>
                         </div>
-                        <select
-                            value={subjectFacultyFilter}
-                            onChange={(e) => setSubjectFacultyFilter(e.target.value)}
-                            className="p-2 pl-3 pr-8 border rounded-lg bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        >
-                            <option value="All">All Faculties</option>
-                            {uniqueFaculties.map(f => (
-                                <option key={f} value={f}>{f}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={subjectClassFilter}
-                            onChange={(e) => setSubjectClassFilter(e.target.value)}
-                            className="p-2 pl-3 pr-8 border rounded-lg bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        >
-                            <option value="All">All Classes</option>
-                            {availableClasses.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                        <div className="flex-1 min-w-[200px] relative">
-                            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <div className="grid grid-cols-2 sm:flex gap-2">
+                            <select
+                                value={subjectFacultyFilter}
+                                onChange={(e) => setSubjectFacultyFilter(e.target.value)}
+                                className="w-full sm:w-auto p-2 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                            >
+                                <option value="All">All Faculties</option>
+                                {uniqueFaculties.map(f => (
+                                    <option key={f} value={f}>{f}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={subjectClassFilter}
+                                onChange={(e) => setSubjectClassFilter(e.target.value)}
+                                className="w-full sm:w-auto p-2 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                            >
+                                <option value="All">All Classes</option>
+                                {availableClasses.map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="relative flex-1">
+                            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                             <input
                                 type="text"
-                                placeholder="Search by subject or faculty name..."
+                                placeholder="Search subjects..."
                                 value={subjectSearchQuery}
                                 onChange={(e) => setSubjectSearchQuery(e.target.value)}
-                                className="w-full p-2 pl-9 border rounded-lg bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full p-2 pl-9 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
                             />
                         </div>
-                        <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
+                        <span className="hidden lg:block text-[10px] text-slate-400 font-bold uppercase tracking-tighter bg-white px-2 py-1 rounded-lg border border-slate-100">
                             {flattenedSubjectList.length} assignments found
                         </span>
                     </div>
