@@ -231,6 +231,7 @@ export class AdministrativeService extends BaseDataService {
         const disabled = settings?.disabledClasses || [];
         const discovered = Array.from(activeClassesSet)
             .filter(c => c && c !== '-' && !disabled.includes(c))
+            .map(c => this.getHistoricalClassName(requestedTermKey, c))
             .sort();
 
         // Fallback to settings or defaults if discovery yields nothing (bootstrap phase)
@@ -1147,13 +1148,21 @@ export class AdministrativeService extends BaseDataService {
 
     public async getTimetableByClass(className: string, termKey?: string): Promise<any[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
+        const dbClassName = this.getDatabaseClassName(activeTerm, className);
         const q = query(
             collection(this.db, this.timetablesCollection),
-            where('className', '==', className),
+            where('className', '==', dbClassName),
             where('termKey', '==', activeTerm)
         );
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snapshot.docs.map(d => {
+            const data = d.data();
+            return { 
+                id: d.id, 
+                ...data,
+                className: this.getHistoricalClassName(activeTerm, data.className)
+            };
+        });
     }
 
     public async saveTimetableEntries(entries: any[]): Promise<void> {
@@ -1166,13 +1175,21 @@ export class AdministrativeService extends BaseDataService {
 
     public async getExamTimetable(className: string, termKey?: string): Promise<any[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
+        const dbClassName = this.getDatabaseClassName(activeTerm, className);
         const q = query(
             collection(this.db, this.examTimetablesCollection),
-            where('className', '==', className),
+            where('className', '==', dbClassName),
             where('termKey', '==', activeTerm)
         );
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snapshot.docs.map(d => {
+            const data = d.data();
+            return { 
+                id: d.id, 
+                ...data,
+                className: this.getHistoricalClassName(activeTerm, data.className)
+            };
+        });
     }
 
     public async saveExamTimetableEntries(entries: any[]): Promise<void> {
@@ -1187,7 +1204,14 @@ export class AdministrativeService extends BaseDataService {
         const activeTerm = termKey || this.getCurrentTermKey();
         const q = query(collection(this.db, this.specialDaysCollection), where('termKey', '==', activeTerm));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return { 
+                id: doc.id, 
+                ...data,
+                className: this.getHistoricalClassName(activeTerm, data.className)
+            };
+        });
     }
 
     public async getHallTicketReleaseStatus(termKey?: string): Promise<boolean> {

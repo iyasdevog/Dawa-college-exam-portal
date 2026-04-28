@@ -14,7 +14,9 @@ import {
     GlobalSettings, 
     StudentRecord, 
     SubjectConfig, 
-    SupplementaryExam 
+    SupplementaryExam,
+    SubjectMarks,
+    PerformanceLevel
 } from '../../../domain/entities/types';
 
 export abstract class BaseDataService {
@@ -105,6 +107,125 @@ export abstract class BaseDataService {
             // If they use single year, let's just keep it single year for simplicity unless pattern says otherwise
             return `${yearStr}-Even`;
         }
+    }
+
+    /**
+     * Maps a class name back to its historical alias for a specific term if needed.
+     * Use this for presentation and reports in historical views.
+     */
+    public getHistoricalClassName(termKey: string | undefined, className: string): string {
+        if (!termKey || !className) return className;
+
+        // Specific mapping for 2025-2026-Odd semester
+        if (termKey === '2025-2026-Odd') {
+            const reverseMappings: Record<string, string> = {
+                'FS2': 'S1',
+                'FS3': 'S2',
+                'HS2': 'P1',
+                'HS3': 'P2'
+            };
+            return reverseMappings[className] || className;
+        }
+
+        return className;
+    }
+
+    /**
+     * Maps a historical class name back to its database/current identity.
+     * Use this when filtering database records (subjects, students) by a selected historical name.
+     */
+    public getDatabaseClassName(termKey: string | undefined, historicalName: string): string {
+        if (!termKey || !historicalName) return historicalName;
+
+        if (termKey === '2025-2026-Odd') {
+            const forwardMappings: Record<string, string> = {
+                'S1': 'FS2',
+                'S2': 'FS3',
+                'P1': 'HS2',
+                'P2': 'HS3'
+            };
+            return forwardMappings[historicalName] || historicalName;
+        }
+
+        return historicalName;
+    }
+
+    /**
+     * Processes a raw student record document and expands it with derived fields for a specific term.
+     * Centralized to ensure consistent nomenclature and metric resolution.
+     */
+    public processStudentRecord(data: any, id: string, termKey?: string): StudentRecord {
+        const currentTermKey = termKey || this.getCurrentTermKey();
+        
+        // Resolve className for the specific term if provided
+        let rawClassName = data.currentClass || data.className || 'Unknown';
+        if (termKey && data.academicHistory?.[termKey]) {
+            rawClassName = data.academicHistory[termKey].className || rawClassName;
+        }
+        
+        const classAlias = termKey ? this.getHistoricalClassName(termKey, rawClassName) : rawClassName;
+
+        let academicHistory = { ...(data.academicHistory || {}) };
+        const currentClass = data.currentClass || data.className || '';
+
+        // 1. Legacy Migration: If top-level marks exist, ensure they are in history
+        if (data.marks && Object.keys(data.marks).length > 0) {
+            const legacyTerm = data.termKey || '2025-2026-Odd';
+            if (!academicHistory[legacyTerm]) {
+                academicHistory[legacyTerm] = {
+                    className: currentClass,
+                    semester: data.semester || (legacyTerm.includes('Odd') ? 'Odd' : 'Even'),
+                    marks: data.marks,
+                    grandTotal: data.grandTotal || 0,
+                    average: data.average || 0,
+                    rank: data.rank || 0,
+                    performanceLevel: data.performanceLevel || 'C (Average)'
+                };
+            }
+        }
+
+        // 2. Normalize and calculate data for the REQUESTED term
+        const termData = academicHistory[currentTermKey];
+        const rawMarks = termData?.marks || {};
+
+        const normalizedMarks: Record<string, SubjectMarks> = {};
+        Object.entries(rawMarks).forEach(([subjectId, marks]: [string, any]) => {
+            normalizedMarks[subjectId] = {
+                int: marks.int !== undefined ? marks.int : (marks.ce !== undefined ? marks.ce : 0),
+                ext: marks.ext !== undefined ? marks.ext : (marks.ta !== undefined ? marks.ta : 0),
+                total: marks.total || 0,
+                status: marks.status || 'Pending',
+                isSupplementary: marks.isSupplementary,
+                supplementaryYear: marks.supplementaryYear
+            };
+        });
+
+        // 3. Populate derived top-level fields for compatibility with current views
+        const currentTotals = academicHistory[currentTermKey] || {
+            grandTotal: 0,
+            average: 0,
+            rank: 0,
+            performanceLevel: 'Pending' as PerformanceLevel
+        };
+
+        const displayClassName = termData?.className || currentClass;
+        const normalizedClassName = this.getHistoricalClassName(currentTermKey, displayClassName);
+
+        return {
+            ...data,
+            id,
+            currentClass,
+            academicHistory,
+            className: normalizedClassName,
+            marks: normalizedMarks,
+            semester: currentTermKey.split('-').length === 3 
+                ? currentTermKey.split('-')[2] as 'Odd' | 'Even' 
+                : (currentTermKey.split('-')[1] as 'Odd' | 'Even'),
+            grandTotal: currentTotals.grandTotal,
+            average: currentTotals.average,
+            rank: currentTotals.rank,
+            performanceLevel: currentTotals.performanceLevel as PerformanceLevel
+        } as StudentRecord;
     }
 
     public getDb(): Firestore {

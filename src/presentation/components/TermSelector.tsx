@@ -56,27 +56,24 @@ export const TermSelector: React.FC<TermSelectorProps> = ({
                     We iterate over 'availableYears' (e.g., ["2025-2026", "2026"]) 
                     and show both semesters for each year. 
                 */}
-                {termOptions.map((yearOrTerm) => {
-                    // Robust extraction of the Year part
+                {/* Deduplicate years to prevent redundant Odd/Even entries per year */}
+                {Array.from(new Set(termOptions.map((yearOrTerm) => {
                     const lastHyphenIndex = yearOrTerm.lastIndexOf('-');
                     let year = yearOrTerm;
-                    
-                    // If it's a full key (has suffix), extract base year
                     if (yearOrTerm.endsWith('-Odd') || yearOrTerm.endsWith('-Even')) {
                         year = yearOrTerm.substring(0, lastHyphenIndex);
                     }
-
-                    return (
-                        <React.Fragment key={year}>
-                            <option value={`${year}-Odd`} className="bg-slate-800 text-white">
-                                {year} - Odd Semester
-                            </option>
-                            <option value={`${year}-Even`} className="bg-slate-800 text-white">
-                                {year} - Even Semester
-                            </option>
-                        </React.Fragment>
-                    );
-                })}
+                    return year;
+                }))).map((year) => (
+                    <React.Fragment key={year}>
+                        <option value={`${year}-Odd`} className="bg-slate-800 text-white">
+                            {year} - Odd Semester
+                        </option>
+                        <option value={`${year}-Even`} className="bg-slate-800 text-white">
+                            {year} - Even Semester
+                        </option>
+                    </React.Fragment>
+                ))}
             </select>
         </div>
     );

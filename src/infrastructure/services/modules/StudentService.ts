@@ -215,70 +215,8 @@ export class StudentService extends BaseDataService {
      * Normalizes a student record from Firestore.
      * Maps legacy 'ta' and 'ce' fields in marks to 'int' and 'ext'.
      */
-    public processStudentRecord(data: any, id: string, termKey?: string): StudentRecord {
-        const currentTermKey = termKey || this.getCurrentTermKey();
-        let academicHistory = { ...(data.academicHistory || {}) };
-        const currentClass = data.currentClass || data.className || '';
+    // processStudentRecord moved to BaseDataService for shared usage
 
-        // 1. Legacy Migration: If top-level marks exist, ensure they are in history
-        if (data.marks && Object.keys(data.marks).length > 0) {
-            // Determine which term these legacy marks belong to
-            // Default to 2025-2026-Odd if not specified (legacy fallback)
-            const legacyTerm = data.termKey || '2025-2026-Odd';
-            
-            if (!academicHistory[legacyTerm]) {
-                academicHistory[legacyTerm] = {
-                    className: currentClass,
-                    semester: data.semester || (legacyTerm.includes('Odd') ? 'Odd' : 'Even'),
-                    marks: data.marks,
-                    grandTotal: data.grandTotal || 0,
-                    average: data.average || 0,
-                    rank: data.rank || 0,
-                    performanceLevel: data.performanceLevel || 'C (Average)'
-                };
-            }
-        }
-
-        // 2. Normalize and calculate data for the REQUESTED term
-        const termData = academicHistory[currentTermKey];
-        const rawMarks = termData?.marks || {};
-
-        const normalizedMarks: Record<string, SubjectMarks> = {};
-        Object.entries(rawMarks).forEach(([subjectId, marks]: [string, any]) => {
-            normalizedMarks[subjectId] = {
-                int: marks.int !== undefined ? marks.int : (marks.ce !== undefined ? marks.ce : 0),
-                ext: marks.ext !== undefined ? marks.ext : (marks.ta !== undefined ? marks.ta : 0),
-                total: marks.total || 0,
-                status: marks.status || 'Pending',
-                isSupplementary: marks.isSupplementary,
-                supplementaryYear: marks.supplementaryYear
-            };
-        });
-
-        // 3. Populate derived top-level fields for compatibility with current views
-        const currentTotals = academicHistory[currentTermKey] || {
-            grandTotal: 0,
-            average: 0,
-            rank: 0,
-            performanceLevel: 'Pending' as PerformanceLevel
-        };
-
-        return {
-            ...data,
-            id,
-            currentClass,
-            academicHistory,
-            className: termData?.className || currentClass,
-            marks: normalizedMarks,
-            semester: currentTermKey.split('-').length === 3 
-                ? currentTermKey.split('-')[2] as 'Odd' | 'Even' 
-                : (currentTermKey.split('-')[1] as 'Odd' | 'Even'),
-            grandTotal: currentTotals.grandTotal,
-            average: currentTotals.average,
-            rank: currentTotals.rank,
-            performanceLevel: currentTotals.performanceLevel as PerformanceLevel
-        } as StudentRecord;
-    }
 
     public async isEligibleForHallTicket(studentId: string, termKey?: string): Promise<boolean> {
         try {

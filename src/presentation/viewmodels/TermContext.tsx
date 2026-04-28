@@ -35,7 +35,15 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // This function is now mostly used to refresh termOptions (available years)
             // as the current year/semester are synced via onSnapshot
             const availableTerms = await dataService.getAvailableTerms();
-            setTermOptions(availableTerms);
+            // Normalize to unique years (e.g. "2025-2026-Odd" -> "2025-2026")
+            const uniqueYears = Array.from(new Set(availableTerms.map(tk => {
+                const lastHyphenIndex = tk.lastIndexOf('-');
+                if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
+                    return tk.substring(0, lastHyphenIndex);
+                }
+                return tk;
+            }))).sort().reverse();
+            setTermOptions(uniqueYears);
         } catch (error) {
             console.error('Error refreshing terms in TermContext', error);
         }
@@ -56,9 +64,8 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 BaseDataService.updateStaticSettings(settings);
 
                 // If settings has availableYears, sync it locally too
-                if (settings.availableYears) {
-                    // Normalize to unique years (e.g. "2025-2026-Odd" -> "2025-2026")
-                    const uniqueYears = Array.from(new Set(settings.availableYears.map(tk => {
+                    const availableYears = settings.availableYears || [];
+                    const uniqueYears = Array.from(new Set(availableYears.map(tk => {
                         const lastHyphenIndex = tk.lastIndexOf('-');
                         if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
                             return tk.substring(0, lastHyphenIndex);
@@ -66,7 +73,6 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         return tk;
                     }))).sort().reverse();
                     setTermOptions(uniqueYears);
-                }
             }
             setIsLoading(false);
         }, (error) => {

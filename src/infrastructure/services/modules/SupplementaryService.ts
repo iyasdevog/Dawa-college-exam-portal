@@ -50,12 +50,24 @@ export class SupplementaryService extends BaseDataService {
             return exams.map(exam => {
                 const student = studentMap.get(exam.studentId);
                 const subject = subjectMap.get(exam.subjectId);
+                
+                // Prioritize resolving class from the term being viewed or recorded
+                const resolutionTerm = (termKey && termKey !== 'All') ? termKey : (exam.examTerm || exam.originalTerm);
+                let historicalClass = (resolutionTerm && student?.academicHistory?.[resolutionTerm]?.className) || 
+                                      (exam.originalTerm && student?.academicHistory?.[exam.originalTerm]?.className) ||
+                                      student?.currentClass || 
+                                      student?.className || 
+                                      'Unknown';
+
+                // Restore historical nomenclature using centralized helper
+                historicalClass = this.getHistoricalClassName(resolutionTerm, historicalClass);
+
                 return {
                     ...exam,
                     studentName: student?.name || (exam as any).studentName || 'Not Registered',
                     studentAdNo: student?.adNo || (exam as any).studentAdNo || exam.studentId,
                     subjectName: subject?.name || 'Unknown Subject',
-                    studentClass: student?.currentClass || student?.className || 'Unknown'
+                    studentClass: historicalClass
                 };
             })
             .filter(exam => exam.subjectName !== 'Unknown Subject' && exam.subjectId);

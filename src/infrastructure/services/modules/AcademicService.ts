@@ -116,42 +116,56 @@ export class AcademicService extends BaseDataService {
             const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
             const allSubjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
             
-            return allSubjects.filter(subject => {
-                const subjectYear = subject.academicYear;
-                
-                // Use strict matching for year to prevent "2026" matching "2025-2026"
-                const isYearMatch = !subjectYear || subjectYear === targetYear;
+            return allSubjects
+                .filter(subject => {
+                    const subjectYear = subject.academicYear;
+                    
+                    // Use strict matching for year to prevent "2026" matching "2025-2026"
+                    const isYearMatch = !subjectYear || subjectYear === targetYear;
 
-                if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
-                    return false;
-                }
-                
-                if (subjectYear && !isYearMatch) {
-                    return false;
-                }
+                    if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
+                        return false;
+                    }
+                    
+                    if (subjectYear && !isYearMatch) {
+                        return false;
+                    }
 
-                if (!subjectYear) {
-                    const hasYearSpecificVersion = allSubjects.some(s => 
-                        s.name === subject.name && 
-                        s.academicYear && (s.academicYear === targetYear || targetYear.includes(s.academicYear)) &&
-                        (s.activeSemester === 'Both' || s.activeSemester === targetSem)
-                    );
-                    if (hasYearSpecificVersion) return false;
-                }
-                
-                return true;
-            });
+                    if (!subjectYear) {
+                        const hasYearSpecificVersion = allSubjects.some(s => 
+                            s.name === subject.name && 
+                            s.academicYear && (s.academicYear === targetYear || targetYear.includes(s.academicYear)) &&
+                            (s.activeSemester === 'Both' || s.activeSemester === targetSem)
+                        );
+                        if (hasYearSpecificVersion) return false;
+                    }
+                    
+                    return true;
+                })
+                .map(subject => ({
+                    ...subject,
+                    targetClasses: (subject.targetClasses || []).map(c => this.getHistoricalClassName(activeTerm, c))
+                }));
         } catch (error) {
             console.error('Error fetching all subjects:', error);
             return [];
         }
     }
 
-    public async getSubjectById(id: string): Promise<SubjectConfig | null> {
+    public async getSubjectById(id: string, termKey?: string): Promise<SubjectConfig | null> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
             const docSnap = await getDoc(docRef);
-            return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as SubjectConfig : null;
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const activeTerm = termKey || this.getCurrentTermKey();
+                return {
+                    id: docSnap.id,
+                    ...data,
+                    targetClasses: (data.targetClasses || []).map((c: string) => this.getHistoricalClassName(activeTerm, c))
+                } as SubjectConfig;
+            }
+            return null;
         } catch (error) {
             console.error('Error fetching subject:', error);
             return null;
@@ -203,8 +217,10 @@ export class AcademicService extends BaseDataService {
     }
 
     public async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
-        const subjects = await this.getAllSubjects(termKey);
-        return subjects.filter(s => s.targetClasses?.includes(className));
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const dbClassName = this.getDatabaseClassName(activeTerm, className);
+        const subjects = await this.getAllSubjects(activeTerm);
+        return subjects.filter(s => s.targetClasses?.includes(dbClassName));
     }
 
     public async enrollStudentInSubject(subjectId: string, studentId: string): Promise<void> {
@@ -298,16 +314,15 @@ export class AcademicService extends BaseDataService {
     }
 
     public async getRankings(className: string, termKey?: string): Promise<any[]> {
-        // Implementation of getRankings usually involves fetching all students in the class
-        // and sorting them by grandTotal. This is better coordinated via DataService facade
-        // or a dedicated ReportingService, but for compatibility we'll implement it here.
         const activeTerm = termKey || this.getCurrentTermKey();
+        const dbClassName = this.getDatabaseClassName(activeTerm, className);
+        
         const studentsSnap = await getDocs(query(collection(this.db, this.studentsCollection)));
         const classStudents = studentsSnap.docs
-            .map(d => ({ id: d.id, ...d.data() } as any))
-            .filter(s => (s.currentClass === className || s.className === className) && s.academicHistory?.[activeTerm])
+            .map(d => this.processStudentRecord(d.data(), d.id, activeTerm))
+            .filter(s => s.className === className && s.academicHistory?.[activeTerm])
             .map(s => {
-                const history = s.academicHistory[activeTerm];
+                const history = s.academicHistory![activeTerm];
                 return {
                     id: s.id,
                     name: s.name,
