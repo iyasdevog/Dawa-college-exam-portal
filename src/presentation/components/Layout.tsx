@@ -1,5 +1,6 @@
 import React from 'react';
-import { ViewType } from '../../domain/entities/types';
+import { ViewType, GlobalSettings } from '../../domain/entities/types';
+import { dataService } from '../../infrastructure/services/dataService';
 import HamburgerMenu from './HamburgerMenu';
 import { User } from '../../domain/entities/User';
 import { useMobile, useMobileNavigation } from '../hooks/useMobile';
@@ -18,6 +19,15 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout, isCloudActive = true, currentUser }) => {
   const { isMobile, isTablet } = useMobile();
   const { isMobileMenuOpen } = useMobileNavigation();
+  const [branding, setBranding] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const loadBranding = async () => {
+      const settings = await dataService.getGlobalSettings();
+      setBranding(settings);
+    };
+    loadBranding();
+  }, []);
 
   const navItems = [
     { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
@@ -86,7 +96,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
       <div className="p-8">
         <h1 className="text-xl font-black tracking-tighter flex items-center gap-3">
           <i className="fa-solid fa-graduation-cap text-emerald-400"></i>
-          AIC Da'wa College
+          {branding?.systemAlias || branding?.institutionName || "AIC Da'wa College"}
         </h1>
         <p className="text-[10px] text-slate-400 mt-2 uppercase font-black tracking-[0.3em]">Exam Portal</p>
       </div>

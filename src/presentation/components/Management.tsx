@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import StudentManagement from './management/StudentManagement';
@@ -23,6 +23,7 @@ const Management: React.FC = () => {
   const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
   const [supplementaryExams, setSupplementaryExams] = useState<any[]>([]);
   const [customClasses, setCustomClasses] = useState<string[]>([]);
+  const [disabledClasses, setDisabledClasses] = useState<string[]>([]);
   const [curriculum, setCurriculum] = useState<any[]>([]);
   const [loadedData, setLoadedData] = useState<Set<string>>(new Set());
   const [isDataActionLoading, setIsDataActionLoading] = useState(false);
@@ -42,13 +43,15 @@ const Management: React.FC = () => {
     setIsDataActionLoading(true);
     try {
       if (tabId === 'students' || tabId === 'subjects' || tabId === 'supplementary' || tabId === 'classes') {
-        const studentData = await dataService.getAllStudents(activeTerm);
+        const [studentData, subjectData, settings] = await Promise.all([
+          dataService.getAllStudents(activeTerm),
+          dataService.getAllSubjects(activeTerm),
+          dataService.getGlobalSettings()
+        ]);
         setStudents(studentData);
-      }
-
-      if (tabId === 'subjects' || tabId === 'supplementary' || tabId === 'classes') {
-        const subjectData = await dataService.getAllSubjects(activeTerm);
         setSubjects(subjectData);
+        setCustomClasses(settings.customClasses || []);
+        setDisabledClasses(settings.disabledClasses || []);
       }
 
       if (tabId === 'supplementary') {
@@ -81,19 +84,22 @@ const Management: React.FC = () => {
   }, [activeTab, loadTabData]);
 
   useEffect(() => {
-    const savedClasses = localStorage.getItem('customClasses');
-    if (savedClasses) {
-      setCustomClasses(JSON.parse(savedClasses));
-    }
-  }, [activeTab, activeTerm]);
+    // Initial data load for default tab
+    loadTabData(activeTab);
+  }, []);
 
   const handleRefresh = async () => {
     await loadTabData(activeTab, true);
   };
 
-  const handleUpdateCustomClasses = (classes: string[]) => {
+  const handleUpdateCustomClasses = async (classes: string[]) => {
     setCustomClasses(classes);
-    localStorage.setItem('customClasses', JSON.stringify(classes));
+    try {
+      await dataService.updateGlobalSettings({ customClasses: classes });
+    } catch (error) {
+      console.error('Error updating custom classes:', error);
+      alert('Failed to save class changes to database.');
+    }
   };
 
   if (isLoading) {
@@ -152,6 +158,7 @@ const Management: React.FC = () => {
           {activeTab === 'students' && (
             <StudentManagement
               students={students}
+              activeTerm={activeTerm}
               onRefresh={handleRefresh}
               isLoading={isDataActionLoading}
             />
@@ -161,6 +168,7 @@ const Management: React.FC = () => {
             <SubjectManagement
               subjects={subjects}
               students={students}
+              curriculum={curriculum}
               activeTerm={activeTerm}
               onRefresh={handleRefresh}
               isLoading={isDataActionLoading}
@@ -170,6 +178,7 @@ const Management: React.FC = () => {
           {activeTab === 'curriculum' && (
             <CurriculumManagement
               curriculum={curriculum}
+              activeTerm={activeTerm}
               onRefresh={handleRefresh}
               isLoading={isDataActionLoading}
             />
@@ -188,6 +197,7 @@ const Management: React.FC = () => {
           {activeTab === 'classes' && (
             <ClassManagement
               customClasses={customClasses}
+              disabledClasses={disabledClasses}
               onUpdateCustomClasses={handleUpdateCustomClasses}
               students={students}
               subjects={subjects}

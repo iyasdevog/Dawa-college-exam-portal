@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AcademicCalendarEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
-import { CLASSES } from '../../../domain/entities/constants';
+import { SYSTEM_CLASSES as CLASSES } from '../../../domain/entities/constants';
 
 const AcademicCalendar: React.FC = () => {
     const [entries, setEntries] = useState<AcademicCalendarEntry[]>([]);

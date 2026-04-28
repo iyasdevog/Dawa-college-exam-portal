@@ -35,24 +35,63 @@ export class StudentService extends BaseDataService {
     }
 
     /**
-     * Parses student CSV data.
+     * Parses student CSV data from a File or raw string.
      */
-    public parseStudentCSV(csvData: string): any[] {
-        const lines = csvData.split('\n');
-        const headers = lines[0].split(',').map(h => h.trim());
-        const data = lines.slice(1).filter(line => line.trim()).map(line => {
-            const values = line.split(',').map(v => v.trim());
-            const obj: any = {};
-            headers.forEach((header, index) => {
-                obj[header] = values[index];
-            });
-            return obj;
+    public async parseStudentCSV(input: File | string): Promise<{ students: any[], errors: string[] }> {
+        if (typeof input === 'string') {
+            try {
+                const lines = input.split('\n');
+                if (lines.length === 0) return { students: [], errors: ['CSV data is empty'] };
+                
+                const headers = lines[0].split(',').map(h => h.trim());
+                const data = lines.slice(1).filter(line => line.trim()).map(line => {
+                    const values = line.split(',').map(v => v.trim());
+                    const obj: any = {};
+                    headers.forEach((header, index) => {
+                        obj[header] = values[index];
+                    });
+                    return obj;
+                });
+                const parsed = ExcelUtils.parseStudentData(data);
+                return { students: parsed, errors: [] };
+            } catch (error) {
+                return { students: [], errors: [error instanceof Error ? error.message : 'Unknown CSV parsing error'] };
+            }
+        }
+
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const text = e.target?.result as string;
+                    this.parseStudentCSV(text).then(resolve);
+                } catch (error) {
+                    resolve({ students: [], errors: [error instanceof Error ? error.message : 'Unknown CSV parsing error'] });
+                }
+            };
+            reader.onerror = () => resolve({ students: [], errors: ['File reading error'] });
+            reader.readAsText(input);
         });
-        return ExcelUtils.parseStudentData(data);
+    }
+
+    /**
+     * Deactivates a student record.
+     */
+    public async archiveStudent(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.studentsCollection, id);
+            await updateDoc(docRef, { isActive: false });
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error archiving student:', error);
+            throw error;
+        }
     }
 
     /**
      * Bulk imports students into Firestore.
+     * Phase 1: Async lookups to determine update vs create for each row.
+     * Phase 2: Synchronous batch writes (no async inside the batch processor).
      */
     public async bulkImportStudents(students: any[]): Promise<{ updated: number; created: number; errors: string[] }> {
         let created = 0;
@@ -60,32 +99,51 @@ export class StudentService extends BaseDataService {
         const errors: string[] = [];
         const termKey = this.getCurrentTermKey();
 
-        await this.runBatchedOperation(students, async (batch, studentData) => {
+        // Phase 1: Resolve all async lookups BEFORE batching
+        const operations: Array<{ type: 'update' | 'create'; data: any; existingId?: string }> = [];
+
+        for (const studentData of students) {
             try {
                 const adNo = studentData.adNo?.toString();
-                if (!adNo) return;
+                if (!adNo) {
+                    errors.push(`Row ${studentData.importRowNumber || '?'}: Missing admission number`);
+                    continue;
+                }
 
                 const existing = await this.getStudentByAdNo(adNo);
                 if (existing) {
-                    const docRef = doc(this.db, this.studentsCollection, existing.id);
+                    operations.push({ type: 'update', data: studentData, existingId: existing.id });
+                } else {
+                    operations.push({ type: 'create', data: studentData });
+                }
+            } catch (err: any) {
+                errors.push(`Row ${studentData.importRowNumber || studentData.adNo}: ${err.message}`);
+            }
+        }
+
+        // Phase 2: Synchronous batch writes (no async inside the processor)
+        await this.runBatchedOperation(operations, (batch, op) => {
+            try {
+                if (op.type === 'update' && op.existingId) {
+                    const docRef = doc(this.db!, this.studentsCollection, op.existingId);
                     batch.update(docRef, {
-                        name: studentData.name,
-                        currentClass: studentData.className,
-                        [`academicHistory.${termKey}.className`]: studentData.className,
-                        [`academicHistory.${termKey}.semester`]: studentData.semester
+                        name: op.data.name,
+                        currentClass: op.data.className,
+                        [`academicHistory.${termKey}.className`]: op.data.className,
+                        [`academicHistory.${termKey}.semester`]: op.data.semester
                     });
                     updated++;
-                } else {
-                    const newStudentRef = doc(collection(this.db, this.studentsCollection));
+                } else if (op.type === 'create') {
+                    const newStudentRef = doc(collection(this.db!, this.studentsCollection));
                     const newStudent = {
-                        adNo,
-                        name: studentData.name,
-                        currentClass: studentData.className,
+                        adNo: op.data.adNo?.toString(),
+                        name: op.data.name,
+                        currentClass: op.data.className,
                         isActive: true,
                         academicHistory: {
                             [termKey]: {
-                                className: studentData.className,
-                                semester: studentData.semester,
+                                className: op.data.className,
+                                semester: op.data.semester,
                                 marks: {},
                                 grandTotal: 0,
                                 average: 0,
@@ -98,8 +156,8 @@ export class StudentService extends BaseDataService {
                     created++;
                 }
             } catch (err: any) {
-                errors.push(`Row ${studentData.adNo}: ${err.message}`);
-                console.error('Error importing student row:', err);
+                errors.push(`Row ${op.data.adNo}: ${err.message}`);
+                console.error('Error in batch write for student:', err);
             }
         });
 
@@ -217,6 +275,23 @@ export class StudentService extends BaseDataService {
         } as StudentRecord;
     }
 
+    public async isEligibleForHallTicket(studentId: string, termKey?: string): Promise<boolean> {
+        try {
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const student = await this.getStudentById(studentId);
+            if (!student) return false;
+
+            // Simple check: Is attendance >= 75%?
+            // In a real system, this would involve more complex logic
+            // For now, we'll assume they are eligible if they have a record in the term
+            const history = student.academicHistory || {};
+            return !!history[activeTerm];
+        } catch (error) {
+            console.error('Error checking eligibility:', error);
+            return false;
+        }
+    }
+
     public async getAllStudents(termKey?: string): Promise<StudentRecord[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
 
@@ -304,7 +379,31 @@ export class StudentService extends BaseDataService {
     public async updateStudent(id: string, updates: Partial<StudentRecord>): Promise<void> {
         try {
             const docRef = doc(this.db, this.studentsCollection, id);
-            const cleanUpdates = this.sanitize(updates);
+            
+            // Sync currentClass and className if one is missing but the other is provided
+            const finalUpdates = { ...updates };
+            if (updates.className && !updates.currentClass) {
+                finalUpdates.currentClass = updates.className;
+            } else if (updates.currentClass && !updates.className) {
+                finalUpdates.className = updates.currentClass;
+            }
+
+            // Also update active term history if class is changing
+            const newClassName = finalUpdates.currentClass;
+            if (newClassName) {
+                const termKey = this.getCurrentTermKey();
+                const student = await this.getStudentById(id);
+                if (student && student.academicHistory?.[termKey]) {
+                    const updatedHistory = { ...student.academicHistory };
+                    updatedHistory[termKey] = {
+                        ...updatedHistory[termKey],
+                        className: newClassName
+                    };
+                    finalUpdates.academicHistory = updatedHistory;
+                }
+            }
+
+            const cleanUpdates = this.sanitize(finalUpdates);
             await updateDoc(docRef, cleanUpdates);
             this.updateStudentInCache(id, cleanUpdates);
         } catch (error) {
@@ -356,9 +455,41 @@ export class StudentService extends BaseDataService {
         }
     }
 
+    /**
+     * Promotes all students in a class to a new class for a specific term.
+     */
+    public async promoteClass(fromClass: string, toClass: string, termKey: string): Promise<void> {
+        try {
+            const students = await this.getStudentsByClass(fromClass);
+            if (students.length === 0) return;
+
+            const parts = termKey.split('-');
+            const semester = parts.pop() as 'Odd' | 'Even';
+            const year = parts.join('-');
+            
+            const studentIds = students.map(s => s.id);
+            await this.promoteStudents(studentIds, toClass, year, semester);
+        } catch (error) {
+            console.error('Error promoting class:', error);
+            throw error;
+        }
+    }
+
     public async getStudentsByClass(className: string, termKey?: string): Promise<StudentRecord[]> {
         const students = await this.getAllStudents(termKey);
-        return students.filter(s => s.currentClass === className || s.className === className);
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const isCurrentTerm = activeTerm === this.getCurrentTermKey();
+
+        return students.filter(s => {
+            if (isCurrentTerm) {
+                // Current semester: include if current or primary matches
+                return s.currentClass === className || s.className === className;
+            } else {
+                // Historical semester: ONLY include if they were in this class AT THAT TIME
+                // className at this point is already resolved to termData.className in processStudentRecord
+                return s.className === className;
+            }
+        });
     }
 
     public updateStudentInCache(studentId: string, updates: Partial<StudentRecord>, termKey?: string): void {

@@ -7,6 +7,7 @@ import AggregatedScorecard from '../AggregatedScorecard';
 
 interface StudentManagementProps {
     students: StudentRecord[];
+    activeTerm: string;
     onRefresh: () => Promise<void>;
     isLoading: boolean;
 }
@@ -36,7 +37,7 @@ interface MobileProgressFeedback {
     progress: number;
 }
 
-const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefresh, isLoading }) => {
+const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeTerm, onRefresh, isLoading }) => {
     const { isMobile } = useMobile();
     const { getTouchProps } = useTouchInteraction();
     const [isOperating, setIsOperating] = useState(false);
@@ -90,6 +91,15 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
 
     const [transcriptStudent, setTranscriptStudent] = useState<StudentRecord | null>(null);
     const [allSubjects, setAllSubjects] = useState<SubjectConfig[]>([]);
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+
+    useEffect(() => {
+        const loadClasses = async () => {
+            const classes = await dataService.getClassesByTerm(activeTerm);
+            setAvailableClasses(classes);
+        };
+        loadClasses();
+    }, [activeTerm]);
 
     // Load mobile preferences
     useEffect(() => {
@@ -321,7 +331,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
         try {
             setIsImporting(true);
             setImportResults(null);
-            const { students: parsedStudents, errors } = dataService.parseStudentCSV(csvData);
+            const { students: parsedStudents, errors } = await dataService.parseStudentCSV(csvData);
 
             if (errors.length > 0) {
                 setImportResults({ success: 0, errors });
@@ -376,8 +386,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
 
     const downloadTemplate = () => {
         // Simple CSV template for now, could be Excel in future
-        const headers = ['adNo', 'name', 'className', 'semester'];
-        const sample = ['1001', 'John Doe', 'S1', 'Odd'];
+        const headers = ['Admission No', 'Student Name', 'Class Name', 'Semester'];
+        const sample = ['138', 'Ahmad Khan', 'S1', 'Odd'];
         const csvContent = [headers.join(','), sample.join(',')].join('\n');
 
         const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -432,8 +442,15 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
 
     return (
         <div className="space-y-6">
-            <div className={`flex items-center justify-between ${isMobile ? 'flex-col gap-4' : ''}`}>
-                <h2 className={`font-black text-slate-900 ${isMobile ? 'text-lg text-center' : 'text-xl'}`}>Student Management</h2>
+            <div className={`flex items-center justify-between flex-wrap gap-4 ${isMobile ? 'flex-col' : ''}`}>
+                <div className="flex items-center gap-3">
+                    <h2 className={`font-black text-slate-900 ${isMobile ? 'text-lg text-center' : 'text-xl'}`}>Student Management</h2>
+                    {activeTerm && (
+                        <span className="text-xs px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
+                            {activeTerm}
+                        </span>
+                    )}
+                </div>
                 <div className={`flex gap-3 ${isMobile ? 'w-full flex-col' : ''}`}>
                     <button
                         onClick={() => setShowPromoteModal(true)}
@@ -568,7 +585,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                     onChange={e => setStudentForm(prev => ({ ...prev, className: e.target.value }))}
                                     className="w-full p-3 border rounded-xl"
                                 >
-                                    {Array.from(new Set([...students.map(s => s.className), 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])).sort().map(c => <option key={c} value={c}>{c}</option>)}
+                                    {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
                             <div className="flex gap-3 pt-4">
@@ -617,7 +634,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                 <textarea
                                     value={csvData}
                                     onChange={e => setCsvData(e.target.value)}
-                                    placeholder="adNo,name,className,semester&#10;1001,John Doe,S1,Odd"
+                                    placeholder="Admission No,Student Name,Class Name,Semester&#10;138,Ahmad Khan,S1,Odd"
                                     className="w-full p-3 border rounded-xl h-32 text-sm font-mono"
                                     disabled={!!excelFile}
                                 />
@@ -630,9 +647,13 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                         <p>✅ Successfully imported {importResults.success} students!</p>
                                     ) : (
                                         <div>
-                                            <p className="font-bold">Import Failed:</p>
-                                            <ul className="list-disc list-inside mt-1 max-h-32 overflow-y-auto">
-                                                {importResults.errors.map((err, i) => <li key={i}>{err}</li>)}
+                                            <p className="font-bold text-red-800 mb-1">Import Failed:</p>
+                                            <ul className="list-disc list-inside mt-1 max-h-32 overflow-y-auto text-red-700">
+                                                {importResults.errors.length > 0 ? (
+                                                    importResults.errors.map((err, i) => <li key={i}>{err}</li>)
+                                                ) : (
+                                                    <li>No valid student data found. Please check your Excel headers (must have 'Admission No' and 'Student Name').</li>
+                                                )}
                                             </ul>
                                         </div>
                                     )}
@@ -706,7 +727,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                         className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-slate-900 font-bold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all outline-none"
                                     >
                                         <option value="">Select Level</option>
-                                        {Array.from(new Set(students.map(s => s.className))).sort().map(cls => (
+                                        {availableClasses.map(cls => (
                                             <option key={cls} value={cls}>{cls}</option>
                                         ))}
                                     </select>
@@ -726,7 +747,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, onRefre
                                         className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-slate-900 font-bold focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all outline-none"
                                     >
                                         <option value="">Next Level</option>
-                                        {['S1','S2','S3','S4','S5','S6','S7','S8'].map(cls => (
+                                        {availableClasses.map(cls => (
                                             <option key={cls} value={cls}>{cls}</option>
                                         ))}
                                     </select>

@@ -61,14 +61,39 @@ export class ExcelUtils {
 
     /**
      * Highly specific parser for student CSV/Excel data.
+     * Uses fuzzy matching for headers to be robust against case/spacing variations.
      */
     public static parseStudentData(json: any[]): any[] {
-        // Shared logic for mapping excel headers to student fields
-        return json.map(row => ({
-            adNo: row['adNo'] || row['Admission No'] || row['AD NO'] || '',
-            name: row['name'] || row['Student Name'] || row['NAME'] || '',
-            className: row['className'] || row['Class'] || row['CLASS'] || 'S1',
-            semester: row['semester'] || row['Semester'] || row['SEMESTER'] || 'Odd'
-        })).filter(s => s.adNo && s.name);
+        if (!json || json.length === 0) return [];
+
+        const mappings = {
+            adNo: ['adno', 'admissionno', 'admission number', 'admission_no', 'adm no', 'adm_no', 'admission_number'],
+            name: ['name', 'student name', 'student_name', 'full name', 'fullname'],
+            className: ['classname', 'class', 'standard', 'grade', 'class_name'],
+            semester: ['semester', 'sem', 'term']
+        };
+
+        return json.map(row => {
+            const mapped: any = {};
+            const keys = Object.keys(row);
+
+            Object.entries(mappings).forEach(([targetKey, synonyms]) => {
+                const sourceKey = keys.find(k => {
+                    const normalizedKey = k.toLowerCase().replace(/[\s_-]/g, '').trim();
+                    return synonyms.some(s => s.toLowerCase().replace(/[\s_-]/g, '') === normalizedKey);
+                });
+                
+                if (sourceKey) {
+                    mapped[targetKey] = row[sourceKey];
+                }
+            });
+
+            return {
+                adNo: String(mapped.adNo || '').trim(),
+                name: String(mapped.name || '').trim(),
+                className: String(mapped.className || '').trim() || 'S1',
+                semester: String(mapped.semester || '').trim() || 'Odd'
+            };
+        }).filter(s => s.adNo && s.name && s.adNo !== 'undefined' && s.name !== 'undefined');
     }
 }

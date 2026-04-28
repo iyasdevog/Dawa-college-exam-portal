@@ -7,25 +7,45 @@ export const CurriculumOverview: React.FC = () => {
     const { isMobile } = useMobile();
     const [activeStage, setActiveStage] = useState<CurriculumStage>('Foundational');
     const [activeStream, setActiveStream] = useState<'3-Year' | '5-Year'>('5-Year');
+    const [activeYear, setActiveYear] = useState<string>('');
+    const [availableYears, setAvailableYears] = useState<string[]>([]);
     const [curriculum, setCurriculum] = useState<CurriculumEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const fetchCurriculum = async () => {
+        const fetchInitialData = async () => {
             try {
-                const data = await dataService.getAllCurriculum();
+                const [data, settings] = await Promise.all([
+                    dataService.getAllCurriculum(),
+                    dataService.getGlobalSettings()
+                ]);
                 setCurriculum(data);
+                
+                if (settings) {
+                    const currentYear = settings.currentAcademicYear || '2025-2026';
+                    setActiveYear(currentYear);
+                    
+                    // Derive available years from curriculum data or settings
+                    const yearsFromCurriculum = Array.from(new Set(data.map(c => c.academicYear).filter(Boolean))) as string[];
+                    const allYears = Array.from(new Set([...yearsFromCurriculum, currentYear, ...(settings.availableYears || [])])).sort().reverse();
+                    setAvailableYears(allYears);
+                }
             } catch (error) {
                 console.error("Failed to load curriculum", error);
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchCurriculum();
+        fetchInitialData();
     }, []);
 
     const filteredCurriculum = curriculum
-        .filter(c => c.stage === activeStage && (activeStage !== 'Foundational' || c.stream === activeStream))
+        .filter(c => {
+            const matchesStage = c.stage === activeStage;
+            const matchesStream = activeStage !== 'Foundational' || c.stream === activeStream;
+            const matchesYear = !activeYear || c.academicYear === activeYear || !c.academicYear;
+            return matchesStage && matchesStream && matchesYear;
+        })
         .sort((a, b) => a.semester - b.semester || a.subjectName.localeCompare(b.subjectName));
 
     const groupedBySemester = filteredCurriculum.reduce((acc, entry) => {
@@ -38,7 +58,7 @@ export const CurriculumOverview: React.FC = () => {
         return (
             <div className="w-full max-w-5xl mx-auto p-12 text-center animate-in fade-in duration-500">
                 <div className="loader-ring mx-auto mb-6"></div>
-                <h3 className="text-white font-bold text-xl">Loading Foundation Curriculum...</h3>
+                <h3 className="text-white font-bold text-xl">Loading Academic Curriculum...</h3>
             </div>
         );
     }
@@ -53,6 +73,26 @@ export const CurriculumOverview: React.FC = () => {
                     Explore our comprehensive foundational courses structured for spiritual and academic excellence over our integrated programs.
                 </p>
             </div>
+
+            {/* Year Selector */}
+            {availableYears.length > 1 && (
+                <div className="flex justify-center mb-6">
+                    <div className="bg-slate-900/40 backdrop-blur-md p-1 rounded-full flex gap-1 border border-white/10 shadow-lg">
+                        {availableYears.map(year => (
+                            <button
+                                key={year}
+                                onClick={() => setActiveYear(year)}
+                                className={`px-4 py-1.5 rounded-full font-bold text-[10px] transition-all uppercase tracking-widest ${activeYear === year
+                                    ? 'bg-teal-500 text-white shadow-md'
+                                    : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                {year}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Stage Selector */}
             <div className="flex justify-center mb-6">

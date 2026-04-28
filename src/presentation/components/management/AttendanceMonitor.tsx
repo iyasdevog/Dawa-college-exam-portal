@@ -34,13 +34,10 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
             const [targetYear, targetSem] = activeTerm.split('-');
             
             // Filter by term metadata if present, or fallback to general list if no metadata
-            // (Note: dataService already does date-based filtering for current term if no metadata)
             const termFiltered = data.filter(record => {
                 if (record.academicYear && record.semester) {
                     return record.academicYear === targetYear && record.semester === targetSem;
                 }
-                // If no metadata, we let it pass for now to show legacy data, 
-                // but ideally we should be strict.
                 return true; 
             });
 
@@ -49,6 +46,23 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
             console.error('Error loading attendance records:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleDeleteRecord = async (record: AttendanceRecord) => {
+        const subject = subjects.find(s => s.id === record.subjectId);
+        const confirmMsg = `Are you sure you want to delete the attendance record for ${subject?.name || 'this subject'} in ${record.className} on ${record.date}?`;
+        
+        if (window.confirm(confirmMsg)) {
+            try {
+                setIsLoading(true);
+                await dataService.deleteAttendancePeriod(record.id);
+                await loadRecords();
+            } catch (error) {
+                console.error('Error deleting record:', error);
+                alert('Failed to delete attendance record.');
+                setIsLoading(false);
+            }
         }
     };
 
@@ -194,12 +208,22 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                             </p>
                                         </td>
                                         <td className="p-5 text-center">
-                                            <button
-                                                onClick={() => setViewingRecord(record)}
-                                                className="w-10 h-10 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm"
-                                            >
-                                                <i className="fa-solid fa-eye"></i>
-                                            </button>
+                                            <div className="flex items-center justify-center gap-2">
+                                                <button
+                                                    onClick={() => setViewingRecord(record)}
+                                                    className="w-10 h-10 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm"
+                                                    title="View Details"
+                                                >
+                                                    <i className="fa-solid fa-eye"></i>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteRecord(record)}
+                                                    className="w-10 h-10 bg-white border border-slate-200 rounded-xl text-slate-400 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all shadow-sm"
+                                                    title="Delete Record"
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );

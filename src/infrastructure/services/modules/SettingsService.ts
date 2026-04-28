@@ -25,16 +25,22 @@ export class SettingsService extends BaseDataService {
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const data = docSnap.data() as any;
-                this.currentGlobalSettings = {
+                BaseDataService.currentGlobalSettings = {
                     currentAcademicYear: data.currentAcademicYear || '2025-2026',
                     currentSemester: data.currentSemester || 'Odd',
                     availableYears: data.availableYears || ['2023-2024', '2024-2025', '2025-2026'],
                     attendanceStartDate: data.attendanceStartDate || '2026-04-01',
                     attendanceEndDate: data.attendanceEndDate || '2026-08-31',
                     minAttendancePercentage: data.minAttendancePercentage || 75,
-                    semesters: data.semesters || []
+                    semesters: data.semesters || [],
+                    customClasses: data.customClasses || [],
+                    disabledClasses: data.disabledClasses || [],
+                    institutionName: data.institutionName || 'Islamic Dawa Academy',
+                    contactEmail: data.contactEmail || 'examinations@aicdawacollege.edu.in',
+                    contactPhone: data.contactPhone || '+91-483-2734567',
+                    systemAlias: data.systemAlias || 'AIC_Dawa_Portal'
                 };
-                return this.currentGlobalSettings;
+                return BaseDataService.currentGlobalSettings;
             }
             return {
                 currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR,
@@ -51,7 +57,7 @@ export class SettingsService extends BaseDataService {
         try {
             const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
             await setDoc(docRef, updates, { merge: true });
-            this.currentGlobalSettings = null; // Invalidate local settings cache
+            BaseDataService.currentGlobalSettings = null; // Invalidate local settings cache
         } catch (error) {
             console.error('Error updating global settings:', error);
             throw error;
@@ -63,14 +69,19 @@ export class SettingsService extends BaseDataService {
             const students = await this.studentService.getAllStudents();
             const terms = new Set<string>();
             const settings = await this.getGlobalSettings();
-            terms.add(this.getCurrentTermKey(settings));
+            
+            // Re-sync the static settings to ensure getCurrentTermKey uses the latest data
+            BaseDataService.updateStaticSettings(settings);
+            
+            terms.add(this.getCurrentTermKey());
 
             const allowedYears = new Set(settings.availableYears || [settings.currentAcademicYear]);
 
             students.forEach(s => {
                 if (s.academicHistory) {
                     Object.keys(s.academicHistory).forEach(termKey => {
-                        const yearMatch = termKey.match(/^(\d{4}-\d{4})/);
+                        // Support both 2025-2026 and 2026 formats
+                        const yearMatch = termKey.match(/^(\d{4}(?:-\d{4})?)/);
                         if (yearMatch && allowedYears.has(yearMatch[1])) {
                             terms.add(termKey);
                         }
@@ -90,13 +101,21 @@ export class SettingsService extends BaseDataService {
             const settings = await this.getGlobalSettings();
             const students = await this.studentService.getAllStudents('All'); // Force fetch all
             
-            const discoveredYears = new Set<string>(settings.availableYears || []);
+            // Start fresh with only the current year, then discover from students
+            const discoveredYears = new Set<string>();
+            if (settings.currentAcademicYear) {
+                discoveredYears.add(settings.currentAcademicYear);
+            }
             
             students.forEach(s => {
                 if (s.academicHistory) {
                     Object.keys(s.academicHistory).forEach(tk => {
-                        const yearPart = tk.split('-').slice(0, 2).join('-');
-                        if (yearPart) discoveredYears.add(yearPart);
+                        if (s.academicHistory![tk] === null) return;
+                        const parts = tk.split('-');
+                        const yearPart = parts.length > 1 ? parts.slice(0, -1).join('-') : parts[0];
+                        if (yearPart && yearPart.match(/^\d{4}(?:-\d{4})?$/)) {
+                            discoveredYears.add(yearPart);
+                        }
                     });
                 }
             });
@@ -105,7 +124,10 @@ export class SettingsService extends BaseDataService {
             let newYear = settings.currentAcademicYear;
             let newSem = settings.currentSemester;
             
-            const currentTermKey = this.getCurrentTermKey(settings);
+            // Use the updated settings for term key resolution
+            const tempSettings = { ...settings, availableYears: sortedYears };
+            BaseDataService.updateStaticSettings(tempSettings);
+            const currentTermKey = this.getCurrentTermKey();
             const currentHasData = students.some(s => s.academicHistory?.[currentTermKey]);
             
             if (!currentHasData && sortedYears.length > 0) {

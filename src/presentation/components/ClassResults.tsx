@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
@@ -15,13 +15,17 @@ interface ClassResultsProps {
 }
 
 const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, currentUser }) => {
+    const [branding, setBranding] = useState<any>(null);
+
+    const [availableClasses, setAvailableClasses] = useState<string[]>(SYSTEM_CLASSES);
+
     // Determine allowed classes based on user role
     const allowedClasses = useMemo(() => {
-        if (!currentUser || currentUser.role === 'admin') return CLASSES;
-        return CLASSES.filter(cls => currentUser.assignedClasses.includes(cls));
-    }, [currentUser]);
+        if (!currentUser || currentUser.role === 'admin') return availableClasses;
+        return availableClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
+    }, [currentUser, availableClasses]);
 
-    const [selectedClass, setSelectedClass] = useState(forcedClass || allowedClasses[0] || 'S1');
+    const [selectedClass, setSelectedClass] = useState(forcedClass || 'S1');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
@@ -39,6 +43,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     }, [activeTerm]);
 
     useEffect(() => {
+        if (allowedClasses.length > 0 && (!selectedClass || !allowedClasses.includes(selectedClass)) && !forcedClass) {
+            setSelectedClass(allowedClasses[0]);
+        }
+    }, [allowedClasses, forcedClass, selectedClass]);
+
+    useEffect(() => {
         if (selectedClass) {
             loadClassData();
         }
@@ -47,8 +57,14 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     const loadData = async () => {
         try {
             setIsLoading(true);
-            const allSubjects = await dataService.getAllSubjects(activeTerm);
+            const [allSubjects, settings, termClasses] = await Promise.all([
+                dataService.getAllSubjects(activeTerm),
+                dataService.getGlobalSettings(),
+                dataService.getClassesByTerm(activeTerm)
+            ]);
             setSubjects(allSubjects);
+            setBranding(settings);
+            setAvailableClasses(termClasses);
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -63,9 +79,25 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             // Map students to their active term data for display and ranking
             const processedStudents = classStudents.map(student => {
                 const termData = student.academicHistory?.[activeTerm];
+                
+                // Pre-process marks with metadata snapshot fallbacks
+                const displayMarksMetadata: Record<string, any> = {};
+                if (termData?.marks) {
+                    Object.keys(termData.marks).forEach(subId => {
+                        const m = termData.marks[subId];
+                        const snapshot = termData.subjectMetadata?.[subId];
+                        displayMarksMetadata[subId] = {
+                            ...m,
+                            displayName: snapshot?.name || (subjects.find(s => s.id === subId)?.name) || subId,
+                            displayArabic: snapshot?.arabicName || (subjects.find(s => s.id === subId)?.arabicName)
+                        };
+                    });
+                }
+
                 return {
                     ...student,
                     displayMarks: termData?.marks || {},
+                    displayMarksMetadata,
                     displayTotal: termData?.grandTotal || 0,
                     displayAverage: termData?.average || 0,
                     displayPerformance: termData?.performanceLevel || 'Not Assessed',
@@ -410,7 +442,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                     {electiveMark ? (
                                                                         <div>
                                                                             <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-[10px] ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{electiveMark.total}</div>
-                                                                            <div className="text-[10px] text-indigo-500 font-medium truncate max-w-[80px] mx-auto">{shortenSubjectName(studentElective?.name)}</div>
+                                                                            <div className="text-[10px] text-indigo-500 font-medium truncate max-w-[80px] mx-auto">
+                                                                                {shortenSubjectName((student as any).displayMarksMetadata[studentElective?.id || '']?.displayName || studentElective?.name || '')}
+                                                                            </div>
                                                                         </div>
                                                                     ) : <span className="text-slate-300 text-sm">-</span>}
                                                                 </td>
@@ -603,10 +637,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 {/* Footer Disclaimer */}
                 <div className="print:mt-4 print:pt-2 border-t border-black text-center print:text-xs text-black print:break-inside-avoid">
                     <div className="font-semibold">
-                        This is an official class results report generated by AIC Da'wa College Examination System
+                        This is an official class results report generated by {branding?.institutionName || "AIC Da'wa College"} Examination System
                     </div>
                     <div className="print:mt-1">
-                        For verification and queries, contact: examinations@aicdawacollege.edu.in | Phone: +91-483-2734567
+                        For verification and queries, contact: {branding?.contactEmail || "examinations@aicdawacollege.edu.in"} | Phone: {branding?.contactPhone || "+91-483-2734567"}
                     </div>
                 </div>
             </div>

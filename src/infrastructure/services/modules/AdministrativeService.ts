@@ -3,6 +3,7 @@ import {
     doc,
     getDocs,
     getDoc,
+    setDoc,
     query,
     where,
     orderBy,
@@ -23,6 +24,8 @@ import {
 } from '../../../domain/entities/types';
 import { SupplementaryService } from './SupplementaryService';
 import { StudentService } from './StudentService';
+import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
+import { GlobalSettings } from '../../../domain/entities/types';
 
 export class AdministrativeService extends BaseDataService {
     constructor(
@@ -100,9 +103,41 @@ export class AdministrativeService extends BaseDataService {
         }
     }
 
+    public async backfillApprovedApplications(): Promise<number> {
+        try {
+            console.log('Starting backfill of approved applications to supplementary...');
+            // Invalidate cache to ensure we get fresh data
+            this.invalidateCache();
+            
+            // Get all applications regardless of term
+            const q = query(collection(this.db, this.applicationsCollection));
+            const snapshot = await getDocs(q);
+            const allApps = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as StudentApplication));
+            
+            const approvedApps = allApps.filter(app => app.status === 'approved' && ['improvement', 'revaluation', 'external-supp', 'internal-supp', 'special-supp'].includes(app.type));
+            
+            let processedCount = 0;
+            for (const application of approvedApps) {
+                try {
+                    await this.supplementaryService.syncApplicationToSupplementary(application);
+                    processedCount++;
+                } catch (err) {
+                    console.error(`Failed to sync legacy application ${application.id}:`, err);
+                }
+            }
+            return processedCount;
+        } catch (error) {
+            console.error('Error backfilling applications:', error);
+            throw error;
+        }
+    }
+
     public async downloadFullSystemBackup(): Promise<void> {
         try {
             console.log('Initiating Full System Backup (JSON)...');
+            const settings = await this.getDocData<GlobalSettings>(this.settingsCollection, 'global_admin_settings');
+            const alias = settings?.systemAlias || 'AIC_Dawa_Portal';
+            
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             const backup: Record<string, any[]> = {};
             
@@ -133,13 +168,230 @@ export class AdministrativeService extends BaseDataService {
             
             const link = document.createElement('a');
             link.href = url;
-            link.download = `AIC_Dawa_Portal_Master_Backup_${timestamp}.json`;
+            link.download = `${alias}_Master_Backup_${timestamp}.json`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Error during Master Backup:', error);
+            throw error;
+        }
+    }
+
+    public async getClassesByTerm(termKey?: string): Promise<string[]> {
+        const settings = await this.getDocData<GlobalSettings>(this.settingsCollection, 'global_admin_settings');
+        const currentTermKey = settings ? `${settings.currentAcademicYear}-${settings.currentSemester}` : null;
+        const requestedTermKey = termKey || currentTermKey;
+
+        if (!requestedTermKey) return SYSTEM_CLASSES;
+
+        // Dynamic Discovery Mode: Find classes that actually have students or subjects in THIS SPECIFIC TERM
+        const activeClassesSet = new Set<string>();
+
+        // 1. Discover from Student Records
+        const studentsSnapshot = await getDocs(collection(this.db, this.studentsCollection));
+        studentsSnapshot.docs.forEach(docSnap => {
+            const data = docSnap.data() as StudentRecord;
+            
+            // For the current term, only include active students
+            // For historical terms, include anyone who was part of that term
+            const isHistorical = termKey && termKey !== currentTermKey;
+            const termRecord = data.academicHistory?.[requestedTermKey];
+            
+            if (termRecord?.className) {
+                if (isHistorical || data.isActive !== false) {
+                    activeClassesSet.add(termRecord.className.trim());
+                }
+            } 
+            
+            // For current term, ALWAYS also consider currentClass as a source of truth
+            if (!isHistorical && data.isActive !== false && data.currentClass) {
+                activeClassesSet.add(data.currentClass.trim());
+            }
+        });
+
+        // 2. Discover from Subject assignments for this term
+        const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+        const parts = requestedTermKey.split('-');
+        const targetSem = parts.pop();
+        const targetYear = parts.join('-');
+
+        subjectsSnap.docs.forEach(doc => {
+            const s = doc.data() as SubjectConfig;
+            // Robust year matching (handles "2025-2026" and substrings)
+            const subjectYear = s.academicYear;
+            const isYearMatch = subjectYear === targetYear || (subjectYear && targetYear && (subjectYear.includes(targetYear) || targetYear.includes(subjectYear)));
+            
+            if (isYearMatch && (s.activeSemester === targetSem || s.activeSemester === 'Both')) {
+                (s.targetClasses || []).forEach(cls => activeClassesSet.add(cls.trim()));
+            }
+        });
+
+        const disabled = settings?.disabledClasses || [];
+        const discovered = Array.from(activeClassesSet)
+            .filter(c => c && c !== '-' && !disabled.includes(c))
+            .sort();
+
+        // Fallback to settings or defaults if discovery yields nothing (bootstrap phase)
+        if (discovered.length === 0) {
+            const custom = settings?.customClasses || [];
+            return [...SYSTEM_CLASSES, ...custom].filter(c => !disabled.includes(c)).sort();
+        }
+
+        return discovered;
+    }
+
+    private async discoverClassesFromHistory(termKey: string): Promise<string[]> {
+        // Redundant with the improved getClassesByTerm, but kept for internal service calls if any
+        return this.getClassesByTerm(termKey);
+    }
+
+    public async restoreFullSystemFromBackup(backupJson: Record<string, any[]>): Promise<any> {
+        try {
+            console.log(`Starting FULL system wipe and master restoration...`);
+            
+            // Helper to get collection data regardless of case
+            const normalizeBackup = (json: any) => {
+                const normalized: Record<string, any[]> = {};
+                Object.keys(json).forEach(key => {
+                    normalized[key.toLowerCase()] = json[key];
+                });
+                return normalized;
+            };
+
+            const data = normalizeBackup(backupJson);
+            const studentsRaw = data[this.studentsCollection.toLowerCase()] || [];
+            const subjectsRaw = data[this.subjectsCollection.toLowerCase()] || [];
+            
+            // 1. Wipe Everything Safely
+            console.log('Wiping collections...');
+            await Promise.all([
+                this.clearAllData(this.studentsCollection),
+                this.clearAllData(this.subjectsCollection),
+                this.clearAllData(this.applicationsCollection),
+                this.clearAllData(this.supplementaryExamsCollection),
+                this.clearAllData(this.academicCalendarCollection),
+                this.clearAllData(this.specialDaysCollection),
+                this.clearAllData('class_configs'),
+                this.clearAllData('timetable'),
+                this.clearAllData('exam_timetable'),
+                this.clearAllData('curriculum')
+            ]);
+            
+            // We manually wipe settings to guarantee a fresh state without corrupting the singleton paradigm completely
+            await this.clearAllData(this.settingsCollection);
+
+            let studentsRestored = 0;
+            let subjectsRestored = 0;
+
+            // 2. Restore Subjects Exactly as Backup (The source of truth)
+            if (subjectsRaw.length > 0) {
+                await this.runBatchedOperation(subjectsRaw, (batch, sub) => {
+                    const subRef = doc(this.db, this.subjectsCollection, sub.id);
+                    const { id, ...subData } = sub;
+                    batch.set(subRef, subData);
+                    subjectsRestored++;
+                });
+            }
+
+            // Map subjects for quick metadata snapshot generation
+            const subjectMap = new Map<string, any>();
+            subjectsRaw.forEach(s => subjectMap.set(s.id, s));
+
+            // 3. Restore Students and UPGRADE data formats
+            if (studentsRaw.length > 0) {
+                await this.runBatchedOperation(studentsRaw, (batch, stud) => {
+                    const studRef = doc(this.db, this.studentsCollection, stud.id);
+                    const { id, ...topLevelData } = stud;
+                    
+                    // UPGRADE PROTOCOL: Synthesize missing metadata snapshots!
+                    if (topLevelData.academicHistory) {
+                        Object.entries(topLevelData.academicHistory).forEach(([termKey, termRecord]: [string, any]) => {
+                            if (termRecord.marks && !termRecord.subjectMetadata) {
+                                termRecord.subjectMetadata = {};
+                                Object.keys(termRecord.marks).forEach(subId => {
+                                    const sourceSub = subjectMap.get(subId);
+                                    if (sourceSub) {
+                                        termRecord.subjectMetadata[subId] = {
+                                            name: sourceSub.name || 'Unknown Subject',
+                                            arabicName: sourceSub.arabicName || '',
+                                            maxINT: sourceSub.maxINT || 20,
+                                            maxEXT: sourceSub.maxEXT || 80,
+                                            passingTotal: sourceSub.passingTotal || 40,
+                                            facultyName: sourceSub.facultyName || '',
+                                            subjectType: sourceSub.subjectType || 'general',
+                                            timestamp: Date.now()
+                                        };
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    batch.set(studRef, topLevelData);
+                    studentsRestored++;
+                });
+            }
+
+            // Restore other generic collections if present
+            const collectionsToRestoreDirectly = [
+                this.applicationsCollection, 
+                this.supplementaryExamsCollection,
+                this.academicCalendarCollection,
+                this.specialDaysCollection,
+                'class_configs',
+                'timetable',
+                'exam_timetable',
+                'curriculum'
+            ];
+
+            const genericRestored: Record<string, number> = {};
+
+            for (const colName of collectionsToRestoreDirectly) {
+                const raw = data[colName.toLowerCase()] || [];
+                genericRestored[colName] = 0;
+                if (raw.length > 0) {
+                    await this.runBatchedOperation(raw, (batch, item) => {
+                        const ref = doc(this.db, colName, item.id);
+                        const { id, ...itemData } = item;
+                        batch.set(ref, itemData);
+                        genericRestored[colName]++;
+                    });
+                }
+            }
+
+            // Manually restore Global Settings to ensure the system boots up
+            const rawSettings = data[this.settingsCollection.toLowerCase()] || [];
+            const globalSettingsDoc = rawSettings.find((s:any) => s.id === 'global_admin_settings');
+            
+            if (globalSettingsDoc) {
+                const ref = doc(this.db, this.settingsCollection, 'global_admin_settings');
+                const { id, ...setItems } = globalSettingsDoc;
+                await setDoc(ref, setItems);
+            } else {
+                // Failsafe bootstrap
+                const ref = doc(this.db, this.settingsCollection, 'global_admin_settings');
+                await setDoc(ref, {
+                    currentAcademicYear: '2025-2026',
+                    currentSemester: 'Odd',
+                    availableYears: ['2025-2026']
+                });
+            }
+
+            this.invalidateCache();
+
+            return {
+                status: 'success',
+                message: 'System fully wiped and restored from backup. Legacy data successfully upgraded to new Metadata Snapshotting format.',
+                stats: {
+                    studentsRestored,
+                    subjectsRestored,
+                    genericRestored
+                }
+            };
+        } catch (error) {
+            console.error('Error during master wipe and restore:', error);
             throw error;
         }
     }
@@ -344,36 +596,6 @@ export class AdministrativeService extends BaseDataService {
         }
     }
 
-    public async deleteSemesterData(termKey: string): Promise<void> {
-        try {
-            const students = await getDocs(collection(this.db, this.studentsCollection));
-            await this.runBatchedOperation(students.docs, (batch, d) => {
-                batch.update(d.ref, { [`academicHistory.${termKey}`]: deleteField() });
-            });
-
-            // Check if deleted term is the current active term and reset it
-            const settingsDocRef = doc(this.db, 'settings', 'global_admin_settings');
-            const settingsDoc = await getDoc(settingsDocRef);
-            if (settingsDoc.exists()) {
-                const settings = settingsDoc.data();
-                const currentStr = settings.currentAcademicYear && settings.currentSemester 
-                    ? `${settings.currentAcademicYear}-${settings.currentSemester}` 
-                    : settings.currentAcademicYear || "";
-                    
-                if (currentStr === termKey) {
-                    await updateDoc(settingsDocRef, {
-                        currentAcademicYear: deleteField(),
-                        currentSemester: deleteField()
-                    });
-                }
-            }
-
-            this.invalidateCache();
-        } catch (error) {
-            console.error('Error deleting semester data:', error);
-            throw error;
-        }
-    }
 
     public async cleanAndSyncApplications(targetTermKey: string): Promise<{ synced: number; duplicatesDeleted: number; rejectedDeleted: number; notRegistered: number }> {
         try {
@@ -512,7 +734,6 @@ export class AdministrativeService extends BaseDataService {
                                     const sem = parts.pop();
                                     updateData.originalSemester = sem as 'Odd' | 'Even';
                                     updateData.originalYear = parseInt(parts[0]);
-                                    needsUpdate = true;
                                     repaired++;
                                 }
                                 break;
@@ -549,6 +770,32 @@ export class AdministrativeService extends BaseDataService {
         }
     }
 
+    public async getInconsistentTerms(): Promise<string[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.studentsCollection));
+            const foundKeys = new Set<string>();
+            
+            snapshot.docs.forEach(docSnap => {
+                const data = docSnap.data() as StudentRecord;
+                if (data.academicHistory) {
+                    Object.keys(data.academicHistory).forEach(key => foundKeys.add(key));
+                }
+            });
+
+            // Standard format: YYYY-YYYY-Semester
+            const standardPattern = /^\d{4}-\d{4}-(Odd|Even)$/;
+            const inconsistent = Array.from(foundKeys).filter(key => {
+                // If it doesn't match standard, it's inconsistent
+                return !standardPattern.test(key);
+            }).sort();
+
+            return inconsistent;
+        } catch (error) {
+            console.error('Error detecting inconsistent terms:', error);
+            return [];
+        }
+    }
+
     public async clearAllSubjects(): Promise<void> {
         return this.clearAllData(this.subjectsCollection);
     }
@@ -568,5 +815,556 @@ export class AdministrativeService extends BaseDataService {
             console.error(`Error clearing ${collectionName}:`, error);
             throw error;
         }
+    }
+
+    /**
+     * Completely removes a semester term and all associated data.
+     */
+    public async deleteSemesterData(termKey: string): Promise<{ studentsAffected: number; subjectsDeleted: number }> {
+        try {
+            console.log(`Deleting all data for term: ${termKey}`);
+            
+            // 1. Remove from Global Settings availableYears
+            const settingsDocRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            const settingsSnap = await getDoc(settingsDocRef);
+            if (settingsSnap.exists()) {
+                const settings = settingsSnap.data() as GlobalSettings;
+                const updatedYears = (settings.availableYears || []).filter(y => y !== termKey);
+                await updateDoc(settingsDocRef, { availableYears: updatedYears });
+            }
+
+            // 2. Delete Subjects for this term
+            const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            const subjectsToDelete = subjectsSnap.docs.filter(d => {
+                const data = d.data();
+                // Match exact termKey if stored, or derived
+                return data.termKey === termKey || 
+                       (`${data.academicYear}-${data.activeSemester}` === termKey);
+            });
+            
+            await this.runBatchedOperation(subjectsToDelete, (batch, d) => {
+                batch.delete(d.ref);
+            });
+
+            // 3. Scrub academicHistory from Students
+            const studentsSnap = await getDocs(collection(this.db, this.studentsCollection));
+            const studentsToUpdate = studentsSnap.docs.filter(d => d.data().academicHistory?.[termKey]);
+            
+            await this.runBatchedOperation(studentsToUpdate, (batch, d) => {
+                batch.update(d.ref, {
+                    [`academicHistory.${termKey}`]: deleteField()
+                });
+            });
+
+            this.invalidateCache();
+            return { 
+                studentsAffected: studentsToUpdate.length, 
+                subjectsDeleted: subjectsToDelete.length 
+            };
+        } catch (error) {
+            console.error(`Error deleting semester ${termKey}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Normalizes term keys across the system (e.g., from "2025" to "2025-2026-Odd").
+     */
+    public async normalizeTermKeys(oldKey: string, newKey: string): Promise<{ studentsUpdated: number; subjectsUpdated: number }> {
+        try {
+            console.log(`Migrating term data: ${oldKey} -> ${newKey}`);
+
+            // 1. Update Students History
+            const studentsSnap = await getDocs(collection(this.db, this.studentsCollection));
+            const studentsToUpdate = studentsSnap.docs.filter(d => d.data().academicHistory?.[oldKey]);
+            
+            await this.runBatchedOperation(studentsToUpdate, (batch, d) => {
+                const data = d.data();
+                const historyRecord = data.academicHistory[oldKey];
+                batch.update(d.ref, {
+                    [`academicHistory.${newKey}`]: historyRecord,
+                    [`academicHistory.${oldKey}`]: deleteField()
+                });
+            });
+
+            // 2. Update Subjects
+            const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            const subjectsToUpdate = subjectsSnap.docs.filter(d => {
+                const data = d.data();
+                return data.termKey === oldKey || (`${data.academicYear}-${data.activeSemester}` === oldKey);
+            });
+
+            const [newYear, newSem] = newKey.split('-').length >= 3 
+                ? [newKey.split('-').slice(0, 2).join('-'), newKey.split('-').pop()]
+                : [newKey.split('-')[0], newKey.split('-')[1]];
+
+            await this.runBatchedOperation(subjectsToUpdate, (batch, d) => {
+                batch.update(d.ref, {
+                    termKey: newKey,
+                    academicYear: newYear,
+                    activeSemester: newSem
+                });
+            });
+
+            // 3. Update Settings availableYears
+            const settingsDocRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            const settingsSnap = await getDoc(settingsDocRef);
+            if (settingsSnap.exists()) {
+                const settings = settingsSnap.data() as GlobalSettings;
+                let available = settings.availableYears || [];
+                if (available.includes(oldKey)) {
+                    available = available.map(y => y === oldKey ? newKey : y);
+                    // Deduplicate
+                    available = Array.from(new Set(available));
+                    await updateDoc(settingsDocRef, { availableYears: available });
+                }
+            }
+
+            this.invalidateCache();
+            return { 
+                studentsUpdated: studentsToUpdate.length, 
+                subjectsUpdated: subjectsToUpdate.length 
+            };
+        } catch (error) {
+            console.error(`Error normalizing term keys ${oldKey} to ${newKey}:`, error);
+            throw error;
+        }
+    }
+    public async renameClass(oldNameRaw: string, newNameRaw: string): Promise<void> {
+        const oldName = oldNameRaw.trim();
+        const newName = newNameRaw.trim();
+        if (!oldName || !newName || oldName === newName) return;
+        try {
+            console.log(`Renaming class from ${oldName} to ${newName}...`);
+            
+            // 1. Update Global Settings (Custom Classes)
+            const settingsRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            const settingsSnap = await getDoc(settingsRef);
+            if (settingsSnap.exists()) {
+                const settings = settingsSnap.data();
+                const customClasses: string[] = settings.customClasses || [];
+                const disabledClasses: string[] = settings.disabledClasses || [];
+                
+                let updatedCustomClasses: string[];
+                let updatedDisabledClasses = [...disabledClasses];
+
+                if (customClasses.includes(oldName)) {
+                    // It was already a custom class, just rename it in place
+                    updatedCustomClasses = customClasses.map((c: string) => c === oldName ? newName : c);
+                } else {
+                    // It was a standard class or missing, add the new name to custom classes
+                    if (!customClasses.includes(newName)) {
+                        updatedCustomClasses = [...customClasses, newName];
+                    } else {
+                        updatedCustomClasses = [...customClasses];
+                    }
+                    // Mark the standard class as disabled so it's hidden from UI
+                    if (!updatedDisabledClasses.includes(oldName)) {
+                        updatedDisabledClasses.push(oldName);
+                    }
+                }
+                
+                await updateDoc(settingsRef, { 
+                    customClasses: updatedCustomClasses,
+                    disabledClasses: updatedDisabledClasses
+                });
+            }
+
+            // 2. Update Students (currentClass and academicHistory)
+            const snapshot = await getDocs(collection(this.db, this.studentsCollection));
+            if (!snapshot.empty) {
+                await this.runBatchedOperation(snapshot.docs, (batch, d) => {
+                    const data = d.data() as StudentRecord;
+                    let needsUpdate = false;
+                    const updates: any = {};
+
+                    // Trim-safe comparison
+                    if (data.currentClass?.trim() === oldName) {
+                        updates.currentClass = newName;
+                        needsUpdate = true;
+                    }
+
+                    if (data.academicHistory) {
+                        const history = data.academicHistory || {};
+                        const updatedHistory = { ...history };
+                        let historyChanged = false;
+                        Object.keys(updatedHistory).forEach(termKey => {
+                            if (updatedHistory[termKey].className?.trim() === oldName) {
+                                updatedHistory[termKey] = { ...updatedHistory[termKey], className: newName };
+                                historyChanged = true;
+                            }
+                        });
+
+                        if (historyChanged) {
+                            updates.academicHistory = updatedHistory;
+                            needsUpdate = true;
+                        }
+                    }
+
+                    if (needsUpdate) {
+                        batch.update(d.ref, updates);
+                    }
+                });
+            }
+
+            // 3. Update Subjects (targetClasses)
+            const subjectsQuery = query(collection(this.db, this.subjectsCollection));
+            const subjectSnaps = await getDocs(subjectsQuery);
+            if (!subjectSnaps.empty) {
+                await this.runBatchedOperation(subjectSnaps.docs, (batch, d) => {
+                    const data = d.data();
+                    const targetClasses: string[] = data.targetClasses || [];
+                    if (targetClasses.includes(oldName)) {
+                        const updatedClasses = targetClasses.map((c: string) => c === oldName ? newName : c);
+                        batch.update(d.ref, { targetClasses: updatedClasses });
+                    }
+                });
+            }
+
+            // 4. Update Timetables
+            const timetablesQuery = query(collection(this.db, this.timetablesCollection), where('className', '==', oldName));
+            const timetableSnaps = await getDocs(timetablesQuery);
+            if (!timetableSnaps.empty) {
+                await this.runBatchedOperation(timetableSnaps.docs, (batch, d) => {
+                    batch.update(d.ref, { className: newName });
+                });
+            }
+
+            // 5. Update Exam Timetables
+            const examTimetablesQuery = query(collection(this.db, this.examTimetablesCollection), where('className', '==', oldName));
+            const examTimetableSnaps = await getDocs(examTimetablesQuery);
+            if (!examTimetableSnaps.empty) {
+                await this.runBatchedOperation(examTimetableSnaps.docs, (batch, d) => {
+                    batch.update(d.ref, { className: newName });
+                });
+            }
+
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error renaming class:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Forward-Only Rename: updates only active/present-facing records.
+     * Leaves academicHistory.className untouched so historical reports
+     * still show the original class name as it was during that period.
+     */
+    public async renameClassForwardOnly(oldName: string, newName: string): Promise<void> {
+        try {
+            // 0. Update settings (customClasses and disabledClasses)
+            const settingsRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            const settingsDoc = await getDoc(settingsRef);
+            
+            if (settingsDoc.exists()) {
+                const settingsData = settingsDoc.data();
+                const customClasses: string[] = settingsData.customClasses || [];
+                const disabledClasses: string[] = settingsData.disabledClasses || [];
+                
+                // Update both custom and disabled classes
+                const isCustomClass = customClasses.includes(oldName);
+                const updatedCustomClasses = isCustomClass 
+                    ? customClasses.map((c: string) => c === oldName ? newName : c)
+                    : (customClasses.includes(newName) ? customClasses : [...customClasses, newName]);
+                
+                const updatedDisabledClasses = [...disabledClasses];
+                if (!isCustomClass && !updatedDisabledClasses.includes(oldName)) {
+                    updatedDisabledClasses.push(oldName);
+                }
+                // Ensure newName is NOT disabled
+                const finalDisabledClasses = updatedDisabledClasses.filter(c => c !== newName);
+
+                await updateDoc(settingsRef, { 
+                    customClasses: updatedCustomClasses,
+                    disabledClasses: finalDisabledClasses
+                });
+            }
+
+            // 1. Update students: only currentClass (NOT academicHistory)
+            const studentsQuery = query(collection(this.db, this.studentsCollection));
+            const studentSnaps = await getDocs(studentsQuery);
+            const studentsToUpdate = studentSnaps.docs.filter(d => {
+                const data = d.data();
+                return data.currentClass === oldName || data.className === oldName;
+            });
+
+            if (studentsToUpdate.length > 0) {
+                const settings = await this.getDocData<GlobalSettings>(this.settingsCollection, 'global_admin_settings');
+                const currentTermKey = settings ? `${settings.currentAcademicYear}-${settings.currentSemester}` : null;
+
+                await this.runBatchedOperation(studentsToUpdate, (batch, d) => {
+                    const data = d.data() as StudentRecord;
+                    const updates: any = {};
+                    if (data.currentClass === oldName) updates.currentClass = newName;
+                    if (data.className === oldName) updates.className = newName;
+
+                    // IMPORTANT: Even for forward-only, we should update the CURRENT term's snapshot
+                    // so discovery engine picks up the new name for the active semester.
+                    if (currentTermKey && data.academicHistory?.[currentTermKey]) {
+                        const history = { ...data.academicHistory };
+                        if (history[currentTermKey].className === oldName) {
+                            history[currentTermKey] = { ...history[currentTermKey], className: newName };
+                            updates.academicHistory = history;
+                        }
+                    }
+
+                    batch.update(d.ref, updates);
+                });
+            }
+
+            // 2. Update Subjects (targetClasses only)
+            const subjectsQuery = query(collection(this.db, this.subjectsCollection));
+            const subjectSnaps = await getDocs(subjectsQuery);
+            const subjectsToUpdate = subjectSnaps.docs.filter(d => {
+                const data = d.data();
+                return (data.targetClasses || []).includes(oldName);
+            });
+
+            if (subjectsToUpdate.length > 0) {
+                await this.runBatchedOperation(subjectsToUpdate, (batch, d) => {
+                    const data = d.data();
+                    const updatedClasses = (data.targetClasses as string[]).map(c => c === oldName ? newName : c);
+                    batch.update(d.ref, { targetClasses: updatedClasses });
+                });
+            }
+
+            // 3. Update Timetables (forward-facing only)
+            const timetablesQuery = query(collection(this.db, this.timetablesCollection), where('className', '==', oldName));
+            const timetableSnaps = await getDocs(timetablesQuery);
+            if (!timetableSnaps.empty) {
+                await this.runBatchedOperation(timetableSnaps.docs, (batch, d) => {
+                    batch.update(d.ref, { className: newName });
+                });
+            }
+
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error in renameClassForwardOnly:', error);
+            throw error;
+        }
+    }
+
+    public async getTimetableByClass(className: string, termKey?: string): Promise<any[]> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const q = query(
+            collection(this.db, this.timetablesCollection),
+            where('className', '==', className),
+            where('termKey', '==', activeTerm)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    public async saveTimetableEntries(entries: any[]): Promise<void> {
+        await this.runBatchedOperation(entries, (batch, entry) => {
+            const ref = entry.id ? doc(this.db, this.timetablesCollection, entry.id) : doc(collection(this.db, this.timetablesCollection));
+            const { id, ...data } = entry;
+            batch.set(ref, data, { merge: true });
+        });
+    }
+
+    public async getExamTimetable(className: string, termKey?: string): Promise<any[]> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const q = query(
+            collection(this.db, this.examTimetablesCollection),
+            where('className', '==', className),
+            where('termKey', '==', activeTerm)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    public async saveExamTimetableEntries(entries: any[]): Promise<void> {
+        await this.runBatchedOperation(entries, (batch, entry) => {
+            const ref = entry.id ? doc(this.db, this.examTimetablesCollection, entry.id) : doc(collection(this.db, this.examTimetablesCollection));
+            const { id, ...data } = entry;
+            batch.set(ref, data, { merge: true });
+        });
+    }
+
+    public async getSpecialDays(termKey?: string): Promise<any[]> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const q = query(collection(this.db, this.specialDaysCollection), where('termKey', '==', activeTerm));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    public async getHallTicketReleaseStatus(termKey?: string): Promise<boolean> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const data = await this.getDocData<any>(this.hallTicketSettingsCollection, activeTerm);
+        return data?.isReleased || false;
+    }
+
+    public async setHallTicketReleaseStatus(isReleased: boolean, termKey?: string): Promise<void> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const ref = doc(this.db, this.hallTicketSettingsCollection, activeTerm);
+        await updateDoc(ref, { isReleased });
+    }
+
+    public async updateGlobalSettings(updates: Partial<GlobalSettings>): Promise<void> {
+        try {
+            const ref = doc(this.db!, this.settingsCollection, 'global_admin_settings');
+            await setDoc(ref, updates, { merge: true });
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error updating global settings:', error);
+            throw error;
+        }
+    }
+    public async reconcileClassNames(): Promise<{ renamed: string[]; totalUpdates: number }> {
+        const mappings: Record<string, string> = {
+            'S1': 'FS2',
+            'S2': 'FS3',
+            'P2': 'HS3',
+            'P1': 'HS2'
+        };
+
+        const results = {
+            renamed: [] as string[],
+            totalUpdates: 0
+        };
+
+        try {
+            console.log('Starting Class Name Reconciliation audit...');
+            const studentsSnap = await getDocs(collection(this.db, this.studentsCollection));
+            const settingsRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            const settingsSnap = await getDoc(settingsRef);
+            const settingsData = settingsSnap.exists() ? settingsSnap.data() as GlobalSettings : null;
+
+            for (const [oldName, newName] of Object.entries(mappings)) {
+                let studentsAffected = 0;
+                
+                await this.runBatchedOperation(studentsSnap.docs, (batch, d) => {
+                    const data = d.data() as StudentRecord;
+                    let needsUpdate = false;
+                    const updates: any = {};
+                    
+                    // Match by currentClass or legacy className field
+                    if (data.currentClass?.trim() === oldName || (data as any).className?.trim() === oldName) {
+                        updates.currentClass = newName;
+                        updates.className = newName;
+                        needsUpdate = true;
+                    }
+
+                    // Sync academicHistory for all recorded terms
+                    if (data.academicHistory) {
+                        const history = { ...data.academicHistory };
+                        let historyChanged = false;
+                        
+                        Object.keys(history).forEach(k => {
+                            if (history[k].className?.trim() === oldName) {
+                                history[k] = { ...history[k], className: newName };
+                                historyChanged = true;
+                            }
+                        });
+
+                        if (historyChanged) {
+                            updates.academicHistory = history;
+                            needsUpdate = true;
+                        }
+                    }
+
+                    if (needsUpdate) {
+                        batch.update(d.ref, updates);
+                        studentsAffected++;
+                    }
+                });
+
+                // Update settings to ensure visibility is correct
+                if (settingsData) {
+                    const custom = settingsData.customClasses || [];
+                    const disabled = settingsData.disabledClasses || [];
+                    
+                    if (!custom.includes(newName) || !disabled.includes(oldName)) {
+                        const updatedCustom = custom.includes(newName) ? custom : [...custom, newName];
+                        const updatedDisabled = disabled.includes(oldName) ? disabled : [...disabled, oldName];
+                        
+                        await updateDoc(settingsRef, {
+                            customClasses: updatedCustom,
+                            disabledClasses: updatedDisabled.filter(c => c !== newName) // Ensure new name is active
+                        });
+                    }
+                }
+
+                if (studentsAffected > 0) {
+                    console.log(`Successfully migrated ${studentsAffected} records from ${oldName} to ${newName}`);
+                    results.renamed.push(`${oldName} → ${newName}`);
+                    results.totalUpdates += studentsAffected;
+                }
+            }
+        } catch (error) {
+            console.error('Error during reconciliation:', error);
+            throw error;
+        }
+
+        this.invalidateCache();
+        return results;
+    }
+
+    /**
+     * Merges two class nomenclatures into one. 
+     * Useful for fixing duplicates or accidental renames (e.g. merging "S2 " and "S2").
+     */
+    public async mergeClasses(sourceName: string, targetName: string): Promise<void> {
+        return this.renameClass(sourceName, targetName);
+    }
+
+    /**
+     * Scans and cleans all class nomenclature in the database.
+     * Trims whitespace and deduplicates the customClasses list.
+     */
+    public async normalizeNomenclature(): Promise<{ studentsUpdated: number; classesNormalized: number }> {
+        const snapshot = await getDocs(collection(this.db, this.studentsCollection));
+        let studentsUpdated = 0;
+
+        if (!snapshot.empty) {
+            await this.runBatchedOperation(snapshot.docs, (batch, docSnap) => {
+                const data = docSnap.data() as StudentRecord;
+                let needsUpdate = false;
+                const update: any = {};
+
+                if (data.currentClass && data.currentClass !== data.currentClass.trim()) {
+                    update.currentClass = data.currentClass.trim();
+                    needsUpdate = true;
+                }
+
+                if (data.academicHistory) {
+                    const newHistory = { ...data.academicHistory };
+                    let historyChanged = false;
+                    Object.entries(newHistory).forEach(([termKey, termData]) => {
+                        if (termData.className && termData.className !== termData.className.trim()) {
+                            newHistory[termKey] = { ...termData, className: termData.className.trim() };
+                            historyChanged = true;
+                        }
+                    });
+                    if (historyChanged) {
+                        update.academicHistory = newHistory;
+                        needsUpdate = true;
+                    }
+                }
+
+                if (needsUpdate) {
+                    batch.update(docSnap.ref, update);
+                    studentsUpdated++;
+                }
+            });
+        }
+
+        // Normalize Settings
+        const settingsRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+        const settingsSnap = await getDoc(settingsRef);
+        let classesNormalized = 0;
+        if (settingsSnap.exists()) {
+            const customClasses: string[] = settingsSnap.data().customClasses || [];
+            const normalized = Array.from(new Set(customClasses.map(c => c.trim()))).filter(c => !SYSTEM_CLASSES.includes(c));
+            if (JSON.stringify(normalized) !== JSON.stringify(customClasses)) {
+                await updateDoc(settingsRef, { customClasses: normalized });
+                classesNormalized = customClasses.length - normalized.length;
+            }
+        }
+
+        this.invalidateCache();
+        return { studentsUpdated, classesNormalized };
     }
 }

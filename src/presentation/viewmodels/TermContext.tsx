@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { dataService } from '../../infrastructure/services/dataService';
+import { BaseDataService } from '../../infrastructure/services/modules/BaseDataService';
+import { GlobalSettings } from '../../domain/entities/types';
 
 interface TermContextType {
     currentAcademicYear: string;
@@ -46,10 +48,13 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const settingsRef = doc(dataService.getDb(), 'settings', 'global_admin_settings');
         const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
             if (docSnap.exists()) {
-                const settings = docSnap.data();
+                const settings = docSnap.data() as GlobalSettings;
                 if (settings.currentAcademicYear) setCurrentAcademicYear(settings.currentAcademicYear);
                 if (settings.currentSemester) setCurrentSemester(settings.currentSemester);
                 
+                // Push to Service Layer static cache
+                BaseDataService.updateStaticSettings(settings);
+
                 // If settings has availableYears, sync it locally too
                 if (settings.availableYears) {
                     setTermOptions(settings.availableYears);
@@ -68,9 +73,25 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
 
-    const setTerm = (year: string, semester: 'Odd' | 'Even') => {
-        setCurrentAcademicYear(year);
-        setCurrentSemester(semester);
+    const setTerm = async (year: string, semester: 'Odd' | 'Even') => {
+        try {
+            // Optimistic update
+            setCurrentAcademicYear(year);
+            setCurrentSemester(semester);
+
+            const settings = await dataService.getGlobalSettings();
+            await dataService.updateGlobalSettings({
+                ...settings,
+                currentAcademicYear: year,
+                currentSemester: semester
+            });
+            
+            // Invalidate service layer cache to ensure data reloads correctly
+            dataService.invalidateCache();
+        } catch (error) {
+            console.error('Error persisting term change:', error);
+            // Revert on error if needed, but onSnapshot will likely fix it anyway
+        }
     };
 
     const activeTerm = `${currentAcademicYear}-${currentSemester}`;

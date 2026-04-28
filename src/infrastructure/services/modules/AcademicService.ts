@@ -15,7 +15,10 @@ import {
     SubjectMarks, 
     PerformanceLevel,
     StudentRecord,
-    GlobalSettings
+    GlobalSettings,
+    AcademicHistory,
+    SubjectSnapshot,
+    TermRecord
 } from '../../../domain/entities/types';
 import { normalizeName } from '../formatUtils';
 import { ExcelUtils } from '../../utils/excelUtils';
@@ -104,18 +107,22 @@ export class AcademicService extends BaseDataService {
             const allSubjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
             
             return allSubjects.filter(subject => {
-                 if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
+                const subjectYear = subject.academicYear;
+                const isYearMatch = !subjectYear || subjectYear === targetYear || 
+                                   (subjectYear && targetYear && (subjectYear.includes(targetYear) || targetYear.includes(subjectYear)));
+
+                if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
                     return false;
                 }
                 
-                if (subject.academicYear && subject.academicYear !== targetYear) {
+                if (subjectYear && !isYearMatch) {
                     return false;
                 }
 
-                if (!subject.academicYear) {
+                if (!subjectYear) {
                     const hasYearSpecificVersion = allSubjects.some(s => 
                         s.name === subject.name && 
-                        s.academicYear === targetYear && 
+                        s.academicYear && (s.academicYear === targetYear || targetYear.includes(s.academicYear)) &&
                         (s.activeSemester === 'Both' || s.activeSemester === targetSem)
                     );
                     if (hasYearSpecificVersion) return false;
@@ -176,6 +183,12 @@ export class AcademicService extends BaseDataService {
             console.error('Error deleting subject:', error);
             throw error;
         }
+    }
+
+    public async getSupplementaryExamsByStudent(studentId: string): Promise<any[]> {
+        // This will be properly implemented when we have a SupplementaryService link
+        // For now, it's a bridge to satisfy DataService interface
+        return [];
     }
 
     public async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
@@ -239,11 +252,27 @@ export class AcademicService extends BaseDataService {
 
                 currentMarks[subjectId] = updatedMark;
                 
+                // --- METADATA SNAPSHOTTING ---
+                const subjectMetadata = termData.subjectMetadata || {};
+                const currentSubject = await this.getSubjectById(subjectId);
+                if (currentSubject) {
+                    subjectMetadata[subjectId] = {
+                        name: currentSubject.name,
+                        arabicName: currentSubject.arabicName,
+                        maxINT: currentSubject.maxINT,
+                        maxEXT: currentSubject.maxEXT,
+                        passingTotal: currentSubject.passingTotal,
+                        facultyName: currentSubject.facultyName,
+                        subjectType: currentSubject.subjectType
+                    };
+                }
+                
                 const allSubjects = await this.getRawAllSubjects();
                 const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
 
                 await updateDoc(studentDocRef, {
                     [`academicHistory.${activeTerm}.marks`]: currentMarks,
+                    [`academicHistory.${activeTerm}.subjectMetadata`]: subjectMetadata,
                     [`academicHistory.${activeTerm}.grandTotal`]: grandTotal,
                     [`academicHistory.${activeTerm}.average`]: average,
                     [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
@@ -368,7 +397,7 @@ export class AcademicService extends BaseDataService {
         }
     }
 
-    public async recalculateAllMarkStatuses(): Promise<{ updated: number }> {
+    public async recalculateAllMarkStatuses(targetTermKey?: string): Promise<{ updated: number }> {
         try {
             const students = await getDocs(collection(this.db, this.studentsCollection));
             let updatedCount = 0;
@@ -378,9 +407,11 @@ export class AcademicService extends BaseDataService {
                 const history = data.academicHistory || {};
                 let changed = false;
 
-                Object.keys(history).forEach(termKey => {
+                const keys = targetTermKey ? [targetTermKey] : Object.keys(history);
+
+                keys.forEach(termKey => {
                     const termData = history[termKey];
-                    if (termData.marks) {
+                    if (termData && termData.marks) {
                         Object.entries(termData.marks).forEach(([subId, mark]: [string, any]) => {
                             const total = (mark.int || 0) + (mark.ext || 0);
                             const status = total >= 40 ? 'Passed' : 'Failed';
@@ -405,7 +436,7 @@ export class AcademicService extends BaseDataService {
         }
     }
 
-    public async recalculateAllStudentTotals(): Promise<{ updated: number }> {
+    public async recalculateAllStudentTotals(targetTermKey?: string): Promise<{ updated: number }> {
         try {
             const subjects = await this.getRawAllSubjects();
             const students = await getDocs(collection(this.db, this.studentsCollection));
@@ -416,9 +447,11 @@ export class AcademicService extends BaseDataService {
                 const history = data.academicHistory || {};
                 let changed = false;
 
-                Object.keys(history).forEach(termKey => {
+                const keys = targetTermKey ? [targetTermKey] : Object.keys(history);
+
+                keys.forEach(termKey => {
                     const termData = history[termKey];
-                    if (termData.marks) {
+                    if (termData && termData.marks) {
                         const { grandTotal, average } = this.calculateTermMetrics(termData.marks, subjects);
                         if (termData.grandTotal !== grandTotal || termData.average !== average) {
                             termData.grandTotal = grandTotal;
@@ -441,7 +474,7 @@ export class AcademicService extends BaseDataService {
         }
     }
 
-    public async recalculateAllStudentPerformanceLevels(): Promise<{ updated: number }> {
+    public async recalculateAllStudentPerformanceLevels(targetTermKey?: string): Promise<{ updated: number }> {
         try {
             const subjects = await this.getRawAllSubjects();
             const students = await getDocs(collection(this.db, this.studentsCollection));
@@ -452,9 +485,11 @@ export class AcademicService extends BaseDataService {
                 const history = data.academicHistory || {};
                 let changed = false;
 
-                Object.keys(history).forEach(termKey => {
+                const keys = targetTermKey ? [targetTermKey] : Object.keys(history);
+
+                keys.forEach(termKey => {
                     const termData = history[termKey];
-                    if (termData.marks) {
+                    if (termData && termData.marks) {
                         const { performanceLevel } = this.calculateTermMetrics(termData.marks, subjects);
                         if (termData.performanceLevel !== performanceLevel) {
                             termData.performanceLevel = performanceLevel;
@@ -475,6 +510,13 @@ export class AcademicService extends BaseDataService {
             throw error;
         }
     }
+
+
+
+
+
+
+
 
     public async exportMarksToExcel(className: string, termKey: string): Promise<void> {
         try {
@@ -565,8 +607,28 @@ export class AcademicService extends BaseDataService {
 
                 if (rowChanged) {
                     const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(newMarks, subjects);
+                    
+                    // Capture snapshots for imported subjects
+                    const snapshotData: Record<string, SubjectSnapshot> = termData.subjectMetadata || {};
+                    Object.keys(newMarks).forEach(subId => {
+                        const subConfig = subjects.find(s => s.id === subId);
+                        if (subConfig && !snapshotData[subId]) {
+                            snapshotData[subId] = {
+                                name: subConfig.name,
+                                arabicName: subConfig.arabicName || '',
+                                facultyName: subConfig.facultyName || '',
+                                maxINT: subConfig.maxINT,
+                                maxEXT: subConfig.maxEXT,
+                                passingTotal: subConfig.passingTotal || 40,
+                                subjectType: subConfig.subjectType || 'general',
+                                timestamp: Date.now()
+                            };
+                        }
+                    });
+
                     await updateDoc(studentDoc.ref, {
                         [`academicHistory.${termKey}.marks`]: newMarks,
+                        [`academicHistory.${termKey}.subjectMetadata`]: snapshotData,
                         [`academicHistory.${termKey}.grandTotal`]: grandTotal,
                         [`academicHistory.${termKey}.average`]: average,
                         [`academicHistory.${termKey}.performanceLevel`]: performanceLevel

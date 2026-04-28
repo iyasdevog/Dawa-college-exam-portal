@@ -8,7 +8,6 @@ export type PerformanceLevel =
   | 'C (Average)'
   | 'F (Failed)'
   | 'Excellent' | 'Good' | 'Average' | 'Needs Improvement' | 'Failed'; // Keep old types temporarily for migration
-
 export interface SubjectMarks {
   int: number | 'A';
   ext: number | 'A';
@@ -45,16 +44,30 @@ export interface SupplementaryExam {
   studentAdNo?: string; // Fallback adNo from application if student record missing
 }
 
+export interface SubjectSnapshot {
+  name: string;
+  arabicName?: string;
+  maxINT: number;
+  maxEXT: number;
+  passingTotal: number;
+  facultyName?: string;
+  subjectType: 'general' | 'elective' | string;
+  timestamp?: number;
+}
+
 export interface TermRecord {
   className: string;
   semester: 'Odd' | 'Even';
   marks: Record<string, SubjectMarks>;
-  supplementaryMarks?: Record<string, SubjectMarks>; // Added for separate storage of successes
+  subjectMetadata?: Record<string, SubjectSnapshot>; // Snapshot of subject config at time of entry
+  supplementaryMarks?: Record<string, SubjectMarks>;
   grandTotal: number;
   average: number;
   rank: number;
   performanceLevel: PerformanceLevel;
 }
+
+export type AcademicHistory = Record<string, TermRecord>;
 
 export interface StudentRecord {
   id: string;
@@ -92,6 +105,13 @@ export interface GlobalSettings {
   attendanceEndDate?: string;   // YYYY-MM-DD
   minAttendancePercentage?: number; // Minimum attendance required for hall ticket (e.g. 75)
   semesters?: SemesterConfig[]; // History of explicit semester metadata
+  customClasses?: string[]; // Added: Manually managed classes
+  disabledClasses?: string[]; // Added: Standard classes to hide (e.g. if renamed)
+  institutionName?: string; // e.g. "Islamic Dawa Academy"
+  contactEmail?: string; // e.g. "examinations@aicdawacollege.edu.in"
+  contactPhone?: string; // e.g. "+91-483-2734567"
+  systemAlias?: string; // e.g. "AIC_Dawa_Portal"
+  classSemesters?: Record<string, 'Odd' | 'Even'>; // Added: Per-class semester mapping
 }
 
 export interface CourseOutcome {
@@ -293,5 +313,7 @@ export interface CurriculumEntry {
   subjectType?: 'general' | 'elective' | string;
   learningPeriod: string; // e.g., "60 hours" or "Jan - Jun"
   portions: string; // e.g., "Unit 1-4"
+  academicYear?: string; // Added for historical tracking
+  termKey?: string; // Added for historical tracking
 }
 

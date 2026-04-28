@@ -17,16 +17,23 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         className: '',
         semester: 'Odd',
         workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-        periodsPerDay: 4,
+        periodsPerDay: 12,
         periodDurationMins: 60,
         subjectWeeklyHours: {},
-        breakSlots: [2], // Default break at period 3
+        breakSlots: [2, 5, 8, 10],
         timeSlots: [
+            { startTime: '06:30', endTime: '07:30' },
+            { startTime: '07:30', endTime: '08:30' },
+            { startTime: '08:30', endTime: '09:00' }, // Break
             { startTime: '09:00', endTime: '10:00' },
-            { startTime: '10:00', endTime: '11:00' },
-            { startTime: '11:00', endTime: '11:30' }, // Break
-            { startTime: '11:30', endTime: '12:30' },
-            { startTime: '12:30', endTime: '01:30' },
+            { startTime: '10:00', endTime: '10:55' },
+            { startTime: '10:55', endTime: '11:05' }, // Break
+            { startTime: '11:05', endTime: '12:00' },
+            { startTime: '12:00', endTime: '13:00' },
+            { startTime: '13:00', endTime: '14:00' }, // Break
+            { startTime: '14:00', endTime: '14:55' },
+            { startTime: '14:55', endTime: '15:05' }, // Break
+            { startTime: '15:05', endTime: '16:00' },
         ],
         rules: []
     });
@@ -83,37 +90,53 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
 
     const loadConfig = async () => {
         const savedConfig = await dataService.getGeneratorConfig(selectedClass, selectedSemester);
+        
+        const initialHours: Record<string, number> = {};
+        filteredSubjects.forEach(s => initialHours[s.id] = 4);
+        
+        const defaultConfig = {
+            id: `${selectedClass}-${selectedSemester}`,
+            className: selectedClass,
+            semester: selectedSemester,
+            workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            periodsPerDay: 12,
+            periodDurationMins: 60,
+            subjectWeeklyHours: initialHours,
+            breakSlots: [2, 5, 8, 10],
+            timeSlots: [
+                { startTime: '06:30', endTime: '07:30' },
+                { startTime: '07:30', endTime: '08:30' },
+                { startTime: '08:30', endTime: '09:00' }, // Break
+                { startTime: '09:00', endTime: '10:00' },
+                { startTime: '10:00', endTime: '10:55' },
+                { startTime: '10:55', endTime: '11:05' }, // Break
+                { startTime: '11:05', endTime: '12:00' },
+                { startTime: '12:00', endTime: '13:00' },
+                { startTime: '13:00', endTime: '14:00' }, // Break
+                { startTime: '14:00', endTime: '14:55' },
+                { startTime: '14:55', endTime: '15:05' }, // Break
+                { startTime: '15:05', endTime: '16:00' },
+            ],
+            rules: []
+        };
+
         if (savedConfig) {
-            setConfig(savedConfig);
+            // Migration check: If it's the old 4-period layout or missing the 6:30 AM start, force update
+            if (savedConfig.periodsPerDay !== 12 || savedConfig.timeSlots?.[0]?.startTime !== '06:30') {
+                console.log("Migrating older timetable config to new 12-slot layout");
+                const migratedConfig = {
+                    ...defaultConfig,
+                    subjectWeeklyHours: { ...defaultConfig.subjectWeeklyHours, ...savedConfig.subjectWeeklyHours },
+                    rules: savedConfig.rules || []
+                };
+                setConfig(migratedConfig);
+                // Auto-save migrated config so it won't reload old data next time
+                try { await dataService.saveGeneratorConfig(migratedConfig); } catch (e) { console.warn('Auto-save migration failed:', e); }
+            } else {
+                setConfig(savedConfig);
+            }
         } else {
-            // Default weekly hours from subjects if available
-            const initialHours: Record<string, number> = {};
-            filteredSubjects.forEach(s => initialHours[s.id] = 4);
-            setConfig({
-                id: `${selectedClass}-${selectedSemester}`,
-                className: selectedClass,
-                semester: selectedSemester,
-                workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-                periodsPerDay: 12,
-                periodDurationMins: 60,
-                subjectWeeklyHours: initialHours,
-                breakSlots: [2, 5, 8, 10],
-                timeSlots: [
-                    { startTime: '06:30', endTime: '07:30' },
-                    { startTime: '07:30', endTime: '08:30' },
-                    { startTime: '08:30', endTime: '09:00' }, // Break
-                    { startTime: '09:00', endTime: '10:00' },
-                    { startTime: '10:00', endTime: '10:55' },
-                    { startTime: '10:55', endTime: '11:05' }, // Break
-                    { startTime: '11:05', endTime: '12:00' },
-                    { startTime: '12:00', endTime: '13:00' },
-                    { startTime: '13:00', endTime: '14:00' }, // Break
-                    { startTime: '14:00', endTime: '14:55' },
-                    { startTime: '14:55', endTime: '15:05' }, // Break
-                    { startTime: '15:05', endTime: '16:00' },
-                ],
-                rules: []
-            });
+            setConfig(defaultConfig);
         }
     };
 

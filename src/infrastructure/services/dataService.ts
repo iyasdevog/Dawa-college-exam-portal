@@ -6,6 +6,8 @@ import { SettingsService } from './modules/SettingsService';
 import { AttendanceService } from './modules/AttendanceService';
 import { AdministrativeService } from './modules/AdministrativeService';
 import { CurriculumService } from './modules/CurriculumService';
+import { SemesterMigrationService } from './modules/SemesterMigrationService';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 import { 
     StudentRecord, 
@@ -31,6 +33,7 @@ export class DataService extends BaseDataService {
     private attendanceService: AttendanceService;
     private administrativeService: AdministrativeService;
     private curriculumService: CurriculumService;
+    private migrationService: SemesterMigrationService;
 
     constructor() {
         super();
@@ -41,6 +44,7 @@ export class DataService extends BaseDataService {
         this.attendanceService = new AttendanceService(this.academicService);
         this.administrativeService = new AdministrativeService(this.supplementaryService, this.studentService);
         this.curriculumService = new CurriculumService();
+        this.migrationService = new SemesterMigrationService();
     }
 
     // --- Curriculum Domain ---
@@ -65,8 +69,12 @@ export class DataService extends BaseDataService {
         return this.studentService.getAllStudents(termKey);
     }
 
-    async getStudentByAdNo(adNo: string): Promise<StudentRecord | null> {
-        return this.studentService.getStudentByAdNo(adNo);
+    async getRawAllStudents(): Promise<StudentRecord[]> {
+        return this.studentService.getAllStudents('All');
+    }
+
+    async getStudentByAdNo(adNo: string, termKey?: string): Promise<StudentRecord | null> {
+        return this.studentService.getStudentByAdNo(adNo, termKey);
     }
 
     async getStudentById(id: string): Promise<StudentRecord | null> {
@@ -97,9 +105,31 @@ export class DataService extends BaseDataService {
         return this.studentService.promoteStudents(studentIds, targetClass, targetYear, targetSemester);
     }
 
+    async promoteClass(fromClass: string, toClass: string, termKey: string): Promise<void> {
+        return this.studentService.promoteClass(fromClass, toClass, termKey);
+    }
+
+    async isEligibleForHallTicket(studentId: string, className: string, termKey: string): Promise<{ eligible: boolean; percentage: number; required: number }> {
+        const percentage = await this.attendanceService.getOverallAttendance(studentId, className, termKey);
+        const required = 75; // Minimum required percentage
+        return {
+            eligible: percentage >= required,
+            percentage,
+            required
+        };
+    }
+
+    async initializeNewSemester(fromTermKey: string, toTermKey: string): Promise<{ subjectsCloned: number; curriculumCloned: number }> {
+        return this.migrationService.initializeNewSemester(fromTermKey, toTermKey);
+    }
+
     // --- Academic Domain ---
     async getAllSubjects(termKey?: string): Promise<SubjectConfig[]> {
         return this.academicService.getAllSubjects(termKey);
+    }
+
+    async getRawSubjects(): Promise<SubjectConfig[]> {
+        return this.academicService.getRawAllSubjects();
     }
 
     async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
@@ -154,6 +184,11 @@ export class DataService extends BaseDataService {
                     portionsStr = updates.details.summaryAndJustification || 'No syllabus available.';
                 }
 
+                const termKey = this.getCurrentTermKey();
+                const [targetYear, targetSemester] = termKey.split('-').length === 3 
+                    ? [`${termKey.split('-')[0]}-${termKey.split('-')[1]}`, termKey.split('-')[2]]
+                    : [termKey.split('-')[0], termKey.split('-')[1]];
+
                 const curriculumData = {
                     stage: curStage,
                     stream: stream,
@@ -162,11 +197,17 @@ export class DataService extends BaseDataService {
                     subjectName: subjectConfigName || updates.details.courseName || 'Unknown Subject',
                     subjectType: subjectType,
                     learningPeriod: updates.details.totalHours || 'TBD',
-                    portions: portionsStr.trim()
+                    portions: portionsStr.trim(),
+                    academicYear: targetYear,
+                    termKey: termKey
                 };
 
                 const curricula = await this.getAllCurriculum();
-                const existing = curricula.find(c => c.subjectCode === id || c.subjectName === curriculumData.subjectName);
+                // Match by name AND term to allow historical versions of the same subject
+                const existing = curricula.find(c => 
+                    (c.subjectCode === id) || 
+                    (c.subjectName === curriculumData.subjectName && (c.termKey === termKey || c.academicYear === targetYear))
+                );
 
                 if (existing) {
                     await this.updateCurriculumEntry(existing.id, curriculumData);
@@ -273,16 +314,78 @@ export class DataService extends BaseDataService {
         return this.administrativeService.deleteApplication(id);
     }
 
+    async backfillApprovedApplications(): Promise<number> {
+        return this.administrativeService.backfillApprovedApplications();
+    }
+
     async downloadFullSystemBackup(): Promise<void> {
         return this.administrativeService.downloadFullSystemBackup();
     }
 
     public async normalizeAllFacultyNames(): Promise<number> {
-        return this.academicService.normalizeAllFacultyNames();
+        try {
+            const count = await this.academicService.normalizeAllFacultyNames();
+            // Self-heal: ensure active classes exist in customClasses if they were stranded
+            const students = await this.studentService.getAllStudents('All');
+            const activeCustomClasses = new Set<string>();
+            students.forEach(s => {
+                if (s.currentClass && s.currentClass.match(/^[A-Z0-9- ]+$/i)) activeCustomClasses.add(s.currentClass);
+            });
+            
+            if (this.db) {
+                // Add them to Settings global customClasses if missing
+                const adminSettingsRef = doc(this.db, 'settings', 'global_admin_settings');
+                const adminSettingsDoc = await getDoc(adminSettingsRef);
+                
+                // ALSO fetch the orphaned 'global' doc where disabledClasses might be stuck!
+                const orphanedGlobalRef = doc(this.db, 'settings', 'global');
+                const orphanedGlobalDoc = await getDoc(orphanedGlobalRef);
+                const orphanedDisabledClasses = orphanedGlobalDoc.exists() ? (orphanedGlobalDoc.data().disabledClasses || []) : [];
+
+                if (adminSettingsDoc.exists()) {
+                    const settings = adminSettingsDoc.data();
+                    const existingCustomClasses: string[] = settings.customClasses || [];
+                    let existingDisabledClasses: string[] = settings.disabledClasses || [];
+                    
+                    let hasChanges = false;
+                    
+                    // Recover orphaned disabled classes
+                    orphanedDisabledClasses.forEach((cls: string) => {
+                        if (!existingDisabledClasses.includes(cls)) {
+                            existingDisabledClasses.push(cls);
+                            hasChanges = true;
+                        }
+                    });
+
+                    Array.from(activeCustomClasses).forEach(cls => {
+                        if (!existingCustomClasses.includes(cls) && cls !== 'All') { // Quick heuristic
+                            existingCustomClasses.push(cls);
+                            hasChanges = true;
+                        }
+                    });
+                    
+                    if (hasChanges) {
+                        await updateDoc(adminSettingsRef, {
+                            customClasses: Array.from(new Set(existingCustomClasses)),
+                            disabledClasses: Array.from(new Set(existingDisabledClasses))
+                        });
+                        console.log('Self-Healed stranded custom/disabled classes');
+                    }
+                }
+            }
+            return count;
+        } catch (e) {
+            console.error('Error in optimization/heal:', e);
+            return 0;
+        }
     }
 
     public calculateTermMetrics(marks: Record<string, SubjectMarks>, subjects: SubjectConfig[], supplementaryMarks?: Record<string, SubjectMarks>): { grandTotal: number; average: number; performanceLevel: PerformanceLevel } {
         return this.academicService.calculateTermMetrics(marks, subjects, supplementaryMarks);
+    }
+
+    public async restoreFullSystemFromBackup(backupJson: Record<string, any[]>): Promise<any> {
+        return this.administrativeService.restoreFullSystemFromBackup(backupJson);
     }
 
     public async restoreTermFromBackup(backupJson: Record<string, any[]>, termKey: string, forceOverwrite = false): Promise<{ 
@@ -311,22 +414,34 @@ export class DataService extends BaseDataService {
         return this.academicService.importMarksFromExcel(file, termKey);
     }
 
-    async importStudentsFromExcel(file: File): Promise<{ updated: number; created: number; errors: string[] }> {
-        return this.studentService.importStudentsFromExcel(file);
+    async archiveStudent(id: string): Promise<void> {
+        return this.studentService.archiveStudent(id);
     }
 
-    async bulkImportStudents(students: any[]): Promise<{ updated: number; created: number; errors: string[] }> {
-        return this.studentService.bulkImportStudents(students);
+    async importStudentsFromExcel(file: File): Promise<{ success: number; errors: string[] }> {
+        const results = await this.studentService.importStudentsFromExcel(file);
+        return {
+            success: results.updated + results.created,
+            errors: results.errors
+        };
     }
 
-    parseStudentCSV(csvData: string): any[] {
-        return this.studentService.parseStudentCSV(csvData);
+    async bulkImportStudents(students: any[]): Promise<{ success: number; errors: string[] }> {
+        const results = await this.studentService.bulkImportStudents(students);
+        return {
+            success: results.updated + results.created,
+            errors: results.errors
+        };
+    }
+
+    async parseStudentCSV(input: File | string): Promise<{ students: any[], errors: string[] }> {
+        return this.studentService.parseStudentCSV(input);
     }
 
     async getSemesterSummaries(): Promise<any[]> {
         const summaries = await this.academicService.getSemesterSummaries();
         const settings = await this.getGlobalSettings();
-        const currentTermKey = this.getCurrentTermKey(settings);
+        const currentTermKey = this.getCurrentTermKey();
 
         let hasCurrent = false;
 
@@ -368,25 +483,22 @@ export class DataService extends BaseDataService {
         return mapped;
     }
 
-    async recalculateAllMarkStatuses(): Promise<{ updated: number }> {
-        return this.academicService.recalculateAllMarkStatuses();
+    async recalculateAllMarkStatuses(targetTermKey?: string): Promise<{ updated: number }> {
+        return this.academicService.recalculateAllMarkStatuses(targetTermKey);
     }
 
-    async recalculateAllStudentTotals(): Promise<{ updated: number }> {
-        return this.academicService.recalculateAllStudentTotals();
+    async recalculateAllStudentTotals(targetTermKey?: string): Promise<{ updated: number }> {
+        return this.academicService.recalculateAllStudentTotals(targetTermKey);
     }
 
-    async recalculateAllStudentPerformanceLevels(): Promise<{ updated: number }> {
-        return this.academicService.recalculateAllStudentPerformanceLevels();
+    async recalculateAllStudentPerformanceLevels(targetTermKey?: string): Promise<{ updated: number }> {
+        return this.academicService.recalculateAllStudentPerformanceLevels(targetTermKey);
     }
 
     async syncAllAvailableYears(): Promise<{ updated: boolean }> {
         return this.settingsService.syncAllAvailableYears();
     }
 
-    async deleteSemesterData(termKey: string): Promise<void> {
-        return this.administrativeService.deleteSemesterData(termKey);
-    }
 
     async cleanAndSyncApplications(targetTermKey: string): Promise<{ synced: number; duplicatesDeleted: number; rejectedDeleted: number; notRegistered: number }> {
         return this.administrativeService.cleanAndSyncApplications(targetTermKey);
@@ -412,9 +524,46 @@ export class DataService extends BaseDataService {
         return this.administrativeService.alignDataToTerms();
     }
 
+    async renameClass(oldName: string, newName: string): Promise<void> {
+        await this.administrativeService.renameClass(oldName, newName);
+        this.invalidateCache();
+    }
+
+    async renameClassForwardOnly(oldName: string, newName: string): Promise<void> {
+        await this.administrativeService.renameClassForwardOnly(oldName, newName);
+        this.invalidateCache();
+    }
+
+    async reconcileClassNames(): Promise<{ renamed: string[]; totalUpdates: number }> {
+        return this.administrativeService.reconcileClassNames();
+    }
+
+    async getClassesByTerm(termKey: string): Promise<string[]> {
+        return this.administrativeService.getClassesByTerm(termKey);
+    }
+
+    async normalizeNomenclature(): Promise<{ studentsUpdated: number; classesNormalized: number }> {
+        return this.administrativeService.normalizeNomenclature();
+    }
+
+    async mergeClasses(sourceName: string, targetName: string): Promise<void> {
+        return this.administrativeService.mergeClasses(sourceName, targetName);
+    }
+
+    async getActiveClasses(settings: GlobalSettings): Promise<string[]> {
+        return this.administrativeService.getClassesByTerm();
+    }
+
     // Re-expose Base utilities for compatibility
     invalidateCache(): void {
         super.invalidateCache();
+        this.studentService.invalidateCache();
+        this.academicService.invalidateCache();
+        this.supplementaryService.invalidateCache();
+        this.settingsService.invalidateCache();
+        this.attendanceService.invalidateCache();
+        this.administrativeService.invalidateCache();
+        this.curriculumService.invalidateCache();
     }
 
     async getReleaseSettings(): Promise<ClassReleaseSettings> {
@@ -426,9 +575,25 @@ export class DataService extends BaseDataService {
     }
 
     async getEnrolledStudentsForSubject(subjectId: string, termKey?: string): Promise<StudentRecord[]> {
-        const studentIds = await this.academicService.getEnrolledStudentsForSubject(subjectId, termKey);
-        const allStudents = await this.studentService.getAllStudents(termKey);
-        return allStudents.filter(s => studentIds.includes(s.id));
+        const [subject, allStudents] = await Promise.all([
+            this.academicService.getSubjectById(subjectId),
+            this.studentService.getAllStudents(termKey)
+        ]);
+        
+        if (!subject) return [];
+
+        if (subject.subjectType === 'elective') {
+            // Elective: only those explicitly enrolled
+            const studentIds = subject.enrolledStudents || [];
+            return allStudents.filter(s => studentIds.includes(s.id));
+        } else {
+            // General: All students who were in the target classes at that time
+            const targetClasses = subject.targetClasses || [];
+            return allStudents.filter(s => {
+                // s.className is already resolved to the term's class in processStudentRecord
+                return targetClasses.includes(s.className || '');
+            });
+        }
     }
 
     async enrollStudentInSubject(subjectId: string, studentId: string): Promise<void> {
@@ -469,6 +634,80 @@ export class DataService extends BaseDataService {
 
     async bulkUpdateEXTMarks(updates: any[], termKey?: string): Promise<void> {
         return this.academicService.bulkUpdateEXTMarks(updates, termKey);
+    }
+
+    // --- Timetable & Scheduling ---
+    async getTimetableByClass(className: string, termKey?: string): Promise<any[]> {
+        return this.administrativeService.getTimetableByClass(className, termKey);
+    }
+
+    async saveTimetableEntries(entries: any[]): Promise<void> {
+        return this.administrativeService.saveTimetableEntries(entries);
+    }
+
+    async getExamTimetable(className: string, termKey?: string): Promise<any[]> {
+        return this.administrativeService.getExamTimetable(className, termKey);
+    }
+
+    async saveExamTimetableEntries(entries: any[]): Promise<void> {
+        return this.administrativeService.saveExamTimetableEntries(entries);
+    }
+
+    async getSpecialDays(termKey?: string): Promise<any[]> {
+        return this.administrativeService.getSpecialDays(termKey);
+    }
+
+    async getHallTicketReleaseStatus(termKey?: string): Promise<boolean> {
+        return this.administrativeService.getHallTicketReleaseStatus(termKey);
+    }
+
+    async getSupplementaryExamsByStudent(studentId: string): Promise<any[]> {
+        return this.academicService.getSupplementaryExamsByStudent(studentId);
+    }
+
+    async setHallTicketReleaseStatus(isReleased: boolean, termKey?: string): Promise<void> {
+        return this.administrativeService.setHallTicketReleaseStatus(isReleased, termKey);
+    }
+
+    async deleteSemesterData(termKey: string): Promise<{ studentsAffected: number; subjectsDeleted: number }> {
+        const result = await this.administrativeService.deleteSemesterData(termKey);
+        await this.settingsService.syncAllAvailableYears();
+        return result;
+    }
+
+    async normalizeTermKeys(oldKey: string, newKey: string): Promise<{ studentsUpdated: number; subjectsUpdated: number }> {
+        const result = await this.administrativeService.normalizeTermKeys(oldKey, newKey);
+        await this.settingsService.syncAllAvailableYears();
+        return result;
+    }
+
+    async getInconsistentTerms(): Promise<string[]> {
+        return this.administrativeService.getInconsistentTerms();
+    }
+
+    // --- Attendance Domain (new methods) ---
+    async markAttendance(record: Omit<AttendanceRecord, 'id'>): Promise<string> {
+        return this.attendanceService.markAttendance(record);
+    }
+
+    async getAllAttendanceRecords(termKey?: string): Promise<AttendanceRecord[]> {
+        return this.attendanceService.getAllAttendanceRecords(termKey);
+    }
+
+    async getAttendanceByClassAndDate(className: string, date: string): Promise<AttendanceRecord[]> {
+        return this.attendanceService.getAttendanceByClassAndDate(className, date);
+    }
+
+    async markSpecialDay(specialDay: { date: string; type: string; note: string; className?: string }): Promise<string> {
+        return this.attendanceService.markSpecialDay(specialDay);
+    }
+
+    async deleteAttendanceRecord(id: string): Promise<void> {
+        return this.attendanceService.deleteAttendanceRecord(id);
+    }
+
+    async deleteAttendancePeriod(virtualId: string): Promise<void> {
+        return this.attendanceService.deleteAttendancePeriod(virtualId);
     }
 }
 

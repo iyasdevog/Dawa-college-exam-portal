@@ -68,7 +68,7 @@ export class ConfigurationService {
                     sessionTimeout: this.getNumberEnvVar('VITE_SESSION_TIMEOUT', 3600000), // 1 hour
                     maxLoginAttempts: this.getNumberEnvVar('VITE_MAX_LOGIN_ATTEMPTS', 5),
                     lockoutDuration: this.getNumberEnvVar('VITE_LOCKOUT_DURATION', 900000), // 15 minutes
-                    dbUnlockPassword: this.getEnvVar('VITE_DB_UNLOCK_PASSWORD', '1234')
+                    dbUnlockPassword: this.getEnvVar('VITE_DB_UNLOCK_PASSWORD', '98765')
                 }
             };
 

@@ -6,9 +6,10 @@ interface HallTicketViewProps {
     timetable: ExamTimetableEntry[];
     semester: 'Odd' | 'Even';
     academicYear?: string;
+    branding?: any;
 }
 
-const HallTicketView: React.FC<HallTicketViewProps> = ({ student, timetable, semester, academicYear }) => {
+const HallTicketView: React.FC<HallTicketViewProps> = ({ student, timetable, semester, academicYear, branding }) => {
     const handlePrint = () => {
         window.print();
     };
@@ -62,7 +63,7 @@ const HallTicketView: React.FC<HallTicketViewProps> = ({ student, timetable, sem
                                 </div>
                             </div>
                             <h1 className="text-[2.5rem] font-black uppercase tracking-[0.2em] text-slate-900 mb-3 drop-shadow-sm relative z-10 leading-none">
-                                Islamic Dawa Academy
+                                {branding?.institutionName || "Islamic Dawa Academy"}
                             </h1>
                             <h2 className="text-xl font-bold uppercase tracking-widest text-slate-700 bg-slate-100 print:bg-transparent border border-slate-200 print:border-none inline-block px-6 py-2 rounded-full print:rounded-none relative z-10">
                                 {semester} Semester Regular Examination - {displayYear}

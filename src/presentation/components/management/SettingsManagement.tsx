@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { dataService } from '../../../infrastructure/services/dataService';
-import { CLASSES } from '../../../domain/entities/constants';
+import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
 import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { useTerm } from '../../viewmodels/TermContext';
 
@@ -15,7 +15,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
     const [isDangerZoneUnlocked, setIsDangerZoneUnlocked] = useState(false);
     const [unlockPassword, setUnlockPassword] = useState('');
-    const DANGER_PASSWORD = import.meta.env.VITE_DB_UNLOCK_PASSWORD || 'pleasecareful';
+    const DANGER_PASSWORD = import.meta.env.VITE_DB_UNLOCK_PASSWORD || '98765';
 
     // Doura Cleanup State
     const [cleanupClass, setCleanupClass] = useState('');
@@ -31,6 +31,12 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [currentSettings, setCurrentSettings] = useState<any>(null);
     const [semesterSummaries, setSemesterSummaries] = useState<any[]>([]);
     const [isLoadingSummaries, setIsLoadingSummaries] = useState(false);
+
+    // Branding State
+    const [institutionName, setInstitutionName] = useState('Islamic Dawa Academy');
+    const [contactEmail, setContactEmail] = useState('examinations@aicdawacollege.edu.in');
+    const [contactPhone, setContactPhone] = useState('+91-483-2734567');
+    const [systemAlias, setSystemAlias] = useState('AIC_Dawa_Portal');
 
     // New Semester Wizard State
     const [showNewSemesterModal, setShowNewSemesterModal] = useState(false);
@@ -63,6 +69,8 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [restoreForceOverwrite, setRestoreForceOverwrite] = useState(false);
     const [isRestoring, setIsRestoring] = useState(false);
     const [isAligning, setIsAligning] = useState(false);
+    const [activeClasses, setActiveClasses] = useState<string[]>([]);
+    const [renamingClass, setRenamingClass] = useState<{ oldName: string; newName: string } | null>(null);
     const [restoreResult, setRestoreResult] = useState<{ 
         studentsRestored: number; 
         subjectsRestored: number; 
@@ -75,6 +83,8 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         genConfigsRestored: number;
         skipped: number 
     } | null>(null);
+
+    const [inconsistentTerms, setInconsistentTerms] = useState<string[]>([]);
 
     React.useEffect(() => {
         const loadSettings = async () => {
@@ -90,6 +100,12 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             setAttendanceThreshold(settings.minAttendancePercentage || 75);
             setCurrentSemester(settings.currentSemester || 'Odd');
             setEditableYear(settings.currentAcademicYear || '');
+            
+            // Branding
+            setInstitutionName(settings.institutionName || 'Islamic Dawa Academy');
+            setContactEmail(settings.contactEmail || 'examinations@aicdawacollege.edu.in');
+            setContactPhone(settings.contactPhone || '+91-483-2734567');
+            setSystemAlias(settings.systemAlias || 'AIC_Dawa_Portal');
         };
 
         const loadSummaries = async () => {
@@ -104,9 +120,57 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             }
         };
 
+        const loadClasses = async () => {
+            try {
+                const students = await dataService.getAllStudents('All');
+                const classes = Array.from(new Set(students.map(s => s.className))).filter(Boolean).sort();
+                setActiveClasses(classes);
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        };
+
+        const loadInconsistentTerms = async () => {
+            try {
+                const terms = await dataService.getInconsistentTerms();
+                setInconsistentTerms(terms);
+            } catch (error) {
+                console.error('Error loading inconsistent terms:', error);
+            }
+        };
+
         loadSettings();
         loadSummaries();
+        loadClasses();
+        loadInconsistentTerms();
     }, []);
+
+    const handleRenameClass = async () => {
+        if (!renamingClass || !renamingClass.newName.trim()) return;
+        if (renamingClass.oldName === renamingClass.newName.trim()) {
+            setRenamingClass(null);
+            return;
+        }
+
+        if (!confirm(`⚠️ DANGER: This will rename "${renamingClass.oldName}" to "${renamingClass.newName.trim()}" SYSTEM-WIDE.\n\nThis affects:\n- All Student records\n- All Subject target classes\n- Global Settings\n\nContinue?`)) return;
+
+        try {
+            setIsOperating(true);
+            await dataService.renameClass(renamingClass.oldName, renamingClass.newName.trim());
+            alert(`✅ Class renamed successfully!`);
+            setRenamingClass(null);
+            
+            // Refresh everything
+            const students = await dataService.getAllStudents('All');
+            setActiveClasses(Array.from(new Set(students.map(s => s.className))).filter(Boolean).sort());
+            await onRefresh();
+        } catch (error) {
+            console.error('Rename failed:', error);
+            alert(`Rename failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsOperating(false);
+        }
+    };
 
     const handleSaveAttendanceSettings = async () => {
         if (!currentSettings) return;
@@ -118,6 +182,10 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                 minAttendancePercentage: attendanceThreshold,
                 currentAcademicYear: editableYear,
                 currentSemester: currentSemester,
+                institutionName,
+                contactEmail,
+                contactPhone,
+                systemAlias,
                 // Ensure years are synced
                 availableYears: Array.from(new Set([...(currentSettings.availableYears || []), editableYear])).filter(Boolean)
             };
@@ -143,11 +211,11 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         
         setIsAligning(true);
         try {
-            const result = await dataService.alignDataToTerms();
-            alert(`✅ Alignment Complete!\n- Special Days Fixed: ${result.specialDaysFixed}\n- Calendar Entries Fixed: ${result.calendarFixed}`);
+            await dataService.alignDataToTerms();
+            alert("✅ Metadata alignment complete");
+            await onRefresh();
         } catch (error) {
-            console.error('Alignment error:', error);
-            alert('Failed to align data.');
+            alert("Alignment failed");
         } finally {
             setIsAligning(false);
         }
@@ -288,13 +356,13 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const loadWizardData = async () => {
         try {
             const [students, subjects] = await Promise.all([
-                dataService.getAllStudents(),
-                dataService.getAllSubjects()
+                dataService.getAllStudents('All'),
+                dataService.getAllSubjects('All')
             ]);
             
             // Derive unique classes from students + system defaults
             const uniqueClasses = Array.from(new Set([
-                ...CLASSES,
+                ...SYSTEM_CLASSES,
                 ...students.map(s => s.className)
             ])).filter(Boolean).sort();
             
@@ -350,11 +418,11 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             setIsOperating(false);
         }
     };
-
     const handleExportMarks = async () => {
         try {
             setIsOperating(true);
-            await dataService.exportMarksToExcel();
+            // Passing 'All' as className to export marks for all classes in the term
+            await dataService.exportMarksToExcel('All', activeTerm);
             alert('Marks exported successfully! Check your downloads folder.');
         } catch (error) {
             console.error('Error exporting marks:', error);
@@ -382,15 +450,15 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             setIsOperating(true);
             setImportResults(null);
 
-            const results = await dataService.importMarksFromExcel(file);
-            setImportResults(results);
+            const results = await dataService.importMarksFromExcel(file, activeTerm);
+            setImportResults({ success: results.updated, errors: results.errors });
 
             await onRefresh();
 
             if (results.errors.length === 0) {
-                alert(`Import completed successfully! ${results.success} records imported.`);
+                alert(`Import completed successfully! ${results.updated} records imported.`);
             } else {
-                alert(`Import completed with ${results.success} successful records and ${results.errors.length} errors.`);
+                alert(`Import completed with ${results.updated} successful records and ${results.errors.length} errors.`);
             }
         } catch (error) {
             console.error('Error importing marks:', error);
@@ -406,10 +474,13 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         
         try {
             setIsOperating(true);
-            const merged = await dataService.syncAllAvailableYears();
-            setAvailableYears(merged);
+            const res = await dataService.syncAllAvailableYears();
+            // syncAllAvailableYears returns { updated: boolean }
+            // If we want the list of years, we should fetch settings again
+            const settings = await dataService.getGlobalSettings();
+            setAvailableYears(settings.availableYears || []);
             await refreshTerms();
-            alert(`Synchronization complete. ${merged.length} academic years are now available.`);
+            alert(`Synchronization complete.`);
         } catch (error) {
             console.error('Error syncing years:', error);
             alert('Failed to synchronize years');
@@ -466,12 +537,19 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
     return (
         <div className="space-y-6">
-            <h2 className="text-xl font-black text-slate-900">System Settings & Data Tools</h2>
+            <div className="flex items-center gap-3">
+                <h2 className="text-xl font-black text-slate-900">System Settings & Data Tools</h2>
+                {activeTerm && (
+                    <span className="text-xs px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
+                        {activeTerm}
+                    </span>
+                )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Data Management Card */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <h3 className="font-bold text-lg mb-4 text-slate-800">Data Import/Export</h3>
+                    <h3 className="font-bold text-lg mb-4 text-slate-800">Data Import/Export & Optimization</h3>
                     <div className="space-y-4">
                         <div>
                             <button
@@ -482,62 +560,66 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 <i className="fa-solid fa-database"></i>
                                 Download JSON Master Backup
                             </button>
-                        </div>
-                        <div className="border-t border-slate-100 pt-4">
-                            <p className="text-sm text-slate-600 mb-2">
-                                <strong>Clean & Sync Applications:</strong> Removes duplicates and rejected apps, then brings all approved applications (Improvements, Revaluations, etc.) into the current term.
-                            </p>
+
                             <button
                                 onClick={async () => {
-                                    if (!confirm('This will delete all rejected + duplicate applications, and forcefully bring approved applications into the current term. Continue?')) return;
+                                    if (!confirm('DANGER: This will WIPE the ENTIRE system database, then inject the Master Backup from April 04, and apply the new Metadata Snapshot architecture.\n\nAre you absolutely sure you want to proceed with this highly destructive operation?')) return;
+                                    
                                     try {
                                         setIsOperating(true);
-                                        const result = await dataService.cleanAndSyncApplications(activeTerm);
+                                        const res = await fetch('/AIC_Dawa_Portal_Master_Backup_2026-04-04T04-11-10.json');
+                                        if (!res.ok) throw new Error('Could not fetch the backup file from public folder.');
+                                        const backupJson = await res.json();
+                                        
+                                        const result = await dataService.restoreFullSystemFromBackup(backupJson);
+                                        
                                         await onRefresh();
-                                        alert(`✅ Migration Complete!\n- Synced to term: ${result.synced}\n- Duplicates removed: ${result.duplicatesDeleted}\n- Rejected apps removed: ${result.rejectedDeleted}\n- ⚠️ Skipped (No Student Record): ${result.notRegistered}`);
-                                    } catch (err) {
-                                        alert('Action failed. Check console.');
+                                        alert(`✅ ${result.message}\n\nStudents Migrated: ${result.stats.studentsRestored}\nSubjects Restored: ${result.stats.subjectsRestored}`);
+                                    } catch (err: any) {
+                                        console.error('Error in master restore:', err);
+                                        alert(`❌ Restore failed: ${err.message}`);
                                     } finally {
                                         setIsOperating(false);
                                     }
                                 }}
                                 disabled={isOperating}
-                                className="w-full mt-2 py-3 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-all flex items-center justify-center gap-2"
+                                className="w-full mt-4 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all flex items-center justify-center gap-2 shadow-md shadow-red-200"
                             >
-                                <i className="fa-solid fa-broom"></i>
-                                {isOperating ? 'Cleaning & Syncing...' : 'Clean & Sync Applications'}
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    if (!confirm('This will repair missing historical marks, backfill "Failed In" metadata, and apply smart semester transitions. Continue?')) return;
-                                    try {
-                                        setIsOperating(true);
-                                        const result = await dataService.repairAndAlignSupplementaryExams(activeTerm);
-                                        await onRefresh();
-                                        alert(`✅ Repair & Alignment Complete!\n- Semesters Aligned: ${result.updated}\n- Records Enriched (Marks/Metadata): ${result.repaired}`);
-                                    } catch (err) {
-                                        alert('Action failed.');
-                                    } finally {
-                                        setIsOperating(false);
-                                    }
-                                }}
-                                disabled={isOperating}
-                                className="w-full mt-2 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 border border-indigo-100"
-                            >
-                                <i className="fa-solid fa-wand-magic-sparkles"></i>
-                                {isOperating ? 'Repairing & Aligning...' : 'Repair & Align Supplementary Data'}
+                                <i className="fa-solid fa-truck-fast"></i>
+                                Full Master Downgrade/Upgrade Restore (April 4th JSON)
                             </button>
                         </div>
 
                         <div className="border-t border-slate-100 pt-4">
                             <div className="text-sm text-slate-600 mb-2">
-                                <strong>System Optimization:</strong> Run a complete database health check and repair. This will:
-                                <ul className="list-disc list-inside mt-1 ml-1 text-xs text-slate-500">
-                                    <li>Standardize all faculty names</li>
-                                    <li>Recalculate all subject pass/fail statuses</li>
-                                    <li>Recalculate student totals, averages, and ranks</li>
-                                    <li>Update performance levels</li>
-                                </ul>
+                                <strong>Supplementary Backfill:</strong> Pulls all historically approved applications that aren't visible and populates them into the Supplementary system.
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will synchronize all approved applications into the Supplementary records.\n\nAre you sure you want to proceed?')) return;
+                                    try {
+                                        setIsOperating(true);
+                                        const count = await dataService.backfillApprovedApplications();
+                                        await onRefresh();
+                                        alert(`✅ Successfully synchronized ${count} approved application(s) into Supplementary Management!`);
+                                    } catch (err: any) {
+                                        console.error('Error backfilling applications:', err);
+                                        alert(`❌ Failed to sync applications: ${err.message}`);
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full mt-2 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-200"
+                            >
+                                <i className="fa-solid fa-cloud-arrow-down"></i>
+                                Backfill Legacy Approved Applications
+                            </button>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <div className="text-sm text-slate-600 mb-2">
+                                <strong>System Optimization:</strong> Run a complete database health check and repair. This will normalize faculty names, recalculate marks/totals, and ensure data consistency.
                             </div>
                             <button
                                 onClick={async () => {
@@ -545,42 +627,20 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
                                     try {
                                         setIsOperating(true);
-
-                                        // Step 1: Normalize Faculty Names
                                         const facultyRes = await dataService.normalizeAllFacultyNames();
-
-                                        // Step 2: Fix Mark Statuses
-                                        const statusRes = await dataService.recalculateAllMarkStatuses();
-
-                                        // Step 3: Fix Totals & Rankings (includes Performance Levels)
-                                        const totalsRes = await dataService.recalculateAllStudentTotals();
-
-                                        // Step 4: Full Bulk Recalculation (Extra safety for new grading logic)
-                                        const perfRes = await dataService.recalculateAllStudentPerformanceLevels();
-
+                                        const statusRes = await dataService.recalculateAllMarkStatuses(activeTerm);
+                                        const totalsRes = await dataService.recalculateAllStudentTotals(activeTerm);
+                                        const perfRes = await dataService.recalculateAllStudentPerformanceLevels(activeTerm);
                                         await onRefresh();
 
                                         let message = `✅ Optimization Complete!\n\n`;
-                                        message += `- Standardized ${facultyRes.updated} faculty names\n`;
+                                        message += `- Standardized ${facultyRes} faculty names\n`;
                                         message += `- Updated ${statusRes.updated} mark statuses\n`;
                                         message += `- Recalculated ${totalsRes.updated} student record totals\n`;
                                         message += `- Applied new grading logic to ${perfRes.updated} students\n`;
 
-                                        // Step 5: Sync Years
                                         await dataService.syncAllAvailableYears();
                                         await refreshTerms();
-
-                                        const allErrors = [
-                                            ...facultyRes.errors,
-                                            ...statusRes.errors,
-                                            ...totalsRes.errors,
-                                            ...perfRes.errors
-                                        ];
-
-                                        if (allErrors.length > 0) {
-                                            message += `\n⚠️ ${allErrors.length} Errors occurred (check console for details)`;
-                                        }
-
                                         alert(message);
                                     } catch (error) {
                                         console.error('Error optimizing database:', error);
@@ -596,6 +656,62 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 {isOperating ? 'Optimizing Database...' : 'Optimize & Repair Database'}
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                {/* Institution Branding Card */}
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-lg mb-4 text-slate-800">Institution Branding</h3>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Institution Name</label>
+                            <input
+                                type="text"
+                                value={institutionName}
+                                onChange={(e) => setInstitutionName(e.target.value)}
+                                className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold"
+                                placeholder="e.g. Islamic Dawa Academy"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Contact Email</label>
+                                <input
+                                    type="email"
+                                    value={contactEmail}
+                                    onChange={(e) => setContactEmail(e.target.value)}
+                                    className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Contact Phone</label>
+                                <input
+                                    type="text"
+                                    value={contactPhone}
+                                    onChange={(e) => setContactPhone(e.target.value)}
+                                    className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">System Title / Alias</label>
+                            <input
+                                type="text"
+                                value={systemAlias}
+                                onChange={(e) => setSystemAlias(e.target.value)}
+                                className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold"
+                            />
+                            <p className="text-[10px] text-slate-400 mt-1">Used for browser tab title and backup filenames.</p>
+                        </div>
+                        
+                        <button
+                            onClick={handleSaveAttendanceSettings}
+                            disabled={isOperating}
+                            className="w-full mt-4 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md"
+                        >
+                            <i className="fa-solid fa-save mr-2"></i>
+                            Save Branding & Settings
+                        </button>
                     </div>
                 </div>
 
@@ -689,6 +805,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         </button>
                     </div>
                 </div>
+
 
                 {/* Restore from Backup Panel */}
                 <div className="bg-white p-6 rounded-xl border-2 border-amber-200 shadow-sm md:col-span-2">
@@ -818,6 +935,29 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         >
                             <i className={`fa-solid fa-arrows-rotate ${isLoadingSummaries ? 'animate-spin' : ''}`}></i>
                             Refresh Stats
+                        </button>
+                        <button 
+                            onClick={async () => {
+                                if (!confirm('This will scan all student records to find historical semesters and restore them to the dropdown list. Continue?')) return;
+                                try {
+                                    setIsOperating(true);
+                                    await dataService.repairGlobalSettings();
+                                    const settings = await dataService.getGlobalSettings();
+                                    setAvailableYears(settings.availableYears || []);
+                                    await refreshTerms();
+                                    alert(`✅ Synchronization complete. All academic years have been discovered.`);
+                                } catch (error) {
+                                    console.error('Error syncing years:', error);
+                                    alert('Failed to synchronize years');
+                                } finally {
+                                    setIsOperating(false);
+                                }
+                            }}
+                            disabled={isOperating}
+                            className="text-sm font-bold text-emerald-600 hover:text-emerald-800 transition-colors flex items-center gap-1"
+                        >
+                            <i className={`fa-solid fa-sync ${isOperating ? 'fa-spin' : ''}`}></i>
+                            Sync All Available Years
                         </button>
                     </div>
 
@@ -1124,25 +1264,33 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         <div className="bg-white p-4 rounded-xl border border-red-100 mb-6 shadow-sm">
                             <div className="flex items-start gap-4 mb-4">
                                 <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
-                                    <i className="fa-solid fa-screwdriver-wrench text-xl"></i>
+                                    <i className="fa-solid fa-heart-pulse text-xl"></i>
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-red-800">Metadata Repair & Sync</h4>
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-red-800">S1 Class Record Recovery</h4>
                                     <p className="text-xs text-red-600 mt-1 leading-relaxed">
-                                        Use this if academic terms are showing incorrectly or if deleted terms still appear as "Active". 
-                                        This scans all student records and synchronizes the global system configuration.
+                                        If S1 marks went missing after a class rename, this tool will scan your history and align those records to the current semester's naming convention.
                                     </p>
                                 </div>
                             </div>
                             <button
                                 onClick={async () => {
-                                    if (!confirm('This will scan all student records and reset global term metadata to match actual data. Continue?')) return;
+                                    if (!confirm('This specifically repairs S1 marks that became detached during a rename. Proceed?')) return;
                                     try {
                                         setIsOperating(true);
-                                        const result = await dataService.repairGlobalSettings();
-                                        await refreshTerms();
+                                        const settings = await dataService.getGlobalSettings();
+                                        const classes = [...SYSTEM_CLASSES, ...(settings.customClasses || [])];
+                                        const possibleNewNames = classes.filter(c => c !== 'S1' && (c.includes('S1') || c.includes('FS1')));
+                                        
+                                        const targetName = prompt(`Please specify the NEW name for S1 (e.g. FS1):`, possibleNewNames[0] || '');
+                                        if (!targetName) {
+                                            alert('Repair cancelled. No target name provided.');
+                                            return;
+                                        }
+
+                                        await dataService.renameClass('S1', targetName);
                                         await onRefresh();
-                                        alert(`✅ Repair Successful!\n\nDiscovered Years: ${result.discoveredYears.join(', ')}\nActive Term set to: ${result.activeTermSet}\n\nThe system is now synchronized.`);
+                                        alert(`✅ S1 marks have been successfully re-indexed to ${targetName}.`);
                                     } catch (error) {
                                         alert('Repair failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
                                     } finally {
@@ -1152,8 +1300,105 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 disabled={isOperating}
                                 className="w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all flex items-center justify-center gap-2 shadow-md shadow-red-200"
                             >
-                                <i className={`fa-solid ${isOperating ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
-                                {isOperating ? 'Repairing Metadata...' : 'Repair & Sync Term Metadata'}
+                                <i className={`fa-solid ${isOperating ? 'fa-spinner fa-spin' : 'fa-dna'}`}></i>
+                                {isOperating ? 'Repairing S1 Marks...' : 'Restore Missing S1 Marks via Re-naming'}
+                            </button>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-xl border border-blue-100 mb-6 shadow-sm">
+                            <div className="flex items-start gap-4 mb-4">
+                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                                    <i className="fa-solid fa-wand-magic-sparkles text-xl"></i>
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-blue-800">Global Class Name Normalizer</h4>
+                                    <p className="text-xs text-blue-600 mt-1 leading-relaxed">
+                                        Fixes duplicate classes (e.g. two "S2" entries) by trimming invisible spaces and merging identical names across the entire database.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will scan ALL students and trim/merge all class names. Recommended for fixing "Duplicate S2" issues. Continue?')) return;
+                                    try {
+                                        setIsOperating(true);
+                                        const res = await dataService.normalizeNomenclature();
+                                        await onRefresh();
+                                        alert(`✅ Normalization Complete!\n\nStudents Updated: ${res.studentsUpdated}\nDuplicate Labels Merged: ${res.classesNormalized}\n\nAny "Double S2" entries should now be merged.`);
+                                    } catch (error) {
+                                        alert('Normalization failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-200"
+                            >
+                                <i className={`fa-solid ${isOperating ? 'fa-spinner fa-spin' : 'fa-broom'}`}></i>
+                                {isOperating ? 'Cleaning Naming...' : 'Normalize & Merge Class Names'}
+                            </button>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-xl border border-purple-100 mb-6 shadow-sm">
+                            <div className="flex items-start gap-4 mb-4">
+                                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                                    <i className="fa-solid fa-calendar-check text-xl"></i>
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-purple-800">Academic Term Standardizer</h4>
+                                    <p className="text-xs text-purple-600 mt-1 leading-relaxed">
+                                        Fixes malformed or inconsistent term names (e.g. "2025" → "2025-2026-Odd"). This will migrate all student marks and subjects from the old key to the new one.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {inconsistentTerms.length > 0 && (
+                                <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                    <div className="flex items-center gap-2 text-amber-700 font-bold mb-2">
+                                        <i className="fa-solid fa-triangle-exclamation"></i>
+                                        <span className="text-sm">Inconsistent Terms Detected ({inconsistentTerms.length})</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {inconsistentTerms.map(term => (
+                                            <span key={term} className="px-2 py-1 bg-white border border-amber-200 rounded text-xs font-mono text-amber-800">
+                                                {term}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <p className="text-[10px] text-amber-600 mt-2">
+                                        Use the tool below to merge these into standard `YYYY-YYYY-Semester` format.
+                                    </p>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={async () => {
+                                    const oldKey = prompt("Enter the OLD/MALFORMED term key (e.g. '2025'):");
+                                    if (!oldKey) return;
+                                    const newKey = prompt("Enter the NEW/STANDARD term key (e.g. '2025-2026-Odd'):");
+                                    if (!newKey) return;
+                                    
+                                    if (!confirm(`⚠️ This will migrate ALL DATA from "${oldKey}" to "${newKey}".\n\nThis affects:\n- Student Academic History (Marks/Attendance)\n- Subject Configurations\n\nExisting data in "${newKey}" will be merged. Continue?`)) return;
+                                    
+                                    try {
+                                        setIsOperating(true);
+                                        const res = await dataService.normalizeTermKeys(oldKey, newKey);
+                                        // Refresh both normal data and inconsistent terms
+                                        const updatedInconsistent = await dataService.getInconsistentTerms();
+                                        setInconsistentTerms(updatedInconsistent);
+                                        await onRefresh();
+                                        alert(`✅ Normalization Complete!\n\nStudents Updated: ${res.studentsUpdated}\nSubjects Migrated: ${res.subjectsUpdated}\n\nTerm "${oldKey}" has been successfully merged into "${newKey}".`);
+                                    } catch (error) {
+                                        alert('Normalization failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                    } finally {
+                                        setIsOperating(false);
+                                    }
+                                }}
+                                disabled={isOperating}
+                                className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all flex items-center justify-center gap-2 shadow-md shadow-purple-200"
+                            >
+                                <i className={`fa-solid ${isOperating ? 'fa-spinner fa-spin' : 'fa-wand-magic'}`}></i>
+                                {isOperating ? 'Standardizing Terms...' : 'Standardize Academic Term Keys'}
                             </button>
                         </div>
 
@@ -1166,7 +1411,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
                                 try {
                                     setIsOperating(true);
-                                    await dataService.clearAllData();
+                                    await dataService.clearAllData('students');
                                     await onRefresh();
                                     alert('All student data has been cleared.');
                                 } catch (error) {

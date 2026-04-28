@@ -120,7 +120,7 @@ const App: React.FC = () => {
         username: 'faculty1',
         role: 'faculty',
         name: 'Faculty One',
-        assignedClasses: ['S1', 'S2'] // Example restriction
+        assignedClasses: ['FS2', 'S2'] // Updated S1 -> FS2 for visibility
       });
       setCurrentUser(facultyUser);
       setIsLoggedIn(true);

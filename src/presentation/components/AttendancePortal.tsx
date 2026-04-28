@@ -30,8 +30,8 @@ const AttendancePortal: React.FC = () => {
     const loadData = async () => {
         try {
             const [studentsData, subjectsData] = await Promise.all([
-                dataService.getAllStudents(),
-                dataService.getAllSubjects()
+                dataService.getAllStudents(activeTerm),
+                dataService.getAllSubjects(activeTerm)
             ]);
             setStudents(studentsData);
             setSubjects(subjectsData);
@@ -44,7 +44,7 @@ const AttendancePortal: React.FC = () => {
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [activeTerm]);
 
     if (isLoading) {
         return (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord } from '../../domain/entities/types';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { useMobile } from '../hooks/useMobile';
 import { useTerm } from '../viewmodels/TermContext';
 

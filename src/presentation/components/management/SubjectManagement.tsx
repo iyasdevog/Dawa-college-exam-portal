@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { SubjectConfig, StudentRecord } from '../../../domain/entities/types';
+import React, { useState, useEffect } from 'react';
+import { SubjectConfig, StudentRecord, CurriculumEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { normalizeName, shortenSubjectName } from '../../../infrastructure/services/formatUtils';
@@ -9,6 +9,7 @@ import { SubjectDetails } from '../../../domain/entities/types';
 interface SubjectManagementProps {
     subjects: SubjectConfig[];
     students: StudentRecord[];
+    curriculum: CurriculumEntry[];
     activeTerm: string;
     onRefresh: () => Promise<void>;
     isLoading: boolean;
@@ -95,7 +96,7 @@ const FacultyCard = React.memo(({ faculty, facultySubjects }: { faculty: string,
     );
 });
 
-const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, students, activeTerm, onRefresh, isLoading }) => {
+const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, students, curriculum, activeTerm, onRefresh, isLoading }) => {
     const { isMobile } = useMobile();
     const [isOperating, setIsOperating] = useState(false);
 
@@ -147,36 +148,49 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const [showClassSelectionModal, setShowClassSelectionModal] = useState(false);
     const [activeClassForSelection, setActiveClassForSelection] = useState<string>('');
     const [studentSearchQuery, setStudentSearchQuery] = useState('');
+    const [isCreatingNewSubject, setIsCreatingNewSubject] = useState(false);
     const [isCreatingNewFaculty, setIsCreatingNewFaculty] = useState(false);
 
-    const uniqueClasses = React.useMemo(() => {
-        const classes = new Set<string>();
-        students.forEach(s => {
-            if (s.className) classes.add(s.className);
-        });
-        subjects.forEach(s => {
-            if (s.targetClasses) s.targetClasses.forEach(c => classes.add(c));
-        });
-        return Array.from(classes).sort();
-    }, [students, subjects]);
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const suggestionRef = React.useRef<HTMLDivElement>(null);
 
-    const handleAddSubject = async () => {
+    const allSubjectSuggestions = React.useMemo(() => {
+        const fromSubjects = subjects.map(s => s.name);
+        const fromCurriculum = curriculum.map(c => c.subjectName);
+        return Array.from(new Set([...fromSubjects, ...fromCurriculum])).sort();
+    }, [subjects, curriculum]);
+
+    const filteredSuggestions = React.useMemo(() => {
+        if (!subjectForm.name.trim()) return [];
+        const query = subjectForm.name.toLowerCase();
+        return allSubjectSuggestions.filter(name => 
+            name.toLowerCase().includes(query) && name.toLowerCase() !== query
+        );
+    }, [allSubjectSuggestions, subjectForm.name]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
+                setShowSuggestions(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        const loadClasses = async () => {
+            if (activeTerm) {
+                const classes = await dataService.getClassesByTerm(activeTerm);
+                setAvailableClasses(classes);
+            }
+        };
+        loadClasses();
+    }, [activeTerm]);
+
+    const handleAddSubject = () => {
         setEditingSubject(null);
-        setIsCreatingNewFaculty(false);
-        
-        let defaultYear = '';
-        let defaultSem = 'Both' as 'Odd' | 'Even' | 'Both';
-        
-        if (activeTerm) {
-            const parts = activeTerm.split('-');
-            const sem = parts.pop() as 'Odd' | 'Even';
-            defaultYear = parts.join('-');
-            defaultSem = sem;
-        } else {
-            const settings = await dataService.getGlobalSettings();
-            defaultYear = settings.currentAcademicYear || '';
-        }
-
         setSubjectForm({
             name: '',
             arabicName: '',
@@ -186,29 +200,30 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             facultyName: '',
             targetClasses: [],
             subjectType: 'general',
+            activeSemester: 'Both',
             enrolledStudents: [],
-            activeSemester: defaultSem,
-            academicYear: defaultYear
+            academicYear: ''
         });
+        setIsCreatingNewSubject(false);
+        setIsCreatingNewFaculty(false);
         setShowSubjectForm(true);
     };
 
     const handleEditSubject = (subject: SubjectConfig) => {
         setEditingSubject(subject);
-        setIsCreatingNewFaculty(false);
         setSubjectForm({
+            ...subject,
             name: subject.name,
             arabicName: subject.arabicName || '',
-            maxINT: subject.maxINT,
-            maxEXT: subject.maxEXT,
-            passingTotal: subject.passingTotal,
             facultyName: subject.facultyName || '',
-            targetClasses: subject.targetClasses,
+            targetClasses: subject.targetClasses || [],
             subjectType: subject.subjectType || 'general',
+            activeSemester: (subject as any).activeSemester || 'Both',
             enrolledStudents: subject.enrolledStudents || [],
-            activeSemester: subject.activeSemester || 'Both',
-            academicYear: subject.academicYear || ''
+            academicYear: (subject as any).academicYear || ''
         });
+        setIsCreatingNewSubject(false);
+        setIsCreatingNewFaculty(false);
         setShowSubjectForm(true);
     };
 
@@ -634,7 +649,14 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black text-slate-900">Subject Management</h2>
+                <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-black text-slate-900">Subject Management</h2>
+                    {activeTerm && (
+                        <span className="text-xs px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
+                            {activeTerm}
+                        </span>
+                    )}
+                </div>
                 <button
                     onClick={handleAddSubject}
                     disabled={isOperating}
@@ -690,7 +712,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                             className="p-2 pl-3 pr-8 border rounded-lg bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         >
                             <option value="All">All Classes</option>
-                            {uniqueClasses.map(c => (
+                            {availableClasses.map(c => (
                                 <option key={c} value={c}>{c}</option>
                             ))}
                         </select>
@@ -793,7 +815,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 className="p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
                             >
                                 <option value="All">All Classes</option>
-                                {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                     </div>
@@ -849,7 +871,51 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                         <form onSubmit={handleSaveSubject} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-bold mb-1">Subject Name</label>
-                                <input type="text" value={subjectForm.name} onChange={e => setSubjectForm(prev => ({ ...prev, name: e.target.value }))} className="w-full p-3 border rounded-xl" required />
+                                <select
+                                    value={isCreatingNewSubject ? '___CREATE_NEW___' : subjectForm.name}
+                                    onChange={(e) => {
+                                        if (e.target.value === '___CREATE_NEW___') {
+                                            setIsCreatingNewSubject(true);
+                                            setSubjectForm(prev => ({ ...prev, name: '' }));
+                                        } else {
+                                            setIsCreatingNewSubject(false);
+                                            setSubjectForm(prev => ({ ...prev, name: e.target.value }));
+                                        }
+                                    }}
+                                    className="w-full p-3 border rounded-xl bg-white"
+                                    required={!isCreatingNewSubject}
+                                >
+                                    <option value="">-- Select Subject --</option>
+                                    {allSubjectSuggestions.map(name => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                    <option value="___CREATE_NEW___">➕ Create New Subject</option>
+                                </select>
+
+                                {isCreatingNewSubject && (
+                                    <div className="mt-2">
+                                        <input
+                                            type="text"
+                                            value={subjectForm.name}
+                                            onChange={e => setSubjectForm(prev => ({ ...prev, name: e.target.value }))}
+                                            className="w-full p-3 border-2 rounded-xl bg-emerald-50 border-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                            placeholder="Enter new subject name"
+                                            required
+                                            autoFocus
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsCreatingNewSubject(false);
+                                                setSubjectForm(prev => ({ ...prev, name: '' }));
+                                            }}
+                                            className="mt-2 text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                                        >
+                                            <i className="fa-solid fa-arrow-left"></i>
+                                            Back to list
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-sm font-bold mb-1">Faculty Name</label>
@@ -958,7 +1024,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                             <div>
                                 <label className="block text-sm font-bold mb-1">Target Classes {subjectForm.subjectType === 'elective' && <span className="text-xs font-normal text-slate-500">(Click class to select students)</span>}</label>
                                 <div className="flex flex-wrap gap-2">
-                                    {['S1', 'S2', 'S3', 'P1', 'P2', 'D1', 'D2', 'D3', 'PG1', 'PG2'].map(cls => {
+                                    {(availableClasses.length > 0 ? availableClasses : ['S1', 'S2', 'S3', 'P1', 'P2', 'D1', 'D2', 'D3', 'PG1', 'PG2']).map(cls => {
                                         if (subjectForm.subjectType === 'elective') {
                                             const enrolledCount = students.filter(s => s.className === cls && subjectForm.enrolledStudents.includes(s.id)).length;
                                             const isTarget = subjectForm.targetClasses.includes(cls) || enrolledCount > 0;
@@ -1037,7 +1103,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                     className="p-2 border rounded-lg"
                                 >
                                     <option value="All">All Classes</option>
-                                    {uniqueClasses.map(cls => (
+                                    {availableClasses.map(cls => (
                                         <option key={cls} value={cls}>{cls}</option>
                                     ))}
                                 </select>

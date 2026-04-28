@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { TimetableEntry, ExamTimetableEntry, SpecialDay, SubjectConfig, HallTicketSettings } from '../../domain/entities/types';
-import { CLASSES, DAYS } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES, DAYS } from '../../domain/entities/constants';
 
 const TimetableManager: React.FC = () => {
-    const [selectedClass, setSelectedClass] = useState('S1');
+    const [selectedClass, setSelectedClass] = useState('');
     const [selectedSemester, setSelectedSemester] = useState<'Odd' | 'Even'>('Odd');
     const [activeSubTab, setActiveSubTab] = useState<'general' | 'exam' | 'special'>('general');
 
@@ -19,25 +19,42 @@ const TimetableManager: React.FC = () => {
     const [showAIModal, setShowAIModal] = useState(false);
     const [aiInput, setAIInput] = useState('');
     const [isExtracting, setIsExtracting] = useState(false);
+    const [activeClasses, setActiveClasses] = useState<string[]>(SYSTEM_CLASSES);
 
     useEffect(() => {
-        loadData();
+        const init = async () => {
+            const settings = await dataService.getGlobalSettings();
+            const active = await dataService.getActiveClasses(settings);
+            setActiveClasses(active);
+            if (active.length > 0) setSelectedClass(active[0]);
+        };
+        init();
+    }, []);
+
+    useEffect(() => {
+        if (selectedClass) {
+            loadData();
+        }
     }, [selectedClass, selectedSemester]);
 
     const loadData = async () => {
+        if (!selectedClass) return;
         setIsLoading(true);
         try {
             const termKey = dataService.getCurrentTermKey();
-            const [tt, et, releaseStatus, sd, allSubjects] = await Promise.all([
+            const [tt, et, sd, allSubjects] = await Promise.all([
                 dataService.getTimetableByClass(selectedClass),
                 dataService.getExamTimetable(selectedClass, selectedSemester),
-                dataService.getHallTicketReleaseStatus(selectedClass, selectedSemester),
                 dataService.getSpecialDays(termKey),
                 dataService.getAllSubjects()
             ]);
             setTimetable(tt);
             setExamTimetable(et);
+            
+            // Hall Ticket release is now per term, not just class/sem
+            const releaseStatus = await dataService.getHallTicketReleaseStatus(termKey);
             setIsHallTicketReleased(releaseStatus);
+            
             setSpecialDays(sd);
             setSubjects(allSubjects);
         } catch (error) {
@@ -107,7 +124,8 @@ const TimetableManager: React.FC = () => {
         if (window.confirm(`${newStatus ? 'Release' : 'Revoke'} hall tickets for ${selectedClass} ${selectedSemester} semester?`)) {
             try {
                 setIsSaving(true);
-                await dataService.setHallTicketReleaseStatus(selectedClass, selectedSemester, newStatus);
+                const termKey = dataService.getCurrentTermKey();
+                await dataService.setHallTicketReleaseStatus(newStatus, termKey);
                 setIsHallTicketReleased(newStatus);
             } catch (error) {
                 alert('Failed to update release status');
@@ -142,7 +160,7 @@ const TimetableManager: React.FC = () => {
                         onChange={(e) => setSelectedClass(e.target.value)}
                         className="p-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all shadow-sm"
                     >
-                        {CLASSES.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                        {activeClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
                     </select>
 
                     <select

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
 import { debounce, throttle, mobileStorage } from '../../infrastructure/services/mobileUtils';
@@ -109,6 +109,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         sortOrder: 'desc',
         filterBy: ''
     });
+    const [branding, setBranding] = useState<any>(null);
+    const [activeClasses, setActiveClasses] = useState<string[]>(SYSTEM_CLASSES);
 
     // Mobile detection and responsive hooks
     const { isMobile, isTablet, screenWidth, orientation } = useMobile();
@@ -217,6 +219,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             setStudents(studentsData);
             setSubjects(subjectsData);
 
+            const settings = await dataService.getGlobalSettings();
+            setBranding(settings);
+
+            const activeClassesData = settings ? await dataService.getActiveClasses(settings) : SYSTEM_CLASSES;
+            setActiveClasses(activeClassesData);
+
             // Complete loading immediately — no artificial delays
             setLoadingState(prev => ({
                 ...prev,
@@ -292,11 +300,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         {
             id: 'active-classes',
             title: 'Active Classes',
-            value: CLASSES.length,
+            value: activeClasses.length,
             icon: 'fa-solid fa-chalkboard',
             color: 'text-purple-600',
             bgColor: 'bg-purple-100',
-            description: `${CLASSES.length} classes currently active in the system`
+            description: `${activeClasses.length} classes currently active in the system`
         }
     ];
 
@@ -481,7 +489,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             setTouchFeedback(prev => ({ ...prev, message: 'Generating sheets...' }));
 
             const summaryData = [
-                ['AIC DA\'WA COLLEGE - COMPREHENSIVE DASHBOARD EXPORT'],
+                [`${branding?.institutionName?.toUpperCase() || "INSTITUTION"} - COMPREHENSIVE DASHBOARD EXPORT`],
                 ['Generated', new Date().toLocaleString()],
                 ['Exported From', 'Mobile Dashboard'],
                 [''],
@@ -489,7 +497,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                 ['Total Students', currentTermStudents.length],
                 ['Total Subjects', subjects.length],
                 ['Overall Average', `${averagePercentage}%`],
-                ['Active Classes', CLASSES.length]
+                ['Active Classes', activeClasses.length]
             ];
 
             const topPerformersData = [
@@ -598,19 +606,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     }), [students]);
 
     // Class-wise statistics — memoized
-    const classStats = useMemo(() => CLASSES.map(className => {
-        const classStudents = students.filter(s => s.className === className);
-        const classAverage = classStudents.length > 0
-            ? Math.round(classStudents.reduce((sum, s) => sum + s.average, 0) / classStudents.length)
-            : 0;
+    const classStats = useMemo(() => {
+        return activeClasses.map(className => {
+            const classStudents = students.filter(s => s.className === className);
+            const classAverage = classStudents.length > 0
+                ? Math.round(classStudents.reduce((sum, s) => sum + s.average, 0) / classStudents.length)
+                : 0;
 
-        return {
-            className,
-            studentCount: classStudents.length,
-            average: classAverage,
-            topStudent: classStudents.find(s => s.rank === 1)
-        };
-    }), [students]);
+            return {
+                className,
+                studentCount: classStudents.length,
+                average: classAverage,
+                topStudent: classStudents.find(s => s.rank === 1)
+            };
+        });
+    }, [students, branding]);
 
     // Top performers — memoized
     const topPerformers = useMemo(() => [...students]
@@ -652,10 +662,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
 
                     {/* Official College Header */}
                     <h1 className="print:text-2xl font-black text-black print:mb-2 print:leading-tight tracking-wider">
-                        AIC DA'WA COLLEGE
+                        {branding?.institutionName || "AIC DA'WA COLLEGE"}
                     </h1>
                     <div className="print:text-xs text-black print:mb-3 print:leading-tight">
-                        Virippadam, Akkod, Vazhakkad, Kerala 673640
+                        {branding?.institutionAddress || "Address details not configured"}
                     </div>
 
                     {/* Document Title */}

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { StudentApplication, ApplicationStatus, ApplicationType } from '../../domain/entities/types';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { useTerm } from '../viewmodels/TermContext';
 
 const ApplicationManagement: React.FC = () => {
     const { activeTerm } = useTerm();
     const [applications, setApplications] = useState<StudentApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<ApplicationStatus | 'all'>('all');
+    const [filterStatus, setFilterStatus] = useState<ApplicationStatus | 'all'>('pending');
     const [filterClass, setFilterClass] = useState<string>('all');
     const [filterType, setFilterType] = useState<ApplicationType | 'all'>('all');
     const [filterSubject, setFilterSubject] = useState<string>('all');
@@ -165,7 +165,7 @@ const ApplicationManagement: React.FC = () => {
     }, [applications]);
 
     const filteredApps = applications.filter(app => 
-        (filterStatus === 'all' ? app.status !== 'approved' : app.status === filterStatus) &&
+        (filterStatus === 'all' ? true : app.status === filterStatus) &&
         (filterClass === 'all' ? true : app.className === filterClass) &&
         (filterType === 'all' ? true : app.type === filterType) &&
         (filterSubject === 'all' ? true : (app.subjectName?.trim().toUpperCase() === filterSubject)) &&
@@ -244,7 +244,7 @@ const ApplicationManagement: React.FC = () => {
                                     (filterType === 'all' ? true : app.type === filterType)
                                 );
                                 const count = status === 'all' 
-                                    ? baseList.filter(app => app.status !== 'approved').length 
+                                    ? baseList.length 
                                     : baseList.filter(app => app.status === status).length;
 
                                 return (

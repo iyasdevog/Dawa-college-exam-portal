@@ -5,11 +5,12 @@ import { useMobile } from '../../hooks/useMobile';
 
 interface CurriculumManagementProps {
     curriculum: CurriculumEntry[];
+    activeTerm?: string;
     onRefresh: () => Promise<void>;
     isLoading: boolean;
 }
 
-export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curriculum, onRefresh, isLoading }) => {
+export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curriculum, activeTerm, onRefresh, isLoading }) => {
     const { isMobile } = useMobile();
     const [isOperating, setIsOperating] = useState(false);
     const [showForm, setShowForm] = useState(false);
@@ -26,6 +27,7 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
         portions: ''
     });
 
+    const [showAllTerms, setShowAllTerms] = useState(false);
     const [activeStage, setActiveStage] = useState<CurriculumStage>('Foundational');
     const [activeStream, setActiveStream] = useState<'3-Year' | '5-Year'>('3-Year');
 
@@ -39,7 +41,9 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
             subjectName: '',
             subjectType: 'general',
             learningPeriod: '',
-            portions: ''
+            portions: '',
+            termKey: activeTerm || undefined,
+            academicYear: activeTerm ? activeTerm.split('-').slice(0, -1).join('-') : undefined
         });
         setShowForm(true);
     };
@@ -90,7 +94,13 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
         }
     };
 
-    const filteredCurriculum = curriculum
+    // Term-aware filtering: show entries matching current term OR legacy entries without a termKey
+    const termFilteredCurriculum = React.useMemo(() => {
+        if (showAllTerms || !activeTerm) return curriculum;
+        return curriculum.filter(c => !c.termKey || c.termKey === activeTerm);
+    }, [curriculum, activeTerm, showAllTerms]);
+
+    const filteredCurriculum = termFilteredCurriculum
         .filter(c => c.stage === activeStage && (activeStage !== 'Foundational' || c.stream === activeStream))
         .sort((a, b) => a.semester - b.semester || a.subjectName.localeCompare(b.subjectName));
 
@@ -103,8 +113,28 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black text-slate-900">Curriculum & Syllabus</h2>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-black text-slate-900">Curriculum &amp; Syllabus</h2>
+                    {activeTerm && (
+                        <div className="flex items-center gap-2">
+                            <span className={`text-xs px-3 py-1 rounded-full font-bold border ${
+                                showAllTerms 
+                                    ? 'bg-slate-100 text-slate-500 border-slate-200' 
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}>
+                                {showAllTerms ? 'All Terms' : activeTerm}
+                            </span>
+                            <button
+                                onClick={() => setShowAllTerms(p => !p)}
+                                title={showAllTerms ? 'Filter by active term' : 'Show all terms'}
+                                className="text-xs text-slate-400 hover:text-slate-600 underline"
+                            >
+                                {showAllTerms ? 'Filter by term' : 'Show all'}
+                            </button>
+                        </div>
+                    )}
+                </div>
                 <button
                     onClick={handleAdd}
                     disabled={isOperating}

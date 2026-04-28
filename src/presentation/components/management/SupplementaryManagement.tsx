@@ -281,7 +281,14 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-black text-slate-900">Supplementary Exams</h2>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-black text-slate-900">Supplementary Exams</h2>
+                        {activeTerm && (
+                            <span className="text-xs px-3 py-1 rounded-full font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap shadow-sm">
+                                {activeTerm}
+                            </span>
+                        )}
+                    </div>
                     <p className="text-sm text-slate-500">Manage re-entries and regular supplementary exams</p>
                 </div>
                 <button

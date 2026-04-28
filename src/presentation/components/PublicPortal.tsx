@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { StudentRecord, SubjectConfig, ClassReleaseSettings, ExamTimetableEntry } from '../../domain/entities/types';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import StudentAttendancePortal from './StudentAttendancePortal';
@@ -21,7 +21,7 @@ interface PublicPortalProps {
 const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const { activeTerm } = useTerm();
     const [searchAdNo, setSearchAdNo] = useState('');
-    const [searchClass, setSearchClass] = useState(CLASSES[0]);
+    const [searchClass, setSearchClass] = useState('');
     const [result, setResult] = useState<StudentRecord | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
@@ -29,14 +29,16 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [isSearching, setIsSearching] = useState(false);
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
     const [viewMode, setViewMode] = useState<'scorecard' | 'class-rank'>('scorecard');
-    const [showAppPortal, setShowAppPortal] = useState(false); // Added state
+    const [showAppPortal, setShowAppPortal] = useState(false);
+    const [branding, setBranding] = useState<any>(null);
+    const [activeClasses, setActiveClasses] = useState<string[]>(SYSTEM_CLASSES);
 
     // Tabs state
     const [subView, setSubView] = useState<'results' | 'attendance' | 'live' | 'hall-ticket' | 'curriculum'>('curriculum');
 
     // Hall Ticket States
     const [htAdNo, setHtAdNo] = useState('');
-    const [htClass, setHtClass] = useState(CLASSES[0]);
+    const [htClass, setHtClass] = useState('');
     const [htSemester, setHtSemester] = useState<'Odd' | 'Even'>('Odd');
     const [htStudent, setHtStudent] = useState<StudentRecord | null>(null);
     const [htTimetable, setHtTimetable] = useState<ExamTimetableEntry[]>([]);
@@ -91,12 +93,22 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             try {
                 if (!hasSearched) setIsLoading(true); // Only show full loader on initial entry
                 await dataService.initializeDatabase();
-                const [allSubjects, settings] = await Promise.all([
+                const [allSubjects, settings, globalBranding, termClasses] = await Promise.all([
                     dataService.getAllSubjects(activeTerm),
-                    dataService.getReleaseSettings()
+                    dataService.getReleaseSettings(),
+                    dataService.getGlobalSettings(),
+                    dataService.getClassesByTerm(activeTerm)
                 ]);
                 setSubjects(allSubjects);
                 setReleaseSettings(settings);
+                setBranding(globalBranding);
+                setActiveClasses(termClasses.length > 0 ? termClasses : SYSTEM_CLASSES);
+                
+                // Initialize classes if not set or invalid for term
+                if (termClasses.length > 0) {
+                    if (!termClasses.includes(searchClass)) setSearchClass(termClasses[0]);
+                    if (!termClasses.includes(htClass)) setHtClass(termClasses[0]);
+                }
             } catch (error) {
                 console.error('Error initializing data:', error);
             } finally {
@@ -160,9 +172,9 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             if (student && student.className === htClass) {
                 const year = activeTerm.split('-').slice(0, 2).join('-');
                 const [released, eligibility, timetable] = await Promise.all([
-                    dataService.getHallTicketReleaseStatus(htClass, htSemester, year),
+                    dataService.getHallTicketReleaseStatus(activeTerm),
                     dataService.isEligibleForHallTicket(student.id, htClass, activeTerm),
-                    dataService.getExamTimetable(htClass, htSemester, year)
+                    dataService.getExamTimetable(htClass, activeTerm)
                 ]);
                 
                 setHtStudent(student);
@@ -193,7 +205,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 <div className="text-center">
                     <div className="loader-ring mb-4"></div>
                     <p className="text-white font-bold">Connecting to Database...</p>
-                    <p className="text-emerald-400 text-sm mt-2">AIC Da'wa College Exam Portal</p>
+                    <p className="text-emerald-400 text-sm mt-2">{branding?.institutionName || "AIC Da'wa College"} Exam Portal</p>
                 </div>
             </div>
         );
@@ -209,10 +221,10 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     </div>
                     <div>
                         <h1 className={`font-black text-white tracking-tighter leading-none ${isMobile ? 'text-lg' : 'text-xl'}`}>
-                            {isMobile ? 'AIC DA\'WA' : 'AIC DA\'WA COLLEGE'}
+                            {isMobile ? (branding?.systemAlias || "AIC DA'WA") : (branding?.institutionName || "AIC DA'WA COLLEGE")}
                         </h1>
                         <p className={`text-emerald-400 font-black uppercase tracking-[0.3em] mt-1 ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>
-                            Exam Portal
+                            {branding?.portalName || "Exam Portal"}
                         </p>
                     </div>
                 </div>
@@ -287,7 +299,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                         value={htClass} onChange={e => setHtClass(e.target.value)} 
                                         className="w-full bg-[#1e293b] border-2 border-white/20 rounded-2xl p-4 text-white focus:ring-4 focus:ring-emerald-500/30 focus:border-emerald-400 outline-none transition-all cursor-pointer"
                                     >
-                                        {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        {activeClasses.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-3">
@@ -339,6 +351,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                             timetable={htTimetable} 
                                             semester={htSemester} 
                                             academicYear={activeTerm.split('-').slice(0, 2).join('-')}
+                                            branding={branding}
                                         />
                                     </div>
                                 )}
@@ -425,7 +438,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                         disabled={isSearching}
                                         style={{ WebkitAppearance: 'none', WebkitTapHighlightColor: 'transparent' }}
                                     >
-                                        {CLASSES.map(c => (
+                                        {activeClasses.map(c => (
                                             <option key={c} value={c} className="bg-slate-800 text-white">{c}</option>
                                         ))}
                                     </select>

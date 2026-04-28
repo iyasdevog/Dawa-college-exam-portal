@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { ProgressiveLoadingSkeleton } from './SkeletonLoaders';
 import { useMobile, useTouchInteraction } from '../hooks/useMobile';
@@ -17,16 +17,18 @@ interface FacultyEntryProps {
 }
 
 const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
+    const [availableClasses, setAvailableClasses] = useState<string[]>(CLASSES);
+
     const allowedClasses = useMemo(() => {
-        if (!currentUser || currentUser.role === 'admin') return CLASSES;
-        return CLASSES.filter(cls => currentUser.assignedClasses?.includes(cls));
-    }, [currentUser]);
+        if (!currentUser || currentUser.role === 'admin') return availableClasses;
+        return availableClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
+    }, [currentUser, availableClasses]);
 
     const { activeTerm } = useTerm();
 
     const [activeTab, setActiveTab] = useState<'marks-entry' | 'upload-tracker' | 'release-settings'>('marks-entry');
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
-    const [selectedClass, setSelectedClass] = useState(allowedClasses[0] || CLASSES[0]);
+    const [selectedClass, setSelectedClass] = useState('');
     const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
     const [selectedSubject, setSelectedSubject] = useState('');
     const [students, setStudents] = useState<StudentRecord[]>([]);
@@ -53,12 +55,14 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 setIsLoading(true);
                 setLoadingStage('initializing');
                 setLoadingProgress(25);
-                const [allSubjects, allStudentsData] = await Promise.all([
+                const [allSubjects, allStudentsData, termClasses] = await Promise.all([
                     dataService.getAllSubjects(activeTerm),
-                    dataService.getAllStudents(activeTerm)
+                    dataService.getAllStudents(activeTerm),
+                    dataService.getClassesByTerm(activeTerm)
                 ]);
                 setSubjects(allSubjects);
                 setAllStudents(allStudentsData);
+                setAvailableClasses(termClasses);
                 setLoadingProgress(100);
             } catch (error) {
                 console.error('Error loading initial data:', error);
@@ -89,6 +93,12 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             loadSettings();
         }
     }, [activeTab, activeTerm]);
+
+    useEffect(() => {
+        if (allowedClasses.length > 0 && (!selectedClass || !allowedClasses.includes(selectedClass))) {
+            setSelectedClass(allowedClasses[0]);
+        }
+    }, [allowedClasses, selectedClass]);
 
     // Update class subjects when class or type changes
     useEffect(() => {

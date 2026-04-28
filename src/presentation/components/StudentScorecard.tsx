@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
-import { CLASSES } from '../../domain/entities/constants';
+import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
@@ -12,13 +12,16 @@ interface StudentScorecardProps {
 }
 
 const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
+    const [branding, setBranding] = useState<any>(null);
+    const [availableClasses, setAvailableClasses] = useState<string[]>(SYSTEM_CLASSES);
+
     // Determine allowed classes based on user role
     const allowedClasses = useMemo(() => {
-        if (!currentUser || currentUser.role === 'admin') return CLASSES;
-        return CLASSES.filter(cls => currentUser.assignedClasses.includes(cls));
-    }, [currentUser]);
+        if (!currentUser || currentUser.role === 'admin') return availableClasses;
+        return availableClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
+    }, [currentUser, availableClasses]);
 
-    const [selectedClass, setSelectedClass] = useState(allowedClasses[0] || 'S1');
+    const [selectedClass, setSelectedClass] = useState('');
     const [selectedStudent, setSelectedStudent] = useState('');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [classStudents, setClassStudents] = useState<StudentRecord[]>([]);
@@ -28,8 +31,16 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
 
     useEffect(() => {
-        loadData();
+        const initBranding = async () => {
+            const settings = await dataService.getGlobalSettings();
+            setBranding(settings);
+        };
+        initBranding();
     }, []);
+
+    useEffect(() => {
+        loadData();
+    }, [activeTerm, currentUser]);
 
     useEffect(() => {
         if (selectedClass) {
@@ -40,12 +51,24 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     const loadData = async () => {
         try {
             setIsLoading(true);
-            const [allStudents, allSubjects] = await Promise.all([
+            const [settings, allStudents, allSubjects, termClasses] = await Promise.all([
+                dataService.getGlobalSettings(),
                 dataService.getAllStudents(activeTerm),
-                dataService.getAllSubjects()
+                dataService.getAllSubjects(activeTerm),
+                dataService.getClassesByTerm(activeTerm)
             ]);
+            setBranding(settings);
             setStudents(allStudents);
             setSubjects(allSubjects);
+            setAvailableClasses(termClasses);
+            
+            const allowed = (!currentUser || currentUser.role === 'admin') 
+                ? termClasses 
+                : termClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
+            
+            if (allowed.length > 0 && (!selectedClass || !allowed.includes(selectedClass))) {
+                setSelectedClass(allowed[0]);
+            }
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -196,12 +219,11 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                 />
                             </div>
 
-                            {/* Official College Header */}
                             <h1 className="print:text-lg font-black text-black print:mb-1 print:leading-tight tracking-wider">
-                                AIC DA'WA COLLEGE
+                                {branding?.institutionName || "INSTITUTION NAME"}
                             </h1>
                             <div className="print:text-[10px] text-black print:mb-2 print:leading-tight">
-                                Virippadam, Akkod, Vazhakkad, Kerala 673640
+                                {branding?.institutionAddress || "Institution Address, Line 1, City, State"}
                             </div>
 
                             {/* Document Title */}
@@ -320,42 +342,51 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                                 return 0;
                                             }).map(subject => {
                                                 const marks = displayMarks[subject.id];
-                                                const maxTotal = subject.maxINT + subject.maxEXT;
+                                                
+                                                // Resolve metadata snapshot for this subject in this term
+                                                const snapshot = activeTermRecord?.subjectMetadata?.[subject.id];
+                                                const displaySubjectName = snapshot?.name || subject.name;
+                                                const displayArabicName = snapshot?.arabicName || subject.arabicName;
+                                                const displayFaculty = snapshot?.facultyName || subject.facultyName;
+                                                const displayMaxINT = snapshot?.maxINT ?? subject.maxINT;
+                                                const displayMaxEXT = snapshot?.maxEXT ?? subject.maxEXT;
+                                                const maxTotal = displayMaxINT + displayMaxEXT;
+
                                                 const percentage = marks ? Math.round((marks.total / maxTotal) * 100) : 0;
 
                                                 return (
                                                     <tr key={subject.id} className="hover:bg-slate-50/50 transition-colors print:hover:bg-transparent print:table-row-keep-together print:break-inside-avoid" role="row">
                                                         <td className="px-8 py-6 print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
                                                             <p className="font-black text-slate-800 text-lg tracking-tight print:text-xs print:text-black print:leading-tight">
-                                                                {shortenSubjectName(subject.name)}
+                                                                {shortenSubjectName(displaySubjectName)}
                                                             </p>
-                                                            {subject.arabicName && (
+                                                            {displayArabicName && (
                                                                 <p className="arabic-text text-xl text-emerald-600 leading-none mt-1 print:text-xs print:text-black print:leading-tight">
-                                                                    {subject.arabicName}
+                                                                    {displayArabicName}
                                                                 </p>
                                                             )}
-                                                            {subject.facultyName && (
+                                                            {displayFaculty && (
                                                                 <p className="text-xs text-slate-500 mt-1 print:hidden">
-                                                                    {subject.facultyName}
+                                                                    {displayFaculty}
                                                                 </p>
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
-                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`EXT marks: ${marks?.ext ?? 'Not assessed'} out of ${subject.maxEXT}`}>
-                                                                {subject.maxINT === 100 || subject.maxEXT === 0 ? (
+                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`EXT marks: ${marks?.ext ?? 'Not assessed'} out of ${displayMaxEXT}`}>
+                                                                {displayMaxINT === 100 || displayMaxEXT === 0 ? (
                                                                     <span className="text-xs text-slate-400 uppercase">N/A</span>
                                                                 ) : (
                                                                     <>
                                                                         {marks?.ext ?? '-'}
-                                                                        <span className="text-xs text-slate-400 print:text-black">/{subject.maxEXT}</span>
+                                                                        <span className="text-xs text-slate-400 print:text-black">/{displayMaxEXT}</span>
                                                                     </>
                                                                 )}
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-6 text-center print:px-1 print:py-1 print:border-r print:border-black print:table-cell-padding" role="cell">
-                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`INT marks: ${marks?.int ?? 'Not assessed'} out of ${subject.maxINT}`}>
+                                                            <div className="font-mono font-bold text-slate-500 print:text-xs print:text-black print:leading-tight" aria-label={`INT marks: ${marks?.int ?? 'Not assessed'} out of ${displayMaxINT}`}>
                                                                 {marks?.int ?? '-'}
-                                                                <span className="text-xs text-slate-400 print:text-black">/{subject.maxINT}</span>
+                                                                <span className="text-xs text-slate-400 print:text-black">/{displayMaxINT}</span>
                                                             </div>
                                                         </td>
 
@@ -510,13 +541,12 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                     </div>
                                 </div>
 
-                                {/* Footer Note */}
                                 <div className="print:mt-2 print:pt-1 border-t border-black text-center print:text-[8px] text-black print:break-inside-avoid">
                                     <div className="font-semibold">
-                                        This is an official document generated by AIC Da'wa College Examination System
+                                        This is an official document generated by {branding?.institutionName || "Institution"} Examination System
                                     </div>
                                     <div className="print:mt-0.5">
-                                        For verification: examinations@aicdawacollege.edu.in | Phone: +91-483-2734567
+                                        For verification: {branding?.contactEmail || "emails@example.com"} | Phone: {branding?.contactPhone || "+91-000-0000000"}
                                     </div>
                                 </div>
                             </div>
