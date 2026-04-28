@@ -676,6 +676,10 @@ export class DataService extends BaseDataService {
     }
 
     // --- Timetable & Scheduling ---
+    async getAllTimetables(termKey?: string): Promise<any[]> {
+        return this.administrativeService.getAllTimetables(termKey);
+    }
+
     async getTimetableByClass(className: string, termKey?: string): Promise<any[]> {
         return this.administrativeService.getTimetableByClass(className, termKey);
     }

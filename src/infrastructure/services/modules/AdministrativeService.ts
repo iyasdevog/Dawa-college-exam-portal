@@ -1146,6 +1146,23 @@ export class AdministrativeService extends BaseDataService {
         }
     }
 
+    public async getAllTimetables(termKey?: string): Promise<any[]> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const q = query(
+            collection(this.db, this.timetablesCollection),
+            where('termKey', '==', activeTerm)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id,
+                ...data,
+                className: this.getHistoricalClassName(activeTerm, data.className)
+            };
+        });
+    }
+
     public async getTimetableByClass(className: string, termKey?: string): Promise<any[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
         const dbClassName = this.getDatabaseClassName(activeTerm, className);
