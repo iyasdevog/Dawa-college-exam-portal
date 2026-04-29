@@ -26,7 +26,7 @@ export interface SupplementaryExam {
   examType: SupplementaryExamType; // Distinguishes between repeating past years and current failures
   attemptNumber?: number; // 1 to 10
   originalTerm?: string; // The semester of the first failure (e.g. "2024-2025-Odd")
-  originalSemester: 'Odd' | 'Even';
+  originalSemester: 'Odd' | 'Even' | 'Bridge';
   originalYear: number;
   supplementaryYear: number;
   status: 'Pending' | 'Completed';
@@ -57,7 +57,7 @@ export interface SubjectSnapshot {
 
 export interface TermRecord {
   className: string;
-  semester: 'Odd' | 'Even';
+  semester: 'Odd' | 'Even' | 'Bridge';
   marks: Record<string, SubjectMarks>;
   subjectMetadata?: Record<string, SubjectSnapshot>; // Snapshot of subject config at time of entry
   supplementaryMarks?: Record<string, SubjectMarks>;
@@ -79,7 +79,7 @@ export interface StudentRecord {
 
   // Legacy fields for migration
   className?: string;
-  semester?: 'Odd' | 'Even';
+  semester?: 'Odd' | 'Even' | 'Bridge';
   marks?: Record<string, SubjectMarks>;
   supplementaryExams?: SupplementaryExam[]; // Track supplementary exams
   grandTotal?: number;
@@ -92,14 +92,14 @@ export interface StudentRecord {
 export interface SemesterConfig {
   termKey: string; // e.g., "2026-Even"
   academicYear: string;
-  semester: 'Odd' | 'Even';
+  semester: 'Odd' | 'Even' | 'Bridge';
   startDate: string;
   endDate: string;
 }
 
 export interface GlobalSettings {
   currentAcademicYear: string; // e.g., "2025-2026"
-  currentSemester: 'Odd' | 'Even';
+  currentSemester: 'Odd' | 'Even' | 'Bridge';
   availableYears?: string[]; // Manually managed list of academic years
   attendanceStartDate?: string; // YYYY-MM-DD
   attendanceEndDate?: string;   // YYYY-MM-DD
@@ -111,7 +111,7 @@ export interface GlobalSettings {
   contactEmail?: string; // e.g. "examinations@aicdawacollege.edu.in"
   contactPhone?: string; // e.g. "+91-483-2734567"
   systemAlias?: string; // e.g. "AIC_Dawa_Portal"
-  classSemesters?: Record<string, 'Odd' | 'Even'>; // Added: Per-class semester mapping
+  classSemesters?: Record<string, 'Odd' | 'Even' | 'Bridge'>; // Added: Per-class semester mapping
 }
 
 export interface CourseOutcome {
@@ -170,7 +170,7 @@ export interface SubjectConfig {
   targetClasses: string[];
   subjectType: 'general' | 'elective';
   enrolledStudents?: string[]; // Student IDs for elective subjects
-  activeSemester?: 'Odd' | 'Even' | 'Both';
+  activeSemester?: 'Odd' | 'Even' | 'Both' | 'Bridge';
   academicYear?: string;
   details?: SubjectDetails;
 }
@@ -201,7 +201,7 @@ export interface StudentApplication {
     status: ApplicationStatus;
     createdAt: number;
     appliedYear: string;
-    appliedSemester: 'Odd' | 'Even';
+    appliedSemester: 'Odd' | 'Even' | 'Bridge';
     reason?: string;
     adminComment?: string;
     studentId?: string; // Links to StudentRecord.id
@@ -215,7 +215,7 @@ export interface TimetableEntry {
   className: string;
   startTime: string; // e.g., "10:00"
   endTime: string;   // e.g., "11:00"
-  semester?: 'Odd' | 'Even';
+  semester?: 'Odd' | 'Even' | 'Bridge';
   academicYear?: string;
 }
 
@@ -226,7 +226,7 @@ export interface ExamTimetableEntry {
   subjectId: string;
   subjectName: string;
   className: string;
-  semester: 'Odd' | 'Even';
+  semester: 'Odd' | 'Even' | 'Bridge';
   academicYear?: string;
   startTime?: string;
   endTime?: string;
@@ -235,7 +235,7 @@ export interface ExamTimetableEntry {
 export interface HallTicketSettings {
   id: string;
   className: string;
-  semester: 'Odd' | 'Even';
+  semester: 'Odd' | 'Even' | 'Bridge';
   academicYear?: string;
   isReleased: boolean;
   releasedAt?: number;
@@ -253,7 +253,7 @@ export interface AttendanceRecord {
   isSpecialDay?: boolean;
   specialDayType?: 'Leave' | 'Program' | 'Other';
   specialDayNote?: string;
-  semester?: 'Odd' | 'Even';
+  semester?: 'Odd' | 'Even' | 'Bridge';
   academicYear?: string;
 }
 
@@ -290,7 +290,7 @@ export type TimetableRule =
 export interface TimetableGeneratorConfig {
   id: string; // Now format: ${className}-${academicYear}-${semester}
   className: string;
-  semester: 'Odd' | 'Even';
+  semester: 'Odd' | 'Even' | 'Bridge';
   academicYear?: string;
   workingDays: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
   periodsPerDay: number;

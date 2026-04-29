@@ -124,8 +124,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
             // Filter subjects for this class - include electives by enrollment OR by marks presence
             const filteredSubjects = subjects.filter(s => {
+                // Resolve alias (e.g. S2 -> FS3) for matching targetClasses
+                const dbClassName = dataService.getDatabaseClassName(activeTerm, selectedClass);
+
                 // General subjects assigned to this class
-                if (s.targetClasses.includes(selectedClass)) return true;
+                if (s.targetClasses.includes(dbClassName)) return true;
                 // Elective subjects: check enrollment list
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
                 // Elective subjects: also check if any student in this class has marks for this subject

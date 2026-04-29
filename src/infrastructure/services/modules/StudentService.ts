@@ -319,30 +319,46 @@ export class StudentService extends BaseDataService {
         }
     }
 
-    public async updateStudent(id: string, updates: Partial<StudentRecord>): Promise<void> {
+    public async updateStudent(id: string, updates: Partial<StudentRecord>, termKey?: string): Promise<void> {
         try {
             const docRef = doc(this.db, this.studentsCollection, id);
+            const finalUpdates: any = { ...updates };
             
             // Sync currentClass and className if one is missing but the other is provided
-            const finalUpdates = { ...updates };
             if (updates.className && !updates.currentClass) {
                 finalUpdates.currentClass = updates.className;
             } else if (updates.currentClass && !updates.className) {
                 finalUpdates.className = updates.currentClass;
             }
 
-            // Also update active term history if class is changing
-            const newClassName = finalUpdates.currentClass;
+            // Target the correct term for history update
+            const targetTerm = termKey || this.getCurrentTermKey();
+            const newClassName = finalUpdates.className;
+
             if (newClassName) {
-                const termKey = this.getCurrentTermKey();
                 const student = await this.getStudentById(id);
-                if (student && student.academicHistory?.[termKey]) {
-                    const updatedHistory = { ...student.academicHistory };
-                    updatedHistory[termKey] = {
-                        ...updatedHistory[termKey],
+                if (student) {
+                    const updatedHistory = { ...(student.academicHistory || {}) };
+                    updatedHistory[targetTerm] = {
+                        ...(updatedHistory[targetTerm] || {
+                            semester: (targetTerm.split('-').pop() || 'Odd') as 'Odd' | 'Even',
+                            marks: {},
+                            grandTotal: 0,
+                            average: 0,
+                            rank: 0,
+                            performanceLevel: 'Pending' as PerformanceLevel
+                        }),
                         className: newClassName
                     };
                     finalUpdates.academicHistory = updatedHistory;
+
+                    // Only update the top-level currentClass if this update targets the CURRENT term
+                    if (targetTerm === this.getCurrentTermKey()) {
+                        finalUpdates.currentClass = newClassName;
+                    } else {
+                        // For historical updates, don't let currentClass change accidentally
+                        delete finalUpdates.currentClass;
+                    }
                 }
             }
 
@@ -414,6 +430,39 @@ export class StudentService extends BaseDataService {
             await this.promoteStudents(studentIds, toClass, year, semester);
         } catch (error) {
             console.error('Error promoting class:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Fixes historical class data for specific students.
+     * Used to repair records where promotion incorrectly overwrote historical class names.
+     */
+    public async fixStudentHistory(adNo: string, targetTerm: string, targetClass: string): Promise<void> {
+        try {
+            const student = await this.getStudentByAdNo(adNo);
+            if (!student) throw new Error(`Student with Admission Number ${adNo} not found`);
+
+            const docRef = doc(this.db, this.studentsCollection, student.id);
+            const academicHistory = { ...(student.academicHistory || {}) };
+            
+            academicHistory[targetTerm] = {
+                ...(academicHistory[targetTerm] || {
+                    semester: (targetTerm.split('-').pop() || 'Odd') as 'Odd' | 'Even',
+                    marks: {},
+                    grandTotal: 0,
+                    average: 0,
+                    rank: 0,
+                    performanceLevel: 'Pending' as PerformanceLevel
+                }),
+                className: targetClass
+            };
+
+            await updateDoc(docRef, { academicHistory });
+            this.invalidateCache();
+            console.log(`Successfully fixed history for AdNo ${adNo} in term ${targetTerm} to class ${targetClass}`);
+        } catch (error) {
+            console.error(`Error fixing history for student ${adNo}:`, error);
             throw error;
         }
     }

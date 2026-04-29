@@ -208,7 +208,24 @@ export abstract class BaseDataService {
             performanceLevel: 'Pending' as PerformanceLevel
         };
 
-        const displayClassName = termData?.className || currentClass;
+        // Strict class name resolution: If we are looking for a historical term, 
+        // we should NOT fallback to currentClass if the history entry exists but is incomplete.
+        // However, if the history entry is entirely missing, we might still want the fallback 
+        // for "legacy" students who haven't been migrated yet (handled by the migration logic above).
+        let displayClassName = termData?.className;
+        
+        // Only fallback to currentClass if this IS the current term or if no history exists at all
+        if (!displayClassName) {
+            const isCurrentTerm = currentTermKey === this.getCurrentTermKey();
+            if (isCurrentTerm || !termData) {
+                displayClassName = currentClass;
+            } else {
+                // For historical terms WITH data but NO className, we mark it as Unknown
+                // to prevent promoted classes (like HS1) from appearing in old reports (like S2).
+                displayClassName = 'Unknown';
+            }
+        }
+        
         const normalizedClassName = this.getHistoricalClassName(currentTermKey, displayClassName);
 
         return {
@@ -218,9 +235,9 @@ export abstract class BaseDataService {
             academicHistory,
             className: normalizedClassName,
             marks: normalizedMarks,
-            semester: currentTermKey.split('-').length === 3 
-                ? currentTermKey.split('-')[2] as 'Odd' | 'Even' 
-                : (currentTermKey.split('-')[1] as 'Odd' | 'Even'),
+            semester: this.getLogicalSemester(normalizedClassName, (currentTermKey.split('-').length === 3 
+                ? currentTermKey.split('-')[2] as 'Odd' | 'Even' | 'Bridge'
+                : currentTermKey.split('-')[1] as 'Odd' | 'Even' | 'Bridge')),
             grandTotal: currentTotals.grandTotal,
             average: currentTotals.average,
             rank: currentTotals.rank,
@@ -294,5 +311,28 @@ export abstract class BaseDataService {
         }
 
         return totalProcessed;
+    }
+    /**
+     * Resolves the academic semester for a specific class given the current global state.
+     * Some classes (like HS1, FS1, PG1) might follow an 'Odd' semester curriculum 
+     * even during a global 'Even' semester (Mixed Semester support).
+     */
+    public getLogicalSemester(className: string, globalSemester: 'Odd' | 'Even' | 'Bridge'): 'Odd' | 'Even' | 'Bridge' {
+        if (!className) return globalSemester;
+        
+        // Use settings override if available
+        if (BaseDataService.currentGlobalSettings?.classSemesters?.[className]) {
+            return BaseDataService.currentGlobalSettings.classSemesters[className]!;
+        }
+
+        // Hardcoded Fallback for Fresh Semesters (standard pattern)
+        const oddOverrideClasses = ['HS1', 'FS1', 'PG1'];
+        if (oddOverrideClasses.includes(className)) {
+            // If global is Even, these classes might be starting fresh (Odd)
+            // But only if they aren't explicitly set otherwise.
+            // For now, we prioritze the settings override above.
+        }
+
+        return globalSemester;
     }
 }

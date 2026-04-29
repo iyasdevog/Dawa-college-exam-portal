@@ -96,22 +96,25 @@ export class AcademicService extends BaseDataService {
         return { grandTotal, average, performanceLevel };
     }
 
-    public async getAllSubjects(termKey?: string): Promise<SubjectConfig[]> {
+    public async getAllSubjects(termKey?: string, className?: string): Promise<SubjectConfig[]> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();
             
             // Robust parsing: Semester is the part after the LAST hyphen
             const lastHyphenIndex = activeTerm.lastIndexOf('-');
             let targetYear = '';
-            let targetSem = '';
+            let globalSem = '';
             
             if (lastHyphenIndex !== -1) {
                 targetYear = activeTerm.substring(0, lastHyphenIndex);
-                targetSem = activeTerm.substring(lastHyphenIndex + 1);
+                globalSem = activeTerm.substring(lastHyphenIndex + 1);
             } else {
                 targetYear = activeTerm;
-                targetSem = '';
+                globalSem = '';
             }
+
+            // Use logical semester if className is provided
+            const targetSem = className ? this.getLogicalSemester(className, globalSem as any) : globalSem;
 
             const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
             const allSubjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
@@ -134,7 +137,7 @@ export class AcademicService extends BaseDataService {
                     if (!subjectYear) {
                         const hasYearSpecificVersion = allSubjects.some(s => 
                             s.name === subject.name && 
-                            s.academicYear && (s.academicYear === targetYear || targetYear.includes(s.academicYear)) &&
+                            s.academicYear && (s.academicYear === targetYear || targetYear.includes(s.academicYear || '')) &&
                             (s.activeSemester === 'Both' || s.activeSemester === targetSem)
                         );
                         if (hasYearSpecificVersion) return false;
@@ -218,9 +221,12 @@ export class AcademicService extends BaseDataService {
 
     public async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
+        
+        // Resolve alias (e.g. S2 -> FS3) for database filtering
         const dbClassName = this.getDatabaseClassName(activeTerm, className);
-        const subjects = await this.getAllSubjects(activeTerm);
-        return subjects.filter(s => s.targetClasses?.includes(dbClassName));
+        const subjects = await this.getAllSubjects(activeTerm, className);
+        
+        return subjects.filter(s => (s.targetClasses || []).includes(dbClassName));
     }
 
     public async enrollStudentInSubject(subjectId: string, studentId: string): Promise<void> {
@@ -297,13 +303,22 @@ export class AcademicService extends BaseDataService {
                 const allSubjects = await this.getRawAllSubjects();
                 const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
 
-                await updateDoc(studentDocRef, {
+                const updates: any = {
                     [`academicHistory.${activeTerm}.marks`]: currentMarks,
                     [`academicHistory.${activeTerm}.subjectMetadata`]: subjectMetadata,
                     [`academicHistory.${activeTerm}.grandTotal`]: grandTotal,
                     [`academicHistory.${activeTerm}.average`]: average,
                     [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
-                });
+                };
+
+                // CRITICAL: Ensure className is persisted in history to prevent "disappearing student" 
+                // bugs if they are promoted later.
+                if (!termData.className) {
+                    updates[`academicHistory.${activeTerm}.className`] = data.currentClass || data.className || 'Unknown';
+                    updates[`academicHistory.${activeTerm}.semester`] = activeTerm.split('-').pop() || 'Odd';
+                }
+
+                await updateDoc(studentDocRef, updates);
                 
                 this.invalidateCache();
             }
@@ -555,15 +570,16 @@ export class AcademicService extends BaseDataService {
         try {
             const studentsSnapshot = await getDocs(collection(this.db, this.studentsCollection));
             const classStudents = studentsSnapshot.docs
-                .map(d => ({ id: d.id, ...d.data() } as StudentRecord))
-                .filter(s => (s.currentClass === className || s.className === className) && s.academicHistory?.[termKey]);
+                .map(d => this.processStudentRecord(d.data(), d.id, termKey))
+                .filter(s => s.className === className && s.academicHistory?.[termKey]);
             
             if (classStudents.length === 0) {
                 throw new Error('No student data found for this class and term.');
             }
 
-            const subjects = await this.getAllSubjects(termKey);
-            const classSubjects = subjects.filter(s => s.targetClasses?.includes(className));
+            const subjects = await this.getAllSubjects(termKey, className);
+            const dbClassName = this.getDatabaseClassName(termKey, className);
+            const classSubjects = subjects.filter(s => s.targetClasses?.includes(dbClassName));
 
             const excelData = classStudents.map(student => {
                 const row: any = {
@@ -697,12 +713,20 @@ export class AcademicService extends BaseDataService {
                 const allSubjects = await this.getRawAllSubjects();
                 const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
 
-                await updateDoc(studentDocRef, {
+                const updates: any = {
                     [`academicHistory.${activeTerm}.marks`]: currentMarks,
                     [`academicHistory.${activeTerm}.grandTotal`]: grandTotal,
                     [`academicHistory.${activeTerm}.average`]: average,
                     [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
-                });
+                };
+
+                // CRITICAL: Maintain historical className integrity
+                if (!termData.className) {
+                    updates[`academicHistory.${activeTerm}.className`] = data.currentClass || data.className || 'Unknown';
+                    updates[`academicHistory.${activeTerm}.semester`] = activeTerm.split('-').pop() || 'Odd';
+                }
+
+                await updateDoc(studentDocRef, updates);
                 this.invalidateCache();
             }
         } catch (error) {

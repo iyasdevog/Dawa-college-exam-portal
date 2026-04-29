@@ -184,34 +184,35 @@ export class AdministrativeService extends BaseDataService {
         const currentTermKey = settings ? `${settings.currentAcademicYear}-${settings.currentSemester}` : null;
         const requestedTermKey = termKey || currentTermKey;
 
-        if (!requestedTermKey) return SYSTEM_CLASSES;
+        if (!requestedTermKey) return SYSTEM_CLASSES.filter(c => !settings?.disabledClasses?.includes(c));
 
-        // Dynamic Discovery Mode: Find classes that actually have students or subjects in THIS SPECIFIC TERM
-        const activeClassesSet = new Set<string>();
+        // Start with Static Classes (System + Custom)
+        const custom = settings?.customClasses || [];
+        const disabled = settings?.disabledClasses || [];
+        const staticClasses = [...SYSTEM_CLASSES, ...custom].filter(c => c && c !== '-' && !disabled.includes(c));
+        
+        const activeClassesSet = new Set<string>(staticClasses);
 
+        // Discovery Mode: Find EXTRA classes that might have students or subjects 
+        // (handles renames, legacy data, or one-off classes not in settings)
+        
         // 1. Discover from Student Records
         const studentsSnapshot = await getDocs(collection(this.db, this.studentsCollection));
         studentsSnapshot.docs.forEach(docSnap => {
             const data = docSnap.data() as StudentRecord;
-            
-            // For the current term, only include active students
-            // For historical terms, include anyone who was part of that term
-            const isHistorical = termKey && termKey !== currentTermKey;
             const termRecord = data.academicHistory?.[requestedTermKey];
             
             if (termRecord?.className) {
-                if (isHistorical || data.isActive !== false) {
-                    activeClassesSet.add(termRecord.className.trim());
-                }
+                activeClassesSet.add(termRecord.className.trim());
             } 
             
-            // For current term, ALWAYS also consider currentClass as a source of truth
-            if (!isHistorical && data.isActive !== false && data.currentClass) {
+            // For current term, also consider currentClass
+            if (requestedTermKey === currentTermKey && data.isActive !== false && data.currentClass) {
                 activeClassesSet.add(data.currentClass.trim());
             }
         });
 
-        // 2. Discover from Subject assignments for this term
+        // 2. Discover from Subject assignments
         const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
         const parts = requestedTermKey.split('-');
         const targetSem = parts.pop();
@@ -219,28 +220,19 @@ export class AdministrativeService extends BaseDataService {
 
         subjectsSnap.docs.forEach(doc => {
             const s = doc.data() as SubjectConfig;
-            // Robust year matching (handles "2025-2026" and substrings)
-            const subjectYear = s.academicYear;
-            const isYearMatch = subjectYear === targetYear || (subjectYear && targetYear && (subjectYear.includes(targetYear) || targetYear.includes(subjectYear)));
+            const isYearMatch = s.academicYear === targetYear || (s.academicYear && targetYear && (s.academicYear.includes(targetYear) || targetYear.includes(s.academicYear)));
             
             if (isYearMatch && (s.activeSemester === targetSem || s.activeSemester === 'Both')) {
                 (s.targetClasses || []).forEach(cls => activeClassesSet.add(cls.trim()));
             }
         });
 
-        const disabled = settings?.disabledClasses || [];
-        const discoveredRaw = Array.from(activeClassesSet)
-            .filter(c => c && c !== '-' && !disabled.includes(c));
-        
-        // Map to historical names and deduplicate (e.g. HS2 -> P1, and if P1 already exists, merge)
-        const discovered = Array.from(new Set(discoveredRaw.map(c => this.getHistoricalClassName(requestedTermKey, c))))
-            .sort();
-
-        // Fallback to settings or defaults if discovery yields nothing (bootstrap phase)
-        if (discovered.length === 0) {
-            const custom = settings?.customClasses || [];
-            return [...SYSTEM_CLASSES, ...custom].filter(c => !disabled.includes(c)).sort();
-        }
+        // Map ALL to historical names and deduplicate
+        const discovered = Array.from(new Set(
+            Array.from(activeClassesSet)
+                .filter(c => c && c !== '-' && !disabled.includes(c))
+                .map(c => this.getHistoricalClassName(requestedTermKey, c))
+        )).sort();
 
         return discovered;
     }
