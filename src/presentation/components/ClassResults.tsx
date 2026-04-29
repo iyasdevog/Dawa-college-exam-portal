@@ -123,19 +123,29 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             setStudents(rankedStudents);
 
             // Filter subjects for this class - include electives by enrollment OR by marks presence
-            const filteredSubjects = subjects.filter(s => {
-                // subjects[].targetClasses are already mapped to historical aliases by the service layer
-                // so we match directly against selectedClass (e.g. 'S2'), not the DB name ('FS3')
+            const potentialSubjects = subjects.filter(s => {
                 if ((s.targetClasses || []).includes(selectedClass)) return true;
-                // Elective subjects: check enrollment list
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
-                // Elective subjects: also check if any student in this class has marks for this subject
                 if (s.subjectType === 'elective' && classStudents.some(cs => {
                     const termMarks = cs.academicHistory?.[activeTerm]?.marks || {};
                     const mark = termMarks[s.id];
                     return mark && (mark.total > 0 || mark.int !== undefined);
                 })) return true;
                 return false;
+            });
+
+            // Hide subjects that have no marks entered for ANY student in this view
+            const filteredSubjects = potentialSubjects.filter(s => {
+                return classStudents.some(cs => {
+                    const m = cs.academicHistory?.[activeTerm]?.marks?.[s.id];
+                    if (!m) return false;
+                    const hasValidMark = (val: any) => val !== undefined && val !== null && val !== '-' && val !== '';
+                    return (
+                        (typeof m.total === 'number' && m.total > 0) || 
+                        hasValidMark(m.int) ||
+                        hasValidMark(m.ext)
+                    );
+                });
             });
             
             // Sort subjects: lower failure rate first (passed subjects mostly)
