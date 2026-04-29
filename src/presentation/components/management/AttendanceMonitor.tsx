@@ -41,10 +41,13 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const loadRecords = async () => {
         setIsLoading(true);
         try {
-            // Fetch all records - we will filter client-side for better UX with small segments
-            const data = await dataService.getAllAttendanceRecords();
+            // Fetch records for the active term
+            const data = await dataService.getAllAttendanceRecords(activeTerm);
             
-            const [targetYear, targetSem] = activeTerm.split('-');
+            // Robust parsing of term key (e.g. "2025-2026-Odd" -> year="2025-2026", sem="Odd")
+            const parts = activeTerm.split('-');
+            const targetSem = parts.pop();
+            const targetYear = parts.join('-');
             
             // Filter by term metadata if present, or fallback to general list if no metadata
             const termFiltered = data.filter(record => {
