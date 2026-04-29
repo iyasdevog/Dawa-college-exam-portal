@@ -221,12 +221,10 @@ export class AcademicService extends BaseDataService {
 
     public async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
-        
-        // Resolve alias (e.g. S2 -> FS3) for database filtering
-        const dbClassName = this.getDatabaseClassName(activeTerm, className);
+        // getAllSubjects already maps targetClasses to historical aliases,
+        // so we filter using the historical name (e.g. 'S2'), not the DB name ('FS3').
         const subjects = await this.getAllSubjects(activeTerm, className);
-        
-        return subjects.filter(s => (s.targetClasses || []).includes(dbClassName));
+        return subjects.filter(s => (s.targetClasses || []).includes(className));
     }
 
     public async enrollStudentInSubject(subjectId: string, studentId: string): Promise<void> {
@@ -578,8 +576,8 @@ export class AcademicService extends BaseDataService {
             }
 
             const subjects = await this.getAllSubjects(termKey, className);
-            const dbClassName = this.getDatabaseClassName(termKey, className);
-            const classSubjects = subjects.filter(s => s.targetClasses?.includes(dbClassName));
+            // getAllSubjects already maps targetClasses to historical aliases, filter by historical name
+            const classSubjects = subjects.filter(s => (s.targetClasses || []).includes(className));
 
             const excelData = classStudents.map(student => {
                 const row: any = {

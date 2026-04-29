@@ -227,20 +227,14 @@ export class AdministrativeService extends BaseDataService {
             }
         });
 
-        // Map ALL to historical names and deduplicate
+        // Map ALL discovered classes to their historical aliases and deduplicate
         const discovered = Array.from(new Set(
-            Array.from(activeClassesSet)
-                .filter(c => c && c !== '-' && !disabled.includes(c))
-                .map(c => this.getHistoricalClassName(requestedTermKey, c))
+            Array.from(activeClassesSet).map(c => this.getHistoricalClassName(requestedTermKey, c))
         )).sort();
 
         return discovered;
     }
 
-    private async discoverClassesFromHistory(termKey: string): Promise<string[]> {
-        // Redundant with the improved getClassesByTerm, but kept for internal service calls if any
-        return this.getClassesByTerm(termKey);
-    }
 
     public async restoreFullSystemFromBackup(backupJson: Record<string, any[]>): Promise<any> {
         try {
