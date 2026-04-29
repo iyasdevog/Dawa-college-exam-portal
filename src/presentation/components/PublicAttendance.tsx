@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { SubjectConfig, TimetableEntry, AttendanceRecord, SpecialDay } from '../../domain/entities/types';
+import { useTerm } from '../viewmodels/TermContext';
 import { MobileFacultyEntrySkeleton } from './SkeletonLoaders';
 
 const PublicAttendance: React.FC = () => {
+    const { activeTerm } = useTerm();
     const [isLoading, setIsLoading] = useState(true);
     const [todaySchedule, setTodaySchedule] = useState<TimetableEntry[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
@@ -12,7 +14,7 @@ const PublicAttendance: React.FC = () => {
 
     useEffect(() => {
         loadTodayData();
-    }, []);
+    }, [activeTerm]);
 
     const loadTodayData = async () => {
         setIsLoading(true);
@@ -22,10 +24,10 @@ const PublicAttendance: React.FC = () => {
             const dateStr = new Date().toISOString().split('T')[0];
 
             const [schedule, allSubjects, records, specials] = await Promise.all([
-                dataService.getTimetableByDay(today),
-                dataService.getAllSubjects(),
-                dataService.getAttendanceByClassAndDate('', dateStr), // We might need to fetch all and filter or modify service
-                dataService.getSpecialDays(dateStr)
+                dataService.getTimetableByDay(today, activeTerm),
+                dataService.getAllSubjects(activeTerm),
+                dataService.getAttendanceByClassAndDate('', dateStr), // Note: this uses internal term resolution
+                dataService.getSpecialDays(activeTerm)
             ]);
 
             setTodaySchedule(schedule);

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord } from '../../domain/entities/types';
-import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { useMobile } from '../hooks/useMobile';
 import { useTerm } from '../viewmodels/TermContext';
 
@@ -13,7 +12,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const [view, setView] = useState<'apply' | 'status'>('apply');
     const [adNo, setAdNo] = useState('');
     const [studentName, setStudentName] = useState('');
-    const [className, setClassName] = useState(CLASSES[0]);
+    const [className, setClassName] = useState('');
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
     const [appType, setAppType] = useState<ApplicationType>('revaluation');
@@ -26,11 +25,25 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const [myApplications, setMyApplications] = useState<StudentApplication[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [foundStudent, setFoundStudent] = useState<StudentRecord | null>(null);
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
     const { isMobile } = useMobile();
     const { termOptions, activeTerm } = useTerm();
     const [selectedTermKey, setSelectedTermKey] = useState(activeTerm);
     
+    // Sync available classes based on selected term
+    useEffect(() => {
+        const loadClasses = async () => {
+            const classes = await dataService.getClassesByTerm(selectedTermKey);
+            setAvailableClasses(classes);
+            // Only force reset if current className is not in the new set
+            if (classes.length > 0 && !classes.includes(className)) {
+                setClassName(classes[0]);
+            }
+        };
+        loadClasses();
+    }, [selectedTermKey]);
+
     // Reset selection when application type changes
     useEffect(() => {
         setSelectedSubjects([]);
@@ -46,8 +59,9 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                     if (student) {
                         setFoundStudent(student);
                         setStudentName(student.name);
-                        if (CLASSES.includes(student.className || '')) {
-                            setClassName(student.className || CLASSES[0]);
+                        // Relaxed class binding for historical consistency
+                        if (student.className) {
+                            setClassName(student.className);
                         }
                     } else {
                         setFoundStudent(null);
@@ -374,12 +388,12 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Class</label>
                                             <select 
                                                 value={className} onChange={e => setClassName(e.target.value)}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
                                             >
-                                                {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                                {availableClasses.length === 0 && <option value="">No classes found</option>}
                                             </select>
                                         </div>
                                     </div>

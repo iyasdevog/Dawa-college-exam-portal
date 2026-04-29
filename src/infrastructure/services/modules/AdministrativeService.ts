@@ -103,6 +103,21 @@ export class AdministrativeService extends BaseDataService {
         }
     }
 
+    public async submitApplication(application: Omit<StudentApplication, 'id' | 'status' | 'createdAt'>): Promise<string> {
+        try {
+            const docRef = await addDoc(collection(this.db, this.applicationsCollection), {
+                ...application,
+                status: 'pending',
+                createdAt: Date.now()
+            });
+            this.invalidateCache();
+            return docRef.id;
+        } catch (error) {
+            console.error('Error submitting application:', error);
+            throw error;
+        }
+    }
+
     public async backfillApprovedApplications(): Promise<number> {
         try {
             console.log('Starting backfill of approved applications to supplementary...');
@@ -1163,6 +1178,12 @@ export class AdministrativeService extends BaseDataService {
                 className: this.getHistoricalClassName(activeTerm, data.className)
             };
         });
+    }
+
+    public async getTimetableByDay(day: string, termKey?: string): Promise<any[]> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const all = await this.getAllTimetables(activeTerm);
+        return all.filter(entry => entry.day === day);
     }
 
     public async getTimetableByClass(className: string, termKey?: string): Promise<any[]> {

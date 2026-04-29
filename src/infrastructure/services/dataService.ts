@@ -314,6 +314,10 @@ export class DataService extends BaseDataService {
         return this.administrativeService.deleteApplication(id);
     }
 
+    async submitApplication(application: Omit<StudentApplication, 'id' | 'status' | 'createdAt'>): Promise<string> {
+        return this.administrativeService.submitApplication(application);
+    }
+
     async backfillApprovedApplications(): Promise<number> {
         return this.administrativeService.backfillApprovedApplications();
     }
@@ -678,6 +682,10 @@ export class DataService extends BaseDataService {
     // --- Timetable & Scheduling ---
     async getAllTimetables(termKey?: string): Promise<any[]> {
         return this.administrativeService.getAllTimetables(termKey);
+    }
+
+    async getTimetableByDay(day: string, termKey?: string): Promise<any[]> {
+        return this.administrativeService.getTimetableByDay(day, termKey);
     }
 
     async getTimetableByClass(className: string, termKey?: string): Promise<any[]> {
