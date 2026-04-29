@@ -314,12 +314,20 @@ export abstract class BaseDataService {
     }
     /**
      * Resolves the academic semester for a specific class given the current global state.
-     * Supports mixed-semester classes (e.g. HS1 following Odd curriculum during global Even term).
-     * Configure per-class overrides via Settings > classSemesters.
+     * Supports mixed-semester classes (e.g. HS1/FS1 following Odd curriculum during global Even term).
+     * Configure per-class overrides via Settings > classSemesters, or rely on built-in defaults.
      */
     public getLogicalSemester(className: string, globalSemester: 'Odd' | 'Even' | 'Bridge'): 'Odd' | 'Even' | 'Bridge' {
         if (!className) return globalSemester;
-        // Use per-class setting override if configured by admin
-        return BaseDataService.currentGlobalSettings?.classSemesters?.[className] ?? globalSemester;
+        // Admin-configured per-class override wins first
+        if (BaseDataService.currentGlobalSettings?.classSemesters?.[className]) {
+            return BaseDataService.currentGlobalSettings.classSemesters[className]!;
+        }
+        // Built-in: HS1 and FS1 are fresh-start classes that always begin with Odd semester
+        // even when the global term is Even (they join mid-cycle)
+        if ((className === 'HS1' || className === 'FS1') && globalSemester === 'Even') {
+            return 'Odd';
+        }
+        return globalSemester;
     }
 }
