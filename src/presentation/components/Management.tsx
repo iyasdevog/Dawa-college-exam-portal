@@ -14,9 +14,12 @@ import { useTerm } from '../viewmodels/TermContext';
 
 const Management: React.FC = () => {
   const { isMobile } = useMobile();
-  const { activeTerm } = useTerm();
+  const { activeTerm, currentAcademicYear, currentSemester } = useTerm();
   const [activeTab, setActiveTab] = useState('students');
   const [isLoading, setIsLoading] = useState(true);
+
+  const currentSystemTerm = `${currentAcademicYear}-${currentSemester}`;
+  const isHistoricalTerm = activeTerm !== currentSystemTerm;
 
   // Shared Data State
   const [students, setStudents] = useState<StudentRecord[]>([]);
@@ -119,6 +122,22 @@ const Management: React.FC = () => {
         <h1 className={`font-black text-slate-900 tracking-tight ${isMobile ? 'text-2xl' : 'text-3xl'}`}>System Management</h1>
         <p className={`text-slate-600 mt-2 ${isMobile ? 'text-sm' : ''}`}>Manage students, subjects, classes, and system settings</p>
       </div>
+
+      {/* Historical Semester Warning Banner */}
+      {isHistoricalTerm && activeTab !== 'supplementary' && (
+        <div className="flex items-start gap-4 bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 shadow-sm">
+            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mt-0.5">
+                <i className="fa-solid fa-triangle-exclamation text-amber-600 text-lg"></i>
+            </div>
+            <div>
+                <p className="font-bold text-amber-800 text-sm">Caution: Managing Historical Semester</p>
+                <p className="text-amber-700 text-xs mt-1">
+                    You are currently modifying configuration for <span className="font-semibold">{activeTerm}</span>, which is a past semester. 
+                    Changes made here directly affect historical records. Please proceed with caution.
+                </p>
+            </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:hidden">

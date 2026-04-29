@@ -806,33 +806,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                             {isOperating ? 'Updating System...' : 'Update Current Active Framework'}
                         </button>
 
-                        {/* Year Management List */}
-                        {availableYears.length > 0 && (
-                            <div className="mt-6 pt-6 border-t border-slate-100">
-                                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Managed Academic Years</h5>
-                                <div className="space-y-2">
-                                    {availableYears.map(year => (
-                                        <div key={year} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 group">
-                                            <div className="flex items-center gap-3">
-                                                <i className="fa-solid fa-calendar text-slate-400 text-xs"></i>
-                                                <span className="font-bold text-slate-700">{year}</span>
-                                                {year === editableYear && (
-                                                    <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded uppercase">Active</span>
-                                                )}
-                                            </div>
-                                            <button
-                                                onClick={() => handleRemoveYear(year)}
-                                                disabled={isOperating || year === editableYear}
-                                                className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-0"
-                                                title="Remove from Framework"
-                                            >
-                                                <i className="fa-solid fa-trash-can text-sm"></i>
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                        {/* Year Management List Removed */}
                     </div>
                 </div>
 

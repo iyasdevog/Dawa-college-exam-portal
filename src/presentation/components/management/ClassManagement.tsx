@@ -24,8 +24,6 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     const [renamedClassName, setRenamedClassName] = useState('');
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameMode, setRenameMode] = useState<'global' | 'forward'>('forward');
-    const [classSemesters, setClassSemesters] = useState<Record<string, 'Odd' | 'Even'>>({});
-    const [globalSemester, setGlobalSemester] = useState<'Odd' | 'Even'>('Odd');
     const [isOperating, setIsOperating] = useState(false);
     const [isReconciling, setIsReconciling] = useState(false);
     const [discoveredClasses, setDiscoveredClasses] = useState<string[]>([]);
@@ -33,9 +31,6 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     React.useEffect(() => {
         const loadSettings = async () => {
             const { dataService } = await import('../../../infrastructure/services/dataService');
-            const settings = await dataService.getGlobalSettings();
-            setClassSemesters(settings.classSemesters || {});
-            setGlobalSemester(settings.currentSemester || 'Odd');
             
             // Also load discovered classes for the active term
             const classes = await dataService.getClassesByTerm(activeTerm);
@@ -159,25 +154,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
         }
     };
 
-    const handleUpdateClassSemester = async (className: string, semester: 'Odd' | 'Even') => {
-        try {
-            setIsOperating(true);
-            const { dataService } = await import('../../../infrastructure/services/dataService');
-            const currentMap = { ...classSemesters };
-            const newMap = { ...currentMap, [className]: semester };
-            
-            await dataService.updateGlobalSettings({ classSemesters: newMap });
-            setClassSemesters(newMap); // Update local state immediately - no refresh needed
-            dataService.invalidateCache();
-            // Don't call onRefresh() here — it reloads students which triggers the useEffect
-            // and can overwrite classSemesters from a now-stale settings cache.
-        } catch (error) {
-            console.error('Error updating class semester:', error);
-            alert('Failed to update class semester');
-        } finally {
-            setIsOperating(false);
-        }
-    };
+
 
     const handleToggleClassVisibility = async (className: string, action: 'hide' | 'unhide') => {
         try {
@@ -345,51 +322,40 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
                                     {inactiveList.map(c => renderClassCard(c, false))}
                                 </>
                             )}
+
+                            {disabledClasses.length > 0 && (
+                                <>
+                                    <div className="col-span-full mt-8 mb-2 border-t border-rose-100 pt-8">
+                                        <h3 className="text-lg font-bold text-rose-300 flex items-center gap-2">
+                                            <i className="fa-solid fa-eye-slash"></i>
+                                            Hidden System Classes
+                                            <span className="text-xs font-normal text-rose-300 ml-2">Manually disabled from filters and selectors</span>
+                                        </h3>
+                                    </div>
+                                    <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                        {disabledClasses.map(c => (
+                                            <div key={c} className="bg-rose-50/30 border border-rose-100 p-4 rounded-2xl flex items-center justify-between group">
+                                                <div className="flex items-center gap-3">
+                                                    <i className="fa-solid fa-ban text-rose-200"></i>
+                                                    <span className="font-bold text-rose-400">{c}</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleToggleClassVisibility(c, 'unhide')}
+                                                    className="px-3 py-1 bg-white text-rose-500 border border-rose-200 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                                                >
+                                                    Unhide
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </>
                     );
                 })()}
             </div>
 
-            {/* Per-Class Semester Configuration Card */}
-            <div className="bg-white rounded-[2.5rem] p-8 border-2 border-slate-100 shadow-sm relative overflow-hidden group mt-10">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-100">
-                        <i className="fa-solid fa-layer-group"></i>
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-black text-slate-900">Per-Class Semesters</h3>
-                        <p className="text-xs text-amber-600 font-bold uppercase tracking-widest">Class-Specific Overrides</p>
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {getAllClasses().map(cls => (
-                        <div key={cls} className="flex flex-col gap-3 p-4 bg-slate-50 rounded-3xl border border-slate-100 hover:border-amber-200 transition-all">
-                            <span className="text-sm font-black text-slate-700 text-center">{cls}</span>
-                            <div className="flex p-1 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                                {(['Odd', 'Even'] as const).map(sem => (
-                                    <button
-                                        key={sem}
-                                        disabled={isOperating}
-                                        onClick={() => handleUpdateClassSemester(cls, sem)}
-                                        className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                            (classSemesters[cls] || globalSemester) === sem 
-                                            ? 'bg-amber-500 text-white shadow-md' 
-                                            : 'text-slate-400 hover:text-slate-600'
-                                        }`}
-                                    >
-                                        {sem}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <p className="mt-6 text-[11px] text-slate-500 font-bold italic leading-relaxed bg-amber-50/50 p-4 rounded-2xl border border-amber-100/50">
-                    <i className="fa-solid fa-circle-info mr-2 text-amber-600"></i>
-                    Use these toggles if certain classes are running on different semester cycles (e.g., Odd for most, Even for Foundational) within the same academic year.
-                </p>
-            </div>
 
             {/* Maintenance & Tools Section */}
 

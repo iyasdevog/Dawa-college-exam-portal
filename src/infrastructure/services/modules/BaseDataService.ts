@@ -74,14 +74,7 @@ export abstract class BaseDataService {
         const settings = BaseDataService.currentGlobalSettings;
         if (!settings) return '2025-2026-Odd';
         
-        let semester = settings.currentSemester;
-        
-        // If a class-specific semester is defined, use it for current term resolution
-        if (className && settings.classSemesters && settings.classSemesters[className]) {
-            semester = settings.classSemesters[className];
-        }
-        
-        return `${settings.currentAcademicYear}-${semester}`;
+        return `${settings.currentAcademicYear}-${settings.currentSemester}`;
     }
 
     public getCurrentTermKey(className?: string): string {

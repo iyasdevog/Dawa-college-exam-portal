@@ -51,7 +51,7 @@ export interface SubjectSnapshot {
   maxEXT: number;
   passingTotal: number;
   facultyName?: string;
-  subjectType: 'general' | 'elective' | string;
+  subjectType: 'general' | 'elective' | 'school_subject' | string;
   timestamp?: number;
 }
 
@@ -168,7 +168,7 @@ export interface SubjectConfig {
   passingTotal: number;
   facultyName?: string;
   targetClasses: string[];
-  subjectType: 'general' | 'elective';
+  subjectType: 'general' | 'elective' | 'school_subject';
   enrolledStudents?: string[]; // Student IDs for elective subjects
   activeSemester?: 'Odd' | 'Even' | 'Both' | 'Bridge';
   academicYear?: string;

@@ -212,25 +212,39 @@ export class AdministrativeService extends BaseDataService {
             }
         });
 
-        // Always: discover from Subject assignments for this term
-        const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
-        const parts = requestedTermKey.split('-');
-        const targetSem = parts.pop();
-        const targetYear = parts.join('-');
+        // For current term only: discover from Subject assignments
+        // (Historical terms rely solely on student records — subjects with 'Both' semester
+        //  would otherwise pull in classes like HS1/FS1 that hadn't started yet)
+        if (isCurrentTerm) {
+            const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            const parts = requestedTermKey.split('-');
+            const targetSem = parts.pop();
+            const targetYear = parts.join('-');
 
-        subjectsSnap.docs.forEach(doc => {
-            const s = doc.data() as SubjectConfig;
-            const isYearMatch = s.academicYear === targetYear ||
-                (s.academicYear && targetYear && (s.academicYear.includes(targetYear) || targetYear.includes(s.academicYear)));
-            if (isYearMatch && (s.activeSemester === targetSem || s.activeSemester === 'Both')) {
-                (s.targetClasses || []).forEach(cls => activeClassesSet.add(cls.trim()));
-            }
-        });
+            subjectsSnap.docs.forEach(doc => {
+                const s = doc.data() as SubjectConfig;
+                const isYearMatch = s.academicYear === targetYear ||
+                    (s.academicYear && targetYear && (s.academicYear.includes(targetYear) || targetYear.includes(s.academicYear)));
+                if (isYearMatch && (s.activeSemester === targetSem || s.activeSemester === 'Both')) {
+                    (s.targetClasses || []).forEach(cls => activeClassesSet.add(cls.trim()));
+                }
+            });
+        }
 
         // Map all to historical display aliases and deduplicate
         return Array.from(new Set(
             Array.from(activeClassesSet)
-                .filter(c => c && c !== '-' && !disabled.includes(c))
+                .filter(c => {
+                    if (!c || c === '-' || disabled.includes(c)) return false;
+
+                    // Specific Fix: HS1 and FS1 just joined in 2025-2026-Even.
+                    // They must not appear in historical Odd semester filters/reports.
+                    if (requestedTermKey === '2025-2026-Odd' && (c === 'HS1' || c === 'FS1')) {
+                        return false;
+                    }
+
+                    return true;
+                })
                 .map(c => this.getHistoricalClassName(requestedTermKey, c))
         )).sort();
     }

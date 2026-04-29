@@ -20,6 +20,19 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const [viewingRecord, setViewingRecord] = useState<AttendanceRecord | null>(null);
 
     const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))], [students]);
+    
+    // O(1) Lookup Maps for optimal rendering
+    const subjectMap = useMemo(() => {
+        const map: Record<string, SubjectConfig> = {};
+        subjects.forEach(s => map[s.id] = s);
+        return map;
+    }, [subjects]);
+
+    const studentMap = useMemo(() => {
+        const map: Record<string, StudentRecord> = {};
+        students.forEach(s => map[s.id] = s);
+        return map;
+    }, [students]);
 
     useEffect(() => {
         loadRecords();
@@ -67,19 +80,22 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     };
 
     const filteredRecords = useMemo(() => {
+        const query = searchTerm.toLowerCase();
+        
         return records.filter(record => {
             const matchesClass = selectedClass === 'All' || record.className === selectedClass;
             const matchesSubject = selectedSubject === 'All' || record.subjectId === selectedSubject;
 
-            // Search by subject name or class if needed
-            const subject = subjects.find(s => s.id === record.subjectId);
-            const matchesSearch = !searchTerm ||
-                subject?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                record.className.toLowerCase().includes(searchTerm.toLowerCase());
+            if (!matchesClass || !matchesSubject) return false;
 
-            return matchesClass && matchesSubject && matchesSearch;
+            if (query) {
+                const subject = subjectMap[record.subjectId];
+                return (subject?.name.toLowerCase().includes(query)) || 
+                       (record.className.toLowerCase().includes(query));
+            }
+            return true;
         });
-    }, [records, selectedClass, selectedSubject, searchTerm, subjects]);
+    }, [records, selectedClass, selectedSubject, searchTerm, subjectMap]);
 
     if (isLoading) {
         return (
@@ -175,7 +191,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {filteredRecords.map((record) => {
-                                const subject = subjects.find(s => s.id === record.subjectId);
+                                const subject = subjectMap[record.subjectId];
                                 const total = record.presentStudentIds.length + record.absentStudentIds.length;
                                 const ratio = total > 0 ? (record.presentStudentIds.length / total) * 100 : 0;
 
@@ -247,7 +263,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                             <div>
                                 <h3 className="text-xl font-black text-slate-900 tracking-tight">Record Details</h3>
                                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                    {viewingRecord.className} • {subjects.find(s => s.id === viewingRecord.subjectId)?.name}
+                                    {viewingRecord.className} • {subjectMap[viewingRecord.subjectId]?.name}
                                 </p>
                             </div>
                             <button
@@ -279,7 +295,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         {viewingRecord.absentStudentIds.length > 0 ? (
                                             viewingRecord.absentStudentIds.map(id => {
-                                                const student = students.find(s => s.id === id);
+                                                const student = studentMap[id];
                                                 return (
                                                     <div key={id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                                                         <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-rose-500 font-bold text-xs ring-1 ring-rose-100">
@@ -308,7 +324,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                         </h5>
                                         <div className="flex flex-wrap gap-2">
                                             {viewingRecord.presentStudentIds.map(id => {
-                                                const student = students.find(s => s.id === id);
+                                                const student = studentMap[id];
                                                 return (
                                                     <div key={id} className="px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold border border-slate-100">
                                                         {student?.name.split(' ')[0]}

@@ -30,8 +30,12 @@ const SubjectRow = React.memo(({ subject, index, onEdit, onDelete, onManageEnrol
             </td>
             <td className="hidden sm:table-cell p-4 text-slate-600 text-sm">{subject.facultyName || '-'}</td>
             <td className="p-2 sm:p-4 text-center">
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] uppercase font-bold tracking-wider ${(subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
-                    {subject.subjectType || 'general'}
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] uppercase font-bold tracking-wider ${
+                    (subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 
+                    subject.subjectType === 'school_subject' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                    'bg-purple-50 text-purple-700 border border-purple-100'
+                }`}>
+                    {subject.subjectType === 'school_subject' ? 'School Subject' : (subject.subjectType || 'general')}
                 </span>
             </td>
             <td className="p-2 sm:p-4 text-center font-mono text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">
@@ -74,8 +78,11 @@ const FacultyCard = React.memo(({ faculty, facultySubjects }: { faculty: string,
                         <div key={`${subject.id}-${subject.specificClass}-${idx}`} className="border rounded-lg p-3 hover:bg-slate-50 transition-colors">
                             <div className="flex justify-between items-start mb-2">
                                 <h4 className="font-bold text-emerald-800">{shortenSubjectName(subject.name)}</h4>
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${subject.subjectType === 'elective' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                                    {subject.subjectType || 'General'}
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${
+                                    subject.subjectType === 'school_subject' ? 'bg-amber-100 text-amber-700' : 
+                                    subject.subjectType === 'elective' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                    {subject.subjectType === 'school_subject' ? 'School Subject' : (subject.subjectType || 'General')}
                                 </span>
                             </div>
                             <div className="flex flex-wrap gap-1 mb-2">
@@ -113,7 +120,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         passingTotal: 40,
         facultyName: '',
         targetClasses: [] as string[],
-        subjectType: 'general' as 'general' | 'elective',
+        subjectType: 'general' as 'general' | 'elective' | 'school_subject',
         enrolledStudents: [] as string[],
         activeSemester: 'Both' as 'Odd' | 'Even' | 'Both',
         academicYear: ''
@@ -1012,8 +1019,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 <div>
                                     <label className="block text-sm font-bold mb-1">Type</label>
                                     <select value={subjectForm.subjectType} onChange={e => setSubjectForm(prev => ({ ...prev, subjectType: e.target.value as any }))} className="w-full p-3 border rounded-xl">
-                                        <option value="general">General</option>
-                                        <option value="elective">Elective</option>
+                                        <option value="general">General Subject</option>
+                                        <option value="elective">Elective Subject</option>
+                                        <option value="school_subject">School Subject (Attendance Only)</option>
                                     </select>
                                 </div>
                                 <div>

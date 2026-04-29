@@ -250,14 +250,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     );
 
     // Calculate statistics — memoized and term-aware
-    const currentTermStudents = useMemo(() => 
-        students.filter(s => 
-            s.academicHistory && 
-            s.academicHistory[activeTerm] && 
-            !s.className?.toLowerCase().includes('doura') // Exclude Doura from active stats
-        ),
-        [students, activeTerm]
-    );
+    const currentTermStudents = useMemo(() => {
+        const currentSystemTerm = `${activeClasses.length > 0 ? activeTerm : activeTerm}`; // Force update on dependencies
+        return students.filter(s => {
+            // Exclude Doura permanently
+            if (s.className?.toLowerCase().includes('doura')) return false;
+            
+            // For active sessions, simply check if they're active right now
+            if (activeTerm === `${branding?.currentAcademicYear || '2025-2026'}-${branding?.currentSemester || 'Even'}`) {
+                return s.isActive !== false && s.currentClass;
+            }
+            // For historical, check their academic history
+            return s.academicHistory && s.academicHistory[activeTerm];
+        });
+    }, [students, activeTerm, branding]);
 
     const totalStudents = currentTermStudents.length;
     const totalSubjects = subjects.length;
