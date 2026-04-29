@@ -10,6 +10,7 @@ const ApplicationManagement: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState<ApplicationStatus | 'all'>('pending');
     const [filterClass, setFilterClass] = useState<string>('all');
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [filterType, setFilterType] = useState<ApplicationType | 'all'>('all');
     const [filterSubject, setFilterSubject] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -19,7 +20,17 @@ const ApplicationManagement: React.FC = () => {
 
     useEffect(() => {
         loadApplications();
+        loadClasses();
     }, [activeTerm]);
+
+    const loadClasses = async () => {
+        const classes = await dataService.getClassesByTerm(activeTerm);
+        setAvailableClasses(classes);
+        // If current filter is not in new list, reset to 'all'
+        if (filterClass !== 'all' && !classes.includes(filterClass)) {
+            setFilterClass('all');
+        }
+    };
 
     const loadApplications = async () => {
         setIsLoading(true);
@@ -215,7 +226,7 @@ const ApplicationManagement: React.FC = () => {
                             className="px-4 py-3 rounded-xl text-xs font-black bg-white text-slate-700 border border-slate-200 focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
                         >
                             <option value="all">All Classes</option>
-                            {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                            {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                         <select
                             value={filterType}

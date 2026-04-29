@@ -17,7 +17,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
 
     // Determine allowed classes based on user role
     const allowedClasses = useMemo(() => {
-        if (!currentUser || currentUser.role === 'admin') return availableClasses;
+        if (!currentUser || currentUser.role === 'admin' || currentUser.role === 'teacher') return availableClasses;
         return availableClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
     }, [currentUser, availableClasses]);
 
@@ -62,7 +62,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             setSubjects(allSubjects);
             setAvailableClasses(termClasses);
             
-            const allowed = (!currentUser || currentUser.role === 'admin') 
+            const allowed = (!currentUser || currentUser.role === 'admin' || currentUser.role === 'teacher') 
                 ? termClasses 
                 : termClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
             

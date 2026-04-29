@@ -48,6 +48,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         studentId: '',
         subjectId: '',
         examType: 'CurrentSemester' as SupplementaryExamType,
+        applicationType: 'external-supp' as string,
         originalSemester: 'Odd' as 'Odd' | 'Even',
         originalYear: new Date().getFullYear() - 1,
         supplementaryYear: new Date().getFullYear()
@@ -72,6 +73,49 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         originalTerm: ''
     });
     const [editingExamHistory, setEditingExamHistory] = useState<SupplementaryExam[]>([]);
+
+    // Auto-fetch original marks when student + subject are selected in manual registration
+    const [fetchedPreviousMarks, setFetchedPreviousMarks] = useState<{ int: number; ext: number; term: string } | null>(null);
+    const [isFetchingMarks, setIsFetchingMarks] = useState(false);
+
+    useEffect(() => {
+        if (!supplementaryForm.studentId || !supplementaryForm.subjectId) {
+            setFetchedPreviousMarks(null);
+            return;
+        }
+        let cancelled = false;
+        const fetchMarks = async () => {
+            setIsFetchingMarks(true);
+            try {
+                const student = await dataService.getStudentById(supplementaryForm.studentId);
+                if (!student?.academicHistory || cancelled) return;
+
+                const allSubs = await dataService.getRawSubjects();
+                const subNameMap = new Map(allSubs.map(s => [s.id, (s.name || '').toLowerCase().trim()]));
+                const targetSubName = (allSubs.find(s => s.id === supplementaryForm.subjectId)?.name || '').toLowerCase().trim();
+
+                let found: { int: number; ext: number; term: string } | null = null;
+                for (const [termKey, termRecord] of Object.entries(student.academicHistory)) {
+                    let subMark = termRecord.marks[supplementaryForm.subjectId];
+                    if (!subMark && targetSubName) {
+                        const matchId = Object.keys(termRecord.marks).find(mid => subNameMap.get(mid) === targetSubName);
+                        if (matchId) subMark = termRecord.marks[matchId];
+                    }
+                    if (subMark) {
+                        found = { int: Number(subMark.int) || 0, ext: Number(subMark.ext) || 0, term: termKey };
+                        break;
+                    }
+                }
+                if (!cancelled) setFetchedPreviousMarks(found);
+            } catch (e) {
+                if (!cancelled) setFetchedPreviousMarks(null);
+            } finally {
+                if (!cancelled) setIsFetchingMarks(false);
+            }
+        };
+        fetchMarks();
+        return () => { cancelled = true; };
+    }, [supplementaryForm.studentId, supplementaryForm.subjectId]);
 
     // Summary Statistics - Now based on filtered list for better clarity per tab
     const stats = useMemo(() => {
@@ -109,6 +153,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             studentId: '',
             subjectId: '',
             examType: 'CurrentSemester',
+            applicationType: 'external-supp',
             originalSemester: 'Odd',
             originalYear: new Date().getFullYear() - 1,
             supplementaryYear: new Date().getFullYear()
@@ -145,8 +190,10 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
         try {
             setIsOperating(true);
+            // Subject may be from a historical term not in the current list — use persisted metadata as fallback
             const subject = subjects.find(s => s.id === editingExam.subjectId);
-            if (!subject) throw new Error('Subject not found');
+            const resolvedMaxINT = editingExam.maxINT ?? subject?.maxINT ?? 30;
+            const resolvedMaxEXT = editingExam.maxEXT ?? subject?.maxEXT ?? 70;
 
             const parseMark = (markStr: string): number | 'A' => {
                 const trimmed = markStr.trim().toUpperCase();
@@ -155,8 +202,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 return isNaN(num) ? 0 : num;
             };
 
-            const minINT = Math.ceil(subject.maxINT * 0.5);
-            const minEXT = Math.ceil(subject.maxEXT * 0.4);
+            const minINT = Math.ceil(resolvedMaxINT * 0.5);
+            const minEXT = Math.ceil(resolvedMaxEXT * 0.4);
 
             const getFinalMark = (formVal: string, prevVal: string, min: number) => {
                 const prev = parseInt(prevVal, 10) || 0;
@@ -197,9 +244,9 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             await onRefresh();
             setShowMarkEntryModal(false);
             alert('Marks updated successfully!');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving marks:', error);
-            alert('Error saving marks.');
+            alert(`Error saving marks: ${error.message || 'Unknown error'}`);
         } finally {
             setIsOperating(false);
         }
@@ -215,11 +262,13 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 studentId: supplementaryForm.studentId,
                 subjectId: supplementaryForm.subjectId,
                 examType: supplementaryForm.examType,
+                applicationType: supplementaryForm.applicationType as any,
                 originalSemester: supplementaryForm.originalSemester,
                 originalYear: supplementaryForm.originalYear,
                 supplementaryYear: supplementaryForm.supplementaryYear,
                 status: 'Pending',
-                examTerm: activeTerm
+                examTerm: activeTerm,
+                ...(fetchedPreviousMarks ? { previousMarks: { int: fetchedPreviousMarks.int, ext: fetchedPreviousMarks.ext } } : {})
             };
 
             await dataService.addSupplementaryExam(newSupplementaryExam);
@@ -298,14 +347,38 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                     </div>
                     <p className="text-sm text-slate-500">Manage re-entries and regular supplementary exams</p>
                 </div>
-                <button
-                    onClick={handleAddSupplementaryExam}
-                    disabled={isOperating}
-                    className="px-4 py-2 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                    <i className="fa-solid fa-plus"></i>
-                    Add Supplementary Exam
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={async () => {
+                            if (!confirm('This will search for all approved applications and sync them to the supplementary list. Continue?')) return;
+                            setIsOperating(true);
+                            try {
+                                const count = await dataService.backfillApprovedApplications();
+                                alert(`Successfully synced ${count} applications.`);
+                                await onRefresh();
+                            } catch (error) {
+                                console.error('Sync failed:', error);
+                                alert('Failed to sync: ' + (error as any).message);
+                            } finally {
+                                setIsOperating(false);
+                            }
+                        }}
+                        disabled={isOperating}
+                        className="px-4 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        title="Search for approved applications that might be missing"
+                    >
+                        <i className="fa-solid fa-sync"></i>
+                        Sync Applications
+                    </button>
+                    <button
+                        onClick={handleAddSupplementaryExam}
+                        disabled={isOperating}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                        <i className="fa-solid fa-user-plus"></i>
+                        Register Manually
+                    </button>
+                </div>
             </div>
 
             {/* Summary Cards */}
@@ -585,13 +658,13 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             {/* Supplementary Form Modal */}
             {showSupplementaryForm && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="bg-orange-600 p-6 text-white">
+                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                        <div className="bg-orange-600 p-6 text-white flex-shrink-0">
                             <h3 className="text-2xl font-black">Register Supplementary</h3>
                             <p className="text-orange-100">Add a student for repetition or semester supplementary</p>
                         </div>
 
-                        <form onSubmit={handleSaveSupplementaryExam} className="p-6 space-y-6">
+                        <form onSubmit={handleSaveSupplementaryExam} className="overflow-y-auto flex-1 p-6 space-y-6">
                             <div className="grid grid-cols-2 gap-4 p-1 bg-slate-100 rounded-xl">
                                 <button
                                     type="button"
@@ -613,6 +686,34 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                 >
                                     Repeat (Prev Year)
                                 </button>
+                            </div>
+
+                            {/* Application Type */}
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">Supplementary Type</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { value: 'external-supp', label: 'External Supp', icon: 'fa-external-link-alt' },
+                                        { value: 'internal-supp', label: 'Internal Supp', icon: 'fa-internal-link-alt' },
+                                        { value: 'special-supp', label: 'Special Supp', icon: 'fa-star' },
+                                        { value: 'improvement', label: 'Improvement', icon: 'fa-arrow-trend-up' },
+                                        { value: 'revaluation', label: 'Revaluation', icon: 'fa-magnifying-glass' },
+                                    ].map(type => (
+                                        <button
+                                            key={type.value}
+                                            type="button"
+                                            onClick={() => setSupplementaryForm(prev => ({ ...prev, applicationType: type.value }))}
+                                            className={`py-2 px-2 rounded-xl text-xs font-bold border-2 transition-all flex flex-col items-center gap-1 ${
+                                                supplementaryForm.applicationType === type.value
+                                                    ? 'bg-orange-50 border-orange-400 text-orange-700 shadow-sm'
+                                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                            }`}
+                                        >
+                                            <i className={`fa-solid ${type.icon} text-xs`}></i>
+                                            {type.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="space-y-4">
@@ -689,6 +790,38 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                         ))}
                                     </select>
                                 </div>
+
+                                {/* Original Marks Preview — shown after student + subject are selected */}
+                                {supplementaryForm.studentId && supplementaryForm.subjectId && (
+                                    <div className={`rounded-2xl p-3 border text-sm flex items-center gap-3 transition-all ${
+                                        isFetchingMarks ? 'bg-slate-50 border-slate-200 text-slate-400' :
+                                        fetchedPreviousMarks ? 'bg-emerald-50 border-emerald-200' :
+                                        'bg-amber-50 border-amber-200'
+                                    }`}>
+                                        {isFetchingMarks ? (
+                                            <>
+                                                <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>
+                                                <span className="text-slate-500 text-xs font-medium">Looking up original marks...</span>
+                                            </>
+                                        ) : fetchedPreviousMarks ? (
+                                            <>
+                                                <i className="fa-solid fa-circle-check text-emerald-500"></i>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Original Marks Found</p>
+                                                    <p className="text-xs text-emerald-700 font-bold mt-0.5">
+                                                        INT: {fetchedPreviousMarks.int} &nbsp;|&nbsp; EXT: {fetchedPreviousMarks.ext} &nbsp;
+                                                        <span className="text-[10px] text-emerald-500 font-medium">({fetchedPreviousMarks.term})</span>
+                                                    </p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                                                <span className="text-amber-700 text-xs font-medium">No original marks found in history for this subject</span>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -872,36 +1005,60 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                     </h4>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className={`block text-[10px] font-bold mb-1 uppercase ${!editingExam?.subjectId || ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5)) ? 'text-slate-400' : 'text-slate-500'}`}>New INT</label>
+                                            <label className={`block text-[10px] font-bold mb-1 uppercase ${
+                                                ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) ||
+                                                 editingExam?.studentClass?.toUpperCase().includes('DOURA'))
+                                                ? 'text-slate-400' : 'text-slate-500'
+                                            }`}>New INT</label>
                                             <input
                                                 type="text"
-                                                value={(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5) ? markEntryForm.prevInt : markEntryForm.int}
+                                                value={
+                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA') ? (markEntryForm.prevInt || '0') :
+                                                    (parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) 
+                                                        ? markEntryForm.prevInt 
+                                                        : markEntryForm.int
+                                                }
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
-                                                disabled={(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5)}
-                                                className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5) ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'}`}
+                                                disabled={
+                                                    (parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) ||
+                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA')
+                                                }
+                                                className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${
+                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) ||
+                                                     editingExam?.studentClass?.toUpperCase().includes('DOURA'))
+                                                    ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'
+                                                }`}
                                                 placeholder="Enter"
                                                 autoFocus
                                             />
                                             <p className="text-[9px] text-slate-400 mt-1">
-                                                {(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5) 
-                                                    ? 'Passed Originally' 
-                                                    : `Max: ${subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0}`}
+                                                {editingExam?.studentClass?.toUpperCase().includes('DOURA')
+                                                    ? 'Not applicable for DOURA'
+                                                    : (parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) 
+                                                        ? 'Passed Originally' 
+                                                        : `Max: ${editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30}`}
                                             </p>
                                         </div>
                                         <div>
-                                            <label className={`block text-[10px] font-bold mb-1 uppercase ${!editingExam?.subjectId || ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4)) ? 'text-slate-400' : 'text-slate-500'}`}>New EXT</label>
+                                            <label className={`block text-[10px] font-bold mb-1 uppercase ${
+                                                (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) 
+                                                ? 'text-slate-400' : 'text-slate-500'
+                                            }`}>New EXT</label>
                                             <input
                                                 type="text"
-                                                value={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4) ? markEntryForm.prevExt : markEntryForm.ext}
+                                                value={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) ? markEntryForm.prevExt : markEntryForm.ext}
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, ext: e.target.value }))}
-                                                disabled={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4)}
-                                                className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4) ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'}`}
+                                                disabled={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4)}
+                                                className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${
+                                                    (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) 
+                                                    ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'
+                                                }`}
                                                 placeholder="Enter"
                                             />
                                             <p className="text-[9px] text-slate-400 mt-1">
-                                                {(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4) 
+                                                {(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) 
                                                     ? 'Passed Originally' 
-                                                    : `Max: ${subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0}`}
+                                                    : `Max: ${editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70}`}
                                             </p>
                                         </div>
                                     </div>

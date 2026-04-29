@@ -36,22 +36,35 @@ export class AdministrativeService extends BaseDataService {
     }
 
     public async getAllApplications(termKey?: string): Promise<StudentApplication[]> {
-        let q = query(collection(this.db, this.applicationsCollection));
-        
-        if (termKey && termKey !== 'All') {
-            // termKey can be "2025-2026-Odd" or "2026-Even"
-            // appliedYear stores "2025-2026" or "2026", appliedSemester stores "Odd" or "Even"
-            const parts = termKey.split('-');
-            const sem = parts.pop()!; // Last part is always the semester (Odd/Even)
-            const year = parts.join('-'); // Everything before is the academic year
-            q = query(q, 
-                where('appliedYear', '==', year),
-                where('appliedSemester', '==', sem)
-            );
-        }
+        try {
+            const q = query(collection(this.db, this.applicationsCollection));
+            const querySnapshot = await getDocs(q);
+            let apps = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentApplication));
+            
+            if (termKey && termKey !== 'All') {
+                const parts = termKey.split('-');
+                const sem = parts.pop()!;
+                const year = parts.join('-');
+                
+                apps = apps.filter(app => {
+                    // Match by termKey if present
+                    if ((app as any).termKey === termKey) return true;
+                    if ((app as any).appliedTerm === termKey) return true;
 
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentApplication));
+                    // Support multi-year format (2025-2026) and single year format (2025)
+                    const appYear = String(app.appliedYear || '');
+                    const yearMatch = appYear === year || year.includes(appYear) || appYear.includes(year);
+                    
+                    return yearMatch && app.appliedSemester === sem;
+                });
+            }
+
+            // Also sort by creation date descending
+            return apps.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        } catch (error) {
+            console.error('Error fetching all applications:', error);
+            return [];
+        }
     }
 
     public async getApplicationsByAdNo(adNo: string): Promise<StudentApplication[]> {
@@ -129,17 +142,30 @@ export class AdministrativeService extends BaseDataService {
             const snapshot = await getDocs(q);
             const allApps = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as StudentApplication));
             
-            const approvedApps = allApps.filter(app => app.status === 'approved' && ['improvement', 'revaluation', 'external-supp', 'internal-supp', 'special-supp'].includes(app.type));
+            const approvedApps = allApps.filter(app => {
+                const isApproved = app.status === 'approved';
+                const type = (app.type || '').toLowerCase();
+                const isSuppType = ['improvement', 'revaluation', 'external-supp', 'internal-supp', 'special-supp', 'external supp', 'internal supp', 'special supp'].includes(type);
+                return isApproved && isSuppType;
+            });
             
             let processedCount = 0;
             for (const application of approvedApps) {
                 try {
+                    // Force the type to lowercase with hyphen for internal consistency if it has spaces
+                    if (application.type) {
+                        application.type = (application.type as string).toLowerCase().replace(' ', '-') as any;
+                    }
                     await this.supplementaryService.syncApplicationToSupplementary(application);
                     processedCount++;
                 } catch (err) {
                     console.error(`Failed to sync legacy application ${application.id}:`, err);
                 }
             }
+            
+            // Phase 2: Enrich existing supplementary records with missing metadata (Repair)
+            await this.supplementaryService.enrichAllSupplementaryMetadata();
+            
             return processedCount;
         } catch (error) {
             console.error('Error backfilling applications:', error);

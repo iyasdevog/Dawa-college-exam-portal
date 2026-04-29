@@ -6,7 +6,6 @@ import { TermProvider } from './viewmodels/TermContext';
 import { ViewType, StudentRecord } from '../domain/entities/types';
 import { User } from '../domain/entities/User';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
-import { configurationService } from '../infrastructure/services/ConfigurationService';
 
 // Lazy load components for code splitting
 const ApplicationManagement = lazy(() => import('./components/ApplicationManagement'));
@@ -102,27 +101,26 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const securityConfig = configurationService.getSecurityConfig();
-    if (username === 'admin' && password === securityConfig.dbUnlockPassword) {
+    if (username === 'admin' && password === 'pleasecareful') {
       const adminUser = User.create({
         id: 'admin-001',
         username: 'admin',
         role: 'admin',
         name: 'System Administrator',
-        assignedClasses: [] // Admin has access to all
+        assignedClasses: []
       });
       setCurrentUser(adminUser);
       setIsLoggedIn(true);
       setMode('admin');
-    } else if (username === 'faculty1' && password === (import.meta.env.VITE_FACULTY_PASSWORD || 'faculty1')) {
-      const facultyUser = User.create({
-        id: 'faculty-001',
-        username: 'faculty1',
-        role: 'faculty',
-        name: 'Faculty One',
-        assignedClasses: ['FS2', 'S2'] // Updated S1 -> FS2 for visibility
+    } else if (username === 'Teacher' && password === 'Teacher') {
+      const teacherUser = User.create({
+        id: 'teacher-001',
+        username: 'Teacher',
+        role: 'teacher',
+        name: 'Faculty',
+        assignedClasses: []
       });
-      setCurrentUser(facultyUser);
+      setCurrentUser(teacherUser);
       setIsLoggedIn(true);
       setMode('admin');
     } else {
@@ -183,6 +181,10 @@ const App: React.FC = () => {
           </FeatureErrorBoundary>
         );
       case 'applications':
+        if (currentUser?.role !== 'admin') {
+          setActiveView('dashboard');
+          return null;
+        }
         return (
           <FeatureErrorBoundary featureName="Application Management" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
@@ -206,7 +208,7 @@ const App: React.FC = () => {
         return (
           <FeatureErrorBoundary featureName="Attendance" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AttendancePortal />
+              <AttendancePortal currentUser={currentUser} />
             </Suspense>
           </FeatureErrorBoundary>
         );

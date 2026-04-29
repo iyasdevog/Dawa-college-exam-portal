@@ -269,7 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     const totalSubjects = subjects.length;
     const averagePercentage = useMemo(() =>
         currentTermStudents.length > 0
-            ? Math.round(currentTermStudents.reduce((sum, s) => sum + s.average, 0) / currentTermStudents.length)
+            ? Math.round(currentTermStudents.reduce((sum, s) => sum + (Number(s.average) || 0), 0) / currentTermStudents.length)
             : 0,
         [currentTermStudents]
     );

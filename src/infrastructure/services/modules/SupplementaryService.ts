@@ -1,6 +1,7 @@
 import {
     collection,
     doc,
+    getDoc,
     getDocs,
     addDoc,
     updateDoc,
@@ -64,13 +65,13 @@ export class SupplementaryService extends BaseDataService {
 
                 return {
                     ...exam,
-                    studentName: student?.name || (exam as any).studentName || 'Not Registered',
-                    studentAdNo: student?.adNo || (exam as any).studentAdNo || exam.studentId,
-                    subjectName: subject?.name || 'Unknown Subject',
+                    studentName: student?.name || (exam as any).studentName || (exam as any).studentId || 'Not Registered',
+                    studentAdNo: student?.adNo || (exam as any).studentAdNo || (exam as any).studentAdNo || (exam as any).studentId,
+                    subjectName: subject?.name || (exam as any).subjectName || 'Unknown Subject',
                     studentClass: historicalClass
                 };
-            })
-            .filter(exam => exam.subjectName !== 'Unknown Subject' && exam.subjectId);
+            });
+            // Removed filtering of Unknown Subject to prevent data loss
         } catch (error) {
             console.error('Error fetching all supplementary exams:', error);
             return [];
@@ -108,11 +109,27 @@ export class SupplementaryService extends BaseDataService {
 
             if (existingStudent && existingStudent.academicHistory) {
                 const historyEntries = Object.entries(existingStudent.academicHistory);
+                // Pre-fetch subjects for robust name matching
+                const allSubs = await this.academicService.getRawAllSubjects();
+                const subNameMap = new Map(allSubs.map(s => [s.id, (s.name || '').toLowerCase().trim()]));
+
                 for (const [termKey, termRecord] of historyEntries) {
-                    const subMark = termRecord.marks[application.subjectId];
-                    if (subMark && subMark.status === 'Failed') {
+                    let subMark = termRecord.marks[application.subjectId];
+                    
+                    // Fallback to name-based matching if ID fails (common in legacy data sync)
+                    if (!subMark && application.subjectName) {
+                        const targetName = application.subjectName.toLowerCase().trim();
+                        const matchingId = Object.keys(termRecord.marks).find(mid => 
+                            subNameMap.get(mid) === targetName
+                        );
+                        if (matchingId) subMark = termRecord.marks[matchingId];
+                    }
+
+                    if (subMark) {
+                        // Use any historical mark; if they are applying for supp/revaluation, we want to show their current status
                         if (!failureTerm) failureTerm = termKey;
                         failureMarks = { int: subMark.int || 0, ext: subMark.ext || 0 };
+                        // Found a match for this subject in history, stop searching
                         break; 
                     }
                 }
@@ -125,6 +142,13 @@ export class SupplementaryService extends BaseDataService {
             const q = query(collection(this.db, this.supplementaryExamsCollection), where('applicationId', '==', application.id));
             const snapshot = await getDocs(q);
             
+            // Find subject metadata to persist it during sync
+            const allSubs = await this.academicService.getRawAllSubjects();
+            const targetSubject = allSubs.find(s => 
+                s.id === application.subjectId || 
+                (s.name || '').toLowerCase().trim() === (application.subjectName || '').toLowerCase().trim()
+            );
+
             const updates: any = { 
                 studentId: studentId || application.adNo,
                 studentName: existingStudent?.name || application.studentName || '',
@@ -132,6 +156,9 @@ export class SupplementaryService extends BaseDataService {
                 applicationId: application.id,
                 applicationType: application.type,
                 subjectId: application.subjectId,
+                subjectName: targetSubject?.name || application.subjectName || '',
+                maxINT: targetSubject?.maxINT ?? 30, // Default to 30 as requested
+                maxEXT: targetSubject?.maxEXT ?? 70, // Default to 70 as requested
                 examTerm: targetExamTerm,
                 originalTerm: failureTerm,
                 updatedAt: Date.now()
@@ -225,8 +252,8 @@ export class SupplementaryService extends BaseDataService {
             await updateDoc(docRef, updateData);
 
             if (marks.status === 'Passed') {
-                const exams = await this.getAllSupplementaryExams();
-                const exam = exams.find(e => e.id === examId);
+                const docSnap = await getDoc(doc(this.db, this.supplementaryExamsCollection, examId));
+                const exam = docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as SupplementaryExam : null;
                 
                 if (exam && exam.studentId && exam.originalTerm) {
                     const student = await this.studentService.getStudentById(exam.studentId);
@@ -270,6 +297,49 @@ export class SupplementaryService extends BaseDataService {
         } catch (error) {
             console.error('Error updating supplementary marks:', error);
             throw error;
+        }
+    }
+
+    public async enrichAllSupplementaryMetadata(): Promise<number> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            const allSubs = await this.academicService.getRawAllSubjects();
+            let enriched = 0;
+            
+            const batch = writeBatch(this.db);
+            let operationCount = 0;
+            
+            for (const d of snapshot.docs) {
+                const exam = d.data() as SupplementaryExam;
+                if (exam.maxINT === undefined || exam.maxEXT === undefined) {
+                    const targetSubject = allSubs.find(s => 
+                        s.id === exam.subjectId || 
+                        (s.name || '').toLowerCase().trim() === (exam.subjectName || '').toLowerCase().trim()
+                    );
+                    
+                    batch.update(d.ref, {
+                        maxINT: targetSubject?.maxINT ?? 30,
+                        maxEXT: targetSubject?.maxEXT ?? 70,
+                        updatedAt: Date.now()
+                    });
+                    enriched++;
+                    operationCount++;
+                    
+                    if (operationCount >= 450) { 
+                        await batch.commit();
+                        operationCount = 0;
+                    }
+                }
+            }
+            
+            if (operationCount > 0) {
+                await batch.commit();
+            }
+            
+            return enriched;
+        } catch (error) {
+            console.error('Error enriching supplementary metadata:', error);
+            return 0;
         }
     }
 }

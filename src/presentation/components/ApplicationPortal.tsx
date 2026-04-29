@@ -194,6 +194,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                     fee: fees[appType],
                     appliedYear,
                     appliedSemester,
+                    termKey: selectedTermKey,
                     reason: appType === 'special-supp' ? `[${specialReason.toUpperCase()}] ${reason}` : undefined
                 });
             });

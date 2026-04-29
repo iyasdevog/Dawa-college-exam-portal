@@ -21,7 +21,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
     // Determine allowed classes based on user role
     const allowedClasses = useMemo(() => {
-        if (!currentUser || currentUser.role === 'admin') return availableClasses;
+        if (!currentUser || currentUser.role === 'admin' || currentUser.role === 'teacher') return availableClasses;
         return availableClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
     }, [currentUser, availableClasses]);
 

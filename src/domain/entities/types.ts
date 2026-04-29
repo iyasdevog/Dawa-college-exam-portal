@@ -42,6 +42,9 @@ export interface SupplementaryExam {
   applicationType?: ApplicationType; // revaluation, improvement, etc.
   studentName?: string; // Fallback name from application if student record missing
   studentAdNo?: string; // Fallback adNo from application if student record missing
+  subjectName?: string; // Fallback name from application if subject record missing
+  maxINT?: number; // Snapshot of max marks for validation
+  maxEXT?: number; // Snapshot of max marks for validation
 }
 
 export interface SubjectSnapshot {
@@ -202,6 +205,7 @@ export interface StudentApplication {
     createdAt: number;
     appliedYear: string;
     appliedSemester: 'Odd' | 'Even' | 'Bridge';
+    termKey?: string;
     reason?: string;
     adminComment?: string;
     studentId?: string; // Links to StudentRecord.id

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'faculty' | 'student' | 'public';
+export type UserRole = 'admin' | 'teacher' | 'faculty' | 'student' | 'public';
 
 export class User {
     constructor(

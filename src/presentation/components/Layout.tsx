@@ -29,13 +29,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
     loadBranding();
   }, []);
 
+  const isAdmin = currentUser?.role === 'admin';
+
   const navItems = [
     { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
     { id: 'attendance', icon: 'fa-clipboard-user', label: 'Attendance' },
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
-    ...(currentUser?.role === 'admin' ? [
+    ...(isAdmin ? [
       { id: 'applications', icon: 'fa-file-signature', label: 'Applications' },
       { id: 'management', icon: 'fa-sliders', label: 'Management' }
     ] : []),

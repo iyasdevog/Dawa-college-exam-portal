@@ -9,8 +9,13 @@ import AcademicCalendar from './management/AcademicCalendar';
 import AttendanceMonitor from './management/AttendanceMonitor';
 import MasterTimetable from './management/MasterTimetable';
 import { useTerm } from '../viewmodels/TermContext';
+import { User } from '../../domain/entities/User';
 
-const AttendancePortal: React.FC = () => {
+interface AttendancePortalProps {
+    currentUser?: User | null;
+}
+
+const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
     const { isMobile } = useMobile();
     const { activeTerm, currentAcademicYear, currentSemester } = useTerm();
     const [activeTab, setActiveTab] = useState('marking');
@@ -21,13 +26,17 @@ const AttendancePortal: React.FC = () => {
     const currentSystemTerm = `${currentAcademicYear}-${currentSemester}`;
     const isHistoricalTerm = activeTerm !== currentSystemTerm;
 
+    const isAdmin = currentUser?.role === 'admin';
+
     const tabs = [
         { id: 'marking', label: 'Attendance Marking', icon: 'fa-clipboard-user' },
         { id: 'monitor', label: 'Academic Monitor', icon: 'fa-chart-pie' },
-        { id: 'calendar', label: 'Academic Calendar', icon: 'fa-calendar-check' },
-        { id: 'generator', label: 'Timetable Generator', icon: 'fa-wand-magic-sparkles' },
-        { id: 'exam', label: 'Exam Timetables', icon: 'fa-file-signature' },
-        { id: 'master', label: 'Master View', icon: 'fa-layer-group' },
+        ...(isAdmin ? [
+            { id: 'calendar', label: 'Academic Calendar', icon: 'fa-calendar-check' },
+            { id: 'generator', label: 'Timetable Generator', icon: 'fa-wand-magic-sparkles' },
+            { id: 'exam', label: 'Exam Timetables', icon: 'fa-file-signature' },
+            { id: 'master', label: 'Master View', icon: 'fa-layer-group' },
+        ] : [])
     ];
 
     const loadData = async () => {
