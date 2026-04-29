@@ -20,7 +20,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [availableClasses, setAvailableClasses] = useState<string[]>(CLASSES);
 
     const allowedClasses = useMemo(() => {
-        if (!currentUser || currentUser.role === 'admin') return availableClasses;
+        if (!currentUser || currentUser.role === 'admin' || currentUser.role === 'teacher') return availableClasses;
         return availableClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
     }, [currentUser, availableClasses]);
 
