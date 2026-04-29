@@ -155,16 +155,25 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 return isNaN(num) ? 0 : num;
             };
 
-            const intVal = markEntryForm.int ? parseMark(markEntryForm.int) : 0;
-            const extVal = markEntryForm.ext ? parseMark(markEntryForm.ext) : 0;
+            const minINT = Math.ceil(subject.maxINT * 0.5);
+            const minEXT = Math.ceil(subject.maxEXT * 0.4);
+
+            const getFinalMark = (formVal: string, prevVal: string, min: number) => {
+                const prev = parseInt(prevVal, 10) || 0;
+                // If they passed originally, KEEP the original mark (it was disabled in UI)
+                if (prev >= min) return prev;
+                // Otherwise use the new entry
+                return parseMark(formVal);
+            };
+
+            const intVal = getFinalMark(markEntryForm.int, markEntryForm.prevInt, minINT);
+            const extVal = getFinalMark(markEntryForm.ext, markEntryForm.prevExt, minEXT);
             const totalNum = (intVal === 'A' ? 0 : intVal) + (extVal === 'A' ? 0 : extVal);
 
             const prevIntVal = markEntryForm.prevInt ? parseMark(markEntryForm.prevInt) : 0;
             const prevExtVal = markEntryForm.prevExt ? parseMark(markEntryForm.prevExt) : 0;
 
             // Calculate Status
-            const minINT = Math.ceil(subject.maxINT * 0.5);
-            const minEXT = Math.ceil(subject.maxEXT * 0.4);
             const passedINT = intVal !== 'A' && typeof intVal === 'number' && intVal >= minINT;
             const passedEXT = extVal !== 'A' && typeof extVal === 'number' && extVal >= minEXT;
             const status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
