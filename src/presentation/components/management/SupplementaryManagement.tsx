@@ -241,10 +241,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
     const filteredExams = useMemo(() => {
         return supplementaryExams.filter(exam => {
-            // Lifecycle Filter: Only hide records that are truly passed & integrated.
-            // Failed attempts (marks.status !== 'Passed') stay in the listing even if
-            // the exam status was incorrectly set to 'Completed' by legacy data.
-            if (exam.status === 'Completed' && exam.marks?.status === 'Passed') return false;
+            // Lifecycle Filter: Keep records visible even if passed, but allow status filtering.
+            // if (exam.status === 'Completed' && exam.marks?.status === 'Passed') return false;
 
             const appType = (exam.applicationType || '').toLowerCase();
             const matchesTab = activeTab === 'All' 
@@ -865,27 +863,37 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                     </h4>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">New INT</label>
+                                            <label className={`block text-[10px] font-bold mb-1 uppercase ${!editingExam?.subjectId || ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5)) ? 'text-slate-400' : 'text-slate-500'}`}>New INT</label>
                                             <input
                                                 type="text"
-                                                value={markEntryForm.int}
+                                                value={(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5) ? markEntryForm.prevInt : markEntryForm.int}
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
-                                                className="w-full p-2 bg-white border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm"
+                                                disabled={(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5)}
+                                                className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5) ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'}`}
                                                 placeholder="Enter"
                                                 autoFocus
                                             />
-                                            <p className="text-[9px] text-slate-400 mt-1">Max: {subjects.find(s => s.id === editingExam.subjectId)?.maxINT}</p>
+                                            <p className="text-[9px] text-slate-400 mt-1">
+                                                {(parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0) * 0.5) 
+                                                    ? 'Passed Originally' 
+                                                    : `Max: ${subjects.find(s => s.id === editingExam.subjectId)?.maxINT || 0}`}
+                                            </p>
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">New EXT</label>
+                                            <label className={`block text-[10px] font-bold mb-1 uppercase ${!editingExam?.subjectId || ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4)) ? 'text-slate-400' : 'text-slate-500'}`}>New EXT</label>
                                             <input
                                                 type="text"
-                                                value={markEntryForm.ext}
+                                                value={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4) ? markEntryForm.prevExt : markEntryForm.ext}
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, ext: e.target.value }))}
-                                                className="w-full p-2 bg-white border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm"
+                                                disabled={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4)}
+                                                className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4) ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'}`}
                                                 placeholder="Enter"
                                             />
-                                            <p className="text-[9px] text-slate-400 mt-1">Max: {subjects.find(s => s.id === editingExam.subjectId)?.maxEXT}</p>
+                                            <p className="text-[9px] text-slate-400 mt-1">
+                                                {(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0) * 0.4) 
+                                                    ? 'Passed Originally' 
+                                                    : `Max: ${subjects.find(s => s.id === editingExam.subjectId)?.maxEXT || 0}`}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

@@ -55,31 +55,48 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
     const displayClass = activeTermRecord?.className || result?.currentClass || '';
     const displaySemester = activeTermRecord?.semester || (displayTerm.endsWith('-Odd') ? 'Odd' : 'Even');
 
+    // Merged marks mapping
+    const suppExams = result?.supplementaryExams || [];
+    const completedSuppIds = new Set(suppExams.filter(su => su.status === 'Completed').map(su => su.subjectId));
+    const originalMarkIds = new Set(Object.keys(displayMarks));
+
     let resultSubjects = result ? subjects.filter(s => {
+        // Show subject if:
+        // 1. It targets the student's class in this term
+        // 2. The student has an original mark for it
+        // 3. The student has a completed supplementary record for it
         const isTargetClass = s.targetClasses?.includes(displayClass);
-        if (!isTargetClass) return false;
+        const hasOriginalMark = originalMarkIds.has(s.id);
+        const isSupplementarySubject = completedSuppIds.has(s.id);
+        
+        if (!isTargetClass && !hasOriginalMark && !isSupplementarySubject) return false;
 
         // For elective subjects, only show if student is explicitly enrolled
         if (s.subjectType === 'elective') {
-            return s.enrolledStudents?.includes(result.id);
+            return s.enrolledStudents?.includes(result.id) || hasOriginalMark || isSupplementarySubject;
         }
 
         return true;
     }) : [];
     
-    // Merged marks mapping
+    // Sort subjects: Generally by name or id, but ensure consistency
+    resultSubjects.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+
     const finalMarks: Record<string, SubjectMarks> = { ...displayMarks };
-    const suppExams = result?.supplementaryExams || [];
 
     if (isSuppReleased) {
         // Merge completed supplementary marks
         const completedSupps = suppExams.filter(su => su.status === 'Completed' && su.marks);
         completedSupps.forEach(su => {
             if (su.marks) {
+                // Store original marks separately for comparison if they exist
+                const originalMarks = displayMarks[su.subjectId];
                 finalMarks[su.subjectId] = {
                     ...su.marks,
-                    isSupplementary: true
-                };
+                    isSupplementary: true,
+                    // Keep original marks for comparison in UI
+                    previousMarks: originalMarks || su.previousMarks
+                } as any;
             }
         });
 
@@ -89,6 +106,8 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
             resultSubjects = resultSubjects.filter(s => suppSubjectIds.has(s.id));
         }
     }
+
+    const hasSupplementary = Object.values(finalMarks).some(m => (m as any).isSupplementary);
 
     if (showAggregatedView) {
         return <AggregatedScorecard student={result} allSubjects={subjects} onClose={() => setShowAggregatedView(false)} />;
@@ -380,8 +399,9 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                         <thead>
                                             <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-slate-100">
                                                 <th className="px-8 py-6 text-left print:px-4 print:py-3">Subject</th>
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">EXT</th>
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">INT</th>
+                                                {hasSupplementary && <th className="px-6 py-6 text-center print:px-4 print:py-3 bg-amber-50/50">Original</th>}
+                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">{hasSupplementary ? 'Final Result' : 'EXT'}</th>
+                                                {!hasSupplementary && <th className="px-6 py-6 text-center print:px-4 print:py-3">INT</th>}
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Total</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Max</th>
                                                 <th className="px-6 py-6 text-center print:px-4 print:py-3">Status</th>
@@ -406,21 +426,37 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                                 <p className="arabic-text text-xl text-emerald-600 leading-none mt-1 print:text-base">{subject.arabicName}</p>
                                                             )}
                                                         </td>
-                                                        <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
+                                                        {hasSupplementary && (
+                                                            <td className="px-6 py-6 text-center font-mono text-xs text-slate-400 print:px-4 print:py-3">
+                                                                {marks?.isSupplementary && (marks as any).previousMarks ? (
+                                                                    <div className="flex flex-col items-center">
+                                                                        <span className="font-bold">{(marks as any).previousMarks.total || '-'}</span>
+                                                                        <span className="text-[9px] opacity-70">
+                                                                            {(marks as any).previousMarks.int}/{(marks as any).previousMarks.ext}
+                                                                        </span>
+                                                                    </div>
+                                                                ) : marks && !marks.isSupplementary ? (
+                                                                    <span className="opacity-30">-</span>
+                                                                ) : '-'}
+                                                            </td>
+                                                        )}
+                                                        <td className={`px-6 py-6 text-center font-mono font-bold print:px-4 print:py-3 print:text-xs ${marks?.isSupplementary ? 'text-emerald-600 bg-emerald-50/20' : 'text-slate-500'}`}>
                                                             {subject.maxEXT === 0 ? (
                                                                 <span className="text-[10px] text-slate-300 uppercase">N/A</span>
                                                             ) : (
-                                                                <>
-                                                                    {marks?.ext ?? '-'}
-                                                                    <span className="text-[10px] text-slate-400 ml-1">/{subject.maxEXT}</span>
-                                                                </>
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className={marks?.isSupplementary ? 'text-base' : ''}>{marks?.ext ?? '-'} {hasSupplementary ? '' : `/${subject.maxEXT}`}</span>
+                                                                    {hasSupplementary && <span className="text-[10px] text-slate-400">{(marks as any).int || '-' } INT</span>}
+                                                                </div>
                                                             )}
                                                         </td>
-                                                        <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
-                                                            {marks?.int ?? '-'}
-                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
-                                                        </td>
-                                                        <td className={`px-6 py-6 text-center font-black text-2xl print:px-4 print:py-3 print:text-lg ${marks?.status === 'Failed' ? 'text-red-500' : 'text-slate-900'
+                                                        {!hasSupplementary && (
+                                                            <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
+                                                                {marks?.int ?? '-'}
+                                                                <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
+                                                            </td>
+                                                        )}
+                                                        <td className={`px-6 py-6 text-center font-black text-2xl print:px-4 print:py-3 print:text-lg ${marks?.status === 'Failed' ? 'text-red-500' : marks?.isSupplementary ? 'text-emerald-600' : 'text-slate-900'
                                                             }`}>
                                                             {marks?.total ?? '-'}
                                                         </td>

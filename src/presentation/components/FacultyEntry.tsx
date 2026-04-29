@@ -39,6 +39,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [attendanceStats, setAttendanceStats] = useState<Record<string, { present: number; total: number; percentage: number }>>({});
+    const [supplementaryExams, setSupplementaryExams] = useState<any[]>([]);
 
     const [loadingStage, setLoadingStage] = useState<'initializing' | 'loading-subjects' | 'loading-students' | 'preparing-interface'>('initializing');
     const [loadingProgress, setLoadingProgress] = useState(0);
@@ -86,8 +87,12 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         } else if (activeTab === 'release-settings') {
             const loadSettings = async () => {
                 try {
-                    const settings = await dataService.getReleaseSettings();
+                    const [settings, supps] = await Promise.all([
+                        dataService.getReleaseSettings(),
+                        dataService.getAllSupplementaryExams(activeTerm)
+                    ]);
                     setReleaseSettings(settings || {});
+                    setSupplementaryExams(supps);
                 } catch (e) { console.error(e); }
             };
             loadSettings();
@@ -204,7 +209,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                     >
                         <i className="fa-solid fa-chart-line mr-2"></i> Upload Tracker
                     </button>
-                    {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
+                    {(currentUser?.role === 'admin') && (
                         <button
                             onClick={() => setActiveTab('release-settings')}
                             className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center ${activeTab === 'release-settings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
@@ -247,6 +252,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         releaseSettings={releaseSettings}
                         onUpdateSetting={handleUpdateReleaseSetting}
                         allowedClasses={allowedClasses}
+                        supplementaryExams={supplementaryExams}
+                        subjects={subjects}
                     />
                 )}
             </main>

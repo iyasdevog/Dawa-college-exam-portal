@@ -1,17 +1,23 @@
-import React from 'react';
-import { ClassReleaseSettings } from '../../../domain/entities/types';
+import React, { useState } from 'react';
+import { ClassReleaseSettings, SubjectConfig } from '../../../domain/entities/types';
 
 interface ReleaseSettingsTabProps {
     allowedClasses: string[];
     releaseSettings: ClassReleaseSettings;
     onUpdateSetting: (className: string, key: keyof any, value: any) => void;
+    supplementaryExams?: any[];
+    subjects?: SubjectConfig[];
 }
 
 const ReleaseSettingsTab: React.FC<ReleaseSettingsTabProps> = ({
     allowedClasses,
     releaseSettings,
-    onUpdateSetting
+    onUpdateSetting,
+    supplementaryExams = [],
+    subjects = []
 }) => {
+    const [expandedClass, setExpandedClass] = useState<string | null>(null);
+
     return (
         <div className="px-4 md:px-0 mt-8 space-y-6">
             <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-200">
@@ -26,8 +32,13 @@ const ReleaseSettingsTab: React.FC<ReleaseSettingsTabProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {allowedClasses.map(cls => {
                         const settings = releaseSettings[cls] || { isReleased: false };
+                        const classSupps = supplementaryExams.filter(su => 
+                            su.className === cls && 
+                            su.status === 'Completed'
+                        );
+
                         return (
-                            <div key={cls} className="bg-slate-50 rounded-xl p-5 border border-slate-200 hover:border-emerald-300 transition-all">
+                            <div key={cls} className="bg-slate-50 rounded-xl p-5 border border-slate-200 hover:border-emerald-300 transition-all flex flex-col h-full">
                                 <div className="flex items-center justify-between mb-4">
                                     <h4 className="text-lg font-bold text-slate-900">{cls} Class</h4>
                                     <div className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${settings.isReleased ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
@@ -35,7 +46,7 @@ const ReleaseSettingsTab: React.FC<ReleaseSettingsTabProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="space-y-4">
+                                <div className="space-y-4 flex-grow">
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm font-bold text-slate-700">Release Status</span>
                                         <button
@@ -98,6 +109,49 @@ const ReleaseSettingsTab: React.FC<ReleaseSettingsTabProps> = ({
                                         )}
                                     </div>
                                 </div>
+
+                                {classSupps.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-slate-200">
+                                        <button 
+                                            onClick={() => setExpandedClass(expandedClass === cls ? null : cls)}
+                                            className="w-full flex items-center justify-between p-2 rounded-lg bg-orange-100/50 text-orange-700 hover:bg-orange-100 transition-colors"
+                                        >
+                                            <span className="text-xs font-black uppercase tracking-tighter">
+                                                <i className="fa-solid fa-list-check mr-2"></i>
+                                                Entered Supp. Results ({classSupps.length})
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down transition-transform duration-300 ${expandedClass === cls ? 'rotate-180' : ''}`}></i>
+                                        </button>
+
+                                        {expandedClass === cls && (
+                                            <div className="mt-3 space-y-2 max-h-48 overflow-y-auto pr-1">
+                                                {classSupps.map(su => {
+                                                    const sub = subjects.find(s => s.id === su.subjectId);
+                                                    const isImproved = su.marks && su.previousMarks && su.marks.total > su.previousMarks.total;
+                                                    
+                                                    return (
+                                                        <div key={su.id} className="p-2 bg-white rounded-lg border border-slate-100 shadow-sm">
+                                                            <div className="flex justify-between items-start mb-1">
+                                                                <span className="text-[10px] font-bold text-slate-800 truncate block max-w-[120px]">{su.studentName}</span>
+                                                                <span className={`text-[8px] font-black uppercase px-1 rounded ${su.marks?.status === 'Passed' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                                    {su.marks?.status || 'N/A'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-[9px] text-slate-500 font-medium mb-1 truncate">{sub?.name || su.subjectName}</div>
+                                                            <div className="flex items-center gap-2 text-[10px]">
+                                                                <span className="text-slate-400 line-through">{su.previousMarks?.total ?? '-'}</span>
+                                                                <i className="fa-solid fa-arrow-right text-[8px] text-slate-300"></i>
+                                                                <span className={`font-black ${isImproved ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                                                    {su.marks?.total ?? '-'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
