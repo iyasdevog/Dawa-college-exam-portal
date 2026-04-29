@@ -5,13 +5,18 @@ import { BaseDataService } from '../../infrastructure/services/modules/BaseDataS
 import { GlobalSettings } from '../../domain/entities/types';
 
 interface TermContextType {
-    currentAcademicYear: string;
-    currentSemester: 'Odd' | 'Even';
-    activeTerm: string;
-    setTerm: (academicYear: string, semester: 'Odd' | 'Even') => void;
+    currentAcademicYear: string; // Viewing Year
+    currentSemester: 'Odd' | 'Even' | 'Bridge'; // Viewing Semester
+    systemAcademicYear: string; // Global System Year
+    systemSemester: 'Odd' | 'Even' | 'Bridge'; // Global System Semester
+    activeTerm: string; // Viewing Term Key
+    systemTerm: string; // Global Term Key
+    isHistoricalTerm: boolean; // Computed: viewing !== system
+    setTerm: (academicYear: string, semester: 'Odd' | 'Even' | 'Bridge') => void;
+    updateSystemTerm: (academicYear: string, semester: 'Odd' | 'Even' | 'Bridge') => Promise<void>;
     refreshTerms: () => Promise<void>;
     isLoading: boolean;
-    termOptions: string[]; // List of available academic years to select, e.g. ["2023-2024", "2024-2025"]
+    termOptions: string[];
 }
 
 const TermContext = createContext<TermContextType | undefined>(undefined);
@@ -26,16 +31,16 @@ export const useTerm = () => {
 
 export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [currentAcademicYear, setCurrentAcademicYear] = useState<string>('2025-2026');
-    const [currentSemester, setCurrentSemester] = useState<'Odd' | 'Even'>('Odd');
+    const [currentSemester, setCurrentSemester] = useState<'Odd' | 'Even' | 'Bridge'>('Odd');
+    const [systemAcademicYear, setSystemAcademicYear] = useState<string>('2025-2026');
+    const [systemSemester, setSystemSemester] = useState<'Odd' | 'Even' | 'Bridge'>('Odd');
     const [termOptions, setTermOptions] = useState<string[]>(['2025-2026']);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasManuallySwitched, setHasManuallySwitched] = useState(false);
 
     const refreshTerms = async () => {
         try {
-            // This function is now mostly used to refresh termOptions (available years)
-            // as the current year/semester are synced via onSnapshot
             const availableTerms = await dataService.getAvailableTerms();
-            // Normalize to unique years (e.g. "2025-2026-Odd" -> "2025-2026")
             const uniqueYears = Array.from(new Set(availableTerms.map(tk => {
                 const lastHyphenIndex = tk.lastIndexOf('-');
                 if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
@@ -51,28 +56,32 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         setIsLoading(true);
-        
-        // 1. Listen for real-time changes to global settings
         const settingsRef = doc(dataService.getDb(), 'settings', 'global_admin_settings');
         const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
             if (docSnap.exists()) {
                 const settings = docSnap.data() as GlobalSettings;
-                if (settings.currentAcademicYear) setCurrentAcademicYear(settings.currentAcademicYear);
-                if (settings.currentSemester) setCurrentSemester(settings.currentSemester);
                 
-                // Push to Service Layer static cache
+                // Update System State
+                if (settings.currentAcademicYear) setSystemAcademicYear(settings.currentAcademicYear);
+                if (settings.currentSemester) setSystemSemester(settings.currentSemester as 'Odd' | 'Even');
+
+                // Update Viewing State ONLY if user hasn't manually picked a different term
+                if (!hasManuallySwitched) {
+                    if (settings.currentAcademicYear) setCurrentAcademicYear(settings.currentAcademicYear);
+                    if (settings.currentSemester) setCurrentSemester(settings.currentSemester as 'Odd' | 'Even');
+                }
+                
                 BaseDataService.updateStaticSettings(settings);
 
-                // If settings has availableYears, sync it locally too
-                    const availableYears = settings.availableYears || [];
-                    const uniqueYears = Array.from(new Set(availableYears.map(tk => {
-                        const lastHyphenIndex = tk.lastIndexOf('-');
-                        if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
-                            return tk.substring(0, lastHyphenIndex);
-                        }
-                        return tk;
-                    }))).sort().reverse();
-                    setTermOptions(uniqueYears);
+                const availableYears = settings.availableYears || [];
+                const uniqueYears = Array.from(new Set(availableYears.map(tk => {
+                    const lastHyphenIndex = tk.lastIndexOf('-');
+                    if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
+                        return tk.substring(0, lastHyphenIndex);
+                    }
+                    return tk;
+                }))).sort().reverse();
+                setTermOptions(uniqueYears);
             }
             setIsLoading(false);
         }, (error) => {
@@ -80,45 +89,50 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsLoading(false);
         });
 
-        // 2. Initial load for available terms (not all might be in global settings yet)
         refreshTerms();
-
         return () => unsubscribe();
-    }, []);
+    }, [hasManuallySwitched]);
 
+    const setTerm = (year: string, semester: 'Odd' | 'Even' | 'Bridge') => {
+        setCurrentAcademicYear(year);
+        setCurrentSemester(semester);
+        setHasManuallySwitched(true);
+        dataService.invalidateCache();
+    };
 
-    const setTerm = async (year: string, semester: 'Odd' | 'Even') => {
+    const updateSystemTerm = async (year: string, semester: 'Odd' | 'Even' | 'Bridge') => {
         try {
-            // Optimistic update
-            setCurrentAcademicYear(year);
-            setCurrentSemester(semester);
-
             const settings = await dataService.getGlobalSettings();
             await dataService.updateGlobalSettings({
                 ...settings,
                 currentAcademicYear: year,
                 currentSemester: semester
             });
-            
-            // Invalidate service layer cache to ensure data reloads correctly
             dataService.invalidateCache();
         } catch (error) {
-            console.error('Error persisting term change:', error);
-            // Revert on error if needed, but onSnapshot will likely fix it anyway
+            console.error('Error updating system term:', error);
+            throw error;
         }
     };
 
     const activeTerm = `${currentAcademicYear}-${currentSemester}`;
+    const systemTerm = `${systemAcademicYear}-${systemSemester}`;
+    const isHistoricalTerm = activeTerm !== systemTerm;
 
     const contextValue = useMemo(() => ({
         currentAcademicYear,
         currentSemester,
+        systemAcademicYear,
+        systemSemester,
         activeTerm,
+        systemTerm,
+        isHistoricalTerm,
         setTerm,
+        updateSystemTerm,
         refreshTerms,
         isLoading,
         termOptions
-    }), [currentAcademicYear, currentSemester, activeTerm, isLoading, termOptions]);
+    }), [currentAcademicYear, currentSemester, systemAcademicYear, systemSemester, activeTerm, systemTerm, isHistoricalTerm, isLoading, termOptions]);
 
     return (
         <TermContext.Provider value={contextValue}>

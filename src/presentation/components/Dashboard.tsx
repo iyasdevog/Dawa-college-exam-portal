@@ -67,7 +67,7 @@ interface MobileDataManipulation {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
-    const { activeTerm } = useTerm();
+    const { activeTerm, isHistoricalTerm } = useTerm();
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [loadingState, setLoadingState] = useState<LoadingState>({
@@ -251,19 +251,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
 
     // Calculate statistics — memoized and term-aware
     const currentTermStudents = useMemo(() => {
-        const currentSystemTerm = `${activeClasses.length > 0 ? activeTerm : activeTerm}`; // Force update on dependencies
         return students.filter(s => {
             // Exclude Doura permanently
             if (s.className?.toLowerCase().includes('doura')) return false;
             
             // For active sessions, simply check if they're active right now
-            if (activeTerm === `${branding?.currentAcademicYear || '2025-2026'}-${branding?.currentSemester || 'Even'}`) {
+            if (!isHistoricalTerm) {
                 return s.isActive !== false && s.currentClass;
             }
             // For historical, check their academic history
             return s.academicHistory && s.academicHistory[activeTerm];
         });
-    }, [students, activeTerm, branding]);
+    }, [students, activeTerm, isHistoricalTerm]);
 
     const totalStudents = currentTermStudents.length;
     const totalSubjects = subjects.length;

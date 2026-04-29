@@ -14,12 +14,9 @@ import { useTerm } from '../viewmodels/TermContext';
 
 const Management: React.FC = () => {
   const { isMobile } = useMobile();
-  const { activeTerm, currentAcademicYear, currentSemester } = useTerm();
+  const { activeTerm, systemTerm, isHistoricalTerm } = useTerm();
   const [activeTab, setActiveTab] = useState('students');
   const [isLoading, setIsLoading] = useState(true);
-
-  const currentSystemTerm = `${currentAcademicYear}-${currentSemester}`;
-  const isHistoricalTerm = activeTerm !== currentSystemTerm;
 
   // Shared Data State
   const [students, setStudents] = useState<StudentRecord[]>([]);

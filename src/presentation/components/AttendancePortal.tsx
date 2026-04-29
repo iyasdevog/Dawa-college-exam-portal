@@ -17,14 +17,11 @@ interface AttendancePortalProps {
 
 const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
     const { isMobile } = useMobile();
-    const { activeTerm, currentAcademicYear, currentSemester } = useTerm();
+    const { activeTerm, systemTerm, isHistoricalTerm } = useTerm();
     const [activeTab, setActiveTab] = useState('marking');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
-    const currentSystemTerm = `${currentAcademicYear}-${currentSemester}`;
-    const isHistoricalTerm = activeTerm !== currentSystemTerm;
 
     const isAdmin = currentUser?.role === 'admin';
 
@@ -94,7 +91,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                         <p className="text-amber-700 text-xs mt-1">
                             You are currently viewing <span className="font-semibold">{activeTerm}</span>. 
                             Attendance marking is disabled for past semesters to protect historical records. 
-                            Switch to <span className="font-semibold">{currentSystemTerm}</span> to mark attendance.
+                            Switch to <span className="font-semibold">{systemTerm}</span> to mark attendance.
                         </p>
                     </div>
                 </div>

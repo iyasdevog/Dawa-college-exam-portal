@@ -10,7 +10,7 @@ interface SettingsManagementProps {
 }
 
 const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNavigate }) => {
-    const { activeTerm, refreshTerms, setTerm } = useTerm();
+    const { activeTerm, refreshTerms, setTerm, updateSystemTerm } = useTerm();
     const [isOperating, setIsOperating] = useState(false);
     const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
     const [isDangerZoneUnlocked, setIsDangerZoneUnlocked] = useState(false);
@@ -26,7 +26,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [availableYears, setAvailableYears] = useState<string[]>([]);
     const [attendanceDates, setAttendanceDates] = useState({ start: '', end: '' });
     const [attendanceThreshold, setAttendanceThreshold] = useState(75);
-    const [currentSemester, setCurrentSemester] = useState<'Odd' | 'Even'>('Odd');
+    const [currentSemester, setCurrentSemester] = useState<'Odd' | 'Even' | 'Bridge'>('Odd');
     const [editableYear, setEditableYear] = useState('');
     const [currentSettings, setCurrentSettings] = useState<any>(null);
     const [semesterSummaries, setSemesterSummaries] = useState<any[]>([]);
@@ -190,7 +190,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                 availableYears: Array.from(new Set([...(currentSettings.availableYears || []), editableYear])).filter(Boolean)
             };
 
-            await dataService.updateGlobalSettings(updatedSettings);
+            await updateSystemTerm(editableYear, currentSemester);
+            // Also update local viewing context so Admin sees the new active term immediately
+            setTerm(editableYear, currentSemester);
             
             // Force immediate propagation
             dataService.invalidateCache();
@@ -554,7 +556,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                     const nextTerm = updated[0];
                     const wantSwitch = confirm(`The active term was deleted.\n\nWould you like to switch to the next available term: ${nextTerm.termKey}?`);
                     if (wantSwitch) {
-                        await setTerm(nextTerm.academicYear, nextTerm.semester);
+                        // Since the active term was deleted, we must update the SYSTEM to a new valid term
+                        await updateSystemTerm(nextTerm.academicYear, nextTerm.semester);
+                        setTerm(nextTerm.academicYear, nextTerm.semester);
                         alert(`✅ Active term switched to ${nextTerm.termKey}`);
                     } else {
                         alert('Please use the "Start New Semester" wizard or the dropdown at the top to pick a different term.');
