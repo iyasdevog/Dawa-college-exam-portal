@@ -252,17 +252,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     // Calculate statistics — memoized and term-aware
     const currentTermStudents = useMemo(() => {
         return students.filter(s => {
-            // Exclude Doura permanently
+            // Exclude Doura permanently from statistics
             if (s.className?.toLowerCase().includes('doura')) return false;
-            
-            // For active sessions, simply check if they're active right now
-            if (!isHistoricalTerm) {
-                return s.isActive !== false && s.currentClass;
-            }
-            // For historical, check their academic history
-            return s.academicHistory && s.academicHistory[activeTerm];
+            return true;
         });
-    }, [students, activeTerm, isHistoricalTerm]);
+    }, [students]);
 
     const totalStudents = currentTermStudents.length;
     const totalSubjects = subjects.length;
