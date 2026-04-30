@@ -7,7 +7,8 @@ import {
     updateDoc,
     deleteDoc,
     query,
-    where
+    where,
+    writeBatch
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
 import { 
@@ -205,11 +206,19 @@ export class AcademicService extends BaseDataService {
     public async updateSubject(id: string, updates: Partial<SubjectConfig>): Promise<void> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
-            const normalizedUpdates = { ...updates };
+            // Deep clone and clean undefined values which can crash Firebase
+            const normalizedUpdates = JSON.parse(JSON.stringify(updates));
+            
             if (updates.facultyName !== undefined) {
                 normalizedUpdates.facultyName = updates.facultyName ? normalizeName(updates.facultyName) : '';
             }
+            
+            // Critical safeguard: ensure mandatory numeric fields don't become NaN
+            if (updates.maxINT !== undefined) normalizedUpdates.maxINT = Number(updates.maxINT) || 30;
+            if (updates.maxEXT !== undefined) normalizedUpdates.maxEXT = Number(updates.maxEXT) || 70;
+
             await updateDoc(docRef, normalizedUpdates);
+            this.invalidateCache();
         } catch (error) {
             console.error('Error updating subject:', error);
             throw error;
@@ -282,23 +291,25 @@ export class AcademicService extends BaseDataService {
                 const currentMarks = termData.marks || {};
                 
                 const existingMark = currentMarks[subjectId] || {};
-                const newInt = marks.int !== undefined ? Number(marks.int) || 0 : (existingMark.int || 0);
-                const newExt = marks.ext !== undefined ? Number(marks.ext) || 0 : (existingMark.ext || 0);
+                const newInt = marks.int !== undefined ? (marks.int === 'A' ? 'A' : Number(marks.int) || 0) : (existingMark.int || 0);
+                const newExt = marks.ext !== undefined ? (marks.ext === 'A' ? 'A' : Number(marks.ext) || 0) : (existingMark.ext || 0);
                 
+                const currentSubject = await this.getSubjectById(subjectId);
+                const mINT = currentSubject?.maxINT ?? 30;
+                const mEXT = currentSubject?.maxEXT ?? 70;
+
                 const updatedMark: SubjectMarks = {
                     ...existingMark,
                     int: newInt,
                     ext: newExt,
-                    total: newInt + newExt,
-                    status: (newInt + newExt) >= 40 ? 'Passed' : 'Failed',
+                    total: (newInt === 'A' ? 0 : newInt) + (newExt === 'A' ? 0 : newExt),
+                    status: (newInt !== 'A' && newExt !== 'A' && newInt >= Math.ceil(mINT * 0.5) && newExt >= Math.ceil(mEXT * 0.4)) ? 'Passed' : 'Failed',
                     updatedAt: Date.now()
                 };
 
                 currentMarks[subjectId] = updatedMark;
                 
-                // --- METADATA SNAPSHOTTING ---
                 const subjectMetadata = termData.subjectMetadata || {};
-                const currentSubject = await this.getSubjectById(subjectId);
                 if (currentSubject) {
                     subjectMetadata[subjectId] = {
                         name: currentSubject.name,
@@ -322,15 +333,12 @@ export class AcademicService extends BaseDataService {
                     [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
                 };
 
-                // CRITICAL: Ensure className is persisted in history to prevent "disappearing student" 
-                // bugs if they are promoted later.
                 if (!termData.className) {
                     updates[`academicHistory.${activeTerm}.className`] = data.currentClass || data.className || 'Unknown';
                     updates[`academicHistory.${activeTerm}.semester`] = activeTerm.split('-').pop() || 'Odd';
                 }
 
                 await updateDoc(studentDocRef, updates);
-                
                 this.invalidateCache();
             }
         } catch (error) {
@@ -780,19 +788,101 @@ export class AcademicService extends BaseDataService {
         }
     }
 
-    public async bulkUpdateMarks(updates: Array<{ studentId: string, subjectId: string, marks: Partial<SubjectMarks> }>, termKey?: string): Promise<void> {
-        for (const update of updates) {
-            await this.updateMarks(update.studentId, update.subjectId, update.marks, termKey);
+    public async bulkUpdateMarks(updates: Array<{ studentId: string, subjectId: string, marks: Partial<SubjectMarks>, maxINT?: number, maxEXT?: number }>, termKey?: string): Promise<void> {
+        if (!updates.length) return;
+        const activeTerm = termKey || this.getCurrentTermKey();
+        const allSubjects = await this.getRawAllSubjects();
+        
+        // Group updates by student to minimize doc interactions
+        const studentUpdates = new Map<string, typeof updates>();
+        updates.forEach(u => {
+            const existing = studentUpdates.get(u.studentId) || [];
+            existing.push(u);
+            studentUpdates.set(u.studentId, existing);
+        });
+
+        const batch = writeBatch(this.db);
+        let count = 0;
+
+        for (const [studentId, studentMarks] of studentUpdates.entries()) {
+            const studentDocRef = doc(this.db, this.studentsCollection, studentId);
+            const studentSnap = await getDoc(studentDocRef);
+            
+            if (studentSnap.exists()) {
+                const data = studentSnap.data();
+                const history = data.academicHistory || {};
+                const termData = history[activeTerm] || { marks: {}, subjectMetadata: {} };
+                const currentMarks = { ...termData.marks };
+                const subjectMetadata = { ...termData.subjectMetadata };
+
+                studentMarks.forEach(u => {
+                    const existingMark = currentMarks[u.subjectId] || {};
+                    const newInt = u.marks.int !== undefined ? (u.marks.int === 'A' ? 'A' : Number(u.marks.int) || 0) : (existingMark.int || 0);
+                    const newExt = u.marks.ext !== undefined ? (u.marks.ext === 'A' ? 'A' : Number(u.marks.ext) || 0) : (existingMark.ext || 0);
+                    
+                    const subConfig = allSubjects.find(s => s.id === u.subjectId);
+                    const mINT = u.maxINT ?? subConfig?.maxINT ?? 30;
+                    const mEXT = u.maxEXT ?? subConfig?.maxEXT ?? 70;
+
+                    const updatedMark: SubjectMarks = {
+                        ...existingMark,
+                        int: newInt,
+                        ext: newExt,
+                        total: (newInt === 'A' ? 0 : newInt) + (newExt === 'A' ? 0 : newExt),
+                        status: (newInt !== 'A' && newExt !== 'A' && newInt >= Math.ceil(mINT * 0.5) && newExt >= Math.ceil(mEXT * 0.4)) ? 'Passed' : 'Failed',
+                        updatedAt: Date.now()
+                    };
+                    currentMarks[u.subjectId] = updatedMark;
+                    
+                    if (subConfig && !subjectMetadata[u.subjectId]) {
+                        subjectMetadata[u.subjectId] = {
+                            name: subConfig.name,
+                            arabicName: subConfig.arabicName,
+                            maxINT: subConfig.maxINT,
+                            maxEXT: subConfig.maxEXT,
+                            passingTotal: subConfig.passingTotal,
+                            facultyName: subConfig.facultyName,
+                            subjectType: subConfig.subjectType
+                        };
+                    }
+                });
+
+                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
+
+                const studentUpdate: any = {
+                    [`academicHistory.${activeTerm}.marks`]: currentMarks,
+                    [`academicHistory.${activeTerm}.subjectMetadata`]: subjectMetadata,
+                    [`academicHistory.${activeTerm}.grandTotal`]: grandTotal,
+                    [`academicHistory.${activeTerm}.average`]: average,
+                    [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
+                };
+
+                if (!termData.className) {
+                    studentUpdate[`academicHistory.${activeTerm}.className`] = data.currentClass || data.className || 'Unknown';
+                    studentUpdate[`academicHistory.${activeTerm}.semester`] = activeTerm.split('-').pop() || 'Odd';
+                }
+
+                batch.update(studentDocRef, studentUpdate);
+                count++;
+                
+                if (count >= 400) { // Safety limit for single batch
+                    await batch.commit();
+                    count = 0;
+                }
+            }
         }
+
+        if (count > 0) await batch.commit();
+        this.invalidateCache();
     }
 
-    public async updateStudentINTMarks(studentId: string, subjectId: string, marks: Partial<SubjectMarks>, termKey?: string): Promise<void> {
-        return this.updateMarks(studentId, subjectId, marks, termKey);
-    }
-
-    public async bulkUpdateEXTMarks(updates: Array<{ studentId: string, subjectId: string, ext: number }>, termKey?: string): Promise<void> {
-        for (const update of updates) {
-            await this.updateMarks(update.studentId, update.subjectId, { ext: update.ext }, termKey);
-        }
+    public async bulkUpdateEXTMarks(updates: Array<{ studentId: string, subjectId: string, ext: number | 'A', maxEXT?: number }>, termKey?: string): Promise<void> {
+        const formattedUpdates = updates.map(u => ({
+            studentId: u.studentId,
+            subjectId: u.subjectId,
+            marks: { ext: u.ext },
+            maxEXT: u.maxEXT
+        }));
+        return this.bulkUpdateMarks(formattedUpdates, termKey);
     }
 }

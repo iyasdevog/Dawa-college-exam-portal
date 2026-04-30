@@ -74,6 +74,12 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     });
     const [editingExamHistory, setEditingExamHistory] = useState<SupplementaryExam[]>([]);
 
+    // Waiver Modal State
+    const [showWaiverModal, setShowWaiverModal] = useState(false);
+    const [waiverPercentage, setWaiverPercentage] = useState(1);
+    const [selectedWaiverSubjects, setSelectedWaiverSubjects] = useState<string[]>([]);
+    const [isApplyingWaiver, setIsApplyingWaiver] = useState(false);
+
     // Auto-fetch original marks when student + subject are selected in manual registration
     const [fetchedPreviousMarks, setFetchedPreviousMarks] = useState<{ int: number; ext: number; term: string } | null>(null);
     const [isFetchingMarks, setIsFetchingMarks] = useState(false);
@@ -207,6 +213,10 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
             const getFinalMark = (formVal: string, prevVal: string, min: number) => {
                 const prev = parseInt(prevVal, 10) || 0;
+                // If it's an improvement exam, we always want to take the new mark (if provided)
+                if (editingExam.applicationType === 'improvement') {
+                    return parseMark(formVal);
+                }
                 // If they passed originally, KEEP the original mark (it was disabled in UI)
                 if (prev >= min) return prev;
                 // Otherwise use the new entry
@@ -280,6 +290,79 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             alert('Error saving supplementary exam.');
         } finally {
             setIsOperating(false);
+        }
+    };
+
+    const eligibleWaiverExams = useMemo(() => {
+        if (selectedWaiverSubjects.length === 0) return [];
+        
+        return supplementaryExams.filter(exam => {
+            // Only process pending or recently failed records for the active term
+            if (activeTerm && exam.examTerm !== activeTerm) return false;
+            if (exam.status === 'Completed' && exam.marks?.status === 'Passed') return false; 
+            if (!selectedWaiverSubjects.includes(exam.subjectId)) return false;
+            
+            const subject = subjects.find(s => s.id === exam.subjectId);
+            const maxEXT = exam.maxEXT ?? subject?.maxEXT ?? 70;
+            const minEXT = Math.ceil(maxEXT * 0.4);
+            
+            const currentEXT = typeof exam.marks?.ext === 'number' ? exam.marks.ext : 0;
+            // Only waive if they are failing EXT but close to minEXT
+            if (currentEXT >= minEXT) return false; 
+            
+            const waiverMarks = (waiverPercentage / 100) * maxEXT;
+            return (minEXT - currentEXT) <= waiverMarks;
+        });
+    }, [supplementaryExams, selectedWaiverSubjects, waiverPercentage, activeTerm, subjects]);
+
+    const handleApplyBatchWaiver = async () => {
+        if (eligibleWaiverExams.length === 0) return;
+        if (!confirm(`Apply ${waiverPercentage}% waiver to ${eligibleWaiverExams.length} students? This will boost their EXT marks to the passing threshold (${waiverPercentage}% of max marks).`)) return;
+        
+        setIsApplyingWaiver(true);
+        try {
+            for (const exam of eligibleWaiverExams) {
+                const subject = subjects.find(s => s.id === exam.subjectId);
+                const maxEXT = exam.maxEXT ?? subject?.maxEXT ?? 70;
+                const minEXT = Math.ceil(maxEXT * 0.4);
+                const maxINT = exam.maxINT ?? subject?.maxINT ?? 30;
+                const minINT = Math.ceil(maxINT * 0.5);
+                
+                const currentInt = typeof exam.marks?.int === 'number' ? exam.marks.int : 
+                                  parseInt(exam.marks?.int as any) || 0;
+                
+                const newMarks = {
+                    int: exam.marks?.int || 0,
+                    ext: minEXT,
+                    total: currentInt + minEXT,
+                    status: 'Passed' as const
+                };
+                
+                // Final safety: Only pass if they also passed INT (unless Doura)
+                const isDoura = exam.studentClass?.toUpperCase().includes('DOURA');
+                if (!isDoura && currentInt < minINT) {
+                    newMarks.status = 'Failed';
+                }
+                
+                if (newMarks.status === 'Passed') {
+                    await dataService.updateSupplementaryExamMarks(
+                        exam.id,
+                        newMarks,
+                        exam.previousMarks,
+                        exam.attemptNumber,
+                        exam.originalTerm
+                    );
+                }
+            }
+            alert(`Successfully applied moderation waiver to qualified students.`);
+            await onRefresh();
+            setShowWaiverModal(false);
+            setSelectedWaiverSubjects([]);
+        } catch (error) {
+            console.error('Error applying waiver:', error);
+            alert('Partial failure applying waivers. Check console for details.');
+        } finally {
+            setIsApplyingWaiver(false);
         }
     };
 
@@ -369,6 +452,15 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                     >
                         <i className="fa-solid fa-sync"></i>
                         Sync Applications
+                    </button>
+                    <button
+                        onClick={() => setShowWaiverModal(true)}
+                        disabled={isOperating}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        title="Moderation tool to pass students close to passing marks"
+                    >
+                        <i className="fa-solid fa-wand-magic-sparkles"></i>
+                        Batch Waiver
                     </button>
                     <button
                         onClick={handleAddSupplementaryExam}
@@ -1006,26 +1098,39 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className={`block text-[10px] font-bold mb-1 uppercase ${
-                                                ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) ||
-                                                 editingExam?.studentClass?.toUpperCase().includes('DOURA'))
+                                                ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                 editingExam?.applicationType !== 'improvement') ||
+                                                editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
+                                                (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
+                                                (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
                                                 ? 'text-slate-400' : 'text-slate-500'
                                             }`}>New INT</label>
                                             <input
                                                 type="text"
                                                 value={
-                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA') ? (markEntryForm.prevInt || '0') :
-                                                    (parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) 
+                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA') || 
+                                                    (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
+                                                    (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
+                                                        ? (markEntryForm.prevInt || '0') :
+                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                     editingExam?.applicationType !== 'improvement')
                                                         ? markEntryForm.prevInt 
                                                         : markEntryForm.int
                                                 }
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
                                                 disabled={
-                                                    (parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) ||
-                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA')
+                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                     editingExam?.applicationType !== 'improvement') ||
+                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
+                                                    (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
+                                                    (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
                                                 }
                                                 className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${
-                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) ||
-                                                     editingExam?.studentClass?.toUpperCase().includes('DOURA'))
+                                                    (((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                      editingExam?.applicationType !== 'improvement') ||
+                                                     editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
+                                                     (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
+                                                     (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0)
                                                     ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'
                                                 }`}
                                                 placeholder="Enter"
@@ -1034,9 +1139,15 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                             <p className="text-[9px] text-slate-400 mt-1">
                                                 {editingExam?.studentClass?.toUpperCase().includes('DOURA')
                                                     ? 'Not applicable for DOURA'
-                                                    : (parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) 
-                                                        ? 'Passed Originally' 
-                                                        : `Max: ${editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30}`}
+                                                    : (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
+                                                      (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
+                                                        ? 'No Internal for 100-Mark Paper'
+                                                        : ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                           editingExam?.applicationType !== 'improvement')
+                                                            ? 'Passed Originally' 
+                                                            : editingExam?.applicationType === 'improvement'
+                                                                ? 'Improvement Entry'
+                                                                : `Max: ${editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30}`}
                                             </p>
                                         </div>
                                         <div>
@@ -1046,19 +1157,31 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                             }`}>New EXT</label>
                                             <input
                                                 type="text"
-                                                value={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) ? markEntryForm.prevExt : markEntryForm.ext}
+                                                value={
+                                                    ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                     editingExam?.applicationType !== 'improvement')
+                                                        ? markEntryForm.prevExt 
+                                                        : markEntryForm.ext
+                                                }
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, ext: e.target.value }))}
-                                                disabled={(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4)}
+                                                disabled={
+                                                    (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                    editingExam?.applicationType !== 'improvement'
+                                                }
                                                 className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${
-                                                    (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) 
+                                                    ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                     editingExam?.applicationType !== 'improvement')
                                                     ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'
                                                 }`}
                                                 placeholder="Enter"
                                             />
                                             <p className="text-[9px] text-slate-400 mt-1">
-                                                {(parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) 
+                                                {((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                  editingExam?.applicationType !== 'improvement')
                                                     ? 'Passed Originally' 
-                                                    : `Max: ${editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70}`}
+                                                    : editingExam?.applicationType === 'improvement'
+                                                        ? 'Improvement Entry'
+                                                        : `Max: ${editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70}`}
                                             </p>
                                         </div>
                                     </div>
@@ -1082,6 +1205,129 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Batch Waiver Modal */}
+            {showWaiverModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+                    <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                        <div className="bg-purple-600 p-6 text-white flex flex-col gap-1">
+                            <h3 className="text-xl font-black">Supplementary Batch Waiver (Moderation)</h3>
+                            <p className="text-purple-100 text-sm">Boost students within a percentage threshold of passing marks</p>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Left Side: Configuration */}
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">
+                                            1. Select Subjects
+                                        </label>
+                                        <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                            {uniqueSubjectsInSupp.map(s => (
+                                                <label key={s.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-all border border-transparent hover:border-slate-200">
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={selectedWaiverSubjects.includes(s.id)}
+                                                        onChange={() => {
+                                                            setSelectedWaiverSubjects(prev => 
+                                                                prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]
+                                                            );
+                                                        }}
+                                                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                                                    />
+                                                    <span className="text-sm font-bold text-slate-700">{s.name}</span>
+                                                </label>
+                                            ))}
+                                            {uniqueSubjectsInSupp.length === 0 && (
+                                                <p className="text-xs text-slate-400 italic">No active supplementary subjects found</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                                            2. Waiver Percentage
+                                        </label>
+                                        <div className="flex items-center gap-4">
+                                            <input 
+                                                type="range" 
+                                                min="0.5" 
+                                                max="5" 
+                                                step="0.5"
+                                                value={waiverPercentage}
+                                                onChange={(e) => setWaiverPercentage(parseFloat(e.target.value))}
+                                                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                            />
+                                            <div className="w-16 text-center py-1 bg-white border border-slate-200 rounded-lg text-lg font-black text-purple-600">
+                                                {waiverPercentage}%
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                                            <i className="fa-solid fa-circle-info mr-1"></i>
+                                            Threshold: students missing ≤ {waiverPercentage}% of max marks will pass.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Right Side: Preview */}
+                                <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 flex flex-col">
+                                    <label className="block text-xs font-black text-purple-600 uppercase tracking-widest mb-3">
+                                        3. Waiver Preview ({eligibleWaiverExams.length})
+                                    </label>
+                                    <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                                        {eligibleWaiverExams.map(exam => (
+                                            <div key={exam.id} className="p-2 bg-white rounded-xl border border-purple-100 shadow-sm flex justify-between items-center animate-in slide-in-from-right-2 duration-200">
+                                                <div>
+                                                    <div className="text-xs font-bold text-slate-700">{exam.studentName}</div>
+                                                    <div className="text-[9px] text-slate-500">{exam.subjectName} | {exam.studentClass}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-[9px] font-black text-red-500">Current: {exam.marks?.ext}</div>
+                                                    <div className="text-[10px] font-black text-emerald-600">→ PASS</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {eligibleWaiverExams.length === 0 && (
+                                            <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-40">
+                                                <i className="fa-solid fa-user-slash text-3xl mb-2"></i>
+                                                <p className="text-xs font-bold leading-tight">Select subjects to see <br/>qualified students</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowWaiverModal(false)}
+                                    className="flex-1 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-all font-black uppercase text-xs tracking-widest"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    onClick={handleApplyBatchWaiver}
+                                    disabled={isApplyingWaiver || eligibleWaiverExams.length === 0}
+                                    className="flex-2 py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 shadow-lg shadow-purple-200 transition-all disabled:opacity-50 font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3"
+                                >
+                                    {isApplyingWaiver ? (
+                                        <>
+                                            <i className="fa-solid fa-spinner fa-spin"></i>
+                                            Applying Waiver...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fa-solid fa-check-double"></i>
+                                            Award Waiver Pass ({eligibleWaiverExams.length})
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

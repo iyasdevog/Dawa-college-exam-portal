@@ -237,65 +237,106 @@ export class SupplementaryService extends BaseDataService {
         originalTerm?: string
     ): Promise<void> {
         try {
-            const docRef = doc(this.db, this.supplementaryExamsCollection, examId);
-            const status = marks.status === 'Passed' ? 'Completed' : marks.status;
-            
-            const updateData: any = {
+            await this.bulkUpdateSupplementaryMarks([{
+                examId,
                 marks,
-                status,
-                updatedAt: Date.now()
-            };
-            if (previousMarks) updateData.previousMarks = previousMarks;
-            if (attemptNumber) updateData.attemptNumber = attemptNumber;
-            if (originalTerm) updateData.originalTerm = originalTerm;
-
-            await updateDoc(docRef, updateData);
-
-            if (marks.status === 'Passed') {
-                const docSnap = await getDoc(doc(this.db, this.supplementaryExamsCollection, examId));
-                const exam = docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as SupplementaryExam : null;
-                
-                if (exam && exam.studentId && exam.originalTerm) {
-                    const student = await this.studentService.getStudentById(exam.studentId);
-                    if (student && student.academicHistory && student.academicHistory[exam.originalTerm]) {
-                        const history = student.academicHistory[exam.originalTerm];
-                        
-                        const updatedMarks = { ...history.marks };
-                        updatedMarks[exam.subjectId] = {
-                            ...updatedMarks[exam.subjectId],
-                            ...marks,
-                            isSupplementary: true,
-                            supplementaryYear: exam.supplementaryYear
-                        };
-
-                        const allSubjects = await this.academicService.getRawAllSubjects();
-                        const { grandTotal, average, performanceLevel } = this.academicService.calculateTermMetrics(updatedMarks, allSubjects);
-
-                        const studentDocRef = doc(this.db, this.studentsCollection, exam.studentId);
-                        await updateDoc(studentDocRef, {
-                            [`academicHistory.${exam.originalTerm}.marks`]: updatedMarks,
-                            [`academicHistory.${exam.originalTerm}.grandTotal`]: grandTotal,
-                            [`academicHistory.${exam.originalTerm}.average`]: average,
-                            [`academicHistory.${exam.originalTerm}.performanceLevel`]: performanceLevel
-                        });
-
-                        this.studentService.updateStudentInCache(exam.studentId, {
-                            academicHistory: {
-                                ...student.academicHistory,
-                                [exam.originalTerm]: {
-                                    ...history,
-                                    marks: updatedMarks,
-                                    grandTotal,
-                                    average,
-                                    performanceLevel
-                                }
-                            }
-                        });
-                    }
-                }
-            }
+                previousMarks,
+                attemptNumber,
+                originalTerm
+            }]);
         } catch (error) {
             console.error('Error updating supplementary marks:', error);
+            throw error;
+        }
+    }
+
+    public async bulkUpdateSupplementaryMarks(
+        updates: Array<{
+            examId: string;
+            marks: { int: number | 'A'; ext: number | 'A'; total: number; status: 'Passed' | 'Failed' | 'Pending' };
+            previousMarks?: { int: number | 'A'; ext: number | 'A' };
+            attemptNumber?: number;
+            originalTerm?: string;
+        }>
+    ): Promise<void> {
+        try {
+            const batch = writeBatch(this.db);
+            const allSubs = await this.academicService.getRawAllSubjects();
+            let count = 0;
+
+            for (const update of updates) {
+                const docRef = doc(this.db, this.supplementaryExamsCollection, update.examId);
+                const status = update.marks.status === 'Passed' ? 'Completed' : update.marks.status;
+                
+                const updateData: any = {
+                    marks: update.marks,
+                    status,
+                    updatedAt: Date.now()
+                };
+                if (update.previousMarks) updateData.previousMarks = update.previousMarks;
+                if (update.attemptNumber) updateData.attemptNumber = update.attemptNumber;
+                if (update.originalTerm) updateData.originalTerm = update.originalTerm;
+
+                batch.update(docRef, updateData);
+                count++;
+
+                if (update.marks.status === 'Passed') {
+                    const examSnap = await getDoc(docRef);
+                    const exam = examSnap.exists() ? { id: examSnap.id, ...examSnap.data() } as SupplementaryExam : null;
+                    
+                    if (exam && exam.studentId && (update.originalTerm || exam.originalTerm)) {
+                        const targetTerm = update.originalTerm || exam.originalTerm!;
+                        const student = await this.studentService.getStudentById(exam.studentId);
+                        
+                        if (student && student.academicHistory && student.academicHistory[targetTerm]) {
+                            const history = student.academicHistory[targetTerm];
+                            const updatedMarks = { ...history.marks };
+                            
+                            updatedMarks[exam.subjectId] = {
+                                ...updatedMarks[exam.subjectId],
+                                ...update.marks,
+                                isSupplementary: true,
+                                supplementaryYear: exam.supplementaryYear
+                            };
+
+                            const { grandTotal, average, performanceLevel } = this.academicService.calculateTermMetrics(updatedMarks, allSubs);
+                            
+                            const studentDocRef = doc(this.db, this.studentsCollection, exam.studentId);
+                            batch.update(studentDocRef, {
+                                [`academicHistory.${targetTerm}.marks`]: updatedMarks,
+                                [`academicHistory.${targetTerm}.grandTotal`]: grandTotal,
+                                [`academicHistory.${targetTerm}.average`]: average,
+                                [`academicHistory.${targetTerm}.performanceLevel`]: performanceLevel
+                            });
+                            count++;
+
+                            this.studentService.updateStudentInCache(exam.studentId, {
+                                academicHistory: {
+                                    ...student.academicHistory,
+                                    [targetTerm]: {
+                                        ...history,
+                                        marks: updatedMarks,
+                                        grandTotal,
+                                        average,
+                                        performanceLevel
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+
+                if (count >= 400) {
+                    await batch.commit();
+                    count = 0;
+                }
+            }
+
+            if (count > 0) {
+                await batch.commit();
+            }
+        } catch (error) {
+            console.error('Error in bulk update supplementary marks:', error);
             throw error;
         }
     }

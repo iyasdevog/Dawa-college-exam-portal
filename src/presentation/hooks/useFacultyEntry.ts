@@ -92,67 +92,49 @@ export const useFacultyEntry = ({
         }
     };
 
-    // Validation helpers
+    // Validation helpers - Refactored to separate logic from direct state dependency where possible
     const validationHelpers = useMemo(() => {
         if (!selectedSubject) return null;
         const subject = subjects.find(s => s.id === selectedSubject);
         if (!subject) return null;
 
+        const maxINT = subject.maxINT;
+        const maxEXT = subject.maxEXT;
+        const minINT = Math.ceil(maxINT * 0.5);
+        const minEXT = Math.ceil(maxEXT * 0.4);
+
         return {
-            isINTExceedingMax: (studentId: string) => {
-                const val = marksData[studentId]?.int;
-                if (!val || val === 'A') return false;
-                return parseInt(val) > subject.maxINT;
-            },
-            isEXTExceedingMax: (studentId: string) => {
-                const val = marksData[studentId]?.ext;
-                if (!val || val === 'A') return false;
-                return parseInt(val) > subject.maxEXT;
-            },
-            isINTFailing: (studentId: string) => {
-                const val = marksData[studentId]?.int;
-                if (!val) return false;
-                if (val === 'A') return true;
-                return parseInt(val) < Math.ceil(subject.maxINT * 0.5);
-            },
-            isEXTFailing: (studentId: string) => {
-                const val = marksData[studentId]?.ext;
-                if (!val) return false;
-                if (val === 'A') return true;
-                return parseInt(val) < Math.ceil(subject.maxEXT * 0.4);
-            },
-            calculateTotal: (studentId: string) => {
-                const marks = marksData[studentId];
-                if (!marks) return 0;
-                const intVal = marks.int === 'A' ? 0 : (parseInt(marks.int) || 0);
-                const extVal = marks.ext === 'A' ? 0 : (parseInt(marks.ext) || 0);
+            maxINT,
+            maxEXT,
+            minINT,
+            minEXT,
+            calculateTotal: (int: string, ext: string) => {
+                const intVal = int === 'A' ? 0 : (parseInt(int) || 0);
+                const extVal = ext === 'A' ? 0 : (parseInt(ext) || 0);
                 return intVal + extVal;
             },
-            getStatus: (studentId: string) => {
-                const marks = marksData[studentId];
-                if (!marks || (!marks.int && !marks.ext)) return 'Pending';
-                
-                const int = marks.int === 'A' ? 0 : (parseInt(marks.int) || 0);
-                const ext = marks.ext === 'A' ? 0 : (parseInt(marks.ext) || 0);
-                
-                const minINT = Math.ceil(subject.maxINT * 0.5);
-                const minEXT = Math.ceil(subject.maxEXT * 0.4);
-                
-                const passedINT = marks.int === 'A' ? false : int >= minINT;
-                const passedEXT = marks.ext === 'A' ? false : ext >= minEXT;
-                
+            getStatus: (int: string, ext: string) => {
+                if (!int && !ext) return 'Pending';
+                const iVal = int === 'A' ? 0 : (parseInt(int) || 0);
+                const eVal = ext === 'A' ? 0 : (parseInt(ext) || 0);
+                const passedINT = int === 'A' ? false : iVal >= minINT;
+                const passedEXT = ext === 'A' ? false : eVal >= minEXT;
                 return (passedINT && passedEXT) ? 'Passed' : 'Failed';
             }
         };
-    }, [marksData, subjects, selectedSubject]);
+    }, [subjects, selectedSubject]); // Removed marksData dependency to stop total re-renders
 
     const invalidMarksInfo = useMemo(() => {
         if (!validationHelpers) return { hasInvalid: false, count: 0 };
-        const invalidStudents = students.filter(student =>
-            validationHelpers.isINTExceedingMax(student.id) || validationHelpers.isEXTExceedingMax(student.id)
-        );
+        const { maxINT, maxEXT } = validationHelpers;
+        const invalidStudents = students.filter(student => {
+            const marks = marksData[student.id];
+            if (!marks) return false;
+            return (marks.int !== 'A' && parseInt(marks.int) > maxINT) || 
+                   (marks.ext !== 'A' && parseInt(marks.ext) > maxEXT);
+        });
         return { hasInvalid: invalidStudents.length > 0, count: invalidStudents.length };
-    }, [students, validationHelpers]);
+    }, [students, marksData, validationHelpers]);
 
     const completionStats = useMemo(() => ({
         completed: students.filter(s => marksData[s.id]?.int && marksData[s.id]?.ext).length,
@@ -220,37 +202,44 @@ export const useFacultyEntry = ({
         if (!selectedSubject || invalidMarksInfo.hasInvalid) return;
         try {
             setOperationLoading({ type: 'saving', message: 'Saving marks...' });
-            const validUpdates: any[] = [];
+            const updates: any[] = [];
             const sub = subjects.find(s => s.id === selectedSubject);
 
             for (const student of students) {
                 const marks = marksData[student.id];
-                if (marks && marks.int && marks.ext) {
+                // Only save if some part of the mark exists
+                if (marks && (marks.int || marks.ext)) {
                     let intToSave: number | 'A' = marks.int === 'A' ? 'A' : parseInt(marks.int);
                     if (sub?.maxINT === 35 && intToSave !== 'A') {
                         intToSave = (intToSave as number) * 2;
                     }
                     
-                    await saveDraft(student.id, selectedSubject, marks.int, marks.ext, activeTerm);
-                    validUpdates.push({
+                    updates.push({
                         studentId: student.id,
                         subjectId: selectedSubject,
                         marks: {
                              int: intToSave,
                              ext: marks.ext === 'A' ? 'A' : parseInt(marks.ext)
-                        }
+                        },
+                        maxINT: sub?.maxINT,
+                        maxEXT: sub?.maxEXT
                     });
+                    
+                    // Optimistic offline backup
+                    saveDraft(student.id, selectedSubject, marks.int, marks.ext, activeTerm);
                 }
             }
 
-            if (isOnline && validUpdates.length > 0) {
-                await dataService.bulkUpdateMarks(validUpdates, activeTerm);
-                validUpdates.forEach(u => deleteDraft(u.studentId, selectedSubject, activeTerm));
+            if (isOnline && updates.length > 0) {
+                // Use TRUE batching
+                await dataService.bulkUpdateMarks(updates, activeTerm);
+                updates.forEach(u => deleteDraft(u.studentId, selectedSubject, activeTerm));
                 await loadStudentsByClass();
             }
-            alert(isOnline ? 'Marks saved successfully!' : 'Marks saved offline as drafts!');
+            alert(isOnline ? 'Marks saved successfully (Batched)!' : 'Marks saved offline as drafts!');
         } catch (error) {
             console.error('Error saving marks:', error);
+            alert('Failed to save marks. Please check your connection.');
         } finally {
             setOperationLoading({ type: null });
         }

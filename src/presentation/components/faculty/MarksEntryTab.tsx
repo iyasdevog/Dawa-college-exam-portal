@@ -11,14 +11,14 @@ interface MarksEntryTabProps {
     setSubjectType: (type: 'general' | 'elective') => void;
     selectedSubject: string;
     setSelectedSubject: (id: string) => void;
-    
+
     // Data
     allowedClasses: string[];
     classSubjects: SubjectConfig[];
     selectedSubjectData: SubjectConfig | undefined;
     students: StudentRecord[];
     attendanceStats: Record<string, { present: number; total: number; percentage: number }>;
-    
+
     // Hook state/handlers
     marksData: Record<string, { int: string; ext: string }>;
     handleMarksChange: (studentId: string, field: 'int' | 'ext', value: string) => void;
@@ -29,14 +29,14 @@ interface MarksEntryTabProps {
     handleClearINTMarks: () => Promise<void>;
     handleClearEXTMarks: () => Promise<void>;
     handleClearAll: () => Promise<void>;
-    
+
     // UI Helpers
     validationHelpers: any;
     invalidMarksInfo: { hasInvalid: boolean; count: number };
     completionStats: { completed: number; total: number };
     operationLoading: { type: string | null; message?: string };
     isSaving: boolean;
-    
+
     // Mobile Navigation
     showStudentList: boolean;
     setShowStudentList: (show: boolean) => void;
@@ -57,6 +57,69 @@ interface MarksEntryTabProps {
     studentRefs: React.MutableRefObject<{ [key: string]: HTMLDivElement | null }>;
     handleKeyDown: (e: React.KeyboardEvent, studentId: string, field: 'int' | 'ext') => void;
 }
+
+const StudentRow = React.memo(({ 
+    student, index, marks, validationHelpers, handleMarksChange, handleKeyDown, 
+    handleSaveEXTMarks, handleSaveINTMarks, handleClearStudentMarks, 
+    isSaving, att, selectedSubjectData 
+}: {
+    student: StudentRecord;
+    index: number;
+    marks: { int: string; ext: string };
+    validationHelpers: any;
+    handleMarksChange: any;
+    handleKeyDown: any;
+    handleSaveEXTMarks: any;
+    handleSaveINTMarks: any;
+    handleClearStudentMarks: any;
+    isSaving: boolean;
+    att: number;
+    selectedSubjectData: SubjectConfig | undefined;
+}) => {
+    const total = validationHelpers?.calculateTotal(marks.int, marks.ext) || 0;
+    const status = validationHelpers?.getStatus(marks.int, marks.ext) || 'Pending';
+
+    return (
+        <tr className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+            <td className="p-4">{student.adNo}</td><td className="p-4">{student.name}</td>
+            <td className="p-4 text-center">
+                <input 
+                    type="text" 
+                    value={marks.ext || ''} 
+                    onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)} 
+                    onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')} 
+                    className={`w-20 p-2 border-2 rounded-xl text-center ${att < 75 ? 'bg-red-50 opacity-60' : ''}`} 
+                    disabled={att < 75 || isSaving} 
+                />
+            </td>
+            <td className="p-4 text-center">
+                <input 
+                    type="text" 
+                    value={marks.int || ''} 
+                    onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)} 
+                    onKeyDown={(e) => handleKeyDown(e, student.id, 'int')} 
+                    className={`w-20 p-2 border-2 rounded-xl text-center ${selectedSubjectData?.maxEXT === 100 || att < 75 ? 'bg-slate-100 opacity-60' : ''}`} 
+                    disabled={selectedSubjectData?.maxEXT === 100 || att < 75 || isSaving} 
+                />
+            </td>
+            <td className="p-4 text-center font-bold">{marks.int && marks.ext ? total : '-'}</td>
+            <td className="p-4 text-center">
+                <span className={`px-2 py-1 rounded-full text-xs ${status === 'Passed' ? 'bg-emerald-100 text-emerald-700' : status === 'Failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100'}`}>
+                    {status}
+                </span>
+            </td>
+            <td className="p-4 text-center">
+                <div className="flex flex-col gap-1">
+                    <div className="flex gap-1">
+                        <button onClick={() => handleSaveEXTMarks(student.id)} className="flex-1 bg-sky-50 text-sky-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.ext}>Save EXT</button>
+                        <button onClick={() => handleSaveINTMarks(student.id)} className="flex-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.int}>Save INT</button>
+                    </div>
+                    <button onClick={() => handleClearStudentMarks(student.id, student.name)} className="bg-red-50 text-red-600 rounded text-xs p-1" disabled={isSaving || (!marks.int && !marks.ext)}>Clear ALL</button>
+                </div>
+            </td>
+        </tr>
+    );
+});
 
 const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
     selectedClass, setSelectedClass,
@@ -280,33 +343,23 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {students.map((student, index) => {
-                                        const total = validationHelpers?.calculateTotal(student.id) || 0;
-                                        const status = validationHelpers?.getStatus(student.id) || 'Pending';
-                                        const att = attendanceStats[student.id]?.percentage || 0;
-                                        return (
-                                            <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                                <td className="p-4">{student.adNo}</td><td className="p-4">{student.name}</td>
-                                                <td className="p-4 text-center">
-                                                    <input type="text" value={marksData[student.id]?.ext || ''} onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)} onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')} className={`w-20 p-2 border-2 rounded-xl text-center ${att < 75 ? 'bg-red-50 opacity-60' : ''}`} disabled={att < 75 || isSaving} />
-                                                </td>
-                                                <td className="p-4 text-center">
-                                                    <input type="text" value={marksData[student.id]?.int || ''} onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)} onKeyDown={(e) => handleKeyDown(e, student.id, 'int')} className={`w-20 p-2 border-2 rounded-xl text-center ${selectedSubjectData?.maxEXT === 100 || att < 75 ? 'bg-slate-100 opacity-60' : ''}`} disabled={selectedSubjectData?.maxEXT === 100 || att < 75 || isSaving} />
-                                                </td>
-                                                <td className="p-4 text-center font-bold">{marksData[student.id]?.int && marksData[student.id]?.ext ? total : '-'}</td>
-                                                <td className="p-4 text-center"><span className={`px-2 py-1 rounded-full text-xs ${status === 'Passed' ? 'bg-emerald-100 text-emerald-700' : status === 'Failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100'}`}>{status}</span></td>
-                                                <td className="p-4 text-center">
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="flex gap-1">
-                                                            <button onClick={() => handleSaveEXTMarks(student.id)} className="flex-1 bg-sky-50 text-sky-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marksData[student.id]?.ext}>Save EXT</button>
-                                                            <button onClick={() => handleSaveINTMarks(student.id)} className="flex-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marksData[student.id]?.int}>Save INT</button>
-                                                        </div>
-                                                        <button onClick={() => handleClearStudentMarks(student.id, student.name)} className="bg-red-50 text-red-600 rounded text-xs p-1" disabled={isSaving || (!marksData[student.id]?.int && !marksData[student.id]?.ext)}>Clear ALL</button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                    {students.map((student, index) => (
+                                        <StudentRow 
+                                            key={student.id}
+                                            student={student}
+                                            index={index}
+                                            marks={marksData[student.id] || { int: '', ext: '' }}
+                                            validationHelpers={validationHelpers}
+                                            handleMarksChange={handleMarksChange}
+                                            handleKeyDown={handleKeyDown}
+                                            handleSaveEXTMarks={handleSaveEXTMarks}
+                                            handleSaveINTMarks={handleSaveINTMarks}
+                                            handleClearStudentMarks={handleClearStudentMarks}
+                                            isSaving={isSaving}
+                                            att={attendanceStats[student.id]?.percentage || 0}
+                                            selectedSubjectData={selectedSubjectData}
+                                        />
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
