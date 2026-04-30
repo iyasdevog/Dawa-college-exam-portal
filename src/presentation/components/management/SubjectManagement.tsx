@@ -304,24 +304,24 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             setIsOperating(true);
 
             // Normalize faculty name to Title Case
-            const normalizedFacultyName = subjectForm.facultyName.trim()
+            const normalizedFacultyName = (subjectForm.facultyName || '').trim()
                 .split(' ')
                 .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                 .join(' ');
 
             const subjectData = {
                 name: normalizedName,
-                arabicName: subjectForm.arabicName.trim(),
-                maxINT: subjectForm.maxINT,
-                maxEXT: subjectForm.maxEXT,
-                passingTotal: subjectForm.passingTotal,
+                arabicName: (subjectForm.arabicName || '').trim(),
+                maxINT: Number(subjectForm.maxINT) || 0,
+                maxEXT: Number(subjectForm.maxEXT) || 0,
+                passingTotal: Number(subjectForm.passingTotal) || 0,
                 facultyName: normalizedFacultyName,
                 targetClasses: uniqueTargetClasses, // Use filtered classes
                 subjectType: subjectForm.subjectType,
-                electiveType: subjectForm.subjectType === 'elective' ? subjectForm.electiveType : undefined,
-                enrolledStudents: subjectForm.enrolledStudents,
-                activeSemester: subjectForm.activeSemester,
-                academicYear: subjectForm.academicYear
+                electiveType: subjectForm.subjectType === 'elective' ? (subjectForm.electiveType || 'intra-class') : null,
+                enrolledStudents: subjectForm.enrolledStudents || [],
+                activeSemester: subjectForm.activeSemester || 'Both',
+                academicYear: subjectForm.academicYear || ''
             };
 
             if (editingSubject) {
@@ -329,13 +329,19 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             } else {
                 await dataService.addSubject(subjectData);
             }
-            await onRefresh();
+            
+            try {
+                await onRefresh();
+            } catch (refreshError) {
+                console.error('Data saved but refresh failed:', refreshError);
+            }
+
             setShowSubjectForm(false);
             setEditingSubject(null);
             alert(`Subject "${subjectData.name}" saved successfully!`);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving subject:', error);
-            alert('Error saving subject.');
+            alert(`Error saving subject: ${error?.message || 'Unknown error'}. Please check your connection and try again.`);
         } finally {
             setIsOperating(false);
         }
