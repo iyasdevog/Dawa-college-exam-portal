@@ -51,6 +51,7 @@ const Management: React.FC = () => {
           dataService.getGlobalSettings()
         ]);
         setSubjects(subjectData);
+        setStudents(studentData);
         setAllHistoricalSubjects(allSubjectsRaw);
         // We reuse curriculum state for global suggestions if needed, but curriculum is specific
         // Let's ensure curriculum is also loaded if we're on subjects tab

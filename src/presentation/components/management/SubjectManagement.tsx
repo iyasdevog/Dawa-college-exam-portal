@@ -1161,21 +1161,32 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                 />
             )}
 
-            {/* Enrollment Modal */}
+            {/* Enrollment Modal - Mobile Optimized */}
             {showEnrollmentModal && selectedSubjectForEnrollment && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-2xl w-full max-w-2xl p-6 h-[80vh] flex flex-col">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold">Manage Enrollment: {selectedSubjectForEnrollment.name}</h3>
-                            <button onClick={() => setShowEnrollmentModal(false)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200"><i className="fa-solid fa-times"></i></button>
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-2 sm:p-4 z-[70] overflow-hidden">
+                    <div className="bg-white rounded-3xl w-full max-w-2xl flex flex-col h-full max-h-[90vh] sm:max-h-[85vh] shadow-2xl animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <div>
+                                <h3 className="text-xl font-black text-slate-800">Manage Enrollment</h3>
+                                <p className="text-emerald-600 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">{selectedSubjectForEnrollment.name}</p>
+                            </div>
+                            <button 
+                                onClick={() => setShowEnrollmentModal(false)}
+                                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400"
+                            >
+                                <i className="fa-solid fa-times text-lg"></i>
+                            </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto">
-                            <div className="mb-4 flex items-center gap-4">
-                                <label className="font-bold text-sm text-slate-700">Filter by Class:</label>
+
+                        {/* Filters */}
+                        <div className="p-4 border-b border-slate-50 flex flex-col sm:flex-row gap-3">
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Filter by Class</label>
                                 <select
                                     value={enrollmentClassFilter}
                                     onChange={(e) => setEnrollmentClassFilter(e.target.value)}
-                                    className="p-2 border rounded-lg"
+                                    className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-slate-900 font-bold focus:border-emerald-500 outline-none transition-all"
                                 >
                                     <option value="All">All Classes</option>
                                     {availableClasses.map(cls => (
@@ -1183,139 +1194,192 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                     ))}
                                 </select>
                             </div>
+                        </div>
 
-                            {/* Filter students based on selection */}
+                        {/* Student List Content */}
+                        <div className="flex-1 overflow-x-auto custom-scrollbar">
                             {(() => {
                                 const displayedStudents = enrollmentClassFilter === 'All'
                                     ? students
                                     : students.filter(s => s.className === enrollmentClassFilter);
 
                                 return displayedStudents.length > 0 ? (
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="text-left border-b bg-slate-50">
-                                                <th className="p-3 sticky top-0 bg-slate-50 font-bold text-slate-700">Student Name</th>
-                                                <th className="p-3 sticky top-0 bg-slate-50 font-bold text-slate-700">Class</th>
-                                                <th className="p-3 sticky top-0 bg-slate-50 font-bold text-slate-700 text-center">Status</th>
-                                                <th className="p-3 sticky top-0 bg-slate-50 font-bold text-slate-700 text-center">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {displayedStudents.map(student => {
-                                                const isEnrolled = (selectedSubjectForEnrollment.enrolledStudents || []).includes(student.id);
-                                                return (
-                                                    <tr key={student.id} className="border-b hover:bg-slate-50 transition-colors">
-                                                        <td className="p-3 font-medium text-slate-900">{student.name}</td>
-                                                        <td className="p-3 text-sm text-slate-500 font-medium">{student.className}</td>
-                                                        <td className="p-3 text-center">
-                                                            {isEnrolled ?
-                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                                                                    Enrolled
-                                                                </span> :
-                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
-                                                                    Not Enrolled
+                                    <div className="min-w-full">
+                                        <table className="w-full">
+                                            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                                                <tr className="text-left border-b border-slate-100">
+                                                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student</th>
+                                                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Class</th>
+                                                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                                                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {displayedStudents.map(student => {
+                                                    const isEnrolled = (selectedSubjectForEnrollment.enrolledStudents || []).includes(student.id);
+                                                    return (
+                                                        <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td className="p-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px] ${isEnrolled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                                        {student.name.charAt(0)}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-bold text-sm text-slate-900 leading-tight">{student.name}</p>
+                                                                        <p className="text-[10px] text-slate-400 sm:hidden">{student.className} • {student.adNo}</p>
+                                                                        <p className="text-[10px] text-slate-400 hidden sm:block">Adm: {student.adNo}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-4 text-sm font-bold text-slate-600 hidden sm:table-cell">{student.className}</td>
+                                                            <td className="p-4 text-center">
+                                                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter ${isEnrolled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                                    {isEnrolled ? 'Enrolled' : 'Available'}
                                                                 </span>
-                                                            }
-                                                        </td>
-                                                        <td className="p-3 text-center">
-                                                            <button
-                                                                onClick={() => handleToggleStudentEnrollment(student.id, isEnrolled)}
-                                                                className={`w-24 py-1.5 rounded-lg text-xs font-bold transition-all ${isEnrolled
-                                                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
-                                                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200'
-                                                                    }`}
-                                                            >
-                                                                {isEnrolled ? 'Remove' : 'Enroll'}
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                                            </td>
+                                                            <td className="p-4 text-right">
+                                                                <button
+                                                                    onClick={() => handleToggleStudentEnrollment(student.id, isEnrolled)}
+                                                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isEnrolled
+                                                                        ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                                                        : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                                                        }`}
+                                                                >
+                                                                    {isEnrolled ? 'Remove' : 'Enroll'}
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center h-40 text-slate-500">
-                                        <i className="fa-solid fa-graduation-cap text-3xl mb-2 opacity-20"></i>
-                                        <p>No students found in {enrollmentClassFilter === 'All' ? 'any class' : enrollmentClassFilter}</p>
+                                    <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                            <i className="fa-solid fa-graduation-cap text-2xl opacity-20"></i>
+                                        </div>
+                                        <p className="font-bold text-sm">No students found</p>
                                     </div>
                                 );
                             })()}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                            <div className="text-left">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Currently Enrolled</p>
+                                <p className="text-xl font-black text-emerald-600">{(selectedSubjectForEnrollment.enrolledStudents || []).length}</p>
+                            </div>
+                            <button
+                                onClick={() => setShowEnrollmentModal(false)}
+                                className="px-10 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-800 shadow-xl"
+                            >
+                                Finish
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Class Student Selection Modal (For Electives Creation) */}
+            {/* Class Student Selection Modal (For Electives Creation) - Mobile Optimized */}
             {showClassSelectionModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
-                    <div className="bg-white rounded-2xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
-                        <div className="flex justify-between items-center mb-4">
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-2 sm:p-4 z-[70] overflow-hidden">
+                    <div className="bg-white rounded-3xl w-full max-w-lg flex flex-col h-full max-h-[90vh] sm:max-h-[80vh] shadow-2xl animate-in zoom-in-95 duration-200">
+                        {/* Modal Header */}
+                        <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                             <div>
-                                <h3 className="text-xl font-bold">Select Students: {activeClassForSelection}</h3>
-                                <p className="text-sm text-slate-500">Pick students for this elective</p>
+                                <h3 className="text-xl font-black text-slate-800">Select Students</h3>
+                                <p className="text-slate-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">Class: {activeClassForSelection}</p>
                             </div>
-                            <button onClick={() => setShowClassSelectionModal(false)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200"><i className="fa-solid fa-check"></i></button>
+                            <button 
+                                onClick={() => setShowClassSelectionModal(false)}
+                                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400"
+                            >
+                                <i className="fa-solid fa-times text-lg"></i>
+                            </button>
                         </div>
-
-                        <div className="mb-4">
-                            <div className="relative">
-                                <i className="fa-solid fa-search absolute left-3 top-3 text-slate-400"></i>
+                        
+                        {/* Search students */}
+                        <div className="p-4 border-b border-slate-50">
+                            <div className="relative group">
+                                <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors"></i>
                                 <input
                                     type="text"
-                                    placeholder="Search students..."
+                                    placeholder="Search by name or admission number..."
                                     value={studentSearchQuery}
                                     onChange={(e) => setStudentSearchQuery(e.target.value)}
-                                    className="w-full p-2 pl-10 border rounded-xl bg-slate-50"
+                                    className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
                                 />
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto">
+                        {/* Student List */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                             {(() => {
                                 const classStudents = students.filter(s => s.className === activeClassForSelection);
                                 const filteredClassStudents = studentSearchQuery
-                                    ? classStudents.filter(s => s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()))
+                                    ? classStudents.filter(s => 
+                                        s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) || 
+                                        s.adNo.toLowerCase().includes(studentSearchQuery.toLowerCase())
+                                      )
                                     : classStudents;
 
                                 return filteredClassStudents.length > 0 ? (
-                                    <div className="space-y-2">
+                                    <div className="grid grid-cols-1 gap-2">
                                         {filteredClassStudents.map(student => {
                                             const isSelected = subjectForm.enrolledStudents.includes(student.id);
                                             return (
-                                                <div
+                                                <button
                                                     key={student.id}
+                                                    type="button"
                                                     onClick={() => handleToggleStudentSelection(student.id)}
-                                                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${isSelected
-                                                        ? 'bg-purple-50 border-purple-200'
-                                                        : 'hover:bg-slate-50 border-slate-100'
+                                                    className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer border-2 transition-all group ${isSelected
+                                                        ? 'bg-purple-50 border-purple-200 shadow-sm'
+                                                        : 'hover:bg-slate-50 border-slate-100 bg-white'
                                                         }`}
                                                 >
-                                                    <div>
-                                                        <p className={`font-bold ${isSelected ? 'text-purple-900' : 'text-slate-900'}`}>{student.name}</p>
-                                                        <p className="text-xs text-slate-500">Adm: {student.adNo}</p>
+                                                    <div className="flex items-center gap-4 text-left">
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs ${isSelected ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {student.name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <p className={`font-black text-sm ${isSelected ? 'text-purple-900' : 'text-slate-900'}`}>{student.name}</p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Adm: {student.adNo}</p>
+                                                        </div>
                                                     </div>
-                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${isSelected
-                                                        ? 'bg-purple-600 border-purple-600 text-white'
-                                                        : 'border-slate-300 bg-white'
+                                                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-all ${isSelected
+                                                        ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-500/20'
+                                                        : 'border-slate-200 bg-white group-hover:border-purple-300'
                                                         }`}>
-                                                        {isSelected && <i className="fa-solid fa-check text-xs"></i>}
+                                                        {isSelected && <i className="fa-solid fa-check text-[10px]"></i>}
                                                     </div>
-                                                </div>
+                                                </button>
                                             );
                                         })}
                                     </div>
                                 ) : (
-                                    <div className="text-center p-8 text-slate-500">
-                                        <p>No students found.</p>
+                                    <div className="flex flex-col items-center justify-center h-full py-12 text-slate-400">
+                                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                            <i className="fa-solid fa-user-slash text-3xl opacity-20"></i>
+                                        </div>
+                                        <p className="font-bold text-sm tracking-tight text-center">No students found in {activeClassForSelection}</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest mt-1">Try a different search or class</p>
                                     </div>
                                 );
                             })()}
                         </div>
 
-                        <div className="mt-4 pt-4 border-t flex justify-end">
+                        {/* Footer */}
+                        <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                            <div className="text-left">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Selected</p>
+                                <p className="text-xl font-black text-purple-600">{subjectForm.enrolledStudents.filter(id => students.find(s => s.id === id && s.className === activeClassForSelection)).length}</p>
+                            </div>
                             <button
+                                type="button"
                                 onClick={() => setShowClassSelectionModal(false)}
-                                className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold"
+                                className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-800 shadow-xl transition-all active:scale-[0.98]"
                             >
                                 Done
                             </button>
