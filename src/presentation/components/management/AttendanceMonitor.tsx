@@ -47,7 +47,22 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
             classStats[className].subjects[subjectId].total += total;
         });
 
-        return classStats;
+        // Convert the nested maps to pre-sorted arrays immediately within the useMemo
+        // This avoids running Object.entries().sort() on the entire list on every React render
+        return Object.entries(classStats)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([className, stats]) => ({
+                className,
+                present: stats.present,
+                total: stats.total,
+                subjectsList: Object.entries(stats.subjects)
+                    .sort(([, a], [, b]) => b.total - a.total)
+                    .map(([subId, subStats]) => ({
+                        subId,
+                        present: subStats.present,
+                        total: subStats.total
+                    }))
+            }));
     }, [records]);
     
     // O(1) Lookup Maps for optimal rendering
@@ -191,8 +206,8 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Class Cards Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {Object.entries(analyticsData).sort(([a], [b]) => a.localeCompare(b)).map(([className, stats]) => {
-                            const percentage = stats.total > 0 ? (stats.present / stats.total) * 100 : 0;
+                        {analyticsData.map(({ className, present, total, subjectsList }) => {
+                            const percentage = total > 0 ? (present / total) * 100 : 0;
                             const isSelected = selectedAnalyticsClass === className;
 
                             return (
@@ -223,7 +238,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                                 </div>
                                                 <div className="text-right">
                                                     <p className={`text-[10px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>Total Periods</p>
-                                                    <h4 className={`text-lg font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{stats.total}</h4>
+                                                    <h4 className={`text-lg font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{total}</h4>
                                                 </div>
                                             </div>
 
@@ -250,9 +265,9 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                             <div className="bg-white/5 rounded-3xl p-4 border border-white/10 space-y-4">
                                                 <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-white/10 pb-2">Individual Subjects</h5>
                                                 <div className="space-y-3">
-                                                    {Object.entries(stats.subjects).sort(([, a], [, b]) => b.total - a.total).map(([subId, subStats]) => {
+                                                    {subjectsList.map(({ subId, present: subPresent, total: subTotal }) => {
                                                         const subject = subjectMap[subId];
-                                                        const subPerc = subStats.total > 0 ? (subStats.present / subStats.total) * 100 : 0;
+                                                        const subPerc = subTotal > 0 ? (subPresent / subTotal) * 100 : 0;
                                                         return (
                                                             <div key={subId} className="flex items-center justify-between gap-4">
                                                                 <div className="flex-1 min-w-0">
@@ -268,7 +283,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                                                     </div>
                                                                 </div>
                                                                 <div className="text-right">
-                                                                    <p className="text-[9px] font-black text-white">{subStats.present}/{subStats.total}</p>
+                                                                    <p className="text-[9px] font-black text-white">{subPresent}/{subTotal}</p>
                                                                 </div>
                                                             </div>
                                                         );

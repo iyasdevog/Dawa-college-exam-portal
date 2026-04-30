@@ -321,7 +321,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         
         setIsApplyingWaiver(true);
         try {
-            for (const exam of eligibleWaiverExams) {
+            const promises = eligibleWaiverExams.map(async (exam) => {
                 const subject = subjects.find(s => s.id === exam.subjectId);
                 const maxEXT = exam.maxEXT ?? subject?.maxEXT ?? 70;
                 const minEXT = Math.ceil(maxEXT * 0.4);
@@ -331,11 +331,16 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 const currentInt = typeof exam.marks?.int === 'number' ? exam.marks.int : 
                                   parseInt(exam.marks?.int as any) || 0;
                 
-                const newMarks = {
+                const newMarks: {
+                    int: number | string;
+                    ext: number;
+                    total: number;
+                    status: 'Passed' | 'Failed';
+                } = {
                     int: exam.marks?.int || 0,
                     ext: minEXT,
                     total: currentInt + minEXT,
-                    status: 'Passed' as const
+                    status: 'Passed'
                 };
                 
                 // Final safety: Only pass if they also passed INT (unless Doura)
@@ -345,7 +350,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 }
                 
                 if (newMarks.status === 'Passed') {
-                    await dataService.updateSupplementaryExamMarks(
+                    return dataService.updateSupplementaryExamMarks(
                         exam.id,
                         newMarks,
                         exam.previousMarks,
@@ -353,7 +358,9 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                         exam.originalTerm
                     );
                 }
-            }
+            });
+
+            await Promise.all(promises);
             alert(`Successfully applied moderation waiver to qualified students.`);
             await onRefresh();
             setShowWaiverModal(false);
