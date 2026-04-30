@@ -1074,38 +1074,40 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                             </div>
 
                             <div className="space-y-4">
-                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <i className="fa-solid fa-history"></i>
-                                        Original Marks (Previous Record)
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">INT</label>
-                                            <input
-                                                type="text"
-                                                value={markEntryForm.prevInt}
-                                                onChange={(e) => setMarkEntryForm(prev => ({ ...prev, prevInt: e.target.value }))}
-                                                className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono text-sm focus:border-emerald-500 outline-none"
-                                                placeholder="INT"
-                                            />
+                                {editingExam?.examType !== 'PreviousYear' && (
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <i className="fa-solid fa-history"></i>
+                                            Original Marks (Previous Record)
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">INT</label>
+                                                <input
+                                                    type="text"
+                                                    value={markEntryForm.prevInt}
+                                                    onChange={(e) => setMarkEntryForm(prev => ({ ...prev, prevInt: e.target.value }))}
+                                                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono text-sm focus:border-emerald-500 outline-none"
+                                                    placeholder="INT"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">EXT</label>
+                                                <input
+                                                    type="text"
+                                                    value={markEntryForm.prevExt}
+                                                    onChange={(e) => setMarkEntryForm(prev => ({ ...prev, prevExt: e.target.value }))}
+                                                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono text-sm focus:border-emerald-500 outline-none"
+                                                    placeholder="EXT"
+                                                />
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">EXT</label>
-                                            <input
-                                                type="text"
-                                                value={markEntryForm.prevExt}
-                                                onChange={(e) => setMarkEntryForm(prev => ({ ...prev, prevExt: e.target.value }))}
-                                                className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono text-sm focus:border-emerald-500 outline-none"
-                                                placeholder="EXT"
-                                            />
-                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-2 font-medium">
+                                            <i className="fa-solid fa-info-circle mr-1"></i>
+                                            Manually enter or override historical marks if missing.
+                                        </p>
                                     </div>
-                                    <p className="text-[10px] text-slate-500 mt-2 font-medium">
-                                        <i className="fa-solid fa-info-circle mr-1"></i>
-                                        Manually enter or override historical marks if missing.
-                                    </p>
-                                </div>
+                                )}
 
                                 <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
                                     <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-2">
