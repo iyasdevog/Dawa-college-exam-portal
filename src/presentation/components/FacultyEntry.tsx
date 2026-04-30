@@ -126,7 +126,10 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         try {
             setIsSaving(true);
             const studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject, activeTerm);
-            const filteredByClass = subjectType === 'general' 
+            const currentSub = subjects.find(s => s.id === selectedSubject);
+            const isCrossClass = currentSub?.subjectType === 'elective' && currentSub?.electiveType === 'cross-class';
+
+            const filteredByClass = (subjectType === 'general' || !isCrossClass)
                 ? studentsToShow.filter(s => s.className === selectedClass)
                 : studentsToShow;
             

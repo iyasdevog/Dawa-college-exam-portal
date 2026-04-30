@@ -172,6 +172,7 @@ export interface SubjectConfig {
   facultyName?: string;
   targetClasses: string[];
   subjectType: 'general' | 'elective' | 'school_subject';
+  electiveType?: 'intra-class' | 'cross-class';
   enrolledStudents?: string[]; // Student IDs for elective subjects
   activeSemester?: 'Odd' | 'Even' | 'Both' | 'Bridge';
   academicYear?: string;

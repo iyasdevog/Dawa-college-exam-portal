@@ -132,6 +132,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         subjectType: 'general' as 'general' | 'elective' | 'school_subject',
         enrolledStudents: [] as string[],
         activeSemester: 'Both' as 'Odd' | 'Even' | 'Both',
+        electiveType: 'intra-class' as 'intra-class' | 'cross-class',
         academicYear: ''
     });
 
@@ -219,6 +220,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             facultyName: '',
             targetClasses: [],
             subjectType: 'general',
+            electiveType: 'intra-class',
             activeSemester: 'Both',
             enrolledStudents: [],
             academicYear: ''
@@ -237,6 +239,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             facultyName: subject.facultyName || '',
             targetClasses: subject.targetClasses || [],
             subjectType: subject.subjectType || 'general',
+            electiveType: subject.electiveType || 'intra-class',
             activeSemester: (subject as any).activeSemester || 'Both',
             enrolledStudents: subject.enrolledStudents || [],
             academicYear: (subject as any).academicYear || ''
@@ -315,6 +318,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                 facultyName: normalizedFacultyName,
                 targetClasses: uniqueTargetClasses, // Use filtered classes
                 subjectType: subjectForm.subjectType,
+                electiveType: subjectForm.subjectType === 'elective' ? subjectForm.electiveType : undefined,
                 enrolledStudents: subjectForm.enrolledStudents,
                 activeSemester: subjectForm.activeSemester,
                 academicYear: subjectForm.academicYear
@@ -477,7 +481,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                 grouped[faculty] = [];
             }
 
-            if (subject.subjectType === 'elective') {
+            if (subject.subjectType === 'elective' && subject.electiveType === 'cross-class') {
                 // Group separate elective records
                 const existing = findExistingElective(grouped[faculty], subject.name);
                 if (existing) {
@@ -551,28 +555,39 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
 
         subjects.forEach(subject => {
             if (subject.subjectType === 'elective') {
-                const key = `${subject.name.trim().toLowerCase()}-${(subject.facultyName || '').trim().toLowerCase()}`;
-
-                if (electiveGroups[key]) {
-                    const existing = electiveGroups[key];
-                    if (subject.targetClasses) {
-                        subject.targetClasses.forEach(c => {
-                            if (!existing.specificClass.includes(c)) {
-                                existing.specificClass.push(c);
-                            }
-                        });
-                    }
-                    existing.relatedIds.push(subject.id);
-                    if (subject.enrolledStudents) {
-                        const currentEnrolled = existing.enrolledStudents || [];
-                        existing.enrolledStudents = Array.from(new Set([...currentEnrolled, ...subject.enrolledStudents]));
+                // If cross-class, group by name+faculty to show them as one combined entry (Common elective)
+                if (subject.electiveType === 'cross-class') {
+                    const key = `${subject.name.trim().toLowerCase()}-${(subject.facultyName || '').trim().toLowerCase()}`;
+                    if (electiveGroups[key]) {
+                        const existing = electiveGroups[key];
+                        if (subject.targetClasses) {
+                            subject.targetClasses.forEach(c => {
+                                if (!existing.specificClass.includes(c)) {
+                                    existing.specificClass.push(c);
+                                }
+                            });
+                        }
+                        existing.relatedIds.push(subject.id);
+                        if (subject.enrolledStudents) {
+                            const currentEnrolled = existing.enrolledStudents || [];
+                            existing.enrolledStudents = Array.from(new Set([...currentEnrolled, ...subject.enrolledStudents]));
+                        }
+                    } else {
+                        electiveGroups[key] = {
+                            ...subject,
+                            specificClass: [...(subject.targetClasses || [])],
+                            relatedIds: [subject.id]
+                        };
                     }
                 } else {
-                    electiveGroups[key] = {
-                        ...subject,
-                        specificClass: [...(subject.targetClasses || [])],
-                        relatedIds: [subject.id]
-                    };
+                    // Intra-class elective: Treat like general subject (separate entry per class)
+                    if (subject.targetClasses && subject.targetClasses.length > 0) {
+                        subject.targetClasses.forEach(cls => {
+                            flattened.push({ ...subject, specificClass: cls });
+                        });
+                    } else {
+                        flattened.push({ ...subject, specificClass: '-' });
+                    }
                 }
             } else {
                 if (subject.targetClasses && subject.targetClasses.length > 0) {
@@ -1066,6 +1081,43 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                             <option value="school_subject">School Subject</option>
                                         </select>
                                     </div>
+
+                                    {subjectForm.subjectType === 'elective' && (
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Elective Type</label>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSubjectForm(prev => ({ ...prev, electiveType: 'intra-class' }))}
+                                                    className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all text-xs ${
+                                                        subjectForm.electiveType === 'intra-class'
+                                                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                                                        : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'
+                                                    }`}
+                                                >
+                                                    <i className="fa-solid fa-users-rectangle mb-1 block"></i>
+                                                    Intra-class
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSubjectForm(prev => ({ ...prev, electiveType: 'cross-class' }))}
+                                                    className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all text-xs ${
+                                                        subjectForm.electiveType === 'cross-class'
+                                                        ? 'bg-purple-50 border-purple-500 text-purple-700'
+                                                        : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'
+                                                    }`}
+                                                >
+                                                    <i className="fa-solid fa-users-line mb-1 block"></i>
+                                                    Cross-class
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-2 ml-1 font-medium italic">
+                                                {subjectForm.electiveType === 'intra-class' 
+                                                    ? 'Separate grades for each class (prevents student mixing).'
+                                                    : 'Multiple classes attend together (common grade list).'}
+                                            </p>
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Semester Availability</label>
                                         <select 
