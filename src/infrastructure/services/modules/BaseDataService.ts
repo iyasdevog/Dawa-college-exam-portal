@@ -109,13 +109,18 @@ export abstract class BaseDataService {
     public getHistoricalClassName(termKey: string | undefined, className: string): string {
         if (!termKey || !className) return className;
 
-        // Specific mapping for 2025-2026-Odd semester
-        if (termKey === '2025-2026-Odd') {
+        // Robust check for 2025-2026-Odd or 2025-Odd styles
+        const is2025Odd = (termKey === '2025-2026-Odd' || termKey === '2025-Odd' || termKey === '2025-26-Odd');
+        
+        if (is2025Odd) {
             const reverseMappings: Record<string, string> = {
                 'FS2': 'S1',
                 'FS3': 'S2',
                 'HS2': 'P1',
-                'HS3': 'P2'
+                'HS3': 'P2',
+                // Adding missing ones just in case
+                'FS1': 'Bridge', 
+                'HS1': 'Prep'
             };
             return reverseMappings[className] || className;
         }
@@ -130,12 +135,16 @@ export abstract class BaseDataService {
     public getDatabaseClassName(termKey: string | undefined, historicalName: string): string {
         if (!termKey || !historicalName) return historicalName;
 
-        if (termKey === '2025-2026-Odd') {
+        const is2025Odd = (termKey === '2025-2026-Odd' || termKey === '2025-Odd' || termKey === '2025-26-Odd');
+
+        if (is2025Odd) {
             const forwardMappings: Record<string, string> = {
                 'S1': 'FS2',
                 'S2': 'FS3',
                 'P1': 'HS2',
-                'P2': 'HS3'
+                'P2': 'HS3',
+                'Bridge': 'FS1',
+                'Prep': 'HS1'
             };
             return forwardMappings[historicalName] || historicalName;
         }

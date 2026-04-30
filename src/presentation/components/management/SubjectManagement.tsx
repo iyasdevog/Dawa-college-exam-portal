@@ -1089,7 +1089,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                     <div className="flex flex-wrap gap-2">
                                         {(availableClasses.length > 0 ? availableClasses : ['S1', 'S2', 'S3', 'P1', 'P2', 'D1', 'D2', 'D3', 'PG1', 'PG2']).map(cls => {
                                             if (subjectForm.subjectType === 'elective') {
-                                                const enrolledCount = students.filter(s => s.className === cls && subjectForm.enrolledStudents.includes(s.id)).length;
+                                                const enrolledCount = students.filter(s => (s.className === cls || s.currentClass === cls) && subjectForm.enrolledStudents.includes(s.id)).length;
                                                 const isTarget = subjectForm.targetClasses.includes(cls) || enrolledCount > 0;
 
                                                 return (
@@ -1199,9 +1199,11 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                         {/* Student List Content */}
                         <div className="flex-1 overflow-x-auto custom-scrollbar">
                             {(() => {
-                                const displayedStudents = enrollmentClassFilter === 'All'
-                                    ? students
-                                    : students.filter(s => s.className === enrollmentClassFilter);
+                                const displayedStudents = students.filter(s => 
+                                    enrollmentClassFilter === 'All' || 
+                                    s.className === enrollmentClassFilter || 
+                                    s.currentClass === enrollmentClassFilter
+                                );
 
                                 return displayedStudents.length > 0 ? (
                                     <div className="min-w-full">
@@ -1317,7 +1319,11 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                         {/* Student List */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                             {(() => {
-                                const classStudents = students.filter(s => s.className === activeClassForSelection);
+                                // Robust matching: check both normalized className and raw currentClass
+                                const classStudents = students.filter(s => 
+                                    s.className === activeClassForSelection || 
+                                    s.currentClass === activeClassForSelection
+                                );
                                 const filteredClassStudents = studentSearchQuery
                                     ? classStudents.filter(s => 
                                         s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) || 
@@ -1374,7 +1380,12 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                         <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
                             <div className="text-left">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Selected</p>
-                                <p className="text-xl font-black text-purple-600">{subjectForm.enrolledStudents.filter(id => students.find(s => s.id === id && s.className === activeClassForSelection)).length}</p>
+                                <p className="text-xl font-black text-purple-600">
+                                    {(subjectForm.enrolledStudents || []).filter(id => {
+                                        const s = students.find(st => st.id === id);
+                                        return s && (s.className === activeClassForSelection || s.currentClass === activeClassForSelection);
+                                    }).length}
+                                </p>
                             </div>
                             <button
                                 type="button"
