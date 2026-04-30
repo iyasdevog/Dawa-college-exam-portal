@@ -85,7 +85,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     const [isFetchingMarks, setIsFetchingMarks] = useState(false);
 
     useEffect(() => {
-        if (!supplementaryForm.studentId || !supplementaryForm.subjectId) {
+        if (!supplementaryForm.studentId || !supplementaryForm.subjectId || supplementaryForm.examType === 'PreviousYear') {
             setFetchedPreviousMarks(null);
             return;
         }
@@ -121,7 +121,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         };
         fetchMarks();
         return () => { cancelled = true; };
-    }, [supplementaryForm.studentId, supplementaryForm.subjectId]);
+    }, [supplementaryForm.studentId, supplementaryForm.subjectId, supplementaryForm.examType]);
 
     // Summary Statistics - Now based on filtered list for better clarity per tab
     const stats = useMemo(() => {
@@ -900,8 +900,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                     </select>
                                 </div>
 
-                                {/* Original Marks Preview — shown after student + subject are selected */}
-                                {supplementaryForm.studentId && supplementaryForm.subjectId && (
+                                {/* Original Marks Preview — shown after student + subject are selected, except for PreviousYear / Repeat */}
+                                {supplementaryForm.studentId && supplementaryForm.subjectId && supplementaryForm.examType !== 'PreviousYear' && (
                                     <div className={`rounded-2xl p-3 border text-sm flex items-center gap-3 transition-all ${
                                         isFetchingMarks ? 'bg-slate-50 border-slate-200 text-slate-400' :
                                         fetchedPreviousMarks ? 'bg-emerald-50 border-emerald-200' :
