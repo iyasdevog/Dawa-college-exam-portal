@@ -192,10 +192,26 @@ export class AcademicService extends BaseDataService {
     public async addSubject(subject: Omit<SubjectConfig, 'id'>): Promise<string> {
         try {
             const normalizedSubject = {
-                ...subject,
-                facultyName: subject.facultyName ? normalizeName(subject.facultyName) : ''
+                name: subject.name || '',
+                arabicName: subject.arabicName || '',
+                maxINT: Number(subject.maxINT) || 0,
+                maxEXT: Number(subject.maxEXT) || 0,
+                passingTotal: Number(subject.passingTotal) || 0,
+                facultyName: subject.facultyName ? normalizeName(subject.facultyName) : '',
+                targetClasses: subject.targetClasses || [],
+                subjectType: subject.subjectType || 'general',
+                // Only set electiveType for elective/school_subject types; use null for general  
+                electiveType: (subject.subjectType === 'elective' || subject.subjectType === 'school_subject')
+                    ? (subject.electiveType || 'intra-class')
+                    : null,
+                enrolledStudents: subject.enrolledStudents || [],
+                activeSemester: subject.activeSemester || 'Both',
+                academicYear: subject.academicYear || ''
             };
-            const docRef = await addDoc(collection(this.db, this.subjectsCollection), normalizedSubject);
+            // Remove null values that crash Firestore
+            const cleaned = JSON.parse(JSON.stringify(normalizedSubject));
+            const docRef = await addDoc(collection(this.db, this.subjectsCollection), cleaned);
+            this.invalidateCache();
             return docRef.id;
         } catch (error) {
             console.error('Error adding subject:', error);
@@ -243,10 +259,14 @@ export class AcademicService extends BaseDataService {
 
     public async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
-        // getAllSubjects already maps targetClasses to historical aliases,
-        // so we filter using the historical name (e.g. 'S2'), not the DB name ('FS3').
         const subjects = await this.getAllSubjects(activeTerm, className);
-        return subjects.filter(s => (s.targetClasses || []).includes(className));
+        
+        // Include subjects targeted for this class AND cross-class electives.
+        // Consumers (like ApplicationPortal) handle student-level enrollment filtering.
+        return subjects.filter(s => 
+            (s.targetClasses || []).includes(className) || 
+            (s.subjectType === 'elective' && s.electiveType === 'cross-class')
+        );
     }
 
     public async enrollStudentInSubject(subjectId: string, studentId: string): Promise<void> {

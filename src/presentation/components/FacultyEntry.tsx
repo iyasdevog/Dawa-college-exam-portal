@@ -105,12 +105,25 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     }, [allowedClasses, selectedClass]);
 
-    // Update class subjects when class or type changes
+    // Update class subjects when class or subject type changes
     useEffect(() => {
+        if (!selectedClass) {
+            setClassSubjects([]);
+            return;
+        }
+
         const filtered = subjects.filter(s => {
-            if (subjectType === 'elective') return s.subjectType === 'elective';
-            return s.targetClasses.includes(selectedClass) && s.subjectType === 'general';
+            const isForClass = (s.targetClasses || []).includes(selectedClass);
+            
+            if (subjectType === 'elective') {
+                // Show electives belonging to this class (intra) OR cross-class ones that include this class
+                return s.subjectType === 'elective' && isForClass;
+            }
+
+            // 'general' tab: includes both general AND school_subject types for this class
+            return isForClass && (s.subjectType === 'general' || s.subjectType === 'school_subject' || !s.subjectType);
         });
+
         setClassSubjects(filtered);
         if (filtered.length > 0) {
             if (!selectedSubject || !filtered.find(s => s.id === selectedSubject)) {
@@ -129,19 +142,23 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             const currentSub = subjects.find(s => s.id === selectedSubject);
             const isCrossClass = currentSub?.subjectType === 'elective' && currentSub?.electiveType === 'cross-class';
 
-            const filteredByClass = (subjectType === 'general' || !isCrossClass)
-                ? studentsToShow.filter(s => s.className === selectedClass)
-                : studentsToShow;
+            // For intra-class electivess and general/school subjects, only show students from selected class
+            // For cross-class electivess, show all enrolled regardless of class
+            const filteredByClass = (subjectType === 'elective' && isCrossClass)
+                ? studentsToShow
+                : studentsToShow.filter(s => s.className === selectedClass);
             
             setStudents(filteredByClass);
             loadedSubjectIdRef.current = selectedSubject;
 
-            const atts: Record<string, any> = {};
-            for (const s of filteredByClass) {
-                const percentage = await dataService.calculateAttendancePercentage(s.id, selectedSubject, activeTerm);
-                atts[s.id] = { percentage };
-            }
-            setAttendanceStats(atts);
+            // Parallelize attendance stat loading instead of sequential for-loop
+            const attResults = await Promise.all(
+                filteredByClass.map(async (s) => {
+                    const percentage = await dataService.calculateAttendancePercentage(s.id, selectedSubject, activeTerm);
+                    return [s.id, { present: 0, total: 0, percentage }] as [string, { present: number; total: number; percentage: number }];
+                })
+            );
+            setAttendanceStats(Object.fromEntries(attResults));
         } catch (error) {
             console.error('Error loading students:', error);
         } finally {

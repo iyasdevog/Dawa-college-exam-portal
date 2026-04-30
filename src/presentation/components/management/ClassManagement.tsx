@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { SYSTEM_CLASSES as CLASSES } from '../../../domain/entities/constants';
 import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { useTerm } from '../../viewmodels/TermContext';
@@ -209,7 +209,22 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     // Card rendering implementation
     const renderClassCard = (className: string, isActive: boolean) => {
         const classStudents = students.filter(s => s.className === className);
-        const classSubjects = subjects.filter(s => s.targetClasses.includes(className));
+        const classStudentIds = new Set(classStudents.map(s => s.id));
+
+        // Count all subjects that are "for" this class:
+        // 1. General/school subjects with this class in targetClasses
+        // 2. Electives with this class in targetClasses (intra-class)
+        // 3. Cross-class electives where at least one enrolled student belongs to this class
+        const classSubjects = subjects.filter(s => {
+            const inTargetClasses = (s.targetClasses || []).includes(className);
+            if (inTargetClasses) return true;
+            // Cross-class electives enrolled by students of this class
+            if (s.subjectType === 'elective' && s.electiveType === 'cross-class') {
+                return (s.enrolledStudents || []).some((id: string) => classStudentIds.has(id));
+            }
+            return false;
+        });
+
         const isCustomClass = customClasses.includes(className);
 
         return (
