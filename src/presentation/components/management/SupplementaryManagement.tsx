@@ -198,8 +198,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             setIsOperating(true);
             // Subject may be from a historical term not in the current list — use persisted metadata as fallback
             const subject = subjects.find(s => s.id === editingExam.subjectId);
-            const resolvedMaxINT = editingExam.maxINT ?? subject?.maxINT ?? 30;
-            const resolvedMaxEXT = editingExam.maxEXT ?? subject?.maxEXT ?? 70;
+            const resolvedMaxINT = Number(editingExam.maxINT ?? subject?.maxINT ?? 30);
+            const resolvedMaxEXT = Number(editingExam.maxEXT ?? subject?.maxEXT ?? 70);
 
             const parseMark = (markStr: string): number | 'A' => {
                 const trimmed = markStr.trim().toUpperCase();
@@ -233,7 +233,13 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             // Calculate Status
             const passedINT = intVal !== 'A' && typeof intVal === 'number' && intVal >= minINT;
             const passedEXT = extVal !== 'A' && typeof extVal === 'number' && extVal >= minEXT;
-            const status = (passedINT && passedEXT) ? 'Passed' : 'Failed';
+            
+            const isNoInternal = editingExam.studentClass?.toUpperCase().includes('DOURA') || 
+                                 editingExam.subjectName?.toUpperCase().includes('DOURA') || 
+                                 resolvedMaxEXT === 100 || 
+                                 resolvedMaxINT === 0;
+
+            const status = ((isNoInternal ? true : passedINT) && passedEXT) ? 'Passed' : 'Failed';
 
             await dataService.updateSupplementaryExamMarks(
                 editingExam.id, 
@@ -343,9 +349,13 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                     status: 'Passed'
                 };
                 
-                // Final safety: Only pass if they also passed INT (unless Doura)
-                const isDoura = exam.studentClass?.toUpperCase().includes('DOURA');
-                if (!isDoura && currentInt < minINT) {
+                // Final safety: Only pass if they also passed INT (unless Doura or 100-mark paper)
+                const isDouraOrNoInt = exam.studentClass?.toUpperCase().includes('DOURA') || 
+                                       exam.subjectName?.toUpperCase().includes('DOURA') || 
+                                       Number(maxEXT) === 100 || 
+                                       Number(maxINT) === 0;
+                
+                if (!isDouraOrNoInt && currentInt < minINT) {
                     newMarks.status = 'Failed';
                 }
                 
@@ -1105,90 +1115,94 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className={`block text-[10px] font-bold mb-1 uppercase ${
-                                                ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
                                                  editingExam?.applicationType !== 'improvement') ||
                                                 editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
-                                                (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
-                                                (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
+                                                editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
+                                                Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
+                                                Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
                                                 ? 'text-slate-400' : 'text-slate-500'
                                             }`}>New INT</label>
                                             <input
                                                 type="text"
                                                 value={
                                                     editingExam?.studentClass?.toUpperCase().includes('DOURA') || 
-                                                    (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
-                                                    (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
+                                                    editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
+                                                    Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
+                                                    Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
                                                         ? (markEntryForm.prevInt || '0') :
-                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
                                                      editingExam?.applicationType !== 'improvement')
                                                         ? markEntryForm.prevInt 
                                                         : markEntryForm.int
                                                 }
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
                                                 disabled={
-                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
                                                      editingExam?.applicationType !== 'improvement') ||
                                                     editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
-                                                    (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
-                                                    (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
+                                                    editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
+                                                    Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
+                                                    Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
                                                 }
                                                 className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${
-                                                    (((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                    (((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
                                                       editingExam?.applicationType !== 'improvement') ||
                                                      editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
-                                                     (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
-                                                     (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0)
+                                                     editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
+                                                     Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
+                                                     Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0)
                                                     ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'
                                                 }`}
                                                 placeholder="Enter"
                                                 autoFocus
                                             />
                                             <p className="text-[9px] text-slate-400 mt-1">
-                                                {editingExam?.studentClass?.toUpperCase().includes('DOURA')
+                                                {editingExam?.studentClass?.toUpperCase().includes('DOURA') || editingExam?.subjectName?.toUpperCase().includes('DOURA')
                                                     ? 'Not applicable for DOURA'
-                                                    : (editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) === 100 ||
-                                                      (editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) === 0
+                                                    : Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
+                                                      Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
                                                         ? 'No Internal for 100-Mark Paper'
-                                                        : ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil((editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30) * 0.5) &&
+                                                        : ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
                                                            editingExam?.applicationType !== 'improvement')
                                                             ? 'Passed Originally' 
                                                             : editingExam?.applicationType === 'improvement'
                                                                 ? 'Improvement Entry'
-                                                                : `Max: ${editingExam?.maxINT || subjects.find(s => s.id === editingExam?.subjectId)?.maxINT || 30}`}
+                                                                : `Max: ${editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30}`}
                                             </p>
                                         </div>
                                         <div>
                                             <label className={`block text-[10px] font-bold mb-1 uppercase ${
-                                                (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) 
+                                                (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil(Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) * 0.4) 
                                                 ? 'text-slate-400' : 'text-slate-500'
                                             }`}>New EXT</label>
                                             <input
                                                 type="text"
                                                 value={
-                                                    ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                    ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil(Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) * 0.4) &&
                                                      editingExam?.applicationType !== 'improvement')
                                                         ? markEntryForm.prevExt 
                                                         : markEntryForm.ext
                                                 }
                                                 onChange={(e) => setMarkEntryForm(prev => ({ ...prev, ext: e.target.value }))}
                                                 disabled={
-                                                    (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                    (parseInt(markEntryForm.prevExt) || 0) >= Math.ceil(Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) * 0.4) &&
                                                     editingExam?.applicationType !== 'improvement'
                                                 }
                                                 className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${
-                                                    ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                    ((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil(Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) * 0.4) &&
                                                      editingExam?.applicationType !== 'improvement')
                                                     ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'
                                                 }`}
                                                 placeholder="Enter"
                                             />
                                             <p className="text-[9px] text-slate-400 mt-1">
-                                                {((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil((editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70) * 0.4) &&
+                                                {((parseInt(markEntryForm.prevExt) || 0) >= Math.ceil(Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) * 0.4) &&
                                                   editingExam?.applicationType !== 'improvement')
                                                     ? 'Passed Originally' 
                                                     : editingExam?.applicationType === 'improvement'
                                                         ? 'Improvement Entry'
-                                                        : `Max: ${editingExam?.maxEXT || subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT || 70}`}
+                                                        : `Max: ${editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70}`}
                                             </p>
                                         </div>
                                     </div>
