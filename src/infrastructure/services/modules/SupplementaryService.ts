@@ -292,9 +292,30 @@ export class SupplementaryService extends BaseDataService {
                             const history = student.academicHistory[targetTerm];
                             const updatedMarks = { ...history.marks };
                             
+                            const oldMark = updatedMarks[exam.subjectId] || {};
+                            
+                            let finalInt = update.marks.int;
+                            let finalExt = update.marks.ext;
+                            let finalTotal = update.marks.total;
+
+                            if (exam.applicationType === 'improvement') {
+                                const prevInt = parseInt(((oldMark as any).int as any) || '0', 10);
+                                const prevExt = parseInt(((oldMark as any).ext as any) || '0', 10);
+                                const currentInt = typeof update.marks.int === 'number' ? update.marks.int : 0;
+                                const currentExt = typeof update.marks.ext === 'number' ? update.marks.ext : 0;
+                                
+                                finalInt = Math.max(prevInt, currentInt);
+                                finalExt = Math.max(prevExt, currentExt);
+                                finalTotal = finalInt + finalExt;
+                            }
+                            
                             updatedMarks[exam.subjectId] = {
-                                ...updatedMarks[exam.subjectId],
+                                ...oldMark,
                                 ...update.marks,
+                                int: finalInt,
+                                ext: finalExt,
+                                total: finalTotal,
+                                status: update.marks.status,
                                 isSupplementary: true,
                                 supplementaryYear: exam.supplementaryYear
                             };
