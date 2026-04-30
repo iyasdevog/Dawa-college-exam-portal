@@ -116,25 +116,28 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
             .slice(0, 4);
     }, [allTimetables, currentTime, dayName]);
 
+    const loadAttendance = useCallback(async () => {
+        if (!selectedClass || !selectedSubject || !selectedDate) return;
+        try {
+            const records = await dataService.getAttendanceByClassAndDate(selectedClass, selectedDate);
+            const record = records.find(r => r.subjectId === selectedSubject);
+
+            const initialAttendance: Record<string, boolean> = {};
+            if (record) {
+                record.presentStudentIds.forEach(id => initialAttendance[id] = true);
+                record.absentStudentIds.forEach(id => initialAttendance[id] = false);
+            } else {
+                filteredStudents.forEach(s => initialAttendance[s.id] = true);
+            }
+            setAttendanceData(initialAttendance);
+        } catch (error) {
+            console.error('Error loading attendance:', error);
+        }
+    }, [selectedClass, selectedSubject, selectedDate, filteredStudents]);
+
     useEffect(() => {
-        if (selectedClass && selectedSubject && selectedDate) {
-            loadAttendance();
-        }
-    }, [selectedClass, selectedSubject, selectedDate]);
-
-    const loadAttendance = async () => {
-        const records = await dataService.getAttendanceByClassAndDate(selectedClass, selectedDate);
-        const record = records.find(r => r.subjectId === selectedSubject);
-
-        const initialAttendance: Record<string, boolean> = {};
-        if (record) {
-            record.presentStudentIds.forEach(id => initialAttendance[id] = true);
-            record.absentStudentIds.forEach(id => initialAttendance[id] = false);
-        } else {
-            filteredStudents.forEach(s => initialAttendance[s.id] = true); // Default all present
-        }
-        setAttendanceData(initialAttendance);
-    };
+        loadAttendance();
+    }, [loadAttendance]);
 
     const handleSelectLiveClass = (entry: TimetableEntry) => {
         setSelectedClass(entry.className);
@@ -148,7 +151,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         setAttendanceData(prev => ({ ...prev, [studentId]: !prev[studentId] }));
     }, []);
 
-    const handleSaveAttendance = async () => {
+    const handleSaveAttendance = useCallback(async () => {
         if (!selectedSubject) return;
 
         const subject = subjects.find(s => s.id === selectedSubject);
@@ -156,27 +159,21 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
 
         setIsSaving(true);
         try {
-            // If shared subject, we might be saving for multiple classes at once
             if (isSharedSubject) {
-                // Group students by their class
                 const classGroups: Record<string, { present: string[], absent: string[] }> = {};
                 filteredStudents.forEach(s => {
-                    if (!classGroups[s.className]) {
-                        classGroups[s.className] = { present: [], absent: [] };
-                    }
+                    if (!classGroups[s.className]) classGroups[s.className] = { present: [], absent: [] };
                     if (attendanceData[s.id] ?? true) {
                         classGroups[s.className].present.push(s.id);
                     } else {
                         classGroups[s.className].absent.push(s.id);
                     }
                 });
-
-                // Save one record per class
-                const savePromises = Object.entries(classGroups).map(([className, data]) => 
+                await Promise.all(Object.entries(classGroups).map(([className, data]) =>
                     dataService.markAttendance({
                         date: selectedDate,
                         subjectId: selectedSubject,
-                        className: className,
+                        className,
                         presentStudentIds: data.present,
                         absentStudentIds: data.absent,
                         markedBy: currentUser?.name || 'System Admin',
@@ -184,18 +181,11 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         academicYear: currentAcademicYear,
                         semester: currentSemester
                     })
-                );
-                await Promise.all(savePromises);
+                ));
             } else {
-                // Standard single-class marking
-                if (!selectedClass) {
-                    alert('Please select a class.');
-                    setIsSaving(false);
-                    return;
-                }
-                const presentIds = Object.keys(attendanceData).filter(id => attendanceData[id] ?? true);
-                const absentIds = filteredStudents.filter(s => !attendanceData[s.id]).map(s => s.id);
-
+                if (!selectedClass) { alert('Please select a class.'); setIsSaving(false); return; }
+                const presentIds = filteredStudents.filter(s => attendanceData[s.id] ?? true).map(s => s.id);
+                const absentIds = filteredStudents.filter(s => !(attendanceData[s.id] ?? true)).map(s => s.id);
                 await dataService.markAttendance({
                     date: selectedDate,
                     subjectId: selectedSubject,
@@ -208,16 +198,15 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                     semester: currentSemester
                 });
             }
-
             alert('Attendance saved!');
             onRefresh();
         } catch (error) {
             console.error('Attendance save error:', error);
-            alert('Failed to save attendance.');
+            alert('Failed to save attendance. Please check your connection and try again.');
         } finally {
             setIsSaving(false);
         }
-    };
+    }, [selectedSubject, selectedClass, selectedDate, filteredStudents, attendanceData, subjects, currentUser, currentAcademicYear, currentSemester, onRefresh]);
 
     const handleSaveSpecialDay = async () => {
         if (!selectedDate || !specialDayNote) return;

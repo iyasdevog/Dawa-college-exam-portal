@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SubjectConfig, StudentRecord, CurriculumEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
@@ -349,8 +349,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         }
     };
 
-    // Updated to handle deletion of specific class or bulk deletion of grouped subjects
-    const handleDeleteSubject = async (subject: SubjectConfig & { relatedIds?: string[] }, specificClass?: string) => {
+    const handleDeleteSubject = useCallback(async (subject: SubjectConfig & { relatedIds?: string[] }, specificClass?: string) => {
         const confirmMsg = specificClass
             ? `Remove ${subject.name} from class ${specificClass}?`
             : `Delete subject ${subject.name} entirely?`;
@@ -361,30 +360,23 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             setIsOperating(true);
 
             if (specificClass && subject.targetClasses && subject.targetClasses.length > 1 && !subject.relatedIds) {
-                // Remove only this class from the subject (Old General Subject logic)
                 const updatedClasses = subject.targetClasses.filter(c => c !== specificClass);
-                await dataService.updateSubject(subject.id, {
-                    ...subject,
-                    targetClasses: updatedClasses
-                });
+                await dataService.updateSubject(subject.id, { ...subject, targetClasses: updatedClasses });
             } else if (subject.relatedIds && subject.relatedIds.length > 0) {
-                // Bulk delete for grouped electives
-                for (const id of subject.relatedIds) {
-                    await dataService.deleteSubject(id);
-                }
+                // Bulk delete in parallel instead of sequential loop
+                await Promise.all(subject.relatedIds.map(id => dataService.deleteSubject(id)));
             } else {
-                // Delete the whole subject if it's the last class or no class specified
                 await dataService.deleteSubject(subject.id);
             }
 
             await onRefresh();
         } catch (error) {
             console.error(error);
-            alert('Error deleting subject.');
+            alert('Error deleting subject. Please try again.');
         } finally {
             setIsOperating(false);
         }
-    };
+    }, [onRefresh]);
 
     const handleManageEnrollment = (subject: SubjectConfig) => {
         if (subject.subjectType !== 'elective') {

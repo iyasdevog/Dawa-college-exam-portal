@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AttendanceRecord, StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
@@ -63,38 +63,32 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
         return map;
     }, [students]);
 
-    useEffect(() => {
-        loadRecords();
-    }, [activeTerm]);
-
-    const loadRecords = async () => {
+    const loadRecords = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Fetch records for the active term
             const data = await dataService.getAllAttendanceRecords(activeTerm);
-            
-            // Robust parsing of term key (e.g. "2025-2026-Odd" -> year="2025-2026", sem="Odd")
             const parts = activeTerm.split('-');
             const targetSem = parts.pop();
             const targetYear = parts.join('-');
-            
-            // Filter by term metadata if present, or fallback to general list if no metadata
             const termFiltered = data.filter(record => {
                 if (record.academicYear && record.semester) {
                     return record.academicYear === targetYear && record.semester === targetSem;
                 }
-                return true; 
+                return true;
             });
-
             setRecords(termFiltered);
         } catch (error) {
             console.error('Error loading attendance records:', error);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [activeTerm]);
 
-    const handleDeleteRecord = async (record: AttendanceRecord) => {
+    useEffect(() => {
+        loadRecords();
+    }, [loadRecords]);
+
+    const handleDeleteRecord = useCallback(async (record: AttendanceRecord) => {
         const subject = subjects.find(s => s.id === record.subjectId);
         const confirmMsg = `Are you sure you want to delete the attendance record for ${subject?.name || 'this subject'} in ${record.className} on ${record.date}?`;
         
@@ -109,7 +103,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 setIsLoading(false);
             }
         }
-    };
+    }, [subjects, loadRecords]);
 
     const filteredRecords = useMemo(() => {
         const query = searchTerm.toLowerCase();
