@@ -25,6 +25,7 @@ const Management: React.FC = () => {
   const [customClasses, setCustomClasses] = useState<string[]>([]);
   const [disabledClasses, setDisabledClasses] = useState<string[]>([]);
   const [curriculum, setCurriculum] = useState<any[]>([]);
+  const [allHistoricalSubjects, setAllHistoricalSubjects] = useState<SubjectConfig[]>([]);
   const [loadedData, setLoadedData] = useState<Set<string>>(new Set());
   const [isDataActionLoading, setIsDataActionLoading] = useState(false);
 
@@ -43,13 +44,20 @@ const Management: React.FC = () => {
     setIsDataActionLoading(true);
     try {
       if (tabId === 'students' || tabId === 'subjects' || tabId === 'supplementary' || tabId === 'classes') {
-        const [studentData, subjectData, settings] = await Promise.all([
+        const [studentData, subjectData, allSubjectsRaw, settings] = await Promise.all([
           dataService.getAllStudents(activeTerm),
           dataService.getAllSubjects(activeTerm),
+          dataService.getRawSubjects(),
           dataService.getGlobalSettings()
         ]);
-        setStudents(studentData);
         setSubjects(subjectData);
+        setAllHistoricalSubjects(allSubjectsRaw);
+        // We reuse curriculum state for global suggestions if needed, but curriculum is specific
+        // Let's ensure curriculum is also loaded if we're on subjects tab
+        if (tabId === 'subjects' && !loadedData.has('curriculum')) {
+           const currData = await dataService.getAllCurriculum();
+           setCurriculum(currData);
+        }
         setCustomClasses(settings.customClasses || []);
         setDisabledClasses(settings.disabledClasses || []);
       }
@@ -183,6 +191,7 @@ const Management: React.FC = () => {
           {activeTab === 'subjects' && (
             <SubjectManagement
               subjects={subjects}
+              allHistoricalSubjects={allHistoricalSubjects}
               students={students}
               curriculum={curriculum}
               activeTerm={activeTerm}

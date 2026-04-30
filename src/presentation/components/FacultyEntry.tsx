@@ -181,40 +181,40 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-4 shadow-sm">
-                <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-                            <i className="fa-solid fa-graduation-cap text-xl"></i>
+            <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 shadow-sm">
+                <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-600 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 shrink-0">
+                            <i className="fa-solid fa-graduation-cap text-lg sm:text-xl"></i>
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Academic Portal</h1>
-                            <p className="text-slate-500 font-bold text-xs uppercase tracking-widest">Faculty Management</p>
+                            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight">Academic Portal</h1>
+                            <p className="text-slate-500 font-bold text-[10px] sm:text-xs uppercase tracking-widest">Faculty Management</p>
                         </div>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto mt-8 px-6">
-                <nav className="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+            <main className="max-w-7xl mx-auto mt-4 sm:mt-8 px-4 sm:px-6">
+                <nav className="flex items-center gap-1 sm:gap-2 mb-6 sm:mb-8 bg-white p-1.5 sm:p-2 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto no-scrollbar whitespace-nowrap">
                     <button
                         onClick={() => setActiveTab('marks-entry')}
-                        className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center ${activeTab === 'marks-entry' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'marks-entry' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
-                        <i className="fa-solid fa-pen-to-square mr-2"></i> Marks Entry
+                        <i className="fa-solid fa-pen-to-square mr-2"></i> Marks
                     </button>
                     <button
                         onClick={() => setActiveTab('upload-tracker')}
-                        className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center ${activeTab === 'upload-tracker' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'upload-tracker' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
-                        <i className="fa-solid fa-chart-line mr-2"></i> Upload Tracker
+                        <i className="fa-solid fa-chart-line mr-2"></i> Tracker
                     </button>
                     {(currentUser?.role === 'admin') && (
                         <button
                             onClick={() => setActiveTab('release-settings')}
-                            className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center ${activeTab === 'release-settings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
+                            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'release-settings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
                         >
-                            <i className="fa-solid fa-bullhorn mr-2"></i> Release Settings
+                            <i className="fa-solid fa-bullhorn mr-2"></i> Settings
                         </button>
                     )}
                 </nav>

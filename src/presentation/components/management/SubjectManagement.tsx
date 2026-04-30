@@ -8,6 +8,7 @@ import { SubjectDetails } from '../../../domain/entities/types';
 
 interface SubjectManagementProps {
     subjects: SubjectConfig[];
+    allHistoricalSubjects: SubjectConfig[];
     students: StudentRecord[];
     curriculum: CurriculumEntry[];
     activeTerm: string;
@@ -105,7 +106,15 @@ const FacultyCard = React.memo(({ faculty, facultySubjects }: { faculty: string,
     );
 });
 
-const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, students, curriculum, activeTerm, onRefresh, isLoading }) => {
+const SubjectManagement: React.FC<SubjectManagementProps> = ({ 
+    subjects, 
+    allHistoricalSubjects = [],
+    students, 
+    curriculum, 
+    activeTerm, 
+    onRefresh, 
+    isLoading 
+}) => {
     const { isMobile } = useMobile();
     const [isOperating, setIsOperating] = useState(false);
 
@@ -167,8 +176,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const allSubjectSuggestions = React.useMemo(() => {
         const fromSubjects = subjects.map(s => s.name);
         const fromCurriculum = curriculum.map(c => c.subjectName);
-        return Array.from(new Set([...fromSubjects, ...fromCurriculum])).sort();
-    }, [subjects, curriculum]);
+        const fromHistorical = allHistoricalSubjects.map(s => s.name);
+        return Array.from(new Set([...fromSubjects, ...fromCurriculum, ...fromHistorical])).sort();
+    }, [subjects, curriculum, allHistoricalSubjects]);
 
     const filteredSuggestions = React.useMemo(() => {
         if (!subjectForm.name.trim()) return [];
@@ -509,23 +519,23 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
     const [subjectClassFilter, setSubjectClassFilter] = useState<string>('All');
     const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
 
-    // Get unique faculties for filter
+    // Get unique faculties for filter - Include historical for discovery
     const uniqueFaculties = React.useMemo(() => {
-        const faculties = new Set(subjects.map(s => s.facultyName || 'Unassigned'));
+        const currentFacs = subjects.map(s => s.facultyName).filter(Boolean);
+        const historicalFacs = allHistoricalSubjects.map(s => s.facultyName).filter(Boolean);
+        const faculties = new Set([...currentFacs, ...historicalFacs]);
         return Array.from(faculties).sort();
-    }, [subjects]);
+    }, [subjects, allHistoricalSubjects]);
 
     // Get normalized unique faculties for dropdown (with proper Title Case)
     const normalizedFaculties = React.useMemo(() => {
-        // Extract all faculty names
-        const allFaculties = subjects
-            .map(s => s.facultyName)
-            .filter(f => f && f.trim() !== '')
-            .map(f => normalizeName(f));
-
+        // Extract all faculty names from current subjects and historical ones
+        const currentFaculties = subjects.map(s => (s.facultyName || '').trim()).filter(Boolean).map(f => normalizeName(f));
+        const historicalFaculties = allHistoricalSubjects.map(s => (s.facultyName || '').trim()).filter(Boolean).map(f => normalizeName(f));
+        
         // Create a map to deduplicate (case-insensitive)
         const uniqueMap = new Map<string, string>();
-        allFaculties.forEach(name => {
+        [...currentFaculties, ...historicalFaculties].forEach(name => {
             const key = name.toLowerCase();
             if (!uniqueMap.has(key)) {
                 uniqueMap.set(key, name);
@@ -533,7 +543,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
         });
 
         return Array.from(uniqueMap.values()).sort();
-    }, [subjects]);
+    }, [subjects, allHistoricalSubjects]);
 
     const baseFlattenedSubjectList = React.useMemo(() => {
         const electiveGroups: Record<string, SubjectConfig & { specificClass: string[], relatedIds: string[] }> = {};
@@ -678,7 +688,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 sm:gap-4 border-b border-slate-200 overflow-x-auto no-scrollbar scroll-smooth">
+            <div className="flex gap-1 sm:gap-4 border-b border-slate-200 overflow-x-auto no-scrollbar scroll-smooth -mx-4 sm:mx-0 px-4 sm:px-0">
                 {[
                     { id: 'subjects', label: 'Subject List' },
                     { id: 'faculty', label: 'Faculty Overview' },
@@ -687,10 +697,10 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
-                        className={`pb-2 px-3 sm:px-4 whitespace-nowrap font-bold border-b-2 transition-all text-xs sm:text-sm ${
+                        className={`pb-3 px-4 whitespace-nowrap font-bold border-b-2 transition-all text-xs sm:text-sm ${
                             activeTab === tab.id 
                             ? 'border-emerald-500 text-emerald-600' 
-                            : 'border-transparent text-slate-400 hover:text-slate-600'
+                            : 'border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200'
                         }`}
                     >
                         {tab.label}
@@ -705,11 +715,11 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                             <i className="fa-solid fa-filter text-slate-400 text-xs"></i>
                             <label className="font-bold text-xs text-slate-500 uppercase tracking-wider">Filters</label>
                         </div>
-                        <div className="grid grid-cols-2 sm:flex gap-2">
+                        <div className="flex flex-col sm:flex-row sm:flex-1 gap-2">
                             <select
                                 value={subjectFacultyFilter}
                                 onChange={(e) => setSubjectFacultyFilter(e.target.value)}
-                                className="w-full sm:w-auto p-2 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                                className="w-full sm:w-auto p-3 sm:p-2 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm"
                             >
                                 <option value="All">All Faculties</option>
                                 {uniqueFaculties.map(f => (
@@ -719,7 +729,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                             <select
                                 value={subjectClassFilter}
                                 onChange={(e) => setSubjectClassFilter(e.target.value)}
-                                className="w-full sm:w-auto p-2 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                                className="w-full sm:w-auto p-3 sm:p-2 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm"
                             >
                                 <option value="All">All Classes</option>
                                 {availableClasses.map(c => (
@@ -727,14 +737,14 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
                                 ))}
                             </select>
                         </div>
-                        <div className="relative flex-1">
+                        <div className="relative w-full sm:flex-1">
                             <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                             <input
                                 type="text"
                                 placeholder="Search subjects..."
                                 value={subjectSearchQuery}
                                 onChange={(e) => setSubjectSearchQuery(e.target.value)}
-                                className="w-full p-2 pl-9 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                                className="w-full p-3 sm:p-2 pl-10 sm:pl-9 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm"
                             />
                         </div>
                         <span className="hidden lg:block text-[10px] text-slate-400 font-bold uppercase tracking-tighter bg-white px-2 py-1 rounded-lg border border-slate-100">
@@ -874,217 +884,270 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ subjects, student
             )}
 
 
-            {/* Subject Form Modal */}
+            {/* Subject Form Modal - Mobile Optimized */}
             {showSubjectForm && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-bold mb-4">{editingSubject ? 'Edit Subject' : 'Add Subject'}</h3>
-                        <form onSubmit={handleSaveSubject} className="space-y-4">
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-2 sm:p-4 z-[60] overflow-hidden">
+                    <div className="bg-white w-full max-w-lg rounded-3xl flex flex-col max-h-[95vh] shadow-2xl animate-in zoom-in-95 duration-200">
+                        {/* Modal Header */}
+                        <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                             <div>
-                                <label className="block text-sm font-bold mb-1">Subject Name</label>
-                                <select
-                                    value={isCreatingNewSubject ? '___CREATE_NEW___' : subjectForm.name}
-                                    onChange={(e) => {
-                                        if (e.target.value === '___CREATE_NEW___') {
-                                            setIsCreatingNewSubject(true);
-                                            setSubjectForm(prev => ({ ...prev, name: '' }));
-                                        } else {
-                                            setIsCreatingNewSubject(false);
-                                            setSubjectForm(prev => ({ ...prev, name: e.target.value }));
-                                        }
-                                    }}
-                                    className="w-full p-3 border rounded-xl bg-white"
-                                    required={!isCreatingNewSubject}
-                                >
-                                    <option value="">-- Select Subject --</option>
-                                    {allSubjectSuggestions.map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                    <option value="___CREATE_NEW___">➕ Create New Subject</option>
-                                </select>
+                                <h3 className="text-xl sm:text-2xl font-black text-slate-800">{editingSubject ? 'Edit Subject' : 'Add New Subject'}</h3>
+                                <p className="text-slate-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">Academic Configuration</p>
+                            </div>
+                            <button onClick={() => setShowSubjectForm(false)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400">
+                                <i className="fa-solid fa-times text-lg"></i>
+                            </button>
+                        </div>
 
-                                {isCreatingNewSubject && (
-                                    <div className="mt-2">
-                                        <input
-                                            type="text"
-                                            value={subjectForm.name}
-                                            onChange={e => setSubjectForm(prev => ({ ...prev, name: e.target.value }))}
-                                            className="w-full p-3 border-2 rounded-xl bg-emerald-50 border-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                                            placeholder="Enter new subject name"
-                                            required
-                                            autoFocus
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsCreatingNewSubject(false);
-                                                setSubjectForm(prev => ({ ...prev, name: '' }));
+                        {/* Modal Body */}
+                        <div className="p-4 sm:p-8 overflow-y-auto flex-1 bg-white custom-scrollbar">
+                            <form onSubmit={handleSaveSubject} className="space-y-6">
+                                {/* Subject Name Selection */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Subject Name</label>
+                                    <div className="relative group">
+                                        <select
+                                            value={isCreatingNewSubject ? '___CREATE_NEW___' : subjectForm.name}
+                                            onChange={(e) => {
+                                                if (e.target.value === '___CREATE_NEW___') {
+                                                    setIsCreatingNewSubject(true);
+                                                    setSubjectForm(prev => ({ ...prev, name: '' }));
+                                                } else {
+                                                    setIsCreatingNewSubject(false);
+                                                    setSubjectForm(prev => ({ ...prev, name: e.target.value }));
+                                                }
                                             }}
-                                            className="mt-2 text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none appearance-none cursor-pointer"
+                                            required={!isCreatingNewSubject}
                                         >
-                                            <i className="fa-solid fa-arrow-left"></i>
-                                            Back to list
-                                        </button>
+                                            <option value="">-- Select Subject --</option>
+                                            {allSubjectSuggestions.map(name => (
+                                                <option key={name} value={name}>{name}</option>
+                                            ))}
+                                            <option value="___CREATE_NEW___">➕ Create New Subject</option>
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-emerald-500 transition-colors">
+                                            <i className="fa-solid fa-chevron-down"></i>
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold mb-1">Faculty Name</label>
-                                <select
-                                    value={isCreatingNewFaculty ? '___CREATE_NEW___' : subjectForm.facultyName}
-                                    onChange={(e) => {
-                                        if (e.target.value === '___CREATE_NEW___') {
-                                            setIsCreatingNewFaculty(true);
-                                            setSubjectForm(prev => ({ ...prev, facultyName: '' }));
-                                        } else {
-                                            setIsCreatingNewFaculty(false);
-                                            setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }));
-                                        }
-                                    }}
-                                    className="w-full p-3 border rounded-xl bg-white"
-                                >
-                                    <option value="">-- Select Faculty --</option>
-                                    {normalizedFaculties.map(faculty => (
-                                        <option key={faculty} value={faculty}>{faculty}</option>
-                                    ))}
-                                    <option value="___CREATE_NEW___">➕ Create New Faculty</option>
-                                </select>
 
-                                {/* Show text input when creating new */}
-                                {isCreatingNewFaculty && (
-                                    <div className="mt-2">
-                                        <input
-                                            type="text"
-                                            value={subjectForm.facultyName}
-                                            onChange={e => setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }))}
-                                            className="w-full p-3 border-2 rounded-xl bg-emerald-50 border-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                                            placeholder="Enter new faculty name"
-                                            autoFocus
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsCreatingNewFaculty(false);
-                                                setSubjectForm(prev => ({ ...prev, facultyName: '' }));
+                                    {isCreatingNewSubject && (
+                                        <div className="mt-3 animate-in slide-in-from-top-2 duration-200">
+                                            <input
+                                                type="text"
+                                                value={subjectForm.name}
+                                                onChange={e => setSubjectForm(prev => ({ ...prev, name: e.target.value }))}
+                                                className="w-full p-4 bg-emerald-50 border-2 border-emerald-100 rounded-2xl text-emerald-900 font-bold focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none shadow-inner"
+                                                placeholder="Enter new subject name"
+                                                required
+                                                autoFocus
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsCreatingNewSubject(false);
+                                                    setSubjectForm(prev => ({ ...prev, name: '' }));
+                                                }}
+                                                className="mt-2 text-[10px] text-slate-400 hover:text-emerald-600 font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors px-2"
+                                            >
+                                                <i className="fa-solid fa-arrow-left"></i>
+                                                Back to list
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Faculty Selection */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Faculty Name</label>
+                                    <div className="relative group">
+                                        <select
+                                            value={isCreatingNewFaculty ? '___CREATE_NEW___' : subjectForm.facultyName}
+                                            onChange={(e) => {
+                                                if (e.target.value === '___CREATE_NEW___') {
+                                                    setIsCreatingNewFaculty(true);
+                                                    setSubjectForm(prev => ({ ...prev, facultyName: '' }));
+                                                } else {
+                                                    setIsCreatingNewFaculty(false);
+                                                    setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }));
+                                                }
                                             }}
-                                            className="mt-2 text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none appearance-none cursor-pointer"
                                         >
-                                            <i className="fa-solid fa-arrow-left"></i>
-                                            Back to list
-                                        </button>
+                                            <option value="">-- Select Faculty --</option>
+                                            {normalizedFaculties.map(faculty => (
+                                                <option key={faculty} value={faculty}>{faculty}</option>
+                                            ))}
+                                            <option value="___CREATE_NEW___">➕ Create New Faculty</option>
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-emerald-500 transition-colors">
+                                            <i className="fa-solid fa-chevron-down"></i>
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Max External (EXT)</label>
-                                    <select
-                                        value={subjectForm.maxEXT}
-                                        onChange={e => {
-                                            const newMaxEXT = parseInt(e.target.value);
-                                            setSubjectForm(prev => ({
-                                                ...prev,
-                                                maxEXT: newMaxEXT,
-                                                maxINT: newMaxEXT === 100 ? 0 : (prev.maxINT === 0 ? 30 : prev.maxINT)
-                                            }));
-                                        }}
-                                        className="w-full p-3 border rounded-xl"
-                                    >
-                                        <option value={100}>100</option>
-                                        <option value={70}>70</option>
-                                        <option value={50}>50</option>
-                                        <option value={35}>35</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Max Internal (INT)</label>
-                                    <select
-                                        value={subjectForm.maxINT}
-                                        onChange={e => setSubjectForm(prev => ({ ...prev, maxINT: parseInt(e.target.value) }))}
-                                        className="w-full p-3 border rounded-xl disabled:bg-slate-100 disabled:text-slate-400"
-                                        disabled={subjectForm.maxEXT === 100}
-                                    >
-                                        {subjectForm.maxEXT === 100 ? (
-                                            <option value={0}>0 (Not Applicable)</option>
-                                        ) : (
-                                            <>
-                                                <option value={50}>50</option>
-                                                <option value={30}>30</option>
-                                            </>
-                                        )}
-                                    </select>
-                                </div>
-                            </div>
-                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Type</label>
-                                    <select value={subjectForm.subjectType} onChange={e => setSubjectForm(prev => ({ ...prev, subjectType: e.target.value as any }))} className="w-full p-3 border rounded-xl">
-                                        <option value="general">General Subject</option>
-                                        <option value="elective">Elective Subject</option>
-                                        <option value="school_subject">School Subject (Attendance Only)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Semester</label>
-                                    <select value={subjectForm.activeSemester} onChange={e => setSubjectForm(prev => ({ ...prev, activeSemester: e.target.value as any }))} className="w-full p-3 border rounded-xl">
-                                        <option value="Both">Both Semesters</option>
-                                        <option value="Odd">Odd Semester Only</option>
-                                        <option value="Even">Even Semester Only</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold mb-1">Target Classes {subjectForm.subjectType === 'elective' && <span className="text-xs font-normal text-slate-500">(Click class to select students)</span>}</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {(availableClasses.length > 0 ? availableClasses : ['S1', 'S2', 'S3', 'P1', 'P2', 'D1', 'D2', 'D3', 'PG1', 'PG2']).map(cls => {
-                                        if (subjectForm.subjectType === 'elective') {
-                                            const enrolledCount = students.filter(s => s.className === cls && subjectForm.enrolledStudents.includes(s.id)).length;
-                                            const isTarget = subjectForm.targetClasses.includes(cls) || enrolledCount > 0;
 
-                                            return (
-                                                <button
-                                                    key={cls}
-                                                    type="button"
-                                                    onClick={() => handleOpenClassSelection(cls)}
-                                                    className={`flex items-center gap-2 p-2 border rounded-lg transition-all ${isTarget
-                                                        ? 'bg-purple-50 border-purple-200 text-purple-700'
-                                                        : 'hover:bg-slate-50'
-                                                        }`}
-                                                >
-                                                    <span className={`font-bold ${isTarget ? 'text-purple-700' : 'text-slate-700'}`}>{cls}</span>
-                                                    {enrolledCount > 0 && <span className="bg-purple-200 text-purple-800 text-xs px-2 py-0.5 rounded-full font-bold">{enrolledCount}</span>}
-                                                    <i className="fa-solid fa-chevron-right text-xs opacity-50 ml-1"></i>
-                                                </button>
-                                            );
-                                        } else {
-                                            return (
-                                                <label key={cls} className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-slate-50">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={subjectForm.targetClasses.includes(cls)}
-                                                        onChange={(e) => handleClassChange(cls, e.target.checked)}
-                                                    />
-                                                    {cls}
-                                                </label>
-                                            );
-                                        }
-                                    })}
+                                    {isCreatingNewFaculty && (
+                                        <div className="mt-3 animate-in slide-in-from-top-2 duration-200">
+                                            <input
+                                                type="text"
+                                                value={subjectForm.facultyName}
+                                                onChange={e => setSubjectForm(prev => ({ ...prev, facultyName: e.target.value }))}
+                                                className="w-full p-4 bg-emerald-50 border-2 border-emerald-100 rounded-2xl text-emerald-900 font-bold focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none shadow-inner"
+                                                placeholder="Enter new faculty name"
+                                                autoFocus
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsCreatingNewFaculty(false);
+                                                    setSubjectForm(prev => ({ ...prev, facultyName: '' }));
+                                                }}
+                                                className="mt-2 text-[10px] text-slate-400 hover:text-emerald-600 font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors px-2"
+                                            >
+                                                <i className="fa-solid fa-arrow-left"></i>
+                                                Back to list
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                                {subjectForm.targetClasses.length > 1 && (
-                                    <div className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-start gap-2">
-                                        <i className="fa-solid fa-lightbulb mt-0.5"></i>
-                                        <p>
-                                            <strong>Note:</strong> Selecting multiple classes means this exact subject (with same grading) applies to all.
-                                            If the grading differs, please create separate subjects for each class.
-                                        </p>
+
+                                {/* Marks Configuration */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Max External</label>
+                                        <select
+                                            value={subjectForm.maxEXT}
+                                            onChange={e => {
+                                                const newMaxEXT = parseInt(e.target.value);
+                                                setSubjectForm(prev => ({
+                                                    ...prev,
+                                                    maxEXT: newMaxEXT,
+                                                    maxINT: newMaxEXT === 100 ? 0 : (prev.maxINT === 0 ? 30 : prev.maxINT)
+                                                }));
+                                            }}
+                                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 transition-all outline-none"
+                                        >
+                                            <option value={100}>100 (No INT)</option>
+                                            <option value={70}>70 (Standard)</option>
+                                            <option value={50}>50 (Half)</option>
+                                            <option value={35}>35 (Minor)</option>
+                                        </select>
                                     </div>
-                                )}
-                            </div>
-                            <div className="flex gap-3 pt-4">
-                                <button type="button" onClick={() => setShowSubjectForm(false)} className="flex-1 py-3 bg-slate-100 rounded-xl">Cancel</button>
-                                <button type="submit" className="flex-1 py-3 bg-emerald-600 text-white rounded-xl">Save</button>
-                            </div>
-                        </form>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Max Internal</label>
+                                        <select
+                                            value={subjectForm.maxINT}
+                                            onChange={e => setSubjectForm(prev => ({ ...prev, maxINT: parseInt(e.target.value) }))}
+                                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 transition-all outline-none disabled:opacity-50 disabled:bg-slate-100"
+                                            disabled={subjectForm.maxEXT === 100}
+                                        >
+                                            {subjectForm.maxEXT === 100 ? (
+                                                <option value={0}>N/A</option>
+                                            ) : (
+                                                <>
+                                                    <option value={50}>50</option>
+                                                    <option value={30}>30</option>
+                                                </>
+                                            )}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Type and Semester */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Subject Type</label>
+                                        <select 
+                                            value={subjectForm.subjectType} 
+                                            onChange={e => setSubjectForm(prev => ({ ...prev, subjectType: e.target.value as any }))} 
+                                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 transition-all outline-none"
+                                        >
+                                            <option value="general">General</option>
+                                            <option value="elective">Elective</option>
+                                            <option value="school_subject">School Subject</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Semester Availability</label>
+                                        <select 
+                                            value={subjectForm.activeSemester} 
+                                            onChange={e => setSubjectForm(prev => ({ ...prev, activeSemester: e.target.value as any }))} 
+                                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 transition-all outline-none"
+                                        >
+                                            <option value="Both">Both</option>
+                                            <option value="Odd">Odd Only</option>
+                                            <option value="Even">Even Only</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Target Classes */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                                        Target Classes 
+                                        {subjectForm.subjectType === 'elective' && <span className="ml-2 lowercase font-normal opacity-60">(Pick Students)</span>}
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(availableClasses.length > 0 ? availableClasses : ['S1', 'S2', 'S3', 'P1', 'P2', 'D1', 'D2', 'D3', 'PG1', 'PG2']).map(cls => {
+                                            if (subjectForm.subjectType === 'elective') {
+                                                const enrolledCount = students.filter(s => s.className === cls && subjectForm.enrolledStudents.includes(s.id)).length;
+                                                const isTarget = subjectForm.targetClasses.includes(cls) || enrolledCount > 0;
+
+                                                return (
+                                                    <button
+                                                        key={cls}
+                                                        type="button"
+                                                        onClick={() => handleOpenClassSelection(cls)}
+                                                        className={`flex items-center gap-2 px-4 py-2 border-2 rounded-2xl font-bold text-xs transition-all ${isTarget
+                                                            ? 'bg-purple-50 border-purple-200 text-purple-700 shadow-sm ring-4 ring-purple-500/5'
+                                                            : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'
+                                                            }`}
+                                                    >
+                                                        {cls}
+                                                        {enrolledCount > 0 && <span className="bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm">{enrolledCount}</span>}
+                                                        <i className="fa-solid fa-chevron-right text-[8px] opacity-40"></i>
+                                                    </button>
+                                                );
+                                            } else {
+                                                const isSelected = subjectForm.targetClasses.includes(cls);
+                                                return (
+                                                    <label key={cls} className={`flex items-center gap-2 px-4 py-2 border-2 rounded-2xl cursor-pointer transition-all ${isSelected
+                                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm ring-4 ring-emerald-500/5'
+                                                        : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'
+                                                        }`}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => handleClassChange(cls, e.target.checked)}
+                                                            className="hidden"
+                                                        />
+                                                        <span className="text-xs font-bold">{cls}</span>
+                                                        {isSelected && <i className="fa-solid fa-check text-[10px]"></i>}
+                                                    </label>
+                                                );
+                                            }
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Modal Actions */}
+                                <div className="flex gap-4 pt-4 sm:pt-6 sticky bottom-0 bg-white border-t border-slate-50 mt-4">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowSubjectForm(false)} 
+                                        className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        disabled={isOperating}
+                                        className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-700 shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
+                                    >
+                                        {isOperating ? 'Saving...' : (editingSubject ? 'Update Subject' : 'Create Subject')}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             )}

@@ -129,7 +129,7 @@ export class DataService extends BaseDataService {
     }
 
     async getRawSubjects(): Promise<SubjectConfig[]> {
-        return this.academicService.getRawAllSubjects();
+        return this.academicService.getRawSubjects();
     }
 
     async getSubjectsByClass(className: string, termKey?: string): Promise<SubjectConfig[]> {

@@ -155,6 +155,19 @@ export class AcademicService extends BaseDataService {
         }
     }
 
+    /**
+     * Gets all subjects without any term-based filtering for global discovery.
+     */
+    public async getRawSubjects(): Promise<SubjectConfig[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+        } catch (error) {
+            console.error('Error in getRawSubjects:', error);
+            return [];
+        }
+    }
+
     public async getSubjectById(id: string, termKey?: string): Promise<SubjectConfig | null> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
