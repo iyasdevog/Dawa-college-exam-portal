@@ -131,6 +131,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                         <AttendanceManagement
                             students={students}
                             subjects={subjects}
+                            currentUser={currentUser}
                             onRefresh={loadData}
                         />
                     )}

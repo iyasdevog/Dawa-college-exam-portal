@@ -18,8 +18,37 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewingRecord, setViewingRecord] = useState<AttendanceRecord | null>(null);
+    const [viewMode, setViewMode] = useState<'records' | 'analytics'>('records');
+    const [selectedAnalyticsClass, setSelectedAnalyticsClass] = useState<string | null>(null);
 
-    const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))], [students]);
+    const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))].sort(), [students]);
+
+    // Analytics Calculation
+    const analyticsData = useMemo(() => {
+        const classStats: Record<string, { present: number; total: number; subjects: Record<string, { present: number; total: number }> }> = {};
+
+        records.forEach(record => {
+            const className = record.className;
+            const subjectId = record.subjectId;
+            const present = record.presentStudentIds.length;
+            const total = present + record.absentStudentIds.length;
+
+            if (!classStats[className]) {
+                classStats[className] = { present: 0, total: 0, subjects: {} };
+            }
+
+            classStats[className].present += present;
+            classStats[className].total += total;
+
+            if (!classStats[className].subjects[subjectId]) {
+                classStats[className].subjects[subjectId] = { present: 0, total: 0 };
+            }
+            classStats[className].subjects[subjectId].present += present;
+            classStats[className].subjects[subjectId].total += total;
+        });
+
+        return classStats;
+    }, [records]);
     
     // O(1) Lookup Maps for optimal rendering
     const subjectMap = useMemo(() => {
@@ -148,36 +177,150 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-                <div className="relative flex-1 w-full">
-                    <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                    <input
-                        type="text"
-                        placeholder="Search by subject or class..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium"
-                    />
-                </div>
-                <div className="flex gap-2 w-full md:w-auto">
-                    <select
-                        value={selectedClass}
-                        onChange={(e) => setSelectedClass(e.target.value)}
-                        className="flex-1 md:w-40 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none"
-                    >
-                        {classes.map(c => <option key={c} value={c}>{c === 'All' ? 'All Classes' : c}</option>)}
-                    </select>
-                    <select
-                        value={selectedSubject}
-                        onChange={(e) => setSelectedSubject(e.target.value)}
-                        className="flex-1 md:w-48 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none"
-                    >
-                        <option value="All">All Subjects</option>
-                        {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                </div>
+            {/* View Mode Toggle */}
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full sm:w-fit self-center">
+                <button
+                    onClick={() => setViewMode('records')}
+                    className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${viewMode === 'records' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <i className="fa-solid fa-list-ul mr-2"></i> Period Records
+                </button>
+                <button
+                    onClick={() => setViewMode('analytics')}
+                    className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${viewMode === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <i className="fa-solid fa-chart-line mr-2"></i> Class Analytics
+                </button>
             </div>
+
+            {viewMode === 'analytics' ? (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Class Cards Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {Object.entries(analyticsData).sort(([a], [b]) => a.localeCompare(b)).map(([className, stats]) => {
+                            const percentage = stats.total > 0 ? (stats.present / stats.total) * 100 : 0;
+                            const isSelected = selectedAnalyticsClass === className;
+
+                            return (
+                                <div 
+                                    key={className}
+                                    onClick={() => setSelectedAnalyticsClass(isSelected ? null : className)}
+                                    className={`group cursor-pointer rounded-[2.5rem] border-2 transition-all duration-300 overflow-hidden relative ${isSelected ? 'bg-slate-900 border-slate-900 shadow-2xl scale-[1.02]' : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-xl'}`}
+                                >
+                                    {/* Stats Icon Background Bubble */}
+                                    <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full transition-colors ${isSelected ? 'bg-white/5 font-black' : 'bg-slate-50 group-hover:bg-emerald-50'}`} />
+                                    
+                                    <div className="p-8 relative z-10">
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div>
+                                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${isSelected ? 'text-slate-400' : 'text-emerald-600'}`}>Class Performance</p>
+                                                <h3 className={`text-2xl font-black tracking-tight ${isSelected ? 'text-white' : 'text-slate-900'}`}>{className}</h3>
+                                            </div>
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl transition-all shadow-sm ${isSelected ? 'bg-emerald-500 text-white rotate-12' : 'bg-slate-50 text-slate-400 group-hover:bg-emerald-500 group-hover:text-white group-hover:rotate-12'}`}>
+                                                <i className="fa-solid fa-chart-simple"></i>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="flex items-end justify-between">
+                                                <div>
+                                                    <p className={`text-[10px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>Avg. Attendance</p>
+                                                    <h4 className={`text-3xl font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{Math.round(percentage)}%</h4>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className={`text-[10px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>Total Periods</p>
+                                                    <h4 className={`text-lg font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{stats.total}</h4>
+                                                </div>
+                                            </div>
+
+                                            {/* Progress Bar */}
+                                            <div className={`h-2.5 w-full rounded-full overflow-hidden ${isSelected ? 'bg-white/10' : 'bg-slate-100'}`}>
+                                                <div 
+                                                    className={`h-full transition-all duration-1000 ${percentage > 85 ? 'bg-emerald-500' : percentage > 75 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                                    style={{ width: `${percentage}%` }}
+                                                />
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between pt-2">
+                                                <span className={`text-[9px] font-black uppercase tracking-widest ${isSelected ? 'text-emerald-400' : 'text-slate-400 group-hover:text-emerald-600'}`}>
+                                                    {isSelected ? 'Click to collapse' : 'View Subject Breakdown'}
+                                                </span>
+                                                <i className={`fa-solid ${isSelected ? 'fa-chevron-up' : 'fa-chevron-right'} text-sm ${isSelected ? 'text-white' : 'text-slate-300'}`}></i>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Expandable Subject Breakdown */}
+                                    {isSelected && (
+                                        <div className="px-8 pb-8 pt-2 animate-in slide-in-from-top-4 duration-300">
+                                            <div className="bg-white/5 rounded-3xl p-4 border border-white/10 space-y-4">
+                                                <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-white/10 pb-2">Individual Subjects</h5>
+                                                <div className="space-y-3">
+                                                    {Object.entries(stats.subjects).sort(([, a], [, b]) => b.total - a.total).map(([subId, subStats]) => {
+                                                        const subject = subjectMap[subId];
+                                                        const subPerc = subStats.total > 0 ? (subStats.present / subStats.total) * 100 : 0;
+                                                        return (
+                                                            <div key={subId} className="flex items-center justify-between gap-4">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs font-bold text-white truncate">{subject?.name || 'Unknown'}</p>
+                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                                                                            <div 
+                                                                                className={`h-full ${subPerc > 80 ? 'bg-emerald-500' : subPerc > 60 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                                                                style={{ width: `${subPerc}%` }}
+                                                                            />
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black text-slate-400 w-8 text-right">{Math.round(subPerc)}%</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-[9px] font-black text-white">{subStats.present}/{subStats.total}</p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            ) : (
+                <>
+                {/* Filters */}
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+                    <div className="relative flex-1 w-full">
+                        <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input
+                            type="text"
+                            placeholder="Search by subject or class..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium"
+                        />
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <select
+                            value={selectedClass}
+                            onChange={(e) => setSelectedClass(e.target.value)}
+                            className="flex-1 md:w-40 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none"
+                        >
+                            {/* Corrected mapping to use pre-sorted classes array */}
+                            {classes.map(c => <option key={c} value={c}>{c === 'All' ? 'All Classes' : c}</option>)}
+                        </select>
+                        <select
+                            value={selectedSubject}
+                            onChange={(e) => setSelectedSubject(e.target.value)}
+                            className="flex-1 md:w-48 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none"
+                        >
+                            <option value="All">All Subjects</option>
+                            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                    </div>
+                </div>
 
             {/* Records List */}
             <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
@@ -256,7 +399,9 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                         <p className="text-slate-400 font-bold">No matching attendance records found</p>
                     </div>
                 )}
-            </div>
+                </div>
+                </>
+            )}
 
             {/* Detail Modal */}
             {viewingRecord && (

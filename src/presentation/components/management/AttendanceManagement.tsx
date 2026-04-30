@@ -7,6 +7,7 @@ import { useTerm } from '../../viewmodels/TermContext';
 interface AttendanceManagementProps {
     subjects: SubjectConfig[];
     students: StudentRecord[];
+    currentUser?: any; // Add this
     onRefresh: () => void;
 }
 
@@ -18,7 +19,10 @@ const StudentAttendanceRow = memo(({ student, isPresent, onToggle }: { student: 
     >
         <div className="flex-1 select-none">
             <div className="font-bold text-slate-900 text-base">{student.name}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{student.adNo}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 font-bold">
+                <span className="bg-slate-100 px-1.5 py-0.5 rounded mr-2 uppercase tracking-tighter">{student.className}</span>
+                {student.adNo}
+            </div>
         </div>
         <div className={`w-14 h-7 rounded-full relative transition-colors ${isPresent ? 'bg-emerald-500' : 'bg-slate-300'}`}>
             <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow-sm ${isPresent ? 'right-1' : 'left-1'}`}></div>
@@ -26,7 +30,7 @@ const StudentAttendanceRow = memo(({ student, isPresent, onToggle }: { student: 
     </div>
 ));
 
-const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, students, onRefresh }) => {
+const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, students, currentUser, onRefresh }) => {
     const { isMobile } = useMobile();
     const { currentAcademicYear, currentSemester } = useTerm();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -48,12 +52,23 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const filteredSubjects = useMemo(() => subjects.filter(s => s.targetClasses.includes(selectedClass)), [subjects, selectedClass]);
     
     const filteredStudents = useMemo(() => {
-        let list = students.filter(s => s.className === selectedClass);
+        const subject = subjects.find(s => s.id === selectedSubject);
+        const isSharedSubject = subject?.electiveType === 'cross-class';
+
+        // Base list: If shared/cross-class subject, use all students in the portal (then filter by enrollment)
+        // Otherwise, filter by selected class.
+        let list = isSharedSubject 
+            ? students.filter(s => subject?.targetClasses?.includes(s.className))
+            : students.filter(s => s.className === selectedClass);
         
         // Optimize for elective subjects: strictly show only enrolled students
-        const subject = subjects.find(s => s.id === selectedSubject);
-        if (subject && subject.subjectType === 'elective' && subject.enrolledStudents) {
-            list = list.filter(s => subject.enrolledStudents.includes(s.id));
+        if (subject && subject.subjectType === 'elective') {
+            if (subject.enrolledStudents) {
+                list = list.filter(s => subject.enrolledStudents.includes(s.id));
+            } else if (!isSharedSubject) {
+                // If elective but no enrollment defined, and not shared, 
+                // we treat it as "whole class" elective (rare but possible).
+            }
         }
 
         // Apply quick search
@@ -134,28 +149,70 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     }, []);
 
     const handleSaveAttendance = async () => {
-        if (!selectedClass || !selectedSubject) return;
+        if (!selectedSubject) return;
+
+        const subject = subjects.find(s => s.id === selectedSubject);
+        const isSharedSubject = subject?.electiveType === 'cross-class';
 
         setIsSaving(true);
         try {
-            const presentIds = Object.keys(attendanceData).filter(id => attendanceData[id]);
-            const absentIds = Object.keys(attendanceData).filter(id => !attendanceData[id]);
+            // If shared subject, we might be saving for multiple classes at once
+            if (isSharedSubject) {
+                // Group students by their class
+                const classGroups: Record<string, { present: string[], absent: string[] }> = {};
+                filteredStudents.forEach(s => {
+                    if (!classGroups[s.className]) {
+                        classGroups[s.className] = { present: [], absent: [] };
+                    }
+                    if (attendanceData[s.id] ?? true) {
+                        classGroups[s.className].present.push(s.id);
+                    } else {
+                        classGroups[s.className].absent.push(s.id);
+                    }
+                });
 
-            await dataService.markAttendance({
-                date: selectedDate,
-                subjectId: selectedSubject,
-                className: selectedClass,
-                presentStudentIds: presentIds,
-                absentStudentIds: absentIds,
-                markedBy: 'Current User', // Should be dynamic
-                markedAt: Date.now(),
-                academicYear: currentAcademicYear,
-                semester: currentSemester
-            });
+                // Save one record per class
+                const savePromises = Object.entries(classGroups).map(([className, data]) => 
+                    dataService.markAttendance({
+                        date: selectedDate,
+                        subjectId: selectedSubject,
+                        className: className,
+                        presentStudentIds: data.present,
+                        absentStudentIds: data.absent,
+                        markedBy: currentUser?.name || 'System Admin',
+                        markedAt: Date.now(),
+                        academicYear: currentAcademicYear,
+                        semester: currentSemester
+                    })
+                );
+                await Promise.all(savePromises);
+            } else {
+                // Standard single-class marking
+                if (!selectedClass) {
+                    alert('Please select a class.');
+                    setIsSaving(false);
+                    return;
+                }
+                const presentIds = Object.keys(attendanceData).filter(id => attendanceData[id] ?? true);
+                const absentIds = filteredStudents.filter(s => !attendanceData[s.id]).map(s => s.id);
+
+                await dataService.markAttendance({
+                    date: selectedDate,
+                    subjectId: selectedSubject,
+                    className: selectedClass,
+                    presentStudentIds: presentIds,
+                    absentStudentIds: absentIds,
+                    markedBy: currentUser?.name || 'System Admin',
+                    markedAt: Date.now(),
+                    academicYear: currentAcademicYear,
+                    semester: currentSemester
+                });
+            }
 
             alert('Attendance saved!');
             onRefresh();
         } catch (error) {
+            console.error('Attendance save error:', error);
             alert('Failed to save attendance.');
         } finally {
             setIsSaving(false);

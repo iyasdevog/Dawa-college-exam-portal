@@ -318,7 +318,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                 facultyName: normalizedFacultyName,
                 targetClasses: uniqueTargetClasses, // Use filtered classes
                 subjectType: subjectForm.subjectType,
-                electiveType: subjectForm.subjectType === 'elective' ? (subjectForm.electiveType || 'intra-class') : null,
+                electiveType: (subjectForm.subjectType === 'elective' || subjectForm.subjectType === 'school_subject') 
+                    ? (subjectForm.electiveType || 'intra-class') 
+                    : null,
                 enrolledStudents: subjectForm.enrolledStudents || [],
                 activeSemester: subjectForm.activeSemester || 'Both',
                 academicYear: subjectForm.academicYear || ''
@@ -1088,9 +1090,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                         </select>
                                     </div>
 
-                                    {subjectForm.subjectType === 'elective' && (
+                                    {(subjectForm.subjectType === 'elective' || subjectForm.subjectType === 'school_subject') && (
                                         <div>
-                                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Elective Type</label>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Grouping Strategy</label>
                                             <div className="flex gap-2">
                                                 <button
                                                     type="button"
@@ -1117,10 +1119,10 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                                     Cross-class
                                                 </button>
                                             </div>
-                                            <p className="text-[10px] text-slate-400 mt-2 ml-1 font-medium italic">
+                                            <p className="text-[10px] text-slate-400 mt-2 ml-1 font-medium italic leading-relaxed">
                                                 {subjectForm.electiveType === 'intra-class' 
-                                                    ? 'Separate grades for each class (prevents student mixing).'
-                                                    : 'Multiple classes attend together (common grade list).'}
+                                                    ? 'Separate registers for each class (prevents student mixing).'
+                                                    : 'Multiple classes merged (shared register/attendance).'}
                                             </p>
                                         </div>
                                     )}
