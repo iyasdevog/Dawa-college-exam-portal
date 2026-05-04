@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { AttendanceRecord, StudentRecord, SubjectConfig } from '../../../domain/entities/types';
+import { AttendanceRecord, StudentRecord, SubjectConfig, TimetableEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { useTerm } from '../../viewmodels/TermContext';
+import StudentAttendanceStats from './StudentAttendanceStats';
 
 interface AttendanceMonitorProps {
     students: StudentRecord[];
@@ -13,12 +14,13 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const { isMobile } = useMobile();
     const { activeTerm } = useTerm();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
+    const [timetables, setTimetables] = useState<TimetableEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedClass, setSelectedClass] = useState('All');
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewingRecord, setViewingRecord] = useState<AttendanceRecord | null>(null);
-    const [viewMode, setViewMode] = useState<'records' | 'analytics'>('records');
+    const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats'>('records');
     const [selectedAnalyticsClass, setSelectedAnalyticsClass] = useState<string | null>(null);
 
     const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))].sort(), [students]);
@@ -81,7 +83,10 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const loadRecords = useCallback(async () => {
         setIsLoading(true);
         try {
-            const data = await dataService.getAllAttendanceRecords(activeTerm);
+            const [data, tData] = await Promise.all([
+                dataService.getAllAttendanceRecords(activeTerm),
+                dataService.getAllTimetables(activeTerm)
+            ]);
             const parts = activeTerm.split('-');
             const targetSem = parts.pop();
             const targetYear = parts.join('-');
@@ -92,8 +97,9 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 return true;
             });
             setRecords(termFiltered);
+            setTimetables(tData || []);
         } catch (error) {
-            console.error('Error loading attendance records:', error);
+            console.error('Error loading attendance records/timetables:', error);
         } finally {
             setIsLoading(false);
         }
@@ -137,6 +143,113 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
             return true;
         });
     }, [records, selectedClass, selectedSubject, searchTerm, subjectMap]);
+
+    const getLocalDateString = useCallback((offsetDays: number = 0) => {
+        const d = new Date();
+        d.setDate(d.getDate() - offsetDays);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
+
+    const todayStr = useMemo(() => getLocalDateString(0), [getLocalDateString]);
+    const yesterdayStr = useMemo(() => getLocalDateString(1), [getLocalDateString]);
+    const dayBeforeStr = useMemo(() => getLocalDateString(2), [getLocalDateString]);
+
+    const getDayOfWeek = (dateStr: string) => {
+        const d = new Date(dateStr);
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        return days[d.getDay()];
+    };
+
+    const buildDailyTimetable = useCallback((dateStr: string) => {
+        const dayOfWeek = getDayOfWeek(dateStr);
+        // Do not filter by selected class and selected subject initially. We just want records of the day.
+        const dayRecords = records.filter(r => r.date === dateStr && (selectedClass === 'All' || r.className === selectedClass));
+        
+        // Find ALL time slots globally for this day, to establish the school's gap scale
+        const allDayTimetables = timetables.filter(t => t.day.toLowerCase() === dayOfWeek.toLowerCase());
+        
+        const STANDARD_PERIODS = [
+            { startTime: '05:30', endTime: '06:30' },
+            { startTime: '06:30', endTime: '07:30' },
+            { startTime: '07:30', endTime: '08:30' },
+            { startTime: '09:00', endTime: '10:00' },
+            { startTime: '10:00', endTime: '10:55' },
+            { startTime: '11:05', endTime: '12:00' },
+            { startTime: '12:00', endTime: '13:00' },
+            { startTime: '14:00', endTime: '14:55' },
+            { startTime: '15:05', endTime: '16:00' }
+        ];
+
+        const results: any[] = [];
+        const matchedRecordIds = new Set<string>();
+
+        STANDARD_PERIODS.forEach(slot => {
+            const { startTime, endTime } = slot;
+                
+            const scheduledPeriods = allDayTimetables.filter(t => 
+                t.startTime === startTime && 
+                t.endTime === endTime && 
+                (selectedClass === 'All' || t.className === selectedClass)
+            );
+
+            if (scheduledPeriods.length > 0) {
+                scheduledPeriods.forEach(sp => {
+                    const matchingRecord = dayRecords.find(r => r.subjectId === sp.subjectId && r.className === sp.className && !matchedRecordIds.has(r.id));
+                    if (matchingRecord) {
+                        matchedRecordIds.add(matchingRecord.id);
+                        results.push({ period: sp, record: matchingRecord, type: 'scheduled', sortByTime: startTime });
+                    } else {
+                        results.push({ period: sp, record: null, type: 'scheduled', sortByTime: startTime });
+                    }
+                });
+            } else {
+                // If no scheduled periods, check if a manual attendance was taken during this slot
+                const manualRecord = dayRecords.find(r => {
+                    if (matchedRecordIds.has(r.id)) return false;
+                    const markedTime = new Date(r.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                    // Special case for selected class or all classes
+                    if (selectedClass !== 'All' && r.className !== selectedClass) return false;
+                    return markedTime >= startTime && markedTime <= endTime;
+                });
+
+                if (manualRecord) {
+                    matchedRecordIds.add(manualRecord.id);
+                    results.push({ 
+                        period: null, 
+                        record: manualRecord, 
+                        type: 'manual-matched', 
+                        startTime, 
+                        endTime, 
+                        sortByTime: startTime 
+                    });
+                } else {
+                    results.push({ 
+                        period: { subjectId: null, startTime, endTime, className: selectedClass !== 'All' ? selectedClass : 'All' }, 
+                        record: null, 
+                        type: 'free', 
+                        sortByTime: startTime 
+                    });
+                }
+            }
+        });
+
+        // Unscheduled/Extra (attendance marked but not in timetable)
+        dayRecords.forEach(r => {
+            if (!matchedRecordIds.has(r.id)) {
+                const timeStr = new Date(r.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                results.push({ period: null, record: r, type: 'unscheduled', sortByTime: timeStr });
+            }
+        });
+
+        return results.sort((a, b) => a.sortByTime.localeCompare(b.sortByTime));
+    }, [records, timetables, selectedClass]);
+
+    const todayMerged = useMemo(() => buildDailyTimetable(todayStr), [buildDailyTimetable, todayStr]);
+    const yesterdayMerged = useMemo(() => buildDailyTimetable(yesterdayStr), [buildDailyTimetable, yesterdayStr]);
+    const dayBeforeMerged = useMemo(() => buildDailyTimetable(dayBeforeStr), [buildDailyTimetable, dayBeforeStr]);
 
     if (isLoading) {
         return (
@@ -186,23 +299,35 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 </div>
             </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full sm:w-fit self-center">
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full lg:w-fit self-center overflow-x-auto no-scrollbar">
                 <button
                     onClick={() => setViewMode('records')}
-                    className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${viewMode === 'records' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex-1 lg:flex-none px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${viewMode === 'records' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     <i className="fa-solid fa-list-ul mr-2"></i> Period Records
                 </button>
                 <button
                     onClick={() => setViewMode('analytics')}
-                    className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${viewMode === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex-1 lg:flex-none px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${viewMode === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <i className="fa-solid fa-chart-line mr-2"></i> Class Analytics
+                    <i className="fa-solid fa-chart-pie mr-2"></i> Class Analytics
+                </button>
+                <button
+                    onClick={() => setViewMode('student-stats')}
+                    className={`flex-1 lg:flex-none px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${viewMode === 'student-stats' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <i className="fa-solid fa-chart-user mr-2"></i> Student Analytics
                 </button>
             </div>
 
-            {viewMode === 'analytics' ? (
+            {viewMode === 'student-stats' ? (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <StudentAttendanceStats 
+                        students={students}
+                        subjects={subjects}
+                    />
+                </div>
+            ) : viewMode === 'analytics' ? (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Class Cards Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -211,50 +336,43 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                             const isSelected = selectedAnalyticsClass === className;
 
                             return (
-                                <div 
-                                    key={className}
-                                    onClick={() => setSelectedAnalyticsClass(isSelected ? null : className)}
-                                    className={`group cursor-pointer rounded-[2.5rem] border-2 transition-all duration-300 overflow-hidden relative ${isSelected ? 'bg-slate-900 border-slate-900 shadow-2xl scale-[1.02]' : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-xl'}`}
-                                >
-                                    {/* Stats Icon Background Bubble */}
-                                    <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full transition-colors ${isSelected ? 'bg-white/5 font-black' : 'bg-slate-50 group-hover:bg-emerald-50'}`} />
-                                    
-                                    <div className="p-8 relative z-10">
-                                        <div className="flex justify-between items-start mb-6">
-                                            <div>
-                                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${isSelected ? 'text-slate-400' : 'text-emerald-600'}`}>Class Performance</p>
-                                                <h3 className={`text-2xl font-black tracking-tight ${isSelected ? 'text-white' : 'text-slate-900'}`}>{className}</h3>
-                                            </div>
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl transition-all shadow-sm ${isSelected ? 'bg-emerald-500 text-white rotate-12' : 'bg-slate-50 text-slate-400 group-hover:bg-emerald-500 group-hover:text-white group-hover:rotate-12'}`}>
-                                                <i className="fa-solid fa-chart-simple"></i>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div className="flex items-end justify-between">
+                                <React.Fragment key={className}>
+                                    <div 
+                                        onClick={() => setSelectedAnalyticsClass(isSelected ? null : className)}
+                                        className={`group cursor-pointer rounded-[2.5rem] border-2 transition-all duration-300 overflow-hidden relative ${isSelected ? 'bg-slate-900 border-slate-900 shadow-2xl scale-[1.02]' : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-xl'}`}
+                                    >
+                                        {/* Stats Icon Background Bubble */}
+                                        <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full transition-colors ${isSelected ? 'bg-white/5 font-black' : 'bg-slate-50 group-hover:bg-emerald-50'}`} />
+                                        
+                                        <div className="p-8 relative z-10 text-slate-900">
+                                            <div className="flex justify-between items-start mb-6">
                                                 <div>
-                                                    <p className={`text-[10px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>Avg. Attendance</p>
-                                                    <h4 className={`text-3xl font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{Math.round(percentage)}%</h4>
+                                                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${isSelected ? 'text-slate-400' : 'text-emerald-600'}`}>Class Performance</p>
+                                                    <h3 className={`text-2xl font-black tracking-tight ${isSelected ? 'text-white' : 'text-slate-900'}`}>{className}</h3>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className={`text-[10px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>Total Periods</p>
-                                                    <h4 className={`text-lg font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{total}</h4>
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl transition-all shadow-sm ${isSelected ? 'bg-emerald-500 text-white rotate-12' : 'bg-slate-50 text-slate-400 group-hover:bg-emerald-500 group-hover:text-white group-hover:rotate-12'}`}>
+                                                    <i className="fa-solid fa-chart-simple"></i>
                                                 </div>
                                             </div>
 
-                                            {/* Progress Bar */}
-                                            <div className={`h-2.5 w-full rounded-full overflow-hidden ${isSelected ? 'bg-white/10' : 'bg-slate-100'}`}>
-                                                <div 
-                                                    className={`h-full transition-all duration-1000 ${percentage > 85 ? 'bg-emerald-500' : percentage > 75 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                                                    style={{ width: `${percentage}%` }}
-                                                />
-                                            </div>
-                                            
-                                            <div className="flex items-center justify-between pt-2">
-                                                <span className={`text-[9px] font-black uppercase tracking-widest ${isSelected ? 'text-emerald-400' : 'text-slate-400 group-hover:text-emerald-600'}`}>
-                                                    {isSelected ? 'Click to collapse' : 'View Subject Breakdown'}
-                                                </span>
-                                                <i className={`fa-solid ${isSelected ? 'fa-chevron-up' : 'fa-chevron-right'} text-sm ${isSelected ? 'text-white' : 'text-slate-300'}`}></i>
+                                            <div className="space-y-4">
+                                                <div className="flex items-end justify-between">
+                                                    <div>
+                                                        <p className={`text-[10px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>Avg. Attendance</p>
+                                                        <h4 className={`text-3xl font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{Math.round(percentage)}%</h4>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className={`text-[10px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-slate-200/50' : 'text-slate-400'}`}>Entries</p>
+                                                        <p className={`text-xs font-black ${isSelected ? 'text-white' : 'text-slate-700'}`}>{subjectsList.length} subjects</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className="absolute h-full bg-emerald-500 rounded-full transition-all duration-1000"
+                                                        style={{ width: `${percentage}%` }}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -262,9 +380,9 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                     {/* Expandable Subject Breakdown */}
                                     {isSelected && (
                                         <div className="px-8 pb-8 pt-2 animate-in slide-in-from-top-4 duration-300">
-                                            <div className="bg-white/5 rounded-3xl p-4 border border-white/10 space-y-4">
+                                            <div className="bg-slate-800 rounded-3xl p-6 border border-white/10 space-y-4">
                                                 <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-white/10 pb-2">Individual Subjects</h5>
-                                                <div className="space-y-3">
+                                                <div className="space-y-4">
                                                     {subjectsList.map(({ subId, present: subPresent, total: subTotal }) => {
                                                         const subject = subjectMap[subId];
                                                         const subPerc = subTotal > 0 ? (subPresent / subTotal) * 100 : 0;
@@ -292,7 +410,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                             </div>
                                         </div>
                                     )}
-                                </div>
+                                </React.Fragment>
                             );
                         })}
                     </div>
@@ -300,7 +418,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
             ) : (
                 <>
                 {/* Filters */}
-                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center mb-6">
                     <div className="relative flex-1 w-full">
                         <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                         <input
@@ -313,14 +431,6 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                     </div>
                     <div className="flex gap-2 w-full md:w-auto">
                         <select
-                            value={selectedClass}
-                            onChange={(e) => setSelectedClass(e.target.value)}
-                            className="flex-1 md:w-40 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none"
-                        >
-                            {/* Corrected mapping to use pre-sorted classes array */}
-                            {classes.map(c => <option key={c} value={c}>{c === 'All' ? 'All Classes' : c}</option>)}
-                        </select>
-                        <select
                             value={selectedSubject}
                             onChange={(e) => setSelectedSubject(e.target.value)}
                             className="flex-1 md:w-48 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none"
@@ -331,84 +441,269 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                     </div>
                 </div>
 
-            {/* Records List */}
-            <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-50">
-                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">Date/Time</th>
-                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">Class</th>
-                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">Subject</th>
-                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">Presence</th>
-                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {filteredRecords.map((record) => {
-                                const subject = subjectMap[record.subjectId];
-                                const total = record.presentStudentIds.length + record.absentStudentIds.length;
-                                const ratio = total > 0 ? (record.presentStudentIds.length / total) * 100 : 0;
+            {/* Main Layout: 2/3 Updates, 1/3 Timetable Status */}
+            <div className="flex flex-col lg:flex-row gap-8">
+                
+                {/* Left Side: Recent Updates (2/3 width) */}
+                <div className="lg:w-2/3 space-y-6">
+                    <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="bg-slate-50 border-b border-slate-100 p-6 flex justify-between items-center">
+                            <h3 className="text-lg font-black text-slate-800">Recent Updates (Top 10)</h3>
+                        </div>
+                        {filteredRecords.length === 0 ? (
+                            <div className="p-12 text-center bg-white">
+                                <i className="fa-solid fa-folder-open text-4xl text-slate-100 mb-4"></i>
+                                <p className="text-slate-400 font-bold">No records found.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-white">
+                                            <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">Date/Time</th>
+                                            <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 min-w-[120px]">Class</th>
+                                            <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">Subject & Presence</th>
+                                            <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {filteredRecords.slice(0, 10).map((record) => {
+                                            const subject = subjectMap[record.subjectId];
+                                            const total = record.presentStudentIds.length + record.absentStudentIds.length;
+                                            const ratio = total > 0 ? (record.presentStudentIds.length / total) * 100 : 0;
 
-                                return (
-                                    <tr key={record.id} className="group hover:bg-slate-50/50 transition-colors">
-                                        <td className="p-5">
-                                            <p className="font-black text-slate-900">{record.date}</p>
-                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                                                {new Date(record.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </p>
-                                        </td>
-                                        <td className="p-5">
-                                            <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">
-                                                {record.className}
-                                            </span>
-                                        </td>
-                                        <td className="p-5 font-bold text-slate-800">{subject?.name || 'Unknown'}</td>
-                                        <td className="p-5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-1 h-2 w-24 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div
-                                                        className={`h-full transition-all duration-1000 ${ratio > 75 ? 'bg-emerald-500' : ratio > 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                                                        style={{ width: `${ratio}%` }}
-                                                    ></div>
-                                                </div>
-                                                <span className="text-xs font-black text-slate-500">{Math.round(ratio)}%</span>
-                                            </div>
-                                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                                                {record.presentStudentIds.length} Present / {record.absentStudentIds.length} Absent
-                                            </p>
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button
-                                                    onClick={() => setViewingRecord(record)}
-                                                    className="w-10 h-10 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm"
-                                                    title="View Details"
-                                                >
-                                                    <i className="fa-solid fa-eye"></i>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteRecord(record)}
-                                                    className="w-10 h-10 bg-white border border-slate-200 rounded-xl text-slate-400 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all shadow-sm"
-                                                    title="Delete Record"
-                                                >
-                                                    <i className="fa-solid fa-trash-can"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-                {filteredRecords.length === 0 && (
-                    <div className="p-20 text-center bg-white">
-                        <i className="fa-solid fa-folder-open text-5xl text-slate-100 mb-4"></i>
-                        <p className="text-slate-400 font-bold">No matching attendance records found</p>
+                                            return (
+                                                <tr key={record.id} className="group hover:bg-slate-50/50 transition-colors">
+                                                    <td className="p-5 align-top pt-8">
+                                                        <div className="flex flex-col gap-1">
+                                                            <p className="text-sm font-black text-slate-700">{new Date(record.markedAt).toLocaleDateString([], { month: 'short', day: 'numeric'})}</p>
+                                                            <p className="font-bold text-slate-500 bg-slate-50 rounded-xl px-2 py-1 inline-flex items-center gap-1 text-[11px] border border-slate-100 shadow-sm w-fit">
+                                                                <i className="fa-regular fa-clock text-emerald-500"></i>
+                                                                {new Date(record.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </p>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-5 align-top pt-8">
+                                                        <span className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest border border-slate-200">
+                                                            {record.className}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-5">
+                                                        <div className="flex flex-col gap-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`w-2 h-2 rounded-full ${record.isSpecialDay ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                                                <p className="font-black text-slate-800 text-sm md:text-base line-clamp-1">{subject?.name || 'Unknown Subject'}</p>
+                                                                {record.isSpecialDay ? (
+                                                                    <span className="px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded-md text-[10px] font-black uppercase tracking-widest hidden sm:inline-block">
+                                                                        {record.specialDayType || 'Special'}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-md text-[10px] font-black uppercase tracking-widest hidden sm:inline-block">Marked</span>
+                                                                )}
+                                                            </div>
+                                                            {record.isSpecialDay && record.specialDayNote && (
+                                                                <p className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">{record.specialDayNote}</p>
+                                                            )}
+                                                            <div className="pl-4 border-l-2 border-slate-100 mt-1">
+                                                                <div className="flex items-center gap-3 mb-1">
+                                                                    <div className="flex-1 h-1.5 w-24 sm:w-32 bg-slate-100 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full transition-all duration-1000 ${ratio > 75 ? 'bg-emerald-500' : ratio > 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                                                            style={{ width: `${ratio}%` }}
+                                                                        ></div>
+                                                                    </div>
+                                                                    <span className="text-[10px] font-black text-slate-500">{Math.round(ratio)}%</span>
+                                                                </div>
+                                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter flex gap-2">
+                                                                    <span className="text-emerald-600">{record.presentStudentIds.length} Present</span>
+                                                                    <span className="text-slate-300">•</span>
+                                                                    <span className="text-rose-500">{record.absentStudentIds.length} Absent</span>
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-5 text-center align-middle">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <button
+                                                                onClick={() => setViewingRecord(record)}
+                                                                className="w-8 h-8 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm flex items-center justify-center"
+                                                                title="View Details"
+                                                            >
+                                                                <i className="fa-solid fa-eye text-xs"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteRecord(record)}
+                                                                className="w-8 h-8 bg-white border border-slate-200 rounded-lg text-slate-400 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all shadow-sm flex items-center justify-center"
+                                                                title="Delete Record"
+                                                            >
+                                                                <i className="fa-solid fa-trash-can text-xs"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
-                )}
                 </div>
+
+                {/* Right Side: Daily Status (1/3 width) */}
+                <div className="lg:w-1/3 flex flex-col gap-6">
+                    <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Monitor Class Timetable</label>
+                        <select
+                            value={selectedClass}
+                            onChange={(e) => setSelectedClass(e.target.value)}
+                            className="w-full sm:w-auto px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl font-black text-slate-700 outline-none text-sm focus:ring-4 focus:ring-slate-500/10"
+                        >
+                            <option value="All">All Classes</option>
+                            {classes.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+
+                    {[
+                        { title: "Today", date: todayStr, data: todayMerged },
+                        { title: "Yesterday", date: yesterdayStr, data: yesterdayMerged },
+                        { title: "Day Before", date: dayBeforeStr, data: dayBeforeMerged }
+                    ].map((section, idx) => (
+                        <div key={idx} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                            <div className="bg-slate-50/50 p-6 pb-4 flex justify-between items-start border-b border-slate-100">
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{section.title}</h3>
+                                    <p className="text-[11px] font-bold text-slate-400 mt-1">{section.date}</p>
+                                </div>
+                                <span className="text-xs font-black bg-slate-200/60 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200">
+                                    {section.data.length} Periods
+                                </span>
+                            </div>
+                            
+                            {section.data.length === 0 ? (
+                                <div className="p-8 text-center bg-white flex-1 flex flex-col items-center justify-center">
+                                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 border border-slate-100">
+                                        <i className="fa-solid fa-calendar-xmark text-2xl text-slate-300"></i>
+                                    </div>
+                                    <p className="text-slate-400 font-bold text-sm">No periods scheduled or marked.</p>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[500px] bg-white hide-scrollbar">
+                                    {section.data.map((item, i) => {
+                                        const isMarked = !!item.record;
+                                        const subjectId = item.period ? item.period.subjectId : item.record?.subjectId;
+                                        const subjectName = subjectId ? (subjectMap[subjectId]?.name || 'Unknown Subject') : (item.period?.subjectName || 'Unknown');
+                                        
+                                        const formatTime12h = (time24: string) => {
+                                            const [h, m] = time24.split(':');
+                                            const hr = parseInt(h);
+                                            const suffix = hr >= 12 ? 'PM' : 'AM';
+                                            const hr12 = hr % 12 || 12;
+                                            return `${hr12}:${m} ${suffix}`;
+                                        };
+
+                                        // Calculate timing display (Single Time like "12:19 PM" or formatted "10:00 AM")
+                                        let timeDisplay = '';
+                                        if (item.type === 'unscheduled' && item.record) {
+                                            timeDisplay = formatTime12h(new Date(item.record.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+                                        } else if (item.period?.startTime && item.period?.endTime) {
+                                            timeDisplay = `${formatTime12h(item.period.startTime)} - ${formatTime12h(item.period.endTime)}`;
+                                        } else if (item.startTime && item.endTime) {
+                                            // For manual-matched
+                                            timeDisplay = `${formatTime12h(item.startTime)} - ${formatTime12h(item.endTime)}`;
+                                        }
+
+                                        let rowBgColor = 'bg-white';
+                                        if (item.type !== 'free') {
+                                            if (item.record?.isSpecialDay) {
+                                                rowBgColor = 'bg-amber-50/50 hover:bg-amber-100/50';
+                                            } else if (isMarked) {
+                                                rowBgColor = 'bg-emerald-50/50 hover:bg-emerald-100/50';
+                                            } else {
+                                                rowBgColor = 'bg-rose-50/50 hover:bg-rose-100/50';
+                                            }
+                                        }
+
+                                        return (
+                                            <div key={i} className={`px-6 py-4 border-l-4 transition-all flex items-center gap-4 ${rowBgColor} ${
+                                                item.type === 'free' ? 'border-transparent' : 
+                                                item.record?.isSpecialDay ? 'border-amber-400' :
+                                                isMarked ? 'border-emerald-400' : 'border-rose-400'
+                                            }`}>
+                                                <div className={`px-2 py-1.5 rounded-lg text-[9px] font-black w-24 text-center shrink-0 border ${
+                                                    item.type === 'free' ? 'bg-slate-50 border-slate-100 text-slate-500' :
+                                                    item.record?.isSpecialDay ? 'bg-amber-100 border-amber-200 text-amber-700' :
+                                                    isMarked ? 'bg-emerald-100 border-emerald-200 text-emerald-700' :
+                                                    'bg-rose-100 border-rose-200 text-rose-700'
+                                                }`}>
+                                                    {timeDisplay}
+                                                </div>
+                                                
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1.5">
+                                                        {item.type === 'free' ? (
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-slate-200"></span>
+                                                        ) : item.record?.isSpecialDay ? (
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-100"></span>
+                                                        ) : isMarked ? (
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100"></span>
+                                                        ) : (
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-100"></span>
+                                                        )}
+                                                        <p className={`text-base font-black truncate tracking-tight ${item.type === 'free' ? 'text-slate-400 italic' : 'text-slate-900'}`}>
+                                                            {subjectName}
+                                                            {isMarked && item.record && (
+                                                                <span className="ml-2 text-xs font-bold text-slate-400">
+                                                                    at {new Date(item.record.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-2 ml-4">
+                                                        {item.type !== 'free' && (
+                                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200">
+                                                                {item.period?.className || item.record?.className || 'N/A'}
+                                                            </span>
+                                                        )}
+                                                        
+                                                        {item.type === 'unscheduled' && !item.record?.isSpecialDay ? (
+                                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                                                EXTRA
+                                                            </span>
+                                                        ) : item.record?.isSpecialDay ? (
+                                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100">
+                                                                {item.record.specialDayType || 'SPECIAL'}
+                                                            </span>
+                                                        ) : item.type === 'free' ? (
+                                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 border border-slate-200">
+                                                                FREE
+                                                            </span>
+                                                        ) : !isMarked && (
+                                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 border border-rose-100">
+                                                                NOT TAKEN
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                
+                                                {isMarked && item.record && (
+                                                    <button
+                                                        onClick={() => setViewingRecord(item.record as AttendanceRecord)}
+                                                        className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm flex items-center justify-center shrink-0 group"
+                                                    >
+                                                        <i className="fa-solid fa-eye text-sm group-hover:scale-110 transition-transform"></i>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
                 </>
             )}
 

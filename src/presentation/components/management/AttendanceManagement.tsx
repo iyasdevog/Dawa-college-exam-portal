@@ -38,7 +38,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const [selectedSubject, setSelectedSubject] = useState('');
     const [attendanceData, setAttendanceData] = useState<Record<string, boolean>>({});
     const [isSaving, setIsSaving] = useState(false);
-    const [isSpecialDayMode, setIsSpecialDayMode] = useState(false);
+    const [specialMode, setSpecialMode] = useState<'none' | 'day' | 'period'>('none');
     const [specialDayType, setSpecialDayType] = useState<'Leave' | 'Program'>('Leave');
     const [specialDayNote, setSpecialDayNote] = useState('');
     const [reports, setReports] = useState<Record<string, number>>({});
@@ -144,7 +144,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         setSelectedSubject(entry.subjectId);
         setSelectedDate(new Date().toISOString().split('T')[0]);
         setSearchQuery('');
-        setIsSpecialDayMode(false);
+        setSpecialMode('none');
     };
 
     const handleToggleAttendance = useCallback((studentId: string) => {
@@ -220,7 +220,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 className: selectedClass || undefined
             });
             alert(`${specialDayType} marked for ${selectedDate}`);
-            setIsSpecialDayMode(false);
+            setSpecialMode('none');
             setSpecialDayNote('');
             onRefresh();
         } catch (error) {
@@ -229,6 +229,37 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
             setIsSaving(false);
         }
     };
+
+    const handleSaveSpecialPeriod = useCallback(async () => {
+        if (!selectedSubject || !selectedClass || !selectedDate || !specialDayNote) return;
+
+        setIsSaving(true);
+        try {
+            await dataService.markAttendance({
+                date: selectedDate,
+                subjectId: selectedSubject,
+                className: selectedClass,
+                presentStudentIds: filteredStudents.map(s => s.id),
+                absentStudentIds: [],
+                markedBy: currentUser?.name || 'System Admin',
+                markedAt: Date.now(),
+                isSpecialDay: true,
+                specialDayType,
+                specialDayNote,
+                academicYear: currentAcademicYear,
+                semester: currentSemester
+            });
+            alert('Special Event Period marked successfully!');
+            setSpecialMode('none');
+            setSpecialDayNote('');
+            onRefresh();
+        } catch (error) {
+            console.error('Attendance save error:', error);
+            alert('Failed to save special period.');
+        } finally {
+            setIsSaving(false);
+        }
+    }, [selectedSubject, selectedClass, selectedDate, specialDayType, specialDayNote, filteredStudents, currentUser, currentAcademicYear, currentSemester, onRefresh]);
 
     return (
         <div className="space-y-6">
@@ -324,7 +355,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         {classes.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
-                {!isSpecialDayMode && (
+                {specialMode !== 'day' && (
                     <div className="flex-1">
                         <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
                         <select
@@ -338,27 +369,42 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         </select>
                     </div>
                 )}
-                <button
-                    onClick={() => setIsSpecialDayMode(!isSpecialDayMode)}
-                    className={`px-4 py-3 rounded-xl font-bold transition-all ${isSpecialDayMode ? 'bg-slate-200 text-slate-800' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
-                >
-                    <i className={`fa-solid ${isSpecialDayMode ? 'fa-xmark' : 'fa-calendar-day'} mr-2`}></i>
-                    {isSpecialDayMode ? 'Cancel' : 'Mark Special Day'}
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:flex-initial">
+                    {(!currentUser || currentUser.role === 'admin') && (
+                        <button
+                            onClick={() => setSpecialMode(specialMode === 'day' ? 'none' : 'day')}
+                            className={`px-4 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${specialMode === 'day' ? 'bg-slate-200 text-slate-800' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+                        >
+                            <i className={`fa-solid ${specialMode === 'day' ? 'fa-xmark' : 'fa-calendar-day'} mr-2`}></i>
+                            {specialMode === 'day' ? 'Cancel' : 'Mark Special Day'}
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setSpecialMode(specialMode === 'period' ? 'none' : 'period')}
+                        className={`px-4 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${specialMode === 'period' ? 'bg-slate-200 text-slate-800' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}`}
+                    >
+                        <i className={`fa-solid ${specialMode === 'period' ? 'fa-xmark' : 'fa-stopwatch'} mr-2`}></i>
+                        {specialMode === 'period' ? 'Cancel' : 'Mark Special Period'}
+                    </button>
+                </div>
             </div>
 
-            {isSpecialDayMode ? (
-                <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 shadow-sm animate-in fade-in slide-in-from-top-4">
-                    <h3 className="text-lg font-bold text-amber-900 mb-4">Register Special Day</h3>
+            {specialMode !== 'none' ? (
+                <div className={`${specialMode === 'day' ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'} p-6 rounded-2xl border shadow-sm animate-in fade-in slide-in-from-top-4`}>
+                    <h3 className={`text-lg font-bold mb-4 ${specialMode === 'day' ? 'text-amber-900' : 'text-indigo-900'}`}>Register Special {specialMode === 'day' ? 'Day' : 'Period'}</h3>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-amber-800 mb-1">Event Type</label>
+                            <label className={`block text-sm font-medium mb-1 ${specialMode === 'day' ? 'text-amber-800' : 'text-indigo-800'}`}>Event Type</label>
                             <div className="flex gap-4">
                                 {['Leave', 'Program'].map(type => (
                                     <button
                                         key={type}
                                         onClick={() => setSpecialDayType(type as any)}
-                                        className={`px-6 py-2 rounded-lg font-medium transition-all ${specialDayType === type ? 'bg-amber-600 text-white' : 'bg-white text-amber-600 border border-amber-300'}`}
+                                        className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                                            specialDayType === type 
+                                                ? (specialMode === 'day' ? 'bg-amber-600 text-white' : 'bg-indigo-600 text-white') 
+                                                : (specialMode === 'day' ? 'bg-white text-amber-600 border border-amber-300' : 'bg-white text-indigo-600 border border-indigo-300')
+                                        }`}
                                     >
                                         {type}
                                     </button>
@@ -366,22 +412,22 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-amber-800 mb-1">Note / Description</label>
+                            <label className={`block text-sm font-medium mb-1 ${specialMode === 'day' ? 'text-amber-800' : 'text-indigo-800'}`}>Note / Description</label>
                             <input
                                 type="text"
                                 value={specialDayNote}
                                 onChange={(e) => setSpecialDayNote(e.target.value)}
                                 placeholder="e.g., National Holiday, Sports Day, etc."
-                                className="w-full p-3 border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500"
+                                className={`w-full p-3 border rounded-xl focus:ring-2 ${specialMode === 'day' ? 'border-amber-300 focus:ring-amber-500' : 'border-indigo-300 focus:ring-indigo-500'}`}
                             />
-                            <p className="text-xs text-amber-700 mt-1">This will apply to {selectedClass || 'all classes'} on {selectedDate}.</p>
+                            <p className={`text-xs mt-1 ${specialMode === 'day' ? 'text-amber-700' : 'text-indigo-700'}`}>This will apply to {specialMode === 'day' ? (selectedClass || 'all classes') : (selectedClass + ' for the selected subject')} on {selectedDate}.</p>
                         </div>
                         <button
-                            onClick={handleSaveSpecialDay}
-                            disabled={!specialDayNote || isSaving}
-                            className="w-full py-4 bg-amber-600 text-white font-bold rounded-xl shadow-lg hover:bg-amber-700 disabled:opacity-50"
+                            onClick={specialMode === 'day' ? handleSaveSpecialDay : handleSaveSpecialPeriod}
+                            disabled={!specialDayNote || isSaving || (specialMode === 'period' && !selectedSubject)}
+                            className={`w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all ${specialMode === 'day' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-indigo-600 hover:bg-indigo-700'} disabled:opacity-50`}
                         >
-                            Save Special Day
+                            Save Special {specialMode === 'day' ? 'Day' : 'Period'}
                         </button>
                     </div>
                 </div>

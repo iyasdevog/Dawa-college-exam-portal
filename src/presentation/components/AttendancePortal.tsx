@@ -8,6 +8,7 @@ import TimetableGenerator from './management/TimetableGenerator';
 import AcademicCalendar from './management/AcademicCalendar';
 import AttendanceMonitor from './management/AttendanceMonitor';
 import MasterTimetable from './management/MasterTimetable';
+import StudentAttendanceStats from './management/StudentAttendanceStats';
 import { useTerm } from '../viewmodels/TermContext';
 import { User } from '../../domain/entities/User';
 
