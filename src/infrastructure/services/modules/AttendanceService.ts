@@ -117,6 +117,7 @@ export class AttendanceService extends BaseDataService {
                         className: this.getHistoricalClassName(activeTerm, data.className),
                         presentStudentIds: periodData.presentStudentIds || [],
                         absentStudentIds: periodData.absentStudentIds || [],
+                        absentReasons: periodData.absentReasons || {},
                         markedBy: periodData.markedBy || '',
                         markedAt: periodData.markedAt || 0,
                         academicYear: data.academicYear,
@@ -239,6 +240,7 @@ export class AttendanceService extends BaseDataService {
                 className: this.getHistoricalClassName(this.getCurrentTermKey(data.className), data.className),
                 presentStudentIds: periodData.presentStudentIds || [],
                 absentStudentIds: periodData.absentStudentIds || [],
+                absentReasons: periodData.absentReasons || {},
                 markedBy: periodData.markedBy || '',
                 markedAt: periodData.markedAt || 0,
                 academicYear: data.academicYear,
@@ -283,6 +285,7 @@ export class AttendanceService extends BaseDataService {
                 [`periods.${record.subjectId}`]: {
                     presentStudentIds: record.presentStudentIds,
                     absentStudentIds: record.absentStudentIds,
+                    absentReasons: record.absentReasons || {},
                     markedBy: record.markedBy,
                     markedAt: record.markedAt
                 }
@@ -322,6 +325,7 @@ export class AttendanceService extends BaseDataService {
                         className: this.getHistoricalClassName(activeTerm, data.className),
                         presentStudentIds: periodData.presentStudentIds || [],
                         absentStudentIds: periodData.absentStudentIds || [],
+                        absentReasons: periodData.absentReasons || {},
                         markedBy: periodData.markedBy || '',
                         markedAt: periodData.markedAt || 0,
                         academicYear: data.academicYear,

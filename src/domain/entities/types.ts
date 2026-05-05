@@ -253,6 +253,7 @@ export interface AttendanceRecord {
   className: string;
   presentStudentIds: string[];
   absentStudentIds: string[];
+  absentReasons?: Record<string, string>; // Maps studentId to reason
   markedBy: string; // Teacher name/ID
   markedAt: number; // Timestamp
   isSpecialDay?: boolean;
