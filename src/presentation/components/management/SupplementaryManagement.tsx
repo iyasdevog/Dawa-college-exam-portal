@@ -571,6 +571,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:border-emerald-500"
                         >
                             <option value="All">All Status</option>
+                            <option value="Pending">Pending</option>
                             <option value="Completed">Completed</option>
                         </select>
                         <select 

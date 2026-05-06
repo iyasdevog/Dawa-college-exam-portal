@@ -70,7 +70,7 @@ const PublicAttendance: React.FC = () => {
                 {todaySchedule.length > 0 ? (
                     todaySchedule.map((entry, idx) => {
                         const subject = subjects.find(s => s.id === entry.subjectId);
-                        const isMarked = attendanceRecords.some(r => r.subjectId === entry.subjectId && r.className === entry.className);
+                        const isMarked = attendanceRecords.some(r => r.subjectId.split('_')[0] === entry.subjectId && r.className === entry.className);
 
                         return (
                             <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-emerald-200 transition-all">

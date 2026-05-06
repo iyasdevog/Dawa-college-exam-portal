@@ -243,7 +243,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
             <main className={`flex-1 container mx-auto print:py-0 print:px-0 print:max-w-none ${isMobile ? 'px-4 py-8' : 'px-6 py-12'}`}>
                 {/* Apps Navigation Tabs */}
-                <div className="flex justify-center bg-white/5 p-1 rounded-3xl mb-8 overflow-x-auto hide-scrollbar touch-pan-x print:hidden w-fit mx-auto">
+                <div className="flex justify-start md:justify-center bg-white/5 p-1 rounded-3xl mb-8 overflow-x-auto hide-scrollbar touch-pan-x print:hidden w-full md:w-fit mx-auto snap-x">
                     {[
                         { id: 'results', label: 'Scorecards', icon: 'fa-file-invoice' },
                         { id: 'hall-ticket', label: 'Hall Ticket', icon: 'fa-id-card-clip' },

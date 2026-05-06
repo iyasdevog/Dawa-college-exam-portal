@@ -65,6 +65,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('');
+    const [selectedSession, setSelectedSession] = useState('1');
     const [attendanceData, setAttendanceData] = useState<Record<string, boolean>>({});
     const [absentReasons, setAbsentReasons] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
@@ -152,23 +153,24 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const loadAttendance = useCallback(async () => {
         if (!selectedClass || !selectedSubject || !selectedDate) return;
         try {
-            console.log(`[Attendance] Fetching: Class=${selectedClass}, Sub=${selectedSubject}, Date=${selectedDate}`);
+            console.log(`[Attendance] Fetching: Class=${selectedClass}, Sub=${selectedSubject}, Session=${selectedSession}, Date=${selectedDate}`);
             const records = await dataService.getAttendanceByClassAndDate(selectedClass, selectedDate);
             console.log(`[Attendance] Found ${records.length} records for this date/class`);
             
-            const record = records.find(r => r.subjectId === selectedSubject);
+            const effectiveSubjectId = selectedSession === '1' ? selectedSubject : `${selectedSubject}_${selectedSession}`;
+            const record = records.find(r => r.subjectId === effectiveSubjectId);
             const initialAttendance: Record<string, boolean> = {};
             const initialReasons: Record<string, string> = {};
 
             if (record) {
-                console.log(`[Attendance] Found specific record for subject: ${selectedSubject}`, record);
+                console.log(`[Attendance] Found specific record for subject: ${effectiveSubjectId}`, record);
                 record.presentStudentIds.forEach(id => initialAttendance[id] = true);
                 record.absentStudentIds.forEach(id => {
                     initialAttendance[id] = false;
                     if (record.absentReasons?.[id]) initialReasons[id] = record.absentReasons[id];
                 });
             } else {
-                console.log(`[Attendance] No record for subject: ${selectedSubject}. Defaulting to all present.`);
+                console.log(`[Attendance] No record for subject: ${effectiveSubjectId}. Defaulting to all present.`);
                 filteredStudents.forEach(s => initialAttendance[s.id] = true);
             }
             setAttendanceData(initialAttendance);
@@ -176,7 +178,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         } catch (error) {
             console.error('[Attendance] Load failed:', error);
         }
-    }, [selectedClass, selectedSubject, selectedDate, filteredStudents]);
+    }, [selectedClass, selectedSubject, selectedSession, selectedDate, filteredStudents]);
 
     const loadRecentHistory = useCallback(async () => {
         try {
@@ -198,8 +200,11 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     }, [loadAttendance, loadRecentHistory]);
 
     const handleSelectRecentRecord = (record: AttendanceRecord) => {
+        const actualSubjectId = record.subjectId.split('_')[0];
+        const sessionNum = record.subjectId.includes('_') ? record.subjectId.split('_')[1] : '1';
         setSelectedClass(record.className);
-        setSelectedSubject(record.subjectId);
+        setSelectedSubject(actualSubjectId);
+        setSelectedSession(sessionNum);
         setSelectedDate(record.date);
         setShowHistory(false);
         setHistorySearch('');
@@ -209,7 +214,8 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         if (!historySearch.trim()) return recentRecords;
         const q = historySearch.toLowerCase();
         return recentRecords.filter(r => {
-            const sub = subjects.find(s => s.id === r.subjectId);
+            const actualSubjectId = r.subjectId.split('_')[0];
+            const sub = subjects.find(s => s.id === actualSubjectId);
             return (sub?.name || '').toLowerCase().includes(q) || 
                    r.className.toLowerCase().includes(q) ||
                    r.date.includes(q);
@@ -246,6 +252,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const handleSaveAttendance = useCallback(async () => {
         if (!selectedSubject) return;
 
+        const effectiveSubjectId = selectedSession === '1' ? selectedSubject : `${selectedSubject}_${selectedSession}`;
         const subject = subjects.find(s => s.id === selectedSubject);
         const isSharedSubject = subject?.electiveType === 'cross-class';
 
@@ -267,7 +274,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 await Promise.all(Object.entries(classGroups).map(([className, data]) =>
                     dataService.markAttendance({
                         date: selectedDate,
-                        subjectId: selectedSubject,
+                        subjectId: effectiveSubjectId,
                         className,
                         presentStudentIds: data.present,
                         absentStudentIds: data.absent,
@@ -290,7 +297,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
 
                 await dataService.markAttendance({
                     date: selectedDate,
-                    subjectId: selectedSubject,
+                    subjectId: effectiveSubjectId,
                     className: selectedClass,
                     presentStudentIds: presentIds,
                     absentStudentIds: absentIds,
@@ -310,7 +317,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         } finally {
             setIsSaving(false);
         }
-    }, [selectedSubject, selectedClass, selectedDate, filteredStudents, attendanceData, subjects, currentUser, currentAcademicYear, currentSemester, onRefresh]);
+    }, [selectedSubject, selectedSession, selectedClass, selectedDate, filteredStudents, attendanceData, subjects, currentUser, currentAcademicYear, currentSemester, onRefresh]);
 
     const handleSaveSpecialDay = async () => {
         if (!selectedDate || !specialDayNote) return;
@@ -336,12 +343,13 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
 
     const handleSaveSpecialPeriod = useCallback(async () => {
         if (!selectedSubject || !selectedClass || !selectedDate || !specialDayNote) return;
+        const effectiveSubjectId = selectedSession === '1' ? selectedSubject : `${selectedSubject}_${selectedSession}`;
 
         setIsSaving(true);
         try {
             await dataService.markAttendance({
                 date: selectedDate,
-                subjectId: selectedSubject,
+                subjectId: effectiveSubjectId,
                 className: selectedClass,
                 presentStudentIds: filteredStudents.map(s => s.id),
                 absentStudentIds: [],
@@ -363,7 +371,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         } finally {
             setIsSaving(false);
         }
-    }, [selectedSubject, selectedClass, selectedDate, specialDayType, specialDayNote, filteredStudents, currentUser, currentAcademicYear, currentSemester, onRefresh]);
+    }, [selectedSubject, selectedSession, selectedClass, selectedDate, specialDayType, specialDayNote, filteredStudents, currentUser, currentAcademicYear, currentSemester, onRefresh]);
 
     return (
         <div className="space-y-6">
@@ -399,7 +407,9 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                         </div>
                                     ) : (
                                         filteredHistory.map(record => {
-                                            const sub = subjects.find(s => s.id === record.subjectId);
+                                            const actualSubjectId = record.subjectId.split('_')[0];
+                                            const sessionText = record.subjectId.includes('_') ? ` (S${record.subjectId.split('_')[1]})` : '';
+                                            const sub = subjects.find(s => s.id === actualSubjectId);
                                             return (
                                                 <button
                                                     key={record.id}
@@ -407,7 +417,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                                     className="w-full text-left p-4 hover:bg-emerald-50/50 border-b border-slate-50 last:border-none transition-all group active:scale-[0.98]"
                                                 >
                                                     <div className="flex justify-between items-center mb-1">
-                                                        <div className="font-black text-slate-900 text-xs truncate group-hover:text-emerald-700 transition-colors">{sub?.name || record.subjectId}</div>
+                                                        <div className="font-black text-slate-900 text-xs truncate group-hover:text-emerald-700 transition-colors">{(sub?.name || actualSubjectId) + sessionText}</div>
                                                         <div className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{record.date}</div>
                                                     </div>
                                                     <div className="flex justify-between items-center">
@@ -513,7 +523,9 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {recentRecords.map(record => {
-                                const sub = subjects.find(s => s.id === record.subjectId);
+                                const actualSubjectId = record.subjectId.split('_')[0];
+                                const sessionText = record.subjectId.includes('_') ? ` (S${record.subjectId.split('_')[1]})` : '';
+                                const sub = subjects.find(s => s.id === actualSubjectId);
                                 return (
                                     <div 
                                         key={record.id}
@@ -521,7 +533,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                         className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600 p-4 rounded-2xl cursor-pointer transition-all group"
                                     >
                                         <div className="flex justify-between items-start mb-2">
-                                            <div className="font-black text-white text-xs truncate max-w-[150px]">{sub?.name || record.subjectId}</div>
+                                            <div className="font-black text-white text-xs truncate max-w-[150px]">{(sub?.name || actualSubjectId) + sessionText}</div>
                                             <div className="text-[9px] font-black text-emerald-400 uppercase tracking-tighter">{record.date}</div>
                                         </div>
                                         <div className="flex justify-between items-end">
@@ -567,6 +579,23 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         >
                             <option value="">Select Subject</option>
                             {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                    </div>
+                )}
+                {specialMode !== 'day' && (
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Session</label>
+                        <select
+                            value={selectedSession}
+                            onChange={(e) => setSelectedSession(e.target.value)}
+                            disabled={!selectedClass || !selectedSubject}
+                            className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-100"
+                        >
+                            <option value="1">1st Session</option>
+                            <option value="2">2nd Session</option>
+                            <option value="3">3rd Session</option>
+                            <option value="4">4th Session</option>
+                            <option value="5">5th Session</option>
                         </select>
                     </div>
                 )}

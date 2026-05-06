@@ -75,11 +75,12 @@ export class AttendanceService extends BaseDataService {
                 const periods = data.periods || {};
 
                 for (const subject of classSubjects) {
-                    const periodData = periods[subject.id];
-                    if (periodData) {
-                        totalClasses++;
-                        if (periodData.presentStudentIds?.includes(studentId)) {
-                            totalPresent++;
+                    for (const [periodKey, periodData] of Object.entries(periods)) {
+                        if (periodKey === subject.id || periodKey.startsWith(`${subject.id}_`)) {
+                            totalClasses++;
+                            if ((periodData as any).presentStudentIds?.includes(studentId)) {
+                                totalPresent++;
+                            }
                         }
                     }
                 }
@@ -108,21 +109,26 @@ export class AttendanceService extends BaseDataService {
             const records: AttendanceRecord[] = [];
             for (const docSnap of snapshot.docs) {
                 const data = docSnap.data();
-                const periodData = data.periods?.[subjectId];
-                if (periodData) {
-                    records.push({
-                        id: docSnap.id,
-                        date: data.date,
-                        subjectId,
-                        className: this.getHistoricalClassName(activeTerm, data.className),
-                        presentStudentIds: periodData.presentStudentIds || [],
-                        absentStudentIds: periodData.absentStudentIds || [],
-                        absentReasons: periodData.absentReasons || {},
-                        markedBy: periodData.markedBy || '',
-                        markedAt: periodData.markedAt || 0,
-                        academicYear: data.academicYear,
-                        semester: data.semester
-                    });
+                const periods = data.periods || {};
+                
+                for (const [periodKey, periodData] of Object.entries(periods)) {
+                    if (periodKey === subjectId || periodKey.startsWith(`${subjectId}_`)) {
+                        // Cast periodData to any to bypass TypeScript typing issues
+                        const pData: any = periodData;
+                        records.push({
+                            id: docSnap.id,
+                            date: data.date,
+                            subjectId: periodKey,
+                            className: this.getHistoricalClassName(activeTerm, data.className),
+                            presentStudentIds: pData.presentStudentIds || [],
+                            absentStudentIds: pData.absentStudentIds || [],
+                            absentReasons: pData.absentReasons || {},
+                            markedBy: pData.markedBy || '',
+                            markedAt: pData.markedAt || 0,
+                            academicYear: data.academicYear,
+                            semester: data.semester
+                        });
+                    }
                 }
             }
             return records;
