@@ -429,8 +429,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     }, [supplementaryExams]);
 
     const uniqueSubjectsInSupp = useMemo(() => {
-        const subjectIds = Array.from(new Set(supplementaryExams.map(e => e.subjectId)));
-        return subjects.filter(s => subjectIds.includes(s.id)).sort((a, b) => a.name.localeCompare(b.name));
+        const subjectIdsSet = new Set(supplementaryExams.map(e => e.subjectId));
+        return subjects.filter(s => subjectIdsSet.has(s.id)).sort((a, b) => a.name.localeCompare(b.name));
     }, [supplementaryExams, subjects]);
 
     return (

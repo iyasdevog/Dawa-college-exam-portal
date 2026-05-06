@@ -280,6 +280,14 @@ export class DataService extends BaseDataService {
         return this.settingsService.repairGlobalSettings();
     }
 
+    async getGeneratorConfig(className: string, semester: string): Promise<any> {
+        return this.administrativeService.getGeneratorConfig(className, semester);
+    }
+
+    async saveGeneratorConfig(config: any): Promise<void> {
+        return this.administrativeService.saveGeneratorConfig(config);
+    }
+
     // --- Attendance & Calendar ---
     async getOverallAttendance(studentId: string, className: string, termKey?: string): Promise<number> {
         return this.attendanceService.getOverallAttendance(studentId, className, termKey);

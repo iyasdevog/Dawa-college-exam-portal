@@ -189,25 +189,37 @@ const MasterTimetable: React.FC<MasterTimetableProps> = ({ subjects, students })
                                                     // Note: TimetableEntry doesn't share a global slot index perfectly if classes have different break configurations,
                                                     // but we'll try to match by relative order of periods.
                                                     const dayEntries = entries.filter(e => e.day === day);
-                                                    // This is a simplification: assuming entries are stored in chronological order.
-                                                    // A better way would be comparing startTimes if available globally.
-                                                    const entry = dayEntries[slotIndex];
+                                                    
+                                                    // Group by start time to handle parallel subjects (group-based)
+                                                    const timeGroups = new Map<string, TimetableEntry[]>();
+                                                    dayEntries.forEach(e => {
+                                                        const key = e.startTime;
+                                                        if (!timeGroups.has(key)) timeGroups.set(key, []);
+                                                        timeGroups.get(key)!.push(e);
+                                                    });
+                                                    
+                                                    const sortedTimes = Array.from(timeGroups.keys()).sort();
+                                                    const slotEntries = timeGroups.get(sortedTimes[slotIndex]) || [];
 
                                                     return (
-                                                        <td key={slotIndex} className="p-2 border-b border-slate-100 min-w-[140px]">
-                                                            {entry ? (
-                                                                <div className="bg-emerald-50 text-emerald-700 p-3 rounded-2xl border border-emerald-100 shadow-sm">
-                                                                    <div className="text-[10px] font-black leading-tight truncate">{entry.subjectName}</div>
-                                                                    <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-emerald-100/50">
-                                                                        <span className="text-[8px] font-bold text-emerald-600/60 uppercase tracking-tighter shrink-0">
-                                                                            {viewType === 'class'
-                                                                                ? (subjects.find(s => s.id === entry.subjectId)?.facultyName || 'Staff')
-                                                                                : entry.className}
-                                                                        </span>
-                                                                        <span className="text-[7px] font-black text-emerald-500/40 tabular-nums">
-                                                                            {entry.startTime}
-                                                                        </span>
-                                                                    </div>
+                                                        <td key={slotIndex} className="p-2 border-b border-slate-100 min-w-[160px]">
+                                                            {slotEntries.length > 0 ? (
+                                                                <div className="flex flex-col gap-2">
+                                                                    {slotEntries.map((entry, entryIdx) => (
+                                                                        <div key={entry.id || entryIdx} className="bg-emerald-50 text-emerald-700 p-3 rounded-2xl border border-emerald-100 shadow-sm">
+                                                                            <div className="text-[10px] font-black leading-tight truncate">{entry.subjectName}</div>
+                                                                            <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-emerald-100/50">
+                                                                                <span className="text-[8px] font-bold text-emerald-600/60 uppercase tracking-tighter shrink-0">
+                                                                                    {viewType === 'class'
+                                                                                        ? (subjects.find(s => s.id === entry.subjectId)?.facultyName || 'Staff')
+                                                                                        : entry.className}
+                                                                                </span>
+                                                                                <span className="text-[7px] font-black text-emerald-500/40 tabular-nums">
+                                                                                    {entry.startTime}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
                                                             ) : (
                                                                 <div className="h-10 border-2 border-dashed border-slate-50/50 rounded-2xl"></div>

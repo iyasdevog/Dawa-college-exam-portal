@@ -28,6 +28,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
     const [selectedClass, setSelectedClass] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+    const [sortBy, setSortBy] = useState<'attendance-asc' | 'attendance-desc' | 'adno-asc'>('attendance-asc');
 
     const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))], [students]);
 
@@ -111,14 +112,25 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
 
     const filteredAggregates = useMemo(() => {
         const lowerSearch = searchQuery.toLowerCase();
-        return aggregates.filter(a => {
+        let result = aggregates.filter(a => {
             const matchesClass = selectedClass === 'All' || a.student.className === selectedClass;
             const matchesSearch = !searchQuery || 
                                  a.student.name.toLowerCase().includes(lowerSearch) || 
                                  a.student.adNo.toLowerCase().includes(lowerSearch);
             return matchesClass && matchesSearch;
         });
-    }, [aggregates, selectedClass, searchQuery]);
+
+        // Apply Sorting
+        return result.sort((a, b) => {
+            if (sortBy === 'attendance-asc') {
+                return a.average - b.average || a.student.adNo.localeCompare(b.student.adNo);
+            } else if (sortBy === 'attendance-desc') {
+                return b.average - a.average || a.student.adNo.localeCompare(b.student.adNo);
+            } else {
+                return a.student.adNo.localeCompare(b.student.adNo);
+            }
+        });
+    }, [aggregates, selectedClass, searchQuery, sortBy]);
 
     // Extract watchlist data
     const averageWatchlist = useMemo(() => 
@@ -165,8 +177,8 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                             <h2 className="text-xl font-black text-slate-900 tracking-tight">Active Student Pulse</h2>
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Aggregate Attendance Monitoring</p>
                         </div>
-                        <div className="flex items-center gap-3 w-full md:w-auto">
-                            <div className="relative flex-1 md:w-64">
+                        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                            <div className="relative flex-1 md:w-48">
                                 <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                                 <input 
                                     type="text" 
@@ -177,9 +189,18 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                                 />
                             </div>
                             <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value as any)}
+                                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none"
+                            >
+                                <option value="attendance-asc">Attendance (Low First)</option>
+                                <option value="attendance-desc">Attendance (High First)</option>
+                                <option value="adno-asc">Admission Number</option>
+                            </select>
+                            <select
                                 value={selectedClass}
                                 onChange={(e) => setSelectedClass(e.target.value)}
-                                className="px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest outline-none"
+                                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none"
                             >
                                 {classes.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>

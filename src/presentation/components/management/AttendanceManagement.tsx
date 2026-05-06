@@ -85,8 +85,14 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const classes = useMemo(() => [...new Set(students.map(s => s.className))], [students]);
     const filteredSubjects = useMemo(() => subjects.filter(s => s.targetClasses.includes(selectedClass)), [subjects, selectedClass]);
     
+    const subjectsMap = useMemo(() => {
+        const map = new Map<string, SubjectConfig>();
+        subjects.forEach(s => map.set(s.id, s));
+        return map;
+    }, [subjects]);
+
     const filteredStudents = useMemo(() => {
-        const subject = subjects.find(s => s.id === selectedSubject);
+        const subject = subjectsMap.get(selectedSubject);
         const isSharedSubject = subject?.electiveType === 'cross-class';
 
         // Base list: If shared/cross-class subject, use all students in the portal (then filter by enrollment)
@@ -115,7 +121,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         }
 
         return list;
-    }, [students, selectedClass, selectedSubject, subjects, searchQuery]);
+    }, [students, selectedClass, selectedSubject, subjectsMap, searchQuery]);
 
     useEffect(() => {
         const loadAllTimetables = async () => {
@@ -215,12 +221,12 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         const q = historySearch.toLowerCase();
         return recentRecords.filter(r => {
             const actualSubjectId = r.subjectId.split('_')[0];
-            const sub = subjects.find(s => s.id === actualSubjectId);
+            const sub = subjectsMap.get(actualSubjectId);
             return (sub?.name || '').toLowerCase().includes(q) || 
                    r.className.toLowerCase().includes(q) ||
                    r.date.includes(q);
         });
-    }, [recentRecords, historySearch, subjects]);
+    }, [recentRecords, historySearch, subjectsMap]);
 
     const handleSelectLiveClass = (entry: TimetableEntry) => {
         setSelectedClass(entry.className);
@@ -253,7 +259,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         if (!selectedSubject) return;
 
         const effectiveSubjectId = selectedSession === '1' ? selectedSubject : `${selectedSubject}_${selectedSession}`;
-        const subject = subjects.find(s => s.id === selectedSubject);
+        const subject = subjectsMap.get(selectedSubject);
         const isSharedSubject = subject?.electiveType === 'cross-class';
 
         setIsSaving(true);
@@ -409,7 +415,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                         filteredHistory.map(record => {
                                             const actualSubjectId = record.subjectId.split('_')[0];
                                             const sessionText = record.subjectId.includes('_') ? ` (S${record.subjectId.split('_')[1]})` : '';
-                                            const sub = subjects.find(s => s.id === actualSubjectId);
+                                            const sub = subjectsMap.get(actualSubjectId);
                                             return (
                                                 <button
                                                     key={record.id}
@@ -525,7 +531,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                             {recentRecords.map(record => {
                                 const actualSubjectId = record.subjectId.split('_')[0];
                                 const sessionText = record.subjectId.includes('_') ? ` (S${record.subjectId.split('_')[1]})` : '';
-                                const sub = subjects.find(s => s.id === actualSubjectId);
+                                const sub = subjectsMap.get(actualSubjectId);
                                 return (
                                     <div 
                                         key={record.id}

@@ -20,7 +20,9 @@ import {
     StudentRecord,
     SubjectConfig,
     SpecialDay,
-    AcademicCalendarEntry
+    AcademicCalendarEntry,
+    TimetableEntry,
+    TimetableGeneratorConfig
 } from '../../../domain/entities/types';
 import { SupplementaryService } from './SupplementaryService';
 import { StudentService } from './StudentService';
@@ -1231,11 +1233,67 @@ export class AdministrativeService extends BaseDataService {
         });
     }
 
-    public async saveTimetableEntries(entries: any[]): Promise<void> {
+    public async getGeneratorConfig(className: string, semester: string): Promise<TimetableGeneratorConfig | null> {
+        try {
+            const settingsSnap = await getDoc(doc(this.db, this.settingsCollection, 'global_admin_settings'));
+            const academicYear = settingsSnap.exists() ? settingsSnap.data().currentAcademicYear : this.DEFAULT_ACADEMIC_YEAR;
+            const termKey = `${academicYear}-${semester}`;
+            
+            // Format ID: ${className}-${academicYear}-${semester}
+            const configId = `${className}-${academicYear}-${semester}`;
+            const configRef = doc(this.db, this.generatorConfigsCollection, configId);
+            const configSnap = await getDoc(configRef);
+            
+            if (configSnap.exists()) {
+                return { id: configSnap.id, ...configSnap.data() } as TimetableGeneratorConfig;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error fetching generator config:', error);
+            return null;
+        }
+    }
+
+    public async saveGeneratorConfig(config: TimetableGeneratorConfig): Promise<void> {
+        try {
+            const settingsSnap = await getDoc(doc(this.db, this.settingsCollection, 'global_admin_settings'));
+            const academicYear = settingsSnap.exists() ? settingsSnap.data().currentAcademicYear : this.DEFAULT_ACADEMIC_YEAR;
+            
+            const termKey = `${academicYear}-${config.semester}`;
+            const configId = `${config.className}-${academicYear}-${config.semester}`;
+            
+            const configRef = doc(this.db, this.generatorConfigsCollection, configId);
+            await setDoc(configRef, this.sanitize({
+                ...config,
+                academicYear,
+                termKey
+            }), { merge: true });
+        } catch (error) {
+            console.error('Error saving generator config:', error);
+            throw error;
+        }
+    }
+
+    public async saveTimetableEntries(entries: TimetableEntry[]): Promise<void> {
+        const settingsSnap = await getDoc(doc(this.db, this.settingsCollection, 'global_admin_settings'));
+        const settings = settingsSnap.exists() ? settingsSnap.data() : null;
+        const currentYear = settings?.currentAcademicYear || this.DEFAULT_ACADEMIC_YEAR;
+
         await this.runBatchedOperation(entries, (batch, entry) => {
             const ref = entry.id ? doc(this.db, this.timetablesCollection, entry.id) : doc(collection(this.db, this.timetablesCollection));
             const { id, ...data } = entry;
-            batch.set(ref, data, { merge: true });
+            
+            // Ensure termKey and academic metadata is present
+            const academicYear = entry.academicYear || currentYear;
+            const semester = entry.semester || (academicYear.includes('Odd') ? 'Odd' : 'Even'); // Fallback if missing
+            const termKey = (data as any).termKey || `${academicYear}-${semester}`;
+            
+            batch.set(ref, this.sanitize({ 
+                ...data, 
+                academicYear, 
+                semester,
+                termKey 
+            }), { merge: true });
         });
     }
 

@@ -16,7 +16,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         id: '',
         className: '',
         semester: 'Odd',
-        workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as any[],
         periodsPerDay: 12,
         periodDurationMins: 60,
         subjectWeeklyHours: {},
@@ -98,7 +98,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
             id: `${selectedClass}-${selectedSemester}`,
             className: selectedClass,
             semester: selectedSemester,
-            workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as any[],
             periodsPerDay: 12,
             periodDurationMins: 60,
             subjectWeeklyHours: initialHours,
@@ -377,10 +377,14 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         if (confirm('This will overwrite any existing manual timetable for this class. Proceed?')) {
             try {
                 const settings = await dataService.getGlobalSettings();
+                const academicYear = settings.currentAcademicYear || '2025-2026';
+                const termKey = `${academicYear}-${selectedSemester}`;
+                
                 const enrichedEntries = generatedTimetable.map(entry => ({
                     ...entry,
                     semester: selectedSemester,
-                    academicYear: settings.currentAcademicYear
+                    academicYear: academicYear,
+                    termKey: termKey
                 }));
                 
                 await dataService.saveTimetableEntries(enrichedEntries);
@@ -428,36 +432,41 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         document.body.removeChild(link);
     };
 
-    const handleManualSlotUpdate = (day: string, effectivePIndex: number, subjectId: string) => {
+    const handleManualSlotUpdate = (day: string, slotTime: {startTime: string, endTime: string}, subjectId: string, entryId?: string) => {
         setGeneratedTimetable(prev => {
-            let dayEntries = prev.filter(e => e.day === day);
-            const otherDays = prev.filter(e => e.day !== day);
-
-            // Pad day entries if it's too short
-            const maxExpected = config.periodsPerDay - (config.breakSlots?.length || 0);
-            while (dayEntries.length < maxExpected) {
-                dayEntries.push({
-                    id: Math.random().toString(36).substr(2, 9),
-                    day,
-                    subjectId: '',
-                    subjectName: '',
-                    className: selectedClass,
-                    startTime: '',
-                    endTime: ''
-                });
-            }
-
             const subject = subjects.find(s => s.id === subjectId);
-            dayEntries[effectivePIndex] = {
-                ...dayEntries[effectivePIndex],
-                subjectId: subjectId,
-                subjectName: subject?.name || '',
-                className: selectedClass,
-                startTime: config.timeSlots?.[effectivePIndex]?.startTime || dayEntries[effectivePIndex].startTime,
-                endTime: config.timeSlots?.[effectivePIndex]?.endTime || dayEntries[effectivePIndex].endTime,
-            };
-
-            return [...otherDays, ...dayEntries];
+            
+            if (entryId) {
+                // Update existing entry
+                return prev.map(e => {
+                    if (e.id === entryId) {
+                        return {
+                            ...e,
+                            subjectId: subjectId,
+                            subjectName: subject?.name || 'FREE',
+                            startTime: slotTime.startTime,
+                            endTime: slotTime.endTime
+                        };
+                    }
+                    return e;
+                });
+            } else if (subjectId) {
+                // Add new entry to this slot
+                const newEntry: TimetableEntry = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    day: day as any,
+                    subjectId: subjectId,
+                    subjectName: subject?.name || '',
+                    className: selectedClass,
+                    startTime: slotTime.startTime,
+                    endTime: slotTime.endTime,
+                    semester: selectedSemester
+                };
+                return [...prev, newEntry];
+            } else {
+                // If subjectId is empty, it means "Clear" - but we should probably only clear if specifically asked or handled elsewhere
+                return prev;
+            }
         });
     };
 
@@ -468,7 +477,7 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
             for (let i = 0; i < maxExpected; i++) {
                 initialEntries.push({
                     id: Math.random().toString(36).substr(2, 9),
-                    day,
+                    day: day as any,
                     subjectId: '',
                     subjectName: '',
                     className: selectedClass,
@@ -1049,47 +1058,56 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                                                 return <td key={pIndex} className="p-4 bg-slate-50/20 border-b border-slate-100 italic text-slate-300 text-[10px] text-center font-black uppercase tracking-widest">Break</td>;
                                                             }
 
-                                                            const breakCount = config.breakSlots?.filter(s => s < pIndex).length || 0;
-                                                            const effectivePIndex = pIndex - breakCount;
-
-                                                            const dayEntries = generatedTimetable.filter(e => e.day === day);
-                                                            const slotEntry = dayEntries[effectivePIndex];
+                                                            const slotTime = config.timeSlots?.[pIndex];
+                                                            const slotEntries = generatedTimetable.filter(e => 
+                                                                e.day === day && 
+                                                                e.startTime === slotTime?.startTime
+                                                            );
 
                                                             return (
-                                                                <td key={pIndex} className="p-4 border-b border-slate-100 min-w-[120px]">
-                                                                    {slotEntry && slotEntry.subjectId ? (
-                                                                        <div className="bg-emerald-50 text-emerald-700 p-3 rounded-2xl border border-emerald-100 relative group animate-in fade-in zoom-in-95 shadow-sm">
-                                                                            <span className="text-[10px] font-black block leading-tight">{slotEntry.subjectName}</span>
-                                                                            <span className="text-[8px] font-bold text-emerald-600/50 uppercase tracking-tighter mt-1 block">
-                                                                                {subjects.find(s => s.id === slotEntry.subjectId)?.facultyName || 'Staff'}
-                                                                            </span>
-                                                                            <div className="absolute inset-0 bg-black/5 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
-                                                                                <i className="fa-solid fa-pen text-emerald-800 text-xs"></i>
+                                                                <td key={pIndex} className="p-4 border-b border-slate-100 min-w-[140px]">
+                                                                    <div className="flex flex-col gap-2">
+                                                                        {slotEntries.map(slotEntry => (
+                                                                            <div key={slotEntry.id} className="bg-emerald-50 text-emerald-700 p-3 rounded-2xl border border-emerald-100 relative group animate-in fade-in zoom-in-95 shadow-sm">
+                                                                                <span className="text-[10px] font-black block leading-tight">{slotEntry.subjectName}</span>
+                                                                                <span className="text-[8px] font-bold text-emerald-600/50 uppercase tracking-tighter mt-1 block">
+                                                                                    {subjects.find(s => s.id === slotEntry.subjectId)?.facultyName || 'Staff'}
+                                                                                </span>
+                                                                                <div className="absolute inset-0 bg-black/5 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+                                                                                    <i className="fa-solid fa-pen text-emerald-800 text-xs"></i>
+                                                                                </div>
+                                                                                <select 
+                                                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                                                    value={slotEntry.subjectId}
+                                                                                    onChange={(e) => {
+                                                                                        if (e.target.value === 'DELETE') {
+                                                                                            setGeneratedTimetable(prev => prev.filter(ent => ent.id !== slotEntry.id));
+                                                                                        } else {
+                                                                                            handleManualSlotUpdate(day, slotTime!, e.target.value, slotEntry.id);
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    <option value="DELETE">Remove Subject</option>
+                                                                                    {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                                                </select>
                                                                             </div>
-                                                                            <select 
-                                                                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                                                               value={slotEntry.subjectId}
-                                                                               onChange={(e) => handleManualSlotUpdate(day, effectivePIndex, e.target.value)}
-                                                                            >
-                                                                               <option value="">Clear Slot</option>
-                                                                               {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                                                            </select>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="h-10 border-2 border-dashed border-slate-200 rounded-2xl relative hover:border-emerald-400 hover:bg-emerald-50/10 cursor-pointer overflow-hidden transition-all group">
+                                                                        ))}
+                                                                        
+                                                                        {/* Add Subject Button if space or always available */}
+                                                                        <div className="h-8 border-2 border-dashed border-slate-200 rounded-xl relative hover:border-emerald-400 hover:bg-emerald-50/10 cursor-pointer overflow-hidden transition-all group">
                                                                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                                                <i className="fa-solid fa-plus text-slate-400 text-xs"></i>
+                                                                                <i className="fa-solid fa-plus text-slate-400 text-[10px]"></i>
                                                                             </div>
                                                                             <select 
-                                                                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                                                               value=""
-                                                                               onChange={(e) => handleManualSlotUpdate(day, effectivePIndex, e.target.value)}
+                                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                                                value=""
+                                                                                onChange={(e) => handleManualSlotUpdate(day, slotTime!, e.target.value)}
                                                                             >
-                                                                               <option value="" disabled>Add Class</option>
-                                                                               {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                                                <option value="" disabled>+ Add Subject</option>
+                                                                                {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                                                             </select>
                                                                         </div>
-                                                                    )}
+                                                                    </div>
                                                                 </td>
                                                             );
                                                         })}
