@@ -700,8 +700,8 @@ export class DataService extends BaseDataService {
         return this.administrativeService.getTimetableByClass(className, termKey);
     }
 
-    async saveTimetableEntries(entries: any[]): Promise<void> {
-        return this.administrativeService.saveTimetableEntries(entries);
+    async saveTimetableEntries(entries: any[], options?: { clearFirst?: boolean; className?: string; termKey?: string }): Promise<void> {
+        return this.administrativeService.saveTimetableEntries(entries, options);
     }
 
     async getExamTimetable(className: string, termKey?: string): Promise<any[]> {

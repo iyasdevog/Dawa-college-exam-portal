@@ -1274,19 +1274,60 @@ export class AdministrativeService extends BaseDataService {
         }
     }
 
-    public async saveTimetableEntries(entries: TimetableEntry[]): Promise<void> {
+    public async clearTimetableEntries(className: string, termKey: string): Promise<void> {
+        try {
+            const dbClassName = this.getDatabaseClassName(termKey, className);
+            const q = query(
+                collection(this.db, this.timetablesCollection),
+                where('className', '==', dbClassName),
+                where('termKey', '==', termKey)
+            );
+            const snaps = await getDocs(q);
+            if (!snaps.empty) {
+                await this.runBatchedOperation(snaps.docs, (batch, d) => {
+                    batch.delete(d.ref);
+                });
+            }
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error clearing timetable entries:', error);
+            throw error;
+        }
+    }
+
+    public async saveTimetableEntries(entries: TimetableEntry[], options?: { clearFirst?: boolean; className?: string; termKey?: string }): Promise<void> {
         const settingsSnap = await getDoc(doc(this.db, this.settingsCollection, 'global_admin_settings'));
         const settings = settingsSnap.exists() ? settingsSnap.data() : null;
         const currentYear = settings?.currentAcademicYear || this.DEFAULT_ACADEMIC_YEAR;
 
+        if (options?.clearFirst && options.className && options.termKey) {
+            await this.clearTimetableEntries(options.className, options.termKey);
+        }
+
+        // If not clearing, let's fetch existing to prevent duplicates during merge
+        let existingEntries: any[] = [];
+        if (!options?.clearFirst && options?.className && options?.termKey) {
+            existingEntries = await this.getTimetableByClass(options.className, options.termKey);
+        }
+
         await this.runBatchedOperation(entries, (batch, entry) => {
-            const ref = entry.id ? doc(this.db, this.timetablesCollection, entry.id) : doc(collection(this.db, this.timetablesCollection));
-            const { id, ...data } = entry;
-            
-            // Ensure termKey and academic metadata is present
+            const { id: entryId, ...data } = entry;
             const academicYear = entry.academicYear || currentYear;
-            const semester = entry.semester || (academicYear.includes('Odd') ? 'Odd' : 'Even'); // Fallback if missing
+            const semester = entry.semester || (academicYear.includes('Odd') ? 'Odd' : 'Even');
             const termKey = (data as any).termKey || `${academicYear}-${semester}`;
+
+            let ref;
+            if (entryId) {
+                ref = doc(this.db, this.timetablesCollection, entryId);
+            } else {
+                // Look for an existing slot at the same day/time to avoid duplicates
+                const match = existingEntries.find(e => 
+                    e.day === entry.day && 
+                    e.startTime === entry.startTime && 
+                    e.className === this.getDatabaseClassName(termKey, options?.className || entry.className)
+                );
+                ref = match ? doc(this.db, this.timetablesCollection, match.id) : doc(collection(this.db, this.timetablesCollection));
+            }
             
             batch.set(ref, this.sanitize({ 
                 ...data, 
@@ -1295,6 +1336,7 @@ export class AdministrativeService extends BaseDataService {
                 termKey 
             }), { merge: true });
         });
+        this.invalidateCache();
     }
 
     public async getExamTimetable(className: string, termKey?: string): Promise<any[]> {

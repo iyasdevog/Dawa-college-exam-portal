@@ -16,14 +16,22 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [timetables, setTimetables] = useState<TimetableEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedClass, setSelectedClass] = useState('All');
+    const [selectedClass, setSelectedClass] = useState<string>('All');
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewingRecord, setViewingRecord] = useState<AttendanceRecord | null>(null);
     const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats'>('records');
     const [selectedAnalyticsClass, setSelectedAnalyticsClass] = useState<string | null>(null);
+    const [timelineDate, setTimelineDate] = useState<'today' | 'tomorrow'>('today');
 
     const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))].sort(), [students]);
+
+    // Set default class on load
+    useEffect(() => {
+        if (selectedClass === 'All' && classes.length > 1) {
+            setSelectedClass(classes[1]); // Set to first actual class (index 0 is 'All')
+        }
+    }, [classes]);
 
     // Analytics Calculation
     const analyticsData = useMemo(() => {
@@ -113,12 +121,12 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
 
     const getLocalDateString = useCallback((offsetDays: number = 0) => {
         const d = new Date();
-        d.setDate(d.getDate() - offsetDays);
+        d.setDate(d.getDate() + offsetDays);
         return d.toISOString().split('T')[0];
     }, []);
 
     const todayStr = useMemo(() => getLocalDateString(0), [getLocalDateString]);
-    const yesterdayStr = useMemo(() => getLocalDateString(1), [getLocalDateString]);
+    const tomorrowStr = useMemo(() => getLocalDateString(1), [getLocalDateString]);
 
     const getDayOfWeek = (dateStr: string) => {
         const d = new Date(dateStr);
@@ -183,18 +191,20 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
         return results.sort((a, b) => a.sortByTime.localeCompare(b.sortByTime));
     }, [records, timetables, selectedClass]);
 
-    const todaySchedule = useMemo(() => buildDailyTimetable(todayStr), [buildDailyTimetable, todayStr]);
+    const activeSchedule = useMemo(() => 
+        buildDailyTimetable(timelineDate === 'today' ? todayStr : tomorrowStr), 
+    [buildDailyTimetable, timelineDate, todayStr, tomorrowStr]);
 
     const upcomingPeriods = useMemo(() => {
-        if (!todaySchedule) return [];
+        if (!activeSchedule) return [];
         const now = new Date();
-        const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-        return todaySchedule.filter(item => 
+        const currentTime = timelineDate === 'tomorrow' ? '00:00' : now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+        return activeSchedule.filter(item => 
             item.type !== 'free' && 
             !item.record && 
             item.sortByTime > currentTime
         );
-    }, [todaySchedule]);
+    }, [activeSchedule, timelineDate]);
 
     const formatTime12h = (time24: string) => {
         if (!time24) return '';
@@ -276,21 +286,55 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 <StudentAttendanceStats students={students} subjects={subjects} />
             ) : viewMode === 'analytics' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-                    {analyticsData.map(({ className, present, total }) => {
+                    {analyticsData.map(({ className, present, total, subjectsList }) => {
                         const percentage = total > 0 ? (present / total) * 100 : 0;
                         const isSelected = selectedAnalyticsClass === className;
                         return (
-                            <div 
-                                key={className}
-                                onClick={() => setSelectedAnalyticsClass(isSelected ? null : className)}
-                                className={`cursor-pointer rounded-[2.5rem] border-2 transition-all p-8 ${isSelected ? 'bg-slate-900 border-slate-900 shadow-2xl' : 'bg-white border-slate-100 hover:border-emerald-200'}`}
-                            >
-                                <h3 className={`text-2xl font-black mb-4 ${isSelected ? 'text-white' : 'text-slate-900'}`}>{className}</h3>
-                                <h4 className={`text-4xl font-black ${isSelected ? 'text-emerald-400' : 'text-slate-900'}`}>{Math.round(percentage)}%</h4>
-                                <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-500" style={{ width: `${percentage}%` }} />
+                            <React.Fragment key={className}>
+                                <div 
+                                    onClick={() => setSelectedAnalyticsClass(isSelected ? null : className)}
+                                    className={`cursor-pointer rounded-[2.5rem] border-2 transition-all p-8 flex flex-col justify-between ${isSelected ? 'bg-slate-900 border-slate-900 shadow-2xl col-span-full' : 'bg-white border-slate-100 hover:border-emerald-200'}`}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className={`text-2xl font-black mb-1 ${isSelected ? 'text-white' : 'text-slate-900'}`}>{className}</h3>
+                                            <p className={`text-[10px] font-bold uppercase tracking-widest ${isSelected ? 'text-slate-400' : 'text-slate-400'}`}>Cumulative Average</p>
+                                        </div>
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${isSelected ? 'bg-white/10 text-emerald-400' : 'bg-slate-50 text-slate-400'}`}>
+                                            <i className="fa-solid fa-chart-pie"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="my-6">
+                                        <h4 className={`text-5xl font-black ${isSelected ? 'text-emerald-400' : 'text-slate-900'}`}>{Math.round(percentage)}%</h4>
+                                        <div className="mt-4 h-2 bg-slate-100/10 rounded-full overflow-hidden">
+                                            <div className="h-full bg-emerald-500" style={{ width: `${percentage}%` }} />
+                                        </div>
+                                    </div>
+
+                                    {isSelected && subjectsList.length > 0 && (
+                                        <div className="mt-6 pt-6 border-t border-white/5 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                                            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4 text-center">Subject Breakdown</h5>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {subjectsList.map(sub => {
+                                                    const subPercentage = sub.total > 0 ? (sub.present / sub.total) * 100 : 0;
+                                                    return (
+                                                        <div key={sub.subId} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
+                                                            <div className="min-w-0">
+                                                                <p className="text-[10px] font-black text-white truncate">{subjectMap[sub.subId]?.name || 'Unknown'}</p>
+                                                                <p className="text-[9px] font-bold text-slate-500">{sub.present}/{sub.total} sessions</p>
+                                                            </div>
+                                                            <span className={`text-xs font-black ${subPercentage >= 75 ? 'text-emerald-400' : subPercentage >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                                                                {Math.round(subPercentage)}%
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                            </React.Fragment>
                         );
                     })}
                 </div>
@@ -317,20 +361,28 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
                             <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
                                 <h3 className="text-lg font-black text-slate-900">Attendance Log</h3>
+                                <div className="flex gap-2 items-center">
+                                    <span className="px-3 py-1 bg-slate-200/50 rounded-full text-[8px] font-black uppercase tracking-widest text-slate-500 border border-slate-200">
+                                        Term: {activeTerm}
+                                    </span>
+                                    <div className="px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 shadow-sm">
+                                        Last 10 Records
+                                    </div>
+                                </div>
                             </div>
-                            <div className="overflow-x-auto text-center">
+                            <div className="overflow-x-auto">
                                 <table className="w-full">
-                                    <tbody className="divide-y divide-slate-50 text-center">
+                                    <tbody className="divide-y divide-slate-50">
                                         {filteredRecords.slice(0, 10).map(record => (
                                             <tr key={record.id} className="hover:bg-slate-50 transition-all text-center">
-                                                <td className="p-6 whitespace-nowrap text-center">
+                                                <td className="p-6 whitespace-nowrap">
                                                     <div className="text-xs font-black text-slate-400 uppercase">{new Date(record.date).toLocaleDateString([], { month: 'short', day: 'numeric'})}</div>
-                                                    <div className="text-sm font-bold">{formatTime12h(record.time || '')}</div>
+                                                    <div className="text-sm font-bold">{new Date(record.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
                                                 </td>
-                                                <td className="p-6 text-center">
+                                                <td className="p-6">
                                                     <span className="px-3 py-1 bg-slate-100 rounded-xl text-[10px] font-black">{record.className}</span>
                                                 </td>
-                                                <td className="p-6 text-center">
+                                                <td className="p-6">
                                                     <div className="font-black text-sm">{subjectMap[record.subjectId]?.name || 'Unknown'}</div>
                                                     <div className="text-[10px] font-bold text-emerald-500">{record.presentStudentIds.length} Present</div>
                                                 </td>
@@ -348,41 +400,63 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                     </div>
 
                     <div className="lg:w-1/3 space-y-6">
-                        {upcomingPeriods.length > 0 && (
-                            <div className="bg-white rounded-[2.5rem] border border-blue-100 shadow-sm overflow-hidden ring-4 ring-blue-50/30">
-                                <div className="p-6 bg-blue-50/20 border-b border-blue-50 flex justify-between items-center">
-                                    <h4 className="font-black text-[10px] text-blue-900 uppercase tracking-widest">Upcoming Table</h4>
-                                    <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-[9px] font-black uppercase">Next Up</span>
+                        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                            <div className="p-6 border-b border-slate-100 space-y-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h4 className="font-black text-[11px] text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                                            <i className="fa-solid fa-calendar-check text-emerald-500"></i>
+                                            {timelineDate === 'today' ? "Today's Table" : "Tomorrow's Table"}
+                                        </h4>
+                                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">{timelineDate === 'today' ? todayStr : tomorrowStr}</p>
+                                    </div>
+                                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                                        <button 
+                                            onClick={() => setTimelineDate('today')}
+                                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${timelineDate === 'today' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+                                        >Today</button>
+                                        <button 
+                                            onClick={() => setTimelineDate('tomorrow')}
+                                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${timelineDate === 'tomorrow' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+                                        >Tmr</button>
+                                    </div>
                                 </div>
-                                <div className="divide-y divide-blue-50">
-                                    {upcomingPeriods.map((item, i) => (
-                                        <div key={i} className="p-5 flex items-center gap-4 hover:bg-blue-50/30 transition-all">
-                                            <div className="w-12 h-14 bg-white border-2 border-blue-100 rounded-2xl flex flex-col items-center justify-center text-blue-900 shrink-0">
-                                                <span className="text-sm font-black">{item.sortByTime.split(':')[0]}</span>
-                                                <span className="text-[8px] font-black uppercase tracking-tighter">{item.sortByTime.split(':')[1]}</span>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h5 className="text-xs font-black truncate">{subjectMap[item.period?.subjectId]?.name || item.period?.subjectName}</h5>
-                                                <p className="text-[9px] text-slate-400 font-bold uppercase">{item.period?.className}</p>
-                                            </div>
-                                            <span className="px-3 py-1 bg-blue-50 text-blue-500 rounded-xl text-[8px] font-black uppercase">Blue</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                <select
+                                    value={selectedClass}
+                                    onChange={(e) => setSelectedClass(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl font-black text-[10px] uppercase tracking-wider"
+                                >
+                                    <option value="All">All Classes</option>
+                                    {classes.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
                             </div>
-                        )}
 
-                        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                                <h4 className="font-black text-[11px] text-slate-900 uppercase tracking-widest">Today's Table</h4>
-                                <span className="px-3 py-1 bg-slate-50 text-slate-400 rounded-full text-[9px] font-black">{todaySchedule.length} Slots</span>
-                            </div>
-                            <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto hide-scrollbar">
-                                {todaySchedule.map((item, i) => {
+                            {upcomingPeriods.length > 0 && (
+                                <div className="p-4 bg-blue-50/30 border-b border-slate-100">
+                                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <i className="fa-solid fa-bolt-lightning"></i>
+                                        Upcoming Classes
+                                    </p>
+                                    <div className="space-y-2">
+                                        {upcomingPeriods.slice(0, 3).map((item, i) => (
+                                            <div key={i} className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-blue-100">
+                                                <div className="text-[10px] font-black text-blue-500 tabular-nums">{item.sortByTime}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[11px] font-black text-slate-900 truncate">{subjectMap[item.period?.subjectId]?.name || item.period?.subjectName}</p>
+                                                    <p className="text-[8px] font-bold text-slate-400 uppercase">{item.period?.className}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto hide-scrollbar">
+                                {activeSchedule.map((item, i) => {
                                     const isMarked = !!item.record;
                                     const isFree = item.type === 'free';
                                     const nowStr = new Date().getHours().toString().padStart(2, '0') + ':' + new Date().getMinutes().toString().padStart(2, '0');
-                                    const isUpcoming = item.sortByTime > nowStr;
+                                    const isUpcoming = timelineDate === 'tomorrow' || item.sortByTime > nowStr;
                                     const isLeave = item.period?.subjectName?.toLowerCase().includes('leave') || item.period?.leave;
                                     
                                     let color = 'text-slate-400 bg-slate-50 border-slate-100';
@@ -450,7 +524,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-[3rem] w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
                         <div className="p-8 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
-                            <div>
+                            <div className="text-left">
                                 <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{subjectMap[viewingRecord.subjectId]?.name || 'Unknown'}</h3>
                                 <p className="text-slate-400 font-bold text-sm">{viewingRecord.className} • {new Date(viewingRecord.date).toLocaleDateString()}</p>
                             </div>
@@ -469,12 +543,12 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                     <h4 className="text-5xl font-black text-rose-900">{viewingRecord.absentStudentIds.length}</h4>
                                 </div>
                             </div>
-                            <div className="space-y-4">
+                            <div className="space-y-4 text-left">
                                 <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
                                     <span className="w-3 h-3 rounded-full bg-rose-500"></span>
                                     Absent Students
                                 </h5>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {viewingRecord.absentStudentIds.length > 0 ? (
                                         viewingRecord.absentStudentIds.map(id => (
                                             <div key={id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SubjectConfig, TimetableGeneratorConfig, TimetableEntry, StudentRecord, TimetableRule } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { aiService } from '../../../infrastructure/services/AIService';
+import { useTerm } from '../../../presentation/viewmodels/TermContext';
 import { DAYS } from '../../../domain/entities/constants';
 
 interface TimetableGeneratorProps {
@@ -10,12 +11,15 @@ interface TimetableGeneratorProps {
 }
 
 const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, students }) => {
+    const { activeTerm, currentSemester: systemSemester, currentAcademicYear: systemYear } = useTerm();
     const [selectedClass, setSelectedClass] = useState('');
-    const [selectedSemester, setSelectedSemester] = useState<'Odd' | 'Even'>('Odd');
+    const [selectedSemester, setSelectedSemester] = useState<'Odd' | 'Even'>(
+        (systemSemester === 'Odd' || systemSemester === 'Even') ? systemSemester : 'Odd'
+    );
     const [config, setConfig] = useState<TimetableGeneratorConfig>({
         id: '',
         className: '',
-        semester: 'Odd',
+        semester: (systemSemester === 'Odd' || systemSemester === 'Even') ? systemSemester : 'Odd',
         workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as any[],
         periodsPerDay: 12,
         periodDurationMins: 60,
@@ -43,9 +47,17 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
     const [isExtracting, setIsExtracting] = useState(false);
     const [viewMode, setViewMode] = useState<'class' | 'subject'>('class');
     const [otherTimetables, setOtherTimetables] = useState<TimetableEntry[]>([]);
+    const [isLoadingApplied, setIsLoadingApplied] = useState(false);
 
     const classes = [...new Set(students.map(s => s.className))];
     const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
+
+    // Sync selectedSemester when system term changes (if not manually changed by user yet)
+    useEffect(() => {
+        if (!selectedClass) {
+            setSelectedSemester((systemSemester === 'Odd' || systemSemester === 'Even') ? systemSemester : 'Odd');
+        }
+    }, [systemSemester]);
 
     useEffect(() => {
         if (selectedClass && selectedSemester) {
@@ -55,8 +67,29 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
     }, [selectedClass, selectedSemester]);
 
     const loadGlobalTimetables = async () => {
-        const allSystemTimetables = await dataService.getAllTimetables();
+        const termKey = `${systemYear}-${selectedSemester}`;
+        const allSystemTimetables = await dataService.getAllTimetables(termKey);
         setOtherTimetables(allSystemTimetables.filter(t => t.className !== selectedClass && t.semester === selectedSemester));
+    };
+
+    const handleLoadAppliedTimetable = async () => {
+        if (!selectedClass) return;
+        setIsLoadingApplied(true);
+        try {
+            const termKey = `${systemYear}-${selectedSemester}`;
+            const applied = await dataService.getTimetableByClass(selectedClass, termKey);
+            if (applied.length === 0) {
+                alert(`No applied timetable found for ${selectedClass} in ${termKey}`);
+            } else {
+                setGeneratedTimetable(applied);
+                alert(`Loaded ${applied.length} existing entries for ${selectedClass}`);
+            }
+        } catch (error) {
+            console.error('Failed to load applied timetable:', error);
+            alert('Error loading existing timetable');
+        } finally {
+            setIsLoadingApplied(false);
+        }
     };
 
     const isFacultyBusy = (facultyName: string | undefined, day: string, startTime: string, endTime: string) => {
@@ -374,25 +407,36 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
 
     const handleApplyTimetable = async () => {
         if (!generatedTimetable.length) return;
-        if (confirm('This will overwrite any existing manual timetable for this class. Proceed?')) {
-            try {
-                const settings = await dataService.getGlobalSettings();
-                const academicYear = settings.currentAcademicYear || '2025-2026';
-                const termKey = `${academicYear}-${selectedSemester}`;
-                
-                const enrichedEntries = generatedTimetable.map(entry => ({
-                    ...entry,
-                    semester: selectedSemester,
-                    academicYear: academicYear,
-                    termKey: termKey
-                }));
-                
-                await dataService.saveTimetableEntries(enrichedEntries);
-                alert('Timetable applied successfully!');
-            } catch (error) {
-                console.error('Error applying timetable:', error);
-                alert('Failed to apply timetable');
-            }
+        
+        const mode = confirm(
+            "CHOOSE SAVE MODE:\n\n" +
+            "Click OK to REPLACE the entire schedule for this class.\n" +
+            "Click Cancel to UPDATE/MERGE only the slots in your current grid.\n\n" +
+            "Tip: If you only want to add FS2 tomorrow, use Merge mode (Cancel) or Load Existing first."
+        );
+
+        try {
+            const settings = await dataService.getGlobalSettings();
+            const academicYear = settings.currentAcademicYear || '2025-2026';
+            const termKey = `${academicYear}-${selectedSemester}`;
+            
+            const enrichedEntries = generatedTimetable.map(entry => ({
+                ...entry,
+                semester: selectedSemester,
+                academicYear: academicYear,
+                termKey: termKey
+            }));
+            
+            await dataService.saveTimetableEntries(enrichedEntries, {
+                clearFirst: mode, // If true (OK clicked), clear entire class timetable first
+                className: selectedClass,
+                termKey: termKey
+            });
+            
+            alert('Timetable applied successfully!');
+        } catch (error) {
+            console.error('Error applying timetable:', error);
+            alert('Failed to apply timetable');
         }
     };
 
@@ -964,27 +1008,57 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
                                     </div>
                                 </div>
 
-                                <div className="pt-4 flex gap-2">
+                                <div className="pt-4 flex flex-col gap-3 border-t border-slate-100 mt-4">
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleLoadAppliedTimetable}
+                                            disabled={!selectedClass || isLoadingApplied}
+                                            className="flex-1 py-3 bg-blue-50 text-blue-700 border border-blue-100 rounded-xl text-[10px] font-black hover:bg-blue-100 transition-all uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
+                                            title="Pull current schedule from database"
+                                        >
+                                            <i className={`fa-solid ${isLoadingApplied ? 'fa-spinner fa-spin' : 'fa-sync'}`}></i>
+                                            {isLoadingApplied ? 'Loading...' : 'Sync System'}
+                                        </button>
+                                        <button
+                                            onClick={generateTimetable}
+                                            disabled={!selectedClass || isGenerating}
+                                            className="flex-[2] py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-lg uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2"
+                                        >
+                                            <i className={`fa-solid ${isGenerating ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
+                                            {isGenerating ? 'Wait...' : 'AI Generate'}
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setGeneratedTimetable([])}
+                                            className="flex-1 py-2 bg-slate-50 text-slate-400 border border-slate-100 rounded-xl text-[9px] font-black hover:bg-slate-100 transition-all uppercase"
+                                        >
+                                            <i className="fa-solid fa-eraser mr-1"></i> Clear Grid
+                                        </button>
+                                        <button
+                                            onClick={handleSaveConfig}
+                                            className="flex-1 py-2 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl text-[9px] font-black hover:bg-slate-100 transition-all uppercase"
+                                            title="Save these rules for future generation"
+                                        >
+                                            <i className="fa-solid fa-save mr-1"></i> Save Rules
+                                        </button>
+                                        <button
+                                            onClick={handleResetConfig}
+                                            className="flex-1 py-2 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl text-[9px] font-black hover:bg-slate-100 transition-all uppercase"
+                                            title="Reset rules to default"
+                                        >
+                                            <i className="fa-solid fa-rotate-left mr-1"></i> Reset Rules
+                                        </button>
+                                    </div>
+                                    
                                     <button
-                                        onClick={handleResetConfig}
-                                        className="flex-1 py-3 bg-red-50 text-red-700 border border-red-100 rounded-xl text-xs font-black hover:bg-red-100 transition-all uppercase tracking-wider"
-                                        title="Restore 6:30 AM - 4:00 PM defaults"
+                                        onClick={handleApplyTimetable}
+                                        disabled={!generatedTimetable.length}
+                                        className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-3 mt-2"
                                     >
-                                        <i className="fa-solid fa-rotate-left mr-2"></i>
-                                        Reset
-                                    </button>
-                                    <button
-                                        onClick={handleSaveConfig}
-                                        className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl text-xs font-black hover:bg-slate-200 transition-all uppercase tracking-wider"
-                                    >
-                                        Save
-                                    </button>
-                                    <button
-                                        onClick={generateTimetable}
-                                        disabled={isGenerating}
-                                        className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition-all shadow-lg uppercase tracking-wider disabled:opacity-50"
-                                    >
-                                        {isGenerating ? 'Generating...' : 'Generate New'}
+                                        <i className="fa-solid fa-cloud-arrow-up text-lg"></i>
+                                        Apply to System
                                     </button>
                                 </div>
                             </div>
