@@ -119,10 +119,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     // Simple style helpers to replace removed functions
     const getTypographyStyle = (variant: string) => {
         switch (variant) {
-            case 'body-large': return { fontSize: '1.125rem', lineHeight: '1.75rem' };
-            case 'body-medium': return { fontSize: '1rem', lineHeight: '1.5rem' };
-            case 'body-small': return { fontSize: '0.875rem', lineHeight: '1.25rem' };
-            case 'caption': return { fontSize: '0.75rem', lineHeight: '1rem' };
+            case 'display-large': return { fontSize: isMobile ? '2rem' : '3.5rem', lineHeight: '1.1', fontWeight: 900, letterSpacing: '-0.04em' };
+            case 'display-medium': return { fontSize: isMobile ? '1.75rem' : '2.5rem', lineHeight: '1.2', fontWeight: 900, letterSpacing: '-0.03em' };
+            case 'heading-large': return { fontSize: isMobile ? '1.5rem' : '2rem', lineHeight: '1.2', fontWeight: 800, letterSpacing: '-0.02em' };
+            case 'heading-medium': return { fontSize: isMobile ? '1.25rem' : '1.5rem', lineHeight: '1.3', fontWeight: 800 };
+            case 'body-large': return { fontSize: '1.125rem', lineHeight: '1.6' };
+            case 'body-medium': return { fontSize: '1rem', lineHeight: '1.5' };
+            case 'body-small': return { fontSize: '0.875rem', lineHeight: '1.4' };
+            case 'caption': return { fontSize: '0.75rem', lineHeight: '1.2', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
             default: return {};
         }
     };
@@ -132,8 +136,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             case 'xs': return '0.25rem';
             case 'sm': return '0.5rem';
             case 'md': return '1rem';
-            case 'lg': return '1.5rem';
-            case 'xl': return '2rem';
+            case 'lg': return isMobile ? '1rem' : '1.5rem';
+            case 'xl': return isMobile ? '1.25rem' : '2rem';
             default: return '1rem';
         }
     };
@@ -700,7 +704,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
 
             <div className={`flex items-center justify-between ${isMobile ? 'flex-col gap-4' : ''
                 }`}>
-                <div className={isMobile ? 'text-center' : ''}>
+                <div className={isMobile ? 'text-center mb-2' : ''}>
                     <h1
                         className="text-slate-900 tracking-tight font-black"
                         style={getTypographyStyle(isMobile ? 'display-medium' : 'display-large')}
@@ -708,10 +712,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                         Academic Dashboard
                     </h1>
                     <p
-                        className="text-slate-600 mt-2"
-                        style={getTypographyStyle(isMobile ? 'body-large' : 'body-medium')}
+                        className="text-slate-500 mt-1"
+                        style={getTypographyStyle(isMobile ? 'body-medium' : 'body-large')}
                     >
-                        Overview of academic performance and statistics
+                        Overview of performance & statistics
                     </p>
                 </div>
 
@@ -955,42 +959,39 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                                         className="w-full flex-shrink-0 px-2"
                                     >
                                         <div
-                                            className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 touch-target-comfortable"
+                                            className="bg-white rounded-[2rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden"
                                             style={{
-                                                ...getTouchTargetStyle('comfortable'),
-                                                minHeight: '140px'
+                                                minHeight: '180px'
                                             }}
                                         >
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div className="flex-1">
-                                                    <p
-                                                        className="text-slate-600 font-medium mb-2"
-                                                        style={getTypographyStyle('body-medium')}
-                                                    >
-                                                        {card.title}
-                                                    </p>
-                                                    <p
-                                                        className="text-slate-900 font-black"
-                                                        style={{
-                                                            ...getTypographyStyle('display-small'),
-                                                            fontSize: isMobile ? '2rem' : '2.5rem'
-                                                        }}
-                                                    >
-                                                        {card.value}
-                                                    </p>
+                                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-slate-50 rounded-full opacity-50"></div>
+                                            <div className="flex flex-col h-full relative z-10">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <div className={`${card.bgColor} w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner`}>
+                                                        <i className={`${card.icon} ${card.color} text-2xl`}></i>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Metrics</p>
+                                                        <div className="flex items-center gap-1 justify-end text-emerald-500 font-bold text-[10px]">
+                                                            <i className="fa-solid fa-arrow-trend-up"></i>
+                                                            <span>Live</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className={`${card.bgColor} p-4 rounded-xl`}>
-                                                    <i className={`${card.icon} ${card.color} text-2xl`}></i>
+                                                
+                                                <div>
+                                                    <p className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-2">{card.title}</p>
+                                                    <p className="text-slate-900 font-black text-5xl tracking-tighter">{card.value}</p>
                                                 </div>
+                                                
+                                                {card.description && (
+                                                    <div className="mt-6 pt-4 border-t border-slate-50">
+                                                        <p className="text-slate-400 text-[10px] font-medium leading-relaxed italic">
+                                                            {card.description}
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {card.description && (
-                                                <p
-                                                    className="text-slate-500 text-sm"
-                                                    style={getTypographyStyle('body-small')}
-                                                >
-                                                    {card.description}
-                                                </p>
-                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -1100,52 +1101,52 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                     >
                         Manage Classes
                     </button>
-                </div>
-
-                <div className={`grid gap-4 ${isMobile
+                              <div className={`grid gap-4 ${isMobile
                     ? 'grid-cols-1'
                     : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'
                     }`}>
                     {classStats.map(stat => (
                         <div
                             key={stat.className}
-                            className={`bg-slate-50 rounded-xl p-4 ${isMobile ? 'touch-target-comfortable' : ''
-                                }`}
-                            style={isMobile ? getTouchTargetStyle('comfortable') : {}}
+                            className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm relative overflow-hidden"
                         >
-                            <div className="flex items-center justify-between mb-3">
-                                <h3
-                                    className="font-black text-slate-900"
-                                    style={getTypographyStyle(isMobile ? 'heading-small' : 'heading-small')}
-                                >
-                                    {stat.className}
-                                </h3>
-                                <span
-                                    className="bg-slate-200 text-slate-600 px-2 py-1 rounded-full font-bold"
-                                    style={{
-                                        ...getTypographyStyle('caption'),
-                                        fontSize: isMobile ? '0.75rem' : '0.625rem'
-                                    }}
-                                >
-                                    {stat.studentCount} students
-                                </span>
-                            </div>
-                            <div className={`space-y-2 ${isMobile ? 'text-base' : 'text-sm'
-                                }`}>
-                                <div className="flex justify-between">
-                                    <span className="text-slate-600">Class Average:</span>
-                                    <span className="font-bold text-slate-900">{stat.average}%</span>
+                            <div className="absolute -right-2 -top-2 w-12 h-12 bg-slate-50 rounded-full opacity-50"></div>
+                            <div className="relative z-10">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-black text-slate-900 text-mobile-xl tracking-tight">
+                                        {stat.className}
+                                    </h3>
+                                    <span className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-wider border border-slate-200/50">
+                                        {stat.studentCount} Students
+                                    </span>
                                 </div>
-                                {stat.topStudent && (
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-600">Top Student:</span>
-                                        <span className="font-bold text-emerald-600">{stat.topStudent.name}</span>
+                                
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Class Average</span>
+                                        <div className="flex items-baseline gap-0.5 mr-2">
+                                            <span className="text-lg font-black text-slate-900">{stat.average}</span>
+                                            <span className="text-[10px] text-slate-400 font-bold">%</span>
+                                        </div>
                                     </div>
-                                )}
+                                    
+                                    {stat.topStudent && (
+                                        <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-100/50">
+                                            <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
+                                                <i className="fa-solid fa-trophy text-xs"></i>
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Topper</p>
+                                                <p className="text-xs font-bold text-slate-700 truncate">{stat.topStudent.name}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}
                 </div>
+    </div>
             </div>
 
             {/* Class Performance Chart - Mobile Optimized */}
@@ -1275,57 +1276,49 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                     <div className="space-y-4">
                         <button
                             onClick={handleNavigateToManagement}
-                            className="w-full p-6 bg-emerald-50 border-2 border-emerald-200 rounded-xl hover:bg-emerald-100 active:bg-emerald-200 transition-all text-left touch-target-comfortable"
-                            style={getTouchTargetStyle('comfortable')}
+                            className="w-full p-6 bg-emerald-50 border border-emerald-100 rounded-[2rem] hover:bg-emerald-100 active:scale-[0.98] transition-all text-left relative overflow-hidden"
                             {...getTouchProps(handleNavigateToManagement)}
                         >
-                            <div className="flex items-center gap-4 mb-3">
-                                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                    <i className="fa-solid fa-users-cog text-emerald-600 text-xl"></i>
+                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl"></div>
+                            <div className="flex items-center gap-5 relative z-10">
+                                <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                                    <i className="fa-solid fa-users-cog text-white text-xl"></i>
                                 </div>
                                 <div className="flex-1">
-                                    <span
-                                        className="font-bold text-emerald-900 block"
-                                        style={getTypographyStyle('body-large')}
-                                    >
+                                    <span className="font-black text-emerald-900 text-mobile-xl tracking-tight leading-none block">
                                         Manage Students
                                     </span>
-                                    <p
-                                        className="text-emerald-700 mt-1"
-                                        style={getTypographyStyle('body-small')}
-                                    >
+                                    <p className="text-emerald-700/70 text-[11px] font-bold mt-1.5 leading-relaxed">
                                         Add, edit, or remove student records
                                     </p>
                                 </div>
-                                <i className="fa-solid fa-chevron-right text-emerald-600"></i>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-emerald-400">
+                                    <i className="fa-solid fa-arrow-right"></i>
+                                </div>
                             </div>
                         </button>
 
                         <button
                             onClick={handleNavigateToManagement}
-                            className="w-full p-6 bg-blue-50 border-2 border-blue-200 rounded-xl hover:bg-blue-100 active:bg-blue-200 transition-all text-left touch-target-comfortable"
-                            style={getTouchTargetStyle('comfortable')}
+                            className="w-full p-6 bg-slate-900 border border-slate-800 rounded-[2rem] hover:bg-slate-800 active:scale-[0.98] transition-all text-left relative overflow-hidden shadow-xl"
                             {...getTouchProps(handleNavigateToManagement)}
                         >
-                            <div className="flex items-center gap-4 mb-3">
-                                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                    <i className="fa-solid fa-book-open text-blue-600 text-xl"></i>
+                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                            <div className="flex items-center gap-5 relative z-10">
+                                <div className="w-14 h-14 bg-slate-800 rounded-2xl flex items-center justify-center border border-slate-700">
+                                    <i className="fa-solid fa-book-open text-emerald-400 text-xl"></i>
                                 </div>
                                 <div className="flex-1">
-                                    <span
-                                        className="font-bold text-blue-900 block"
-                                        style={getTypographyStyle('body-large')}
-                                    >
+                                    <span className="font-black text-white text-mobile-xl tracking-tight leading-none block">
                                         Manage Subjects
                                     </span>
-                                    <p
-                                        className="text-blue-700 mt-1"
-                                        style={getTypographyStyle('body-small')}
-                                    >
-                                        Configure subjects and class assignments
+                                    <p className="text-slate-400 text-[11px] font-bold mt-1.5 leading-relaxed">
+                                        Configure subjects and assignments
                                     </p>
                                 </div>
-                                <i className="fa-solid fa-chevron-right text-blue-600"></i>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-slate-700">
+                                    <i className="fa-solid fa-arrow-right"></i>
+                                </div>
                             </div>
                         </button>
 

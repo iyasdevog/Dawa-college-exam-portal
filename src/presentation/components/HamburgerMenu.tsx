@@ -111,29 +111,38 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 id="mobile-navigation"
                 className={`
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw]
-          bg-slate-900 text-white z-[2001]
-          transform transition-transform duration-300 ease-in-out
-          overflow-y-auto print:hidden
-          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+          bg-slate-900/95 backdrop-blur-xl text-white z-[2001]
+          transform transition-all duration-300 ease-in-out
+          overflow-y-auto print:hidden shadow-2xl border-r border-slate-800
+          ${isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}
         `}
                 aria-label="Mobile navigation"
             >
                 {/* Header */}
-                <div className="p-6 pt-8 border-b border-slate-800">
-                    <div className="flex items-center justify-between mb-4">
-                        <h1 className="text-lg font-black tracking-tighter flex items-center gap-3">
-                            <i className="fa-solid fa-graduation-cap text-emerald-400 text-xl"></i>
-                            AIC Da'wa College
-                        </h1>
+                <div className="p-8 pt-10 border-b border-slate-800/50">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                                <i className="fa-solid fa-graduation-cap text-white text-2xl"></i>
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-black tracking-tighter leading-none">
+                                    AIC Da'wa
+                                </h1>
+                                <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mt-1">
+                                    Exam Portal
+                                </p>
+                            </div>
+                        </div>
 
                         {/* Close Button */}
                         <button
                             {...getTouchProps(closeMobileMenu)}
                             className="
                 w-10 h-10 flex items-center justify-center
-                text-slate-400 hover:text-white hover:bg-slate-800
-                rounded-lg transition-all duration-200
-                touch-target-min
+                text-slate-400 hover:text-white bg-slate-800/50
+                rounded-xl transition-all duration-200
+                touch-target-min border border-slate-700/50
               "
                             {...ariaHelpers.button('Close navigation menu')}
                         >
@@ -141,24 +150,20 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         </button>
                     </div>
 
-                    <p className="text-xs text-slate-400 uppercase font-black tracking-[0.2em]">
-                        Exam Portal
-                    </p>
-
                     {/* Cloud Status */}
-                    <div className="mt-4">
+                    <div className="mt-2">
                         {isCloudActive ? (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-900/30 text-emerald-300 rounded-lg border border-emerald-800/30">
-                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                                <span className="text-xs font-bold uppercase tracking-wide">
-                                    Cloud Synced
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
+                                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]"></div>
+                                <span className="text-[9px] font-black uppercase tracking-wider">
+                                    Cloud Active
                                 </span>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-amber-900/30 text-amber-300 rounded-lg border border-amber-800/30">
-                                <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
-                                <span className="text-xs font-bold uppercase tracking-wide">
-                                    Local Mode
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 text-amber-400 rounded-full border border-amber-500/20">
+                                <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
+                                <span className="text-[9px] font-black uppercase tracking-wider">
+                                    Offline Mode
                                 </span>
                             </div>
                         )}
@@ -166,67 +171,79 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 </div>
 
                 {/* Navigation Items */}
-                <div className="p-4 space-y-2 flex-1">
-                    {navItems.map((item, index) => (
-                        <button
-                            key={item.id}
-                            {...getTouchProps(() => handleNavItemClick(item.id, item.label))}
-                            className={`
-                w-full flex items-center gap-4 px-4 py-4 rounded-xl
-                transition-all duration-200 text-left
-                touch-target-min
-                ${activeView === item.id
-                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
-                                    : 'text-slate-300 hover:bg-slate-800 hover:text-white active:bg-slate-700'
-                                }
-              `}
-                            {...ariaHelpers.button(
-                                `${item.label}. ${item.description || ''}`,
-                                undefined,
-                                undefined
-                            )}
-                            aria-current={activeView === item.id ? 'page' : undefined}
-                        >
-                            <div className="w-6 flex justify-center">
-                                <i className={`fa-solid ${item.icon} text-sm`}></i>
-                            </div>
-                            <span className="font-semibold text-sm">{item.label}</span>
+                <div className="p-6 space-y-3 flex-1">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 ml-2">Main Menu</p>
+                    {navItems.map((item, index) => {
+                        const isActive = activeView === item.id;
+                        return (
+                            <button
+                                key={item.id}
+                                {...getTouchProps(() => handleNavItemClick(item.id, item.label))}
+                                className={`
+                    w-full flex items-center gap-4 px-5 py-5 rounded-2xl
+                    transition-all duration-300 text-left relative overflow-hidden group
+                    ${isActive
+                                        ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20'
+                                        : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'
+                                    }
+                  `}
+                                {...ariaHelpers.button(
+                                    `${item.label}. ${item.description || ''}`,
+                                    undefined,
+                                    undefined
+                                )}
+                                aria-current={isActive ? 'page' : undefined}
+                            >
+                                <div className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${
+                                    isActive ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-700'
+                                }`}>
+                                    <i className={`fa-solid ${item.icon} ${isActive ? 'text-lg' : 'text-base'}`}></i>
+                                </div>
+                                <div className="flex-1">
+                                    <span className={`font-black text-sm block ${isActive ? 'text-white' : 'text-slate-300'}`}>
+                                        {item.label}
+                                    </span>
+                                    {item.description && !isActive && (
+                                        <span className="text-[10px] text-slate-500 font-medium truncate block max-w-[180px]">
+                                            {item.description}
+                                        </span>
+                                    )}
+                                </div>
 
-                            {/* Active Indicator */}
-                            {activeView === item.id && (
-                                <div className="ml-auto w-2 h-2 bg-white rounded-full"></div>
-                            )}
-                        </button>
-                    ))}
+                                {isActive && (
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-slate-800">
-                    {/* Node ID Info */}
-                    <div className="mb-4 p-3 bg-slate-800/50 rounded-lg">
-                        <p className="text-xs font-bold text-slate-300 uppercase tracking-wide">
-                            Faculty Terminal
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1 font-mono">
-                            Node ID: IDA-2025-01
-                        </p>
+                <div className="p-6 mt-auto border-t border-slate-800/50 bg-slate-950/50">
+                    <div className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-slate-800/30 border border-slate-700/30 mb-6">
+                        <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
+                            <i className="fa-solid fa-user-shield text-slate-400"></i>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Access ID</p>
+                            <p className="text-xs font-mono text-slate-300">IDA-2025-01</p>
+                        </div>
                     </div>
 
-                    {/* Logout Button */}
                     <button
                         {...getTouchProps(handleLogoutClick)}
                         className="
-              w-full flex items-center gap-4 px-4 py-4 rounded-xl
-              text-red-400 hover:bg-red-500/10 active:bg-red-500/20
-              transition-all duration-200
+              w-full flex items-center gap-4 px-5 py-5 rounded-2xl
+              text-red-400 bg-red-500/5 hover:bg-red-500/10 active:bg-red-500/20
+              transition-all duration-300 border border-red-500/10
               touch-target-min
             "
                         {...ariaHelpers.button('Exit admin panel and return to public portal')}
                     >
-                        <div className="w-6 flex justify-center">
-                            <i className="fa-solid fa-right-from-bracket text-sm"></i>
+                        <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
+                            <i className="fa-solid fa-right-from-bracket text-base"></i>
                         </div>
-                        <span className="font-semibold text-sm">Exit Admin</span>
+                        <span className="font-black text-sm uppercase tracking-widest">Sign Out</span>
                     </button>
                 </div>
             </nav>

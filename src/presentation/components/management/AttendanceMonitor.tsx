@@ -20,11 +20,55 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewingRecord, setViewingRecord] = useState<AttendanceRecord | null>(null);
-    const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats'>('records');
+    const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats' | 'subject-report'>('records');
     const [selectedAnalyticsClass, setSelectedAnalyticsClass] = useState<string | null>(null);
     const [timelineDate, setTimelineDate] = useState<'today' | 'tomorrow'>('today');
+    const [facultyFilter, setFacultyFilter] = useState('All');
 
     const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))].sort(), [students]);
+
+    const uniqueFaculty = useMemo(() => {
+        return ['All', ...new Set(subjects.map(s => s.facultyName).filter(Boolean) as string[])].sort();
+    }, [subjects]);
+
+    const [reportSubjectId, setReportSubjectId] = useState<string | null>(null);
+    const [reportClassName, setReportClassName] = useState<string | null>(null);
+    const [isReportLoading, setIsReportLoading] = useState(false);
+    const [subjectReportRecords, setSubjectReportRecords] = useState<AttendanceRecord[]>([]);
+
+    const filteredSubjectsForReport = useMemo(() => {
+        const result: Array<SubjectConfig & { reportClass: string }> = [];
+        subjects.forEach(s => {
+            const matchesFaculty = facultyFilter === 'All' || !facultyFilter || s.facultyName === facultyFilter;
+            const matchesSearch = !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase());
+            
+            if (matchesFaculty && matchesSearch) {
+                const targetClasses = s.targetClasses || [];
+                if (targetClasses.length === 0) {
+                    result.push({ ...s, reportClass: 'All' });
+                } else {
+                    targetClasses.forEach(cls => {
+                        result.push({ ...s, reportClass: cls });
+                    });
+                }
+            }
+        });
+        return result.sort((a, b) => a.name.localeCompare(b.name) || a.reportClass.localeCompare(b.reportClass));
+    }, [subjects, facultyFilter, searchTerm]);
+
+    const loadSubjectReport = useCallback(async (subjectId: string, className: string) => {
+        setIsReportLoading(true);
+        setReportSubjectId(subjectId);
+        setReportClassName(className);
+        try {
+            const data = await dataService.getAttendanceForSubject(subjectId, activeTerm, className);
+            setSubjectReportRecords(data.sort((a, b) => b.date.localeCompare(a.date)));
+        } catch (error) {
+            console.error('Error loading subject report:', error);
+        } finally {
+            setIsReportLoading(false);
+        }
+    }, [activeTerm]);
 
     // Set default class on load
     useEffect(() => {
@@ -280,9 +324,103 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 >
                     Individual Analytics
                 </button>
+                <button
+                    onClick={() => setViewMode('subject-report')}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${viewMode === 'subject-report' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                    Subject Report
+                </button>
             </div>
 
-            {viewMode === 'student-stats' ? (
+            {viewMode === 'subject-report' ? (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                    <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 flex flex-col md:flex-row gap-4 items-center shadow-sm">
+                        <div className="relative flex-1 w-full">
+                            <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input
+                                type="text"
+                                placeholder="Search subjects..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="flex gap-4 w-full md:w-auto">
+                            <select
+                                value={facultyFilter}
+                                onChange={(e) => setFacultyFilter(e.target.value)}
+                                className="flex-1 md:w-64 px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none"
+                            >
+                                <option value="All">All Faculties</option>
+                                {uniqueFaculty.filter(f => f !== 'All').map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {!reportSubjectId ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {filteredSubjectsForReport.map(sub => (
+                                <div 
+                                    key={`${sub.id}-${sub.reportClass}`} 
+                                    onClick={() => loadSubjectReport(sub.id, sub.reportClass)}
+                                    className="bg-white p-8 rounded-[2.5rem] border border-slate-100 hover:border-emerald-300 hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
+                                >
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-emerald-50 group-hover:text-emerald-500 transition-colors">
+                                            <i className="fa-solid fa-book-open text-xl"></i>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-400">{sub.subjectType}</span>
+                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-md text-[8px] font-black uppercase tracking-wider">{sub.reportClass}</span>
+                                        </div>
+                                    </div>
+                                    <h3 className="text-xl font-black text-slate-900 mb-1 group-hover:text-emerald-600 transition-colors">{sub.name}</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">{sub.facultyName || 'No faculty'}</p>
+                                    
+                                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50">
+                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+                                            <i className="fa-solid fa-layer-group text-[10px]"></i>
+                                            <span className="text-[10px] font-black uppercase tracking-widest">{records.filter(r => r.subjectId === sub.id && r.className === sub.reportClass).length} Sessions</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-emerald-600 text-[10px] font-black uppercase tracking-widest">
+                                            View <i className="fa-solid fa-arrow-right ml-1 group-hover:translate-x-1 transition-transform"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {subjectReportRecords.map((session, idx) => (
+                                <div key={idx} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500 rounded-full opacity-60"></div>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Session #{subjectReportRecords.length - idx}</p>
+                                            <h4 className="text-lg font-bold text-slate-900 leading-tight">{getDayOfWeek(session.date)}</h4>
+                                            <p className="text-[10px] font-bold text-slate-500 mt-1">{new Date(session.date).toLocaleDateString()}</p>
+                                        </div>
+                                        <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-emerald-50 group-hover:text-emerald-500 transition-colors">
+                                            <i className="fa-solid fa-calendar-check text-xl"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-3 mt-6">
+                                        <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100/50">
+                                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Present</p>
+                                            <p className="text-xl font-black text-emerald-700">{session.presentStudentIds.length}</p>
+                                        </div>
+                                        <div className="bg-rose-50/50 p-3 rounded-2xl border border-rose-100/50">
+                                            <p className="text-[9px] font-black text-rose-600 uppercase tracking-widest mb-1">Absent</p>
+                                            <p className="text-xl font-black text-rose-700">{session.absentStudentIds.length}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : viewMode === 'student-stats' ? (
                 <StudentAttendanceStats students={students} subjects={subjects} />
             ) : viewMode === 'analytics' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">

@@ -115,8 +115,57 @@ export class AttendanceService extends BaseDataService {
                     if (periodKey === subjectId || periodKey.startsWith(`${subjectId}_`)) {
                         // Cast periodData to any to bypass TypeScript typing issues
                         const pData: any = periodData;
+                        if (pData.presentStudentIds?.includes(studentId) || pData.absentStudentIds?.includes(studentId)) {
+                            records.push({
+                                id: `${docSnap.id}_${periodKey}`,
+                                date: data.date,
+                                subjectId: periodKey,
+                                className: this.getHistoricalClassName(activeTerm, data.className),
+                                presentStudentIds: pData.presentStudentIds || [],
+                                absentStudentIds: pData.absentStudentIds || [],
+                                absentReasons: pData.absentReasons || {},
+                                markedBy: pData.markedBy || '',
+                                markedAt: pData.markedAt || 0,
+                                academicYear: data.academicYear,
+                                semester: data.semester
+                            });
+                        }
+                    }
+                }
+            }
+            return records;
+        } catch (error) {
+            console.error('Error fetching attendance records:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get all attendance records for a specific subject in a term.
+     */
+    public async getAttendanceForSubject(subjectId: string, activeTerm: string, className?: string): Promise<AttendanceRecord[]> {
+        try {
+            const q = query(
+                collection(this.db!, this.attendanceCollection),
+                where('termKey', '==', activeTerm)
+            );
+            const snapshot = await getDocs(q);
+
+            const records: AttendanceRecord[] = [];
+            for (const docSnap of snapshot.docs) {
+                const data = docSnap.data();
+                
+                if (className && className !== 'All' && data.className !== className) {
+                    continue;
+                }
+
+                const periods = data.periods || {};
+                
+                for (const [periodKey, periodData] of Object.entries(periods)) {
+                    if (periodKey === subjectId || periodKey.startsWith(`${subjectId}_`)) {
+                        const pData: any = periodData;
                         records.push({
-                            id: docSnap.id,
+                            id: `${docSnap.id}_${periodKey}`,
                             date: data.date,
                             subjectId: periodKey,
                             className: this.getHistoricalClassName(activeTerm, data.className),
@@ -133,7 +182,7 @@ export class AttendanceService extends BaseDataService {
             }
             return records;
         } catch (error) {
-            console.error('Error fetching attendance records:', error);
+            console.error('Error fetching subject attendance:', error);
             return [];
         }
     }

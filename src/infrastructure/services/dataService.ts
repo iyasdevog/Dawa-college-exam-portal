@@ -297,6 +297,10 @@ export class DataService extends BaseDataService {
         return this.attendanceService.getAttendanceForStudent(studentId, subjectId, termKey);
     }
 
+    async getAttendanceForSubject(subjectId: string, termKey?: string, className?: string): Promise<AttendanceRecord[]> {
+        return this.attendanceService.getAttendanceForSubject(subjectId, termKey || '', className);
+    }
+
     async saveAttendanceRecord(record: any): Promise<string> {
         return this.attendanceService.saveAttendanceRecord(record);
     }
