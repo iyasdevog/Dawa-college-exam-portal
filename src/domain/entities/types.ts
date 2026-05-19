@@ -15,6 +15,11 @@ export interface SubjectMarks {
   status: 'Passed' | 'Failed' | 'Pending';
   isSupplementary?: boolean; // Indicates if this is a supplementary exam
   supplementaryYear?: number; // Year of the supplementary exam
+  previousMarks?: {
+    int: number | 'A';
+    ext: number | 'A';
+    total?: number;
+  };
 }
 
 export type SupplementaryExamType = 'PreviousYear' | 'CurrentSemester';

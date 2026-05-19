@@ -65,11 +65,11 @@ export const CurriculumOverview: React.FC = () => {
 
     return (
         <div className="w-full max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-16">
-            <div className={`text-center mb-10 ${isMobile ? 'px-4' : ''}`}>
-                <h2 className={`font-black tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-500 ${isMobile ? 'text-3xl' : 'text-5xl'}`}>
+            <div className={`text-center mb-8 ${isMobile ? 'px-4' : ''}`}>
+                <h2 className={`font-black tracking-tighter mb-3 text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-500 ${isMobile ? 'text-2xl' : 'text-4xl'}`}>
                     Academic Curriculum
                 </h2>
-                <p className="text-slate-300 max-w-2xl mx-auto">
+                <p className={`text-slate-400 max-w-2xl mx-auto ${isMobile ? 'text-xs' : 'text-sm'}`}>
                     Explore our comprehensive foundational courses structured for spiritual and academic excellence over our integrated programs.
                 </p>
             </div>
@@ -101,7 +101,7 @@ export const CurriculumOverview: React.FC = () => {
                         <button
                             key={stage}
                             onClick={() => setActiveStage(stage)}
-                            className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold uppercase tracking-widest text-xs transition-all ${activeStage === stage
+                            className={`flex-1 min-w-[100px] px-3 py-2.5 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all ${activeStage === stage
                                 ? 'bg-emerald-500 text-white shadow-lg scale-105'
                                 : 'text-slate-300 hover:bg-white/10 hover:text-white hover:scale-105'
                             }`}
@@ -161,7 +161,7 @@ export const CurriculumOverview: React.FC = () => {
                         <div key={semester} className={`relative z-10 animate-in fade-in slide-in-from-bottom-4 fill-mode-both duration-500 flex gap-4 md:gap-8`} style={{ animationDelay: `${idx * 150}ms` }}>
                             {/* Semester Indicator Node */}
                             <div className="shrink-0 flex flex-col items-center">
-                                <div className={`flex items-center justify-center font-black shadow-lg shadow-emerald-500/20 text-white z-10 border-4 border-slate-900 ${isMobile ? 'w-12 h-12 text-lg rounded-xl bg-emerald-600' : 'w-20 h-20 text-3xl rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600'}`}>
+                                <div className={`flex items-center justify-center font-black shadow-lg shadow-emerald-500/20 text-white z-10 border-4 border-slate-900 ${isMobile ? 'w-10 h-10 text-base rounded-xl bg-emerald-600' : 'w-16 h-16 text-2xl rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600'}`}>
                                     S{semester}
                                 </div>
                                 {isMobile && idx < Object.keys(groupedBySemester).length - 1 && (
@@ -174,7 +174,7 @@ export const CurriculumOverview: React.FC = () => {
                                 {/* Subtle background icon */}
                                 <i className="fa-brands fa-pagelines absolute -right-6 -bottom-6 text-9xl text-white/5 rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none"></i>
                                 
-                                <h3 className="font-black text-white text-xl uppercase tracking-widest mb-6 flex items-center gap-3">
+                                <h3 className="font-black text-white text-lg uppercase tracking-widest mb-4 flex items-center gap-3">
                                     <span className="text-emerald-400">SEMESTER {semester}</span>
                                     <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/30 to-transparent"></div>
                                 </h3>
@@ -196,7 +196,7 @@ export const CurriculumOverview: React.FC = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <h4 className="font-bold text-white text-lg">{entry.subjectName}</h4>
+                                                    <h4 className="font-bold text-white text-base">{entry.subjectName}</h4>
                                                 </div>
                                                 <span className="bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap self-start">
                                                     <i className="fa-solid fa-hourglass-half mr-1"></i> {entry.learningPeriod}

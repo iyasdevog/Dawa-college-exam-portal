@@ -91,8 +91,8 @@ const StudentAttendancePortal: React.FC = () => {
         <div className="max-w-4xl mx-auto p-6 space-y-8 pb-20">
             <div className="text-center space-y-4 mb-4">
                 <div className="animate-in fade-in slide-in-from-top-4 duration-500">
-                    <h1 className="text-mobile-4xl font-black text-slate-900 tracking-tighter uppercase">Attendance</h1>
-                    <p className="text-mobile-base text-slate-500 font-medium italic">Track your academic progress</p>
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Attendance</h1>
+                    <p className="text-xs text-slate-500 font-medium italic">Track your academic progress</p>
                 </div>
                 
                 <div className="inline-flex items-center gap-2 bg-white/50 backdrop-blur-sm p-1.5 rounded-2xl border border-slate-200/60 shadow-sm">
@@ -115,18 +115,18 @@ const StudentAttendancePortal: React.FC = () => {
                                 type="text"
                                 value={adNo}
                                 onChange={(e) => setAdNo(e.target.value)}
-                                placeholder="Enter your Ad No..."
-                                className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-bold text-lg"
+                                placeholder="Enter Ad No..."
+                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-bold text-base"
                             />
-                            <i className="fa-solid fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl"></i>
+                            <i className="fa-solid fa-hashtag absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
                         </div>
                     </div>
                     <button
                         type="submit"
                         disabled={isLoading || !adNo}
-                        className="w-full py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+                        className="w-full py-3 bg-emerald-600 text-white font-black text-sm uppercase tracking-widest rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
                     >
-                        {isLoading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-magnifying-glass"></i>}
+                        {isLoading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-search"></i>}
                         Check Attendance
                     </button>
                 </form>

@@ -725,7 +725,7 @@ export class DataService extends BaseDataService {
     }
 
     async getSupplementaryExamsByStudent(studentId: string): Promise<any[]> {
-        return this.academicService.getSupplementaryExamsByStudent(studentId);
+        return this.supplementaryService.getSupplementaryExamsByStudent(studentId);
     }
 
     async setHallTicketReleaseStatus(isReleased: boolean, termKey?: string): Promise<void> {

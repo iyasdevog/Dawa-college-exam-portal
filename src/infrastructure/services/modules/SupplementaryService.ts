@@ -288,11 +288,17 @@ export class SupplementaryService extends BaseDataService {
                         const targetTerm = update.originalTerm || exam.originalTerm!;
                         const student = await this.studentService.getStudentById(exam.studentId);
                         
-                        if (student && student.academicHistory && student.academicHistory[targetTerm]) {
-                            const history = student.academicHistory[targetTerm];
-                            const updatedMarks = { ...history.marks };
+                        if (student && student.academicHistory) {
+                            // Find the matching term key case-insensitively
+                            const historyKeys = Object.keys(student.academicHistory);
+                            const targetTermNormalized = targetTerm.toLowerCase().trim();
+                            const actualTermKey = historyKeys.find(k => k.toLowerCase().trim() === targetTermNormalized);
                             
-                            const oldMark = updatedMarks[exam.subjectId] || {};
+                            if (actualTermKey) {
+                                const history = student.academicHistory[actualTermKey];
+                                const updatedMarks = { ...history.marks };
+                                
+                                const oldMark = updatedMarks[exam.subjectId] || {};
                             
                             let finalInt = update.marks.int;
                             let finalExt = update.marks.ext;
@@ -324,17 +330,17 @@ export class SupplementaryService extends BaseDataService {
                             
                             const studentDocRef = doc(this.db, this.studentsCollection, exam.studentId);
                             batch.update(studentDocRef, {
-                                [`academicHistory.${targetTerm}.marks`]: updatedMarks,
-                                [`academicHistory.${targetTerm}.grandTotal`]: grandTotal,
-                                [`academicHistory.${targetTerm}.average`]: average,
-                                [`academicHistory.${targetTerm}.performanceLevel`]: performanceLevel
+                                [`academicHistory.${actualTermKey}.marks`]: updatedMarks,
+                                [`academicHistory.${actualTermKey}.grandTotal`]: grandTotal,
+                                [`academicHistory.${actualTermKey}.average`]: average,
+                                [`academicHistory.${actualTermKey}.performanceLevel`]: performanceLevel
                             });
                             count++;
 
                             this.studentService.updateStudentInCache(exam.studentId, {
                                 academicHistory: {
                                     ...student.academicHistory,
-                                    [targetTerm]: {
+                                    [actualTermKey]: {
                                         ...history,
                                         marks: updatedMarks,
                                         grandTotal,
@@ -346,8 +352,9 @@ export class SupplementaryService extends BaseDataService {
                         }
                     }
                 }
+            }
 
-                if (count >= 400) {
+            if (count >= 400) {
                     await batch.commit();
                     count = 0;
                 }
@@ -402,6 +409,20 @@ export class SupplementaryService extends BaseDataService {
         } catch (error) {
             console.error('Error enriching supplementary metadata:', error);
             return 0;
+        }
+    }
+
+    public async getSupplementaryExamsByStudent(studentId: string): Promise<SupplementaryExam[]> {
+        try {
+            const q = query(
+                collection(this.db, this.supplementaryExamsCollection),
+                where('studentId', '==', studentId)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupplementaryExam));
+        } catch (error) {
+            console.error('Error fetching student supplementary exams:', error);
+            return [];
         }
     }
 }

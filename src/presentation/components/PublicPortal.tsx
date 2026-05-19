@@ -128,12 +128,36 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
             const student = await dataService.getStudentByAdNo(searchAdNo.trim(), activeTerm);
 
-            if (student && student.className === searchClass) {
+            if (student) {
+                // Ensure searchClass matches student's class in the activeTerm context
+                // If student was found but in a different class, we might want to allow it or strict check
+                if (student.className !== searchClass) {
+                    setResult(null);
+                    setHasSearched(true);
+                    alert(`No student found in ${searchClass} with this Admission Number.`);
+                    return;
+                }
+
                 try {
                     const suppExams = await dataService.getSupplementaryExamsByStudent(student.id);
                     student.supplementaryExams = suppExams;
                 } catch (e) {
                     console.error('Error fetching supplementary exams:', e);
+                }
+
+                // Fallback detection for subjects
+                let displayTerm = activeTerm;
+                const history = student.academicHistory || {};
+                const currentSubjects = subjects;
+                const hasCurrentSubjects = currentSubjects.some(s => s.targetClasses?.includes(student.className));
+
+                if (!history[activeTerm] && !hasCurrentSubjects && Object.keys(history).length > 0) {
+                    const terms = Object.keys(history).sort().reverse();
+                    displayTerm = terms[0];
+                    if (displayTerm !== activeTerm) {
+                        const fallbackSubs = await dataService.getAllSubjects(displayTerm);
+                        setSubjects(fallbackSubs);
+                    }
                 }
                 
                 setResult(student);
@@ -141,7 +165,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             } else {
                 setResult(null);
                 setHasSearched(true);
-                alert('No student found in the selected class with this Admission Number.');
+                alert('No student found with this Admission Number.');
             }
         } catch (error) {
             console.error('Search error:', error);
@@ -220,10 +244,10 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                         <i className={`fa-solid fa-graduation-cap ${isMobile ? 'text-lg' : 'text-xl'}`}></i>
                     </div>
                     <div>
-                        <h1 className={`font-black text-white tracking-tighter leading-none ${isMobile ? 'text-lg' : 'text-xl'}`}>
+                        <h1 className={`font-black text-white tracking-tighter leading-none ${isMobile ? 'text-base' : 'text-lg'}`}>
                             {isMobile ? (branding?.systemAlias || "AIC DA'WA") : (branding?.institutionName || "AIC DA'WA COLLEGE")}
                         </h1>
-                        <p className={`text-emerald-400 font-black uppercase tracking-[0.3em] mt-1 ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>
+                        <p className={`text-emerald-400 font-bold uppercase tracking-[0.2em] mt-1 ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
                             {branding?.portalName || "Exam Portal"}
                         </p>
                     </div>
@@ -245,10 +269,10 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 {/* Apps Navigation Tabs */}
                 <div className="flex justify-start md:justify-center bg-white/5 p-1 rounded-3xl mb-8 overflow-x-auto hide-scrollbar touch-pan-x print:hidden w-full md:w-fit mx-auto snap-x">
                     {[
-                        { id: 'results', label: 'Scorecards', icon: 'fa-file-invoice' },
-                        { id: 'hall-ticket', label: 'Hall Ticket', icon: 'fa-id-card-clip' },
+                        { id: 'results', label: 'Results', icon: 'fa-file-invoice' },
+                        { id: 'hall-ticket', label: 'Tickets', icon: 'fa-id-card-clip' },
                         { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' },
-                        { id: 'curriculum', label: 'Curriculum Map', icon: 'fa-sitemap' }
+                        { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -260,13 +284,13 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     setResult(null);
                                 }
                             }}
-                            className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-black uppercase tracking-widest transition-all whitespace-nowrap ${subView === tab.id
+                            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-black uppercase tracking-widest transition-all whitespace-nowrap ${subView === tab.id
                                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
                                 : 'text-slate-400 hover:text-white hover:bg-white/5'
-                                }`}
+                                } ${isMobile ? 'text-[10px]' : 'text-xs'}`}
                         >
-                            <i className={`fa-solid ${tab.icon}`}></i>
-                            {isMobile && subView !== tab.id ? '' : tab.label}
+                            <i className={`fa-solid ${tab.icon} ${isMobile ? 'text-xs' : 'text-sm'}`}></i>
+                            {tab.label}
                         </button>
                     ))}
                 </div>
@@ -363,11 +387,11 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 {subView === 'results' && (
                     <>
                 {/* Search Header */}
-                <div className={`w-full max-w-4xl mx-auto text-center mb-12 print:hidden ${isMobile ? 'px-4' : ''}`}>
-                    <h2 className={`font-black text-white tracking-tighter mb-6 ${isMobile ? 'text-3xl' : 'text-5xl'}`}>
+                <div className={`w-full max-w-4xl mx-auto text-center mb-8 print:hidden ${isMobile ? 'px-4' : ''}`}>
+                    <h2 className={`font-black text-white tracking-tighter mb-4 ${isMobile ? 'text-2xl' : 'text-4xl'}`}>
                         {isMobile ? 'Academic Portal' : 'Academic Excellence Portal'}
                     </h2>
-                    <p className={`text-slate-300 max-w-2xl mx-auto ${isMobile ? 'text-base px-2' : 'text-lg'}`}>
+                    <p className={`text-slate-400 max-w-2xl mx-auto ${isMobile ? 'text-xs px-2' : 'text-sm'}`}>
                         {isMobile
                             ? 'Access your academic records and performance with complete transparency'
                             : 'Access your comprehensive academic records and performance analytics with complete transparency'
@@ -377,10 +401,10 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
                 {/* Search Form */}
                 <div className={`w-full max-w-2xl mx-auto bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 mb-8 print:hidden mobile-layout-element ${isMobile ? 'p-6' : 'p-8'}`}>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                        <h3 className={`font-black text-white flex items-center gap-3 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                        <h3 className={`font-black text-white flex items-center gap-2.5 ${isMobile ? 'text-lg' : 'text-xl'}`}>
                             <i className="fa-solid fa-search text-emerald-400"></i>
-                            {isMobile ? 'Search Results' : 'Student Result Search'}
+                            {isMobile ? 'Search Records' : 'Student Result Search'}
                         </h3>
                         <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/10">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2 hidden sm:inline">Active Term</span>
@@ -404,11 +428,11 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                         pattern="[0-9]*"
                                         value={searchAdNo}
                                         onChange={(e) => setSearchAdNo(e.target.value)}
-                                        className={`w-full bg-white/10 border-2 border-white/20 rounded-2xl text-white placeholder-slate-400 outline-none focus:ring-4 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all touch-target-large mobile-focus-ring ${isMobile ? 'p-5 text-lg min-h-[64px] pl-12' : 'p-4 text-base pl-10'}`}
-                                        placeholder={isMobile ? "Enter number" : "Enter admission number (e.g., 138)"}
+                                        className={`w-full bg-slate-900/40 border-2 border-white/10 rounded-2xl text-white placeholder-slate-500 outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all touch-target-large mobile-focus-ring ${isMobile ? 'p-4 text-base pl-12' : 'p-3.5 text-sm pl-10'}`}
+                                        placeholder={isMobile ? "Admission No." : "Enter admission number (e.g., 138)"}
                                         required
                                         disabled={isSearching}
-                                        style={{ fontSize: isMobile && isIOS ? '16px' : undefined, WebkitAppearance: 'none', WebkitTapHighlightColor: 'transparent' }}
+                                        style={{ WebkitAppearance: 'none', WebkitTapHighlightColor: 'transparent' }}
                                     />
                                     <div className={`absolute left-0 top-0 h-full flex items-center justify-center pointer-events-none ${isMobile ? 'w-12' : 'w-10'}`}>
                                         <i className="fa-solid fa-hashtag text-emerald-400 text-sm"></i>
@@ -434,7 +458,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     <select
                                         value={searchClass}
                                         onChange={(e) => setSearchClass(e.target.value)}
-                                        className={`w-full bg-white/10 border-2 border-white/20 rounded-2xl text-white outline-none focus:ring-4 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all appearance-none cursor-pointer touch-target-large mobile-focus-ring ${isMobile ? 'p-5 text-lg min-h-[64px] pl-12 pr-12' : 'p-4 text-base pl-10 pr-10'}`}
+                                        className={`w-full bg-slate-900/40 border-2 border-white/10 rounded-2xl text-white outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all appearance-none cursor-pointer touch-target-large mobile-focus-ring ${isMobile ? 'p-4 text-base pl-12 pr-12' : 'p-3.5 text-sm pl-10 pr-10'}`}
                                         disabled={isSearching}
                                         style={{ WebkitAppearance: 'none', WebkitTapHighlightColor: 'transparent' }}
                                     >
@@ -553,14 +577,19 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     <i className="fa-solid fa-file-invoice"></i> {isMobile ? (isOnlySupp ? 'Supp. Result' : 'Scorecard') : (isOnlySupp ? 'Supplementary Result' : 'My Scorecard')}
                                 </button>
                             )}
-                            {isResultsReleased && (
                                 <button
                                     onClick={() => setViewMode('class-rank')}
                                     className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'class-rank' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
                                 >
                                     <i className="fa-solid fa-ranking-star"></i> {isMobile ? 'Rankings' : 'Class Rankings'}
                                 </button>
-                            )}
+                                <button
+                                    onClick={() => setViewMode('scorecard' as any)} // Overloaded as a trick or just use state
+                                    className="flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm text-amber-400 hover:text-amber-300 hover:bg-white/5 transition-all flex items-center justify-center gap-2"
+                                    id="view-transcript-btn"
+                                >
+                                    <i className="fa-solid fa-layer-group"></i> {isMobile ? 'Transcript' : 'Full Transcript'}
+                                </button>
                         </div>
 
                         {viewMode === 'scorecard' && !canViewScorecard ? (
@@ -581,7 +610,9 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                             </div>
                         ) : viewMode === 'scorecard' ? (
                             <Suspense fallback={<div className="p-12 text-center"><div className="loader-ring"></div></div>}>
-                                <PublicScorecard result={result} subjects={subjects} isResultsReleased={isResultsReleased} isSuppReleased={isSuppReleased} />
+                                <div id="scorecard-container">
+                                    <PublicScorecard result={result} subjects={subjects} isResultsReleased={isResultsReleased} isSuppReleased={isSuppReleased} />
+                                </div>
                             </Suspense>
                         ) : (
                             <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl border border-slate-200">

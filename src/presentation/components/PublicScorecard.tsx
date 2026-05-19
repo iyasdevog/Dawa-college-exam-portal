@@ -33,12 +33,15 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
         window.print();
     };
 
-    // Get the specified term record, or fallback to the most recent one if current is empty
+    // Get the specified term record
     let displayTerm = activeTerm;
     let activeTermRecord = result?.academicHistory?.[activeTerm];
     
-    if (!activeTermRecord && result?.academicHistory && Object.keys(result.academicHistory).length > 0) {
-        // Fallback to latest available term
+    // Determine if we should fallback: only if no marks AND no subjects for this term
+    const hasSubjectsForTerm = subjects.some(s => s.targetClasses?.includes(result?.currentClass || result?.className || ''));
+    
+    if (!activeTermRecord && !hasSubjectsForTerm && result?.academicHistory && Object.keys(result.academicHistory).length > 0) {
+        // Fallback to latest available term only if current has no subjects assigned
         const terms = Object.keys(result.academicHistory).sort().reverse();
         displayTerm = terms[0];
         activeTermRecord = result.academicHistory[displayTerm];
@@ -57,17 +60,20 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
 
     // Merged marks mapping
     const suppExams = result?.supplementaryExams || [];
-    const completedSuppIds = new Set(suppExams.filter(su => su.status === 'Completed').map(su => su.subjectId));
-    const originalMarkIds = new Set(Object.keys(displayMarks));
+    const completedSuppIds = new Set(suppExams.filter(su => su.status === 'Completed').map(su => su.subjectId.toLowerCase().trim()));
+    const originalMarkIds = new Set(Object.keys(displayMarks).map(id => id.toLowerCase().trim()));
 
     let resultSubjects = result ? subjects.filter(s => {
+        // Normalize search ID
+        const sId = s.id.toLowerCase().trim();
+        
         // Show subject if:
         // 1. It targets the student's class in this term
         // 2. The student has an original mark for it
         // 3. The student has a completed supplementary record for it
         const isTargetClass = s.targetClasses?.includes(displayClass);
-        const hasOriginalMark = originalMarkIds.has(s.id);
-        const isSupplementarySubject = completedSuppIds.has(s.id);
+        const hasOriginalMark = originalMarkIds.has(sId);
+        const isSupplementarySubject = completedSuppIds.has(sId);
         
         if (!isTargetClass && !hasOriginalMark && !isSupplementarySubject) return false;
 
@@ -79,31 +85,60 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
         return true;
     }) : [];
     
+    // De-duplicate resultSubjects based on normalized names to handle case-variant legacy IDs
+    const seenSubjects = new Set<string>();
+    resultSubjects = resultSubjects.filter(s => {
+        const key = (s.name || s.id).toLowerCase().trim();
+        if (seenSubjects.has(key)) return false;
+        seenSubjects.add(key);
+        return true;
+    });
+
     // Sort subjects: Generally by name or id, but ensure consistency
     resultSubjects.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
 
-    const finalMarks: Record<string, SubjectMarks> = { ...displayMarks };
+    const finalMarks: Record<string, SubjectMarks> = {};
+    // Build final marks map with case-insensitive lookup
+    const markLookup: Record<string, SubjectMarks> = {};
+    Object.entries(displayMarks).forEach(([id, m]) => {
+        markLookup[id.toLowerCase().trim()] = m;
+    });
+
+    resultSubjects.forEach(s => {
+        const sId = s.id.toLowerCase().trim();
+        const originalMark = markLookup[sId];
+        if (originalMark) {
+            finalMarks[s.id] = { ...originalMark };
+        }
+    });
 
     if (isSuppReleased) {
         // Merge completed supplementary marks
         const completedSupps = suppExams.filter(su => su.status === 'Completed' && su.marks);
         completedSupps.forEach(su => {
             if (su.marks) {
-                // Store original marks separately for comparison if they exist
-                const originalMarks = displayMarks[su.subjectId];
-                finalMarks[su.subjectId] = {
-                    ...su.marks,
-                    isSupplementary: true,
-                    // Keep original marks for comparison in UI
-                    previousMarks: originalMarks || su.previousMarks
-                } as any;
+                const sId = su.subjectId.toLowerCase().trim();
+                // Find corresponding subject in resultSubjects (matching by name or ID)
+                const targetSubject = resultSubjects.find(rs => 
+                    rs.id.toLowerCase().trim() === sId || 
+                    (rs.name && su.subjectName && rs.name.toLowerCase().trim() === su.subjectName.toLowerCase().trim())
+                );
+
+                if (targetSubject) {
+                    const originalMarks = markLookup[sId];
+                    finalMarks[targetSubject.id] = {
+                        ...su.marks,
+                        isSupplementary: true,
+                        previousMarks: originalMarks || su.previousMarks
+                    } as any;
+                }
             }
         });
 
         if (!isResultsReleased) {
             // ONLY SHOW supplementary subjects
-            const suppSubjectIds = new Set(completedSupps.map(su => su.subjectId));
-            resultSubjects = resultSubjects.filter(s => suppSubjectIds.has(s.id));
+            const suppSubjectIds = new Set(completedSupps.map(su => su.subjectId.toLowerCase().trim()));
+            resultSubjects = resultSubjects.filter(s => suppSubjectIds.has(s.id.toLowerCase().trim()));
         }
     }
 
@@ -201,31 +236,31 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
             )}
 
             {/* The Actual Result Card */}
-            <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border print:border-slate-300 print:rounded-none">
-                {/* Mobile-Optimized Header */}
-                <div className={`bg-gradient-to-r from-slate-900 to-emerald-800 text-white print:p-8 ${isMobile ? 'p-6' : 'p-12'}`}>
+            <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-200/60 print:shadow-none print:border print:border-slate-300 print:rounded-none">
+                {/* Refined Header */}
+                <div className={`bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 text-white print:p-8 ${isMobile ? 'p-5' : 'p-10'}`}>
                     <div className={`flex justify-between items-start gap-8 ${isMobile ? 'flex-col gap-6' : 'flex-wrap'}`}>
-                        <div className={isMobile ? 'w-full' : ''}>
-                            <h3 className={`font-black tracking-tighter mb-2 print:text-3xl ${isMobile ? 'text-2xl' : 'text-4xl'}`}>
+                        <div className={isMobile ? 'w-full' : 'flex-1'}>
+                            <h3 className={`font-black tracking-tighter mb-1 print:text-2xl ${isMobile ? 'text-xl' : 'text-3xl'}`}>
                                 {result.name}
                             </h3>
-                            <div className={`flex gap-4 items-center ${isMobile ? 'flex-col items-start gap-3' : 'flex-wrap'}`}>
-                                <span className={`bg-white/20 rounded-lg font-black tracking-widest uppercase ${isMobile ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-[10px]'}`}>
+                            <div className={`flex gap-3 items-center ${isMobile ? 'flex-col items-start gap-2' : 'flex-wrap'}`}>
+                                <span className={`bg-white/10 text-white/90 rounded-md font-black tracking-widest uppercase ${isMobile ? 'px-2 py-1 text-[10px]' : 'px-3 py-1.5 text-[9px]'}`}>
                                     {displayClass}
                                 </span>
-                                <span className={`text-emerald-300 font-bold ${isMobile ? 'text-sm' : 'text-sm'}`}>
-                                    Admission: {result.adNo}
+                                <span className={`text-emerald-400 font-bold ${isMobile ? 'text-xs' : 'text-xs'}`}>
+                                    ID: {result.adNo}
                                 </span>
-                                <div className={`flex items-center gap-2 print:hidden ${isMobile ? 'flex-col items-start gap-3 w-full mt-2' : ''}`}>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">View Term:</span>
-                                        <TermSelector variant="dark" className="!bg-white/10 border-none !p-1 h-auto text-xs" />
+                                <div className={`flex items-center gap-2 print:hidden ${isMobile ? 'flex-col items-start gap-2 w-full mt-1' : ''}`}>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Term:</span>
+                                        <TermSelector variant="dark" className="!bg-white/5 border-none !p-1 h-auto text-[10px] !text-emerald-300" />
                                     </div>
                                     <button 
                                         onClick={() => setShowAggregatedView(true)} 
-                                        className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-emerald-300 font-bold text-xs transition border border-emerald-400/30 whitespace-nowrap"
+                                        className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 rounded-md text-amber-300 font-bold text-[10px] transition border border-amber-500/20 whitespace-nowrap"
                                     >
-                                        <i className="fa-solid fa-layer-group mr-1.5"></i> Full Transcript
+                                        <i className="fa-solid fa-layer-group mr-1"></i> Full Transcript
                                     </button>
                                 </div>
                                 <span className="hidden print:inline text-emerald-300 font-bold text-sm">
@@ -233,48 +268,45 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                 </span>
                             </div>
                         </div>
-                        <div className={`text-right ${isMobile ? 'w-full text-center' : ''}`}>
-                            <span className={`uppercase font-black tracking-[0.3em] text-white/60 mb-2 block ${isMobile ? 'text-xs' : 'text-[9px]'}`}>
+                        <div className={`text-right ${isMobile ? 'w-full text-left pt-2 border-t border-white/5' : ''}`}>
+                            <span className={`uppercase font-black tracking-[0.2em] text-white/40 mb-0.5 block ${isMobile ? 'text-[10px]' : 'text-[8px]'}`}>
                                 Class Rank
                             </span>
-                            <span className={`font-black text-emerald-300 print:text-3xl ${isMobile ? 'text-4xl' : 'text-5xl'}`}>
+                            <span className={`font-black text-emerald-400 print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'}`}>
                                 #{displayRank}
                             </span>
                         </div>
                     </div>
                 </div>
 
-                {/* Mobile-Optimized Performance Summary */}
-                <div className={`print:p-8 ${isMobile ? 'p-6' : 'p-12'}`}>
-                    <div className={`grid gap-8 mb-12 print:grid-cols-3 print:mb-8 ${isMobile ? 'grid-cols-1 gap-4 mb-8' : 'grid-cols-1 md:grid-cols-3'}`}>
-                        <div className={`bg-slate-50 border border-slate-100 text-center print:p-4 print:rounded-2xl ${isMobile ? 'p-6 rounded-2xl' : 'p-8 rounded-[2rem]'}`}>
-                            <p className={`uppercase font-black text-slate-400 mb-2 tracking-widest ${isMobile ? 'text-xs' : 'text-[10px]'}`}>
+                {/* Refined Performance Summary */}
+                <div className={`print:p-8 ${isMobile ? 'p-5' : 'p-8 pb-4'}`}>
+                    <div className={`grid gap-4 mb-4 print:grid-cols-3 print:mb-6 ${isMobile ? 'grid-cols-1 mb-6' : 'grid-cols-1 md:grid-cols-3'}`}>
+                        <div className={`bg-slate-100/50 border border-slate-200/50 text-center print:p-3 print:rounded-xl p-5 rounded-2xl`}>
+                            <p className="uppercase font-black text-slate-500 mb-1 tracking-widest text-[9px]">
                                 Total Marks
                             </p>
-                            <p className={`font-black text-slate-900 print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'}`}>
+                            <p className={`font-black text-slate-900 print:text-xl ${isMobile ? 'text-2xl' : 'text-3xl'}`}>
                                 {displayTotal}
                             </p>
                         </div>
-                        <div className={`bg-slate-50 border border-slate-100 text-center print:p-4 print:rounded-2xl ${isMobile ? 'p-6 rounded-2xl' : 'p-8 rounded-[2rem]'}`}>
-                            <p className={`uppercase font-black text-slate-400 mb-2 tracking-widest ${isMobile ? 'text-xs' : 'text-[10px]'}`}>
+                        <div className={`bg-slate-100/50 border border-slate-200/50 text-center print:p-3 print:rounded-xl p-5 rounded-2xl`}>
+                            <p className="uppercase font-black text-slate-500 mb-1 tracking-widest text-[9px]">
                                 Average
                             </p>
-                            <p className={`font-black text-slate-900 print:text-2xl ${isMobile ? 'text-3xl' : 'text-4xl'}`}>
+                            <p className={`font-black text-slate-900 print:text-xl ${isMobile ? 'text-2xl' : 'text-3xl'}`}>
                                 {typeof displayAverage === 'number' ? displayAverage.toFixed(1) : displayAverage}%
                             </p>
                         </div>
-                        <div className={`bg-slate-50 border border-slate-100 text-center print:p-4 print:rounded-2xl ${isMobile ? 'p-6 rounded-2xl' : 'p-8 rounded-[2rem]'}`}>
-                            <p className={`uppercase font-black text-slate-400 mb-2 tracking-widest ${isMobile ? 'text-xs' : 'text-[10px]'}`}>
-                                Grade
+                        <div className={`bg-slate-100/50 border border-slate-200/50 text-center print:p-3 print:rounded-xl p-5 rounded-2xl`}>
+                            <p className="uppercase font-black text-slate-500 mb-1 tracking-widest text-[9px]">
+                                Performance
                             </p>
-                            <p className={`font-black print:text-2xl ${isMobile ? 'text-2xl' : 'text-3xl'} ${displayPerformance === 'F (Failed)' ? 'text-red-500' :
-                                displayPerformance.includes('O (Outstanding)') ? 'text-emerald-600' :
-                                    displayPerformance.includes('A+ (Excellent)') ? 'text-emerald-500' :
-                                        displayPerformance.includes('A (Very Good)') ? 'text-blue-500' :
-                                            displayPerformance.includes('B+ (Good)') ? 'text-teal-500' :
-                                                displayPerformance.includes('B (Good)') ? 'text-teal-400' :
-                                                    displayPerformance === 'C (Average)' ? 'text-amber-500' :
-                                                        'text-slate-500'
+                            <p className={`font-black print:text-xl ${isMobile ? 'text-xl' : 'text-2xl'} ${displayPerformance === 'F (Failed)' ? 'text-red-600' :
+                                displayPerformance.includes('O') ? 'text-emerald-700' :
+                                displayPerformance.includes('A+') ? 'text-emerald-600' :
+                                displayPerformance.includes('A') ? 'text-blue-600' :
+                                'text-slate-700'
                                 }`}>
                                 {displayPerformance}
                             </p>
@@ -288,8 +320,8 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                             {isMobile ? (
                                 <div className="space-y-4 mobile-layout-element">
                                     <div className="flex items-center justify-between mb-6">
-                                        <h4 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                                            <i className="fa-solid fa-list-check text-emerald-600"></i>
+                                        <h4 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                                            <i className="fa-solid fa-list-check text-emerald-700"></i>
                                             Subject Results
                                         </h4>
                                         <div className="text-xs text-slate-500 font-medium">
@@ -335,31 +367,42 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                 </div>
 
                                                 {/* Marks Grid */}
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    <div className="bg-slate-50 rounded-xl p-3 text-center">
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">EXT</p>
-                                                        <p className="text-lg font-black text-slate-700">
+                                                <div className={`grid ${marks?.isSupplementary ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}>
+                                                    {marks?.isSupplementary && (
+                                                        <div className="bg-amber-50/50 rounded-xl p-2 text-center border border-amber-200/30">
+                                                            <p className="text-[9px] font-bold text-amber-900 uppercase tracking-wider mb-1">PREV</p>
+                                                            <p className="text-base font-black text-slate-500">
+                                                                {marks?.previousMarks?.total ?? '-'}
+                                                            </p>
+                                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                                E:{marks?.previousMarks?.ext ?? '-'} I:{marks?.previousMarks?.int ?? '-'}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                    <div className="bg-slate-100/50 rounded-xl p-2 text-center">
+                                                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">EXT</p>
+                                                        <p className="text-base font-black text-slate-900">
                                                             {subject.maxEXT === 0 ? 'N/A' : (
                                                                 <>
                                                                     {marks?.ext ?? '-'}
-                                                                    <span className="text-[10px] text-slate-400 ml-1">/{subject.maxEXT}</span>
+                                                                    <span className="text-[9px] text-slate-500 ml-0.5">/{subject.maxEXT}</span>
                                                                 </>
                                                             )}
                                                         </p>
                                                     </div>
-                                                    <div className="bg-slate-50 rounded-xl p-3 text-center">
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">INT</p>
-                                                        <p className="text-lg font-black text-slate-700">
+                                                    <div className="bg-slate-100/50 rounded-xl p-2 text-center">
+                                                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">INT</p>
+                                                        <p className="text-base font-black text-slate-900">
                                                             {marks?.int ?? '-'}
-                                                            <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
+                                                            <span className="text-[9px] text-slate-500 ml-0.5">/{subject.maxINT}</span>
                                                         </p>
                                                     </div>
-                                                    <div className={`rounded-xl p-3 text-center ${marks?.status === 'Failed'
+                                                    <div className={`rounded-xl p-2 text-center shadow-sm ${marks?.status === 'Failed'
                                                         ? 'bg-red-50 border border-red-200'
                                                         : 'bg-emerald-50 border border-emerald-200'
                                                         }`}>
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total</p>
-                                                        <p className={`text-xl font-black ${marks?.status === 'Failed' ? 'text-red-600' : 'text-emerald-600'
+                                                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">Total</p>
+                                                        <p className={`text-lg font-black ${marks?.status === 'Failed' ? 'text-red-700' : 'text-emerald-700'
                                                             }`}>
                                                             {marks?.total ?? '-'}
                                                         </p>
@@ -394,17 +437,17 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                 </div>
                             ) : (
                                 /* Desktop Table Layout - Aligned with StudentScorecard */
-                                <div className="overflow-x-auto rounded-[2rem] border border-slate-100 print:border-slate-200">
+                                <div className="overflow-x-auto rounded-[1.5rem] border border-slate-100 print:border-slate-200">
                                     <table className="w-full border-collapse">
                                         <thead>
-                                            <tr className="text-[10px] uppercase text-slate-400 font-black tracking-[0.2em] bg-slate-50 print:bg-slate-100">
-                                                <th className="px-8 py-6 text-left print:px-4 print:py-3">Subject</th>
-                                                {hasSupplementary && <th className="px-6 py-6 text-center print:px-4 print:py-3 bg-amber-50/50">Original</th>}
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">{hasSupplementary ? 'Final Result' : 'EXT'}</th>
-                                                {!hasSupplementary && <th className="px-6 py-6 text-center print:px-4 print:py-3">INT</th>}
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">Total</th>
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">Max</th>
-                                                <th className="px-6 py-6 text-center print:px-4 print:py-3">Status</th>
+                                            <tr className="text-[9px] uppercase text-slate-600 font-black tracking-[0.15em] bg-slate-100/80 print:bg-slate-100">
+                                                <th className="px-6 py-4 text-left">Subject</th>
+                                                {hasSupplementary && <th className="px-4 py-4 text-center bg-amber-50/50 text-amber-900">Prev. Total</th>}
+                                                <th className="px-4 py-4 text-center">External</th>
+                                                <th className="px-4 py-4 text-center">Internal</th>
+                                                <th className="px-4 py-4 text-center border-l border-slate-200">Total</th>
+                                                <th className="px-4 py-4 text-center">Max</th>
+                                                <th className="px-4 py-4 text-center border-l border-slate-200">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50 print:divide-slate-200">
@@ -412,67 +455,69 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                 const marks = finalMarks[subject.id];
                                                 const maxTotal = (subject.maxINT || 0) + (subject.maxEXT || 0);
                                                 return (
-                                                    <tr key={subject.id} className="hover:bg-slate-50/50 transition-colors">
-                                                        <td className="px-8 py-6 print:px-4 print:py-3">
-                                                            <p className="font-black text-slate-800 text-lg tracking-tight print:text-sm flex items-center gap-2">
+                                                    <tr key={subject.id} className="hover:bg-slate-50/30 transition-colors">
+                                                        <td className="px-6 py-4 print:px-4 print:py-3">
+                                                            <p className="font-bold text-slate-800 text-sm tracking-tight print:text-xs flex items-center gap-2">
                                                                 {subject.name}
                                                                 {marks?.isSupplementary && (
-                                                                    <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded uppercase tracking-widest font-bold">
+                                                                    <span className="bg-orange-100/80 text-orange-700 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">
                                                                         Supp
                                                                     </span>
                                                                 )}
                                                             </p>
                                                             {subject.arabicName && (
-                                                                <p className="arabic-text text-xl text-emerald-600 leading-none mt-1 print:text-base">{subject.arabicName}</p>
+                                                                <p className="arabic-text text-lg text-emerald-600 leading-none mt-0.5 print:text-sm">{subject.arabicName}</p>
                                                             )}
                                                         </td>
                                                         {hasSupplementary && (
-                                                            <td className="px-6 py-6 text-center font-mono text-xs text-slate-400 print:px-4 print:py-3">
-                                                                {marks?.isSupplementary && (marks as any).previousMarks ? (
+                                                            <td className="px-4 py-4 text-center bg-amber-50/10">
+                                                                {marks?.isSupplementary ? (
                                                                     <div className="flex flex-col items-center">
-                                                                        <span className="font-bold">{(marks as any).previousMarks.total || '-'}</span>
-                                                                        <span className="text-[9px] opacity-70">
-                                                                            {(marks as any).previousMarks.int}/{(marks as any).previousMarks.ext}
+                                                                        <span className="text-sm font-black text-slate-400">
+                                                                            {(marks as any).previousMarks?.total ?? '-'}
+                                                                        </span>
+                                                                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter mt-0.5">
+                                                                            E:{(marks as any).previousMarks?.ext ?? '-'} I:{(marks as any).previousMarks?.int ?? '-'}
                                                                         </span>
                                                                     </div>
-                                                                ) : marks && !marks.isSupplementary ? (
-                                                                    <span className="opacity-30">-</span>
                                                                 ) : '-'}
                                                             </td>
                                                         )}
-                                                        <td className={`px-6 py-6 text-center font-mono font-bold print:px-4 print:py-3 print:text-xs ${marks?.isSupplementary ? 'text-emerald-600 bg-emerald-50/20' : 'text-slate-500'}`}>
-                                                            {subject.maxEXT === 0 ? (
-                                                                <span className="text-[10px] text-slate-300 uppercase">N/A</span>
-                                                            ) : (
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className={marks?.isSupplementary ? 'text-base' : ''}>{marks?.ext ?? '-'} {hasSupplementary ? '' : `/${subject.maxEXT}`}</span>
-                                                                    {hasSupplementary && <span className="text-[10px] text-slate-400">{(marks as any).int || '-' } INT</span>}
-                                                                </div>
-                                                            )}
+                                                        <td className="px-4 py-4 text-center">
+                                                            <div className="flex flex-col items-center">
+                                                                <span className={`text-sm font-black ${marks?.isSupplementary ? 'text-emerald-700' : 'text-slate-900'} print:text-xs`}>
+                                                                    {subject.maxEXT === 0 ? 'N/A' : (marks?.ext ?? '-')}
+                                                                </span>
+                                                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight opacity-70">
+                                                                    MAX {subject.maxEXT}
+                                                                </span>
+                                                            </div>
                                                         </td>
-                                                        {!hasSupplementary && (
-                                                            <td className="px-6 py-6 text-center font-mono font-bold text-slate-500 print:px-4 print:py-3 print:text-xs">
-                                                                {marks?.int ?? '-'}
-                                                                <span className="text-[10px] text-slate-400 ml-1">/{subject.maxINT}</span>
-                                                            </td>
-                                                        )}
-                                                        <td className={`px-6 py-6 text-center font-black text-2xl print:px-4 print:py-3 print:text-lg ${marks?.status === 'Failed' ? 'text-red-500' : marks?.isSupplementary ? 'text-emerald-600' : 'text-slate-900'
+                                                        <td className="px-4 py-4 text-center">
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-sm font-black text-slate-900 print:text-xs">
+                                                                    {marks?.int ?? '-'}
+                                                                </span>
+                                                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight opacity-70">
+                                                                    MAX {subject.maxINT}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className={`px-4 py-4 text-center font-black text-xl border-l border-slate-50 print:px-3 print:py-2 print:text-base ${marks?.status === 'Failed' ? 'text-red-700' : marks?.isSupplementary ? 'text-emerald-700' : 'text-slate-900'
                                                             }`}>
                                                             {marks?.total ?? '-'}
                                                         </td>
-                                                        <td className="px-6 py-6 text-center font-mono text-slate-400 print:px-4 print:py-3 print:text-xs">
+                                                        <td className="px-4 py-4 text-center font-bold text-slate-900 print:px-3 print:py-2 text-xs">
                                                             {maxTotal}
                                                         </td>
-                                                        <td className="px-6 py-6 text-center print:px-4 print:py-3">
-                                                            {marks ? (
-                                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${marks.status === 'Passed'
-                                                                    ? 'bg-emerald-100 text-emerald-700'
-                                                                    : 'bg-red-100 text-red-700'
+                                                        <td className="px-4 py-4 text-center print:px-3 print:py-2">
+                                                            {marks && (
+                                                                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${marks.status === 'Passed'
+                                                                    ? 'bg-emerald-100 text-emerald-800 shadow-sm'
+                                                                    : 'bg-red-100 text-red-800 shadow-sm'
                                                                     }`}>
                                                                     {marks.status}
                                                                 </span>
-                                                            ) : (
-                                                                <span className="text-slate-300 text-[10px] font-black uppercase">Pending</span>
                                                             )}
                                                         </td>
                                                     </tr>
