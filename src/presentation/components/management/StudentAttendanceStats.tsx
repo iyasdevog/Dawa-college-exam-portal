@@ -536,6 +536,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 };
