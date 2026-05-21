@@ -684,7 +684,7 @@ export class DataService extends BaseDataService {
     }
 
     async updateStudentINTMarks(studentId: string, subjectId: string, marks: any, termKey?: string): Promise<void> {
-        return this.academicService.updateStudentINTMarks(studentId, subjectId, marks, termKey);
+        return this.academicService.updateMarks(studentId, subjectId, { int: marks }, termKey);
     }
 
     async bulkUpdateEXTMarks(updates: any[], termKey?: string): Promise<void> {
@@ -771,6 +771,19 @@ export class DataService extends BaseDataService {
 
     async deleteAttendancePeriod(virtualId: string): Promise<void> {
         return this.attendanceService.deleteAttendancePeriod(virtualId);
+    }
+
+    // --- Leave Permissions ---
+    async getLeavePermissions(date: string, termKey?: string): Promise<any[]> {
+        return this.attendanceService.getLeavePermissions(date, termKey);
+    }
+
+    async saveLeavePermission(permission: any): Promise<string> {
+        return this.attendanceService.saveLeavePermission(permission);
+    }
+
+    async deleteLeavePermission(id: string): Promise<void> {
+        return this.attendanceService.deleteLeavePermission(id);
     }
 }
 

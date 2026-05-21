@@ -251,6 +251,19 @@ export interface HallTicketSettings {
   releasedAt?: number;
 }
 
+export type LeavePermissionType = 'Principal' | 'Medical' | 'Other';
+
+export interface LeavePermission {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  type: LeavePermissionType;
+  note?: string;
+  approvedBy: string;
+  createdAt: number;
+  termKey?: string;
+}
+
 export interface AttendanceRecord {
   id: string;
   date: string; // YYYY-MM-DD
@@ -261,6 +274,10 @@ export interface AttendanceRecord {
   absentReasons?: Record<string, string>; // Maps studentId to reason
   markedBy: string; // Teacher name/ID
   markedAt: number; // Timestamp
+  isAdditional?: boolean; // If this was a substitution or extra class
+  substitutedSubjectId?: string; // The ID of the subject this replaced (if any)
+  principalApprovedAbsences?: string[]; // Deprecated: use granularPermissions
+  granularPermissions?: Record<string, LeavePermissionType>; // Maps studentId to type
   isSpecialDay?: boolean;
   specialDayType?: 'Leave' | 'Program' | 'Other';
   specialDayNote?: string;

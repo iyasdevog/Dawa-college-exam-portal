@@ -17,42 +17,101 @@ const StudentAttendanceRow = memo(({
     isPresent, 
     onToggle,
     reason,
-    onReasonChange
+    onReasonChange,
+    isAuthorized,
+    onToggleAuthorization,
+    onCyclePermission,
+    permissionType
 }: { 
     student: StudentRecord, 
     isPresent: boolean, 
     onToggle: (id: string) => void,
     reason: string,
-    onReasonChange: (id: string, reason: string) => void
+    onReasonChange: (id: string, reason: string) => void,
+    isAuthorized?: boolean,
+    onToggleAuthorization?: (id: string) => void,
+    onCyclePermission?: (id: string) => void,
+    permissionType?: 'Principal' | 'Medical' | 'Other'
 }) => (
-    <div className="border-b border-slate-50">
+    <div className="border-b border-slate-50 last:border-0">
         <div
             onClick={() => onToggle(student.id)}
-            className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer active:bg-slate-100 touch-pan-y"
+            className="flex items-center justify-between p-5 hover:bg-slate-50/50 transition-all cursor-pointer active:bg-slate-100/80 touch-pan-y"
         >
-            <div className="flex-1 select-none">
-                <div className="font-bold text-slate-900 text-base">{student.name}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5 font-bold">
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded mr-2 uppercase tracking-tighter">{student.className}</span>
-                    {student.adNo}
+            <div className="flex-1 select-none pr-4">
+                <div className="flex items-center flex-wrap gap-2">
+                    <div className="font-black text-slate-800 text-lg leading-tight">{student.name}</div>
+                    {permissionType === 'Principal' && (
+                        <span className={`bg-emerald-600 text-white text-[7px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in-75 duration-300 flex items-center gap-1 ${isPresent ? 'opacity-40 grayscale-[0.5]' : ''}`}>
+                            <i className="fa-solid fa-crown"></i>
+                            Principal Permission
+                        </span>
+                    )}
+                    {permissionType === 'Medical' && (
+                        <span className={`bg-amber-500 text-white text-[7px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in-75 duration-300 flex items-center gap-1 ${isPresent ? 'opacity-40 grayscale-[0.5]' : ''}`}>
+                            <i className="fa-solid fa-house-medical"></i>
+                            Medical Permission
+                        </span>
+                    )}
+                    {permissionType === 'Other' && (
+                        <span className={`bg-indigo-500 text-white text-[7px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in-75 duration-300 flex items-center gap-1 ${isPresent ? 'opacity-40 grayscale-[0.5]' : ''}`}>
+                            <i className="fa-solid fa-file-circle-check"></i>
+                            Other Permission
+                        </span>
+                    )}
+                    {(isAuthorized && !permissionType) && (
+                        <span className="bg-blue-600 text-white text-[7px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in-75 duration-300 flex items-center gap-1">
+                            <i className="fa-solid fa-shield-check"></i>
+                            Authorized
+                        </span>
+                    )}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1 font-bold flex items-center gap-2">
+                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase tracking-tighter border border-slate-200/50">{student.className}</span>
+                    <span className="opacity-50">#{student.adNo}</span>
                 </div>
             </div>
-            <div className={`w-14 h-7 rounded-full relative transition-colors ${isPresent ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow-sm ${isPresent ? 'right-1' : 'left-1'}`}></div>
+            <div className={`w-16 h-8 rounded-full relative transition-all duration-300 shadow-inner flex-shrink-0 ${isPresent ? 'bg-emerald-500 shadow-emerald-600/20' : 'bg-slate-200 shadow-slate-300/50'}`}>
+                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-300 shadow-xl flex items-center justify-center ${isPresent ? 'right-1' : 'left-1'}`}>
+                    <i className={`fa-solid ${isPresent ? 'fa-check text-emerald-500' : 'fa-xmark text-slate-300'} text-[10px]`}></i>
+                </div>
             </div>
         </div>
         {!isPresent && (
-            <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="relative">
-                    <i className="fa-solid fa-comment-dots absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
-                    <input
-                        type="text"
-                        placeholder="Add reason for absence (optional)"
-                        value={reason}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => onReasonChange(student.id, e.target.value)}
-                        className="w-full text-xs pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-rose-200 outline-none font-bold text-slate-600 placeholder:text-slate-400 transition-all"
-                    />
+            <div className="px-5 pb-5 animate-in fade-in slide-in-from-top-3 duration-300">
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1 group">
+                        <i className="fa-solid fa-comment-dots absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300 text-xs group-focus-within:text-rose-400 transition-colors"></i>
+                        <input
+                            type="text"
+                            placeholder="Reason for absence..."
+                            value={reason}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => onReasonChange(student.id, e.target.value)}
+                            className="w-full text-sm pl-10 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:bg-white focus:border-rose-100 focus:ring-4 focus:ring-rose-50 outline-none font-bold text-slate-600 placeholder:text-slate-300 transition-all shadow-sm"
+                        />
+                    </div>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onCyclePermission) onCyclePermission(student.id);
+                            else onToggleAuthorization?.(student.id);
+                        }}
+                        className={`px-6 py-3 rounded-2xl border-2 flex items-center justify-center gap-3 transition-all active:scale-95 ${
+                            isAuthorized || permissionType 
+                                ? (permissionType === 'Principal' ? 'bg-emerald-600 border-emerald-600 shadow-emerald-200' : 
+                                   permissionType === 'Medical' ? 'bg-amber-500 border-amber-500 shadow-amber-200' : 
+                                   permissionType === 'Other' ? 'bg-indigo-600 border-indigo-600 shadow-indigo-200' : 
+                                   'bg-blue-600 border-blue-600 shadow-blue-200') + ' text-white shadow-lg'
+                                : 'bg-white border-slate-100 text-slate-400 hover:border-blue-200 hover:text-blue-500 hover:bg-blue-50/30'
+                        }`}
+                        title="Toggle/Cycle Permission"
+                    >
+                        <i className={`fa-solid ${isAuthorized || permissionType ? 'fa-shield-check' : 'fa-shield'} text-sm`}></i>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
+                            {permissionType || (isAuthorized ? 'Auth' : 'Permission')}
+                        </span>
+                    </button>
                 </div>
             </div>
         )}
@@ -79,11 +138,24 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
 
     const [allTimetables, setAllTimetables] = useState<TimetableEntry[]>([]);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
+    
+    const [isAdditional, setIsAdditional] = useState(false);
+    const [substitutedSubjectId, setSubstitutedSubjectId] = useState('');
+    const [showAllSubjects, setShowAllSubjects] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [authorizedAbsences, setAuthorizedAbsences] = useState<Set<string>>(new Set());
+    const [leavePermissions, setLeavePermissions] = useState<Record<string, 'Principal' | 'Medical' | 'Other'>>({});
+    const [showLeaveModal, setShowLeaveModal] = useState(false);
+    const [leaveStudentId, setLeaveStudentId] = useState('');
+    const [leaveType, setLeaveType] = useState<'Principal' | 'Medical' | 'Other'>('Principal');
+    const [leaveDate, setLeaveDate] = useState(new Date().toISOString().split('T')[0]);
 
     const classes = useMemo(() => [...new Set(students.map(s => s.className))], [students]);
-    const filteredSubjects = useMemo(() => subjects.filter(s => s.targetClasses.includes(selectedClass)), [subjects, selectedClass]);
+    const filteredSubjects = useMemo(() => {
+        if (showAllSubjects) return subjects;
+        return subjects.filter(s => s.targetClasses.includes(selectedClass));
+    }, [subjects, selectedClass, showAllSubjects]);
     
     const subjectsMap = useMemo(() => {
         const map = new Map<string, SubjectConfig>();
@@ -167,24 +239,44 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
             const record = records.find(r => r.subjectId === effectiveSubjectId);
             const initialAttendance: Record<string, boolean> = {};
             const initialReasons: Record<string, string> = {};
+            const authorizedSet = new Set<string>();
 
             if (record) {
-                console.log(`[Attendance] Found specific record for subject: ${effectiveSubjectId}`, record);
-                record.presentStudentIds.forEach(id => initialAttendance[id] = true);
                 record.absentStudentIds.forEach(id => {
                     initialAttendance[id] = false;
                     if (record.absentReasons?.[id]) initialReasons[id] = record.absentReasons[id];
+                    if (record.principalApprovedAbsences?.includes(id)) authorizedSet.add(id);
                 });
+                setAuthorizedAbsences(authorizedSet);
             } else {
                 console.log(`[Attendance] No record for subject: ${effectiveSubjectId}. Defaulting to all present.`);
                 filteredStudents.forEach(s => initialAttendance[s.id] = true);
+                setAuthorizedAbsences(new Set());
             }
+            const permissions = await dataService.getLeavePermissions(selectedDate, activeTerm);
+            const permMap: Record<string, any> = {};
+            permissions.forEach(p => {
+                if (p.className === selectedClass) {
+                    permMap[p.studentId] = p.type;
+                }
+            });
+            setLeavePermissions(permMap);
+
+            // AUTO-MARK: If record is new (no record found), mark students with permissions as absent
+            if (!record) {
+                Object.keys(permMap).forEach(studentId => {
+                    initialAttendance[studentId] = false;
+                    authorizedSet.add(studentId);
+                });
+            }
+
             setAttendanceData(initialAttendance);
             setAbsentReasons(initialReasons);
+            setAuthorizedAbsences(authorizedSet);
         } catch (error) {
             console.error('[Attendance] Load failed:', error);
         }
-    }, [selectedClass, selectedSubject, selectedSession, selectedDate, filteredStudents]);
+    }, [selectedClass, selectedSubject, selectedSession, selectedDate, filteredStudents, activeTerm]);
 
     const loadRecentHistory = useCallback(async () => {
         try {
@@ -239,17 +331,69 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const handleToggleAttendance = useCallback((studentId: string) => {
         setAttendanceData(prev => {
             const newState = { ...prev, [studentId]: !prev[studentId] };
-            // Clear reason if student becomes present
+            // Clear reason and authorization if student becomes present
             if (newState[studentId]) {
                 setAbsentReasons(r => {
                     const next = { ...r };
                     delete next[studentId];
                     return next;
                 });
+                setAuthorizedAbsences(prevSet => {
+                    const next = new Set(prevSet);
+                    next.delete(studentId);
+                    return next;
+                });
             }
             return newState;
         });
     }, []);
+
+    const handleToggleAuthorization = useCallback((studentId: string) => {
+        setAuthorizedAbsences(prev => {
+            const next = new Set(prev);
+            if (next.has(studentId)) {
+                next.delete(studentId);
+                // Also clear type if toggled off
+                setLeavePermissions(perms => {
+                    const nextP = { ...perms };
+                    delete nextP[studentId];
+                    return nextP;
+                });
+            } else {
+                next.add(studentId);
+            }
+            return next;
+        });
+    }, []);
+
+    const handleCyclePermission = useCallback((studentId: string) => {
+        const types: (any)[] = [undefined, 'Principal', 'Medical', 'Other'];
+        
+        setLeavePermissions(prev => {
+            const currentType = prev[studentId];
+            const currentIndex = types.indexOf(currentType);
+            const nextType = types[(currentIndex + 1) % types.length];
+            
+            const next = { ...prev };
+            if (nextType) {
+                next[studentId] = nextType;
+                setAuthorizedAbsences(auth => {
+                    const newSet = new Set(auth);
+                    newSet.add(studentId);
+                    return newSet;
+                });
+            } else {
+                delete next[studentId];
+                setAuthorizedAbsences(auth => {
+                    const newSet = new Set(auth);
+                    newSet.delete(studentId);
+                    return newSet;
+                });
+            }
+            return next;
+        });
+    }, []);
+
 
     const handleReasonChange = useCallback((studentId: string, reason: string) => {
         setAbsentReasons(prev => ({ ...prev, [studentId]: reason }));
@@ -288,7 +432,13 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         markedBy: currentUser?.name || 'System Admin',
                         markedAt: Date.now(),
                         academicYear: currentAcademicYear,
-                        semester: currentSemester
+                        semester: currentSemester,
+                        principalApprovedAbsences: Array.from(authorizedAbsences).filter(id => data.absent.includes(id)),
+                        granularPermissions: Object.fromEntries(
+                            Array.from(authorizedAbsences)
+                                .filter(id => data.absent.includes(id))
+                                .map(id => [id, leavePermissions[id] || 'Principal'])
+                        )
                     })
                 ));
             } else {
@@ -308,14 +458,22 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                     presentStudentIds: presentIds,
                     absentStudentIds: absentIds,
                     absentReasons: recordReasons,
+                    principalApprovedAbsences: Array.from(authorizedAbsences),
+                    granularPermissions: Object.fromEntries(
+                        Array.from(authorizedAbsences).map(id => [id, leavePermissions[id] || 'Principal'])
+                    ),
                     markedBy: currentUser?.name || 'System Admin',
                     markedAt: Date.now(),
+                    isAdditional: isAdditional,
+                    substitutedSubjectId: substitutedSubjectId || undefined,
                     academicYear: currentAcademicYear,
                     semester: currentSemester
                 });
             }
             alert('Attendance saved!');
-            loadRecentHistory();
+            // Reset additional class flags after save
+            setIsAdditional(false);
+            setSubstitutedSubjectId('');
             onRefresh();
         } catch (error) {
             console.error('Attendance save error:', error);
@@ -378,6 +536,31 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
             setIsSaving(false);
         }
     }, [selectedSubject, selectedSession, selectedClass, selectedDate, specialDayType, specialDayNote, filteredStudents, currentUser, currentAcademicYear, currentSemester, onRefresh]);
+
+    const handleSavePermission = async () => {
+        if (!leaveStudentId || !leaveDate) return;
+        setIsSaving(true);
+        try {
+            const student = students.find(s => s.id === leaveStudentId);
+            await dataService.saveLeavePermission({
+                studentId: leaveStudentId,
+                studentName: student?.name || 'Unknown',
+                className: student?.className || 'Unknown',
+                date: leaveDate,
+                type: leaveType,
+                termKey: activeTerm
+            });
+            alert('Leave permission saved successfully!');
+            setShowLeaveModal(false);
+            setLeaveStudentId('');
+            loadAttendance();
+        } catch (error) {
+            alert('Failed to save leave permission.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
 
     return (
         <div className="space-y-6">
@@ -553,49 +736,57 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                     </div>
                 )}
             </div>
-            <div className="flex flex-col md:flex-row md:items-end gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                <div className="flex-1">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Date</label>
                     <input
                         type="date"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold text-slate-700"
                     />
                 </div>
-                <div className="flex-1">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Class</label>
+                <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Class</label>
                     <select
                         value={selectedClass}
                         onChange={(e) => setSelectedClass(e.target.value)}
-                        className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold text-slate-700"
                     >
                         <option value="">Select Class</option>
                         {classes.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
                 {specialMode !== 'day' && (
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+                    <div className="relative">
+                        <div className="flex justify-between items-center mb-2 px-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Subject</label>
+                            <button 
+                                onClick={() => setShowAllSubjects(!showAllSubjects)}
+                                className={`text-[8px] font-black uppercase tracking-tight px-2 py-0.5 rounded-md transition-all ${showAllSubjects ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}
+                            >
+                                {showAllSubjects ? 'My Classes' : 'All Subjects'}
+                            </button>
+                        </div>
                         <select
                             value={selectedSubject}
                             onChange={(e) => setSelectedSubject(e.target.value)}
-                            disabled={!selectedClass}
-                            className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-100"
+                            disabled={!selectedClass && !showAllSubjects}
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-300"
                         >
                             <option value="">Select Subject</option>
-                            {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name} {showAllSubjects ? `(${s.targetClasses.join(', ')})` : ''}</option>)}
                         </select>
                     </div>
                 )}
                 {specialMode !== 'day' && (
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Session</label>
+                    <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Session</label>
                         <select
                             value={selectedSession}
                             onChange={(e) => setSelectedSession(e.target.value)}
                             disabled={!selectedClass || !selectedSubject}
-                            className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-100"
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-300"
                         >
                             <option value="1">1st Session</option>
                             <option value="2">2nd Session</option>
@@ -605,25 +796,87 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         </select>
                     </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:flex-initial">
-                    {(!currentUser || currentUser.role === 'admin') && (
-                        <button
-                            onClick={() => setSpecialMode(specialMode === 'day' ? 'none' : 'day')}
-                            className={`px-4 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${specialMode === 'day' ? 'bg-slate-200 text-slate-800' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
-                        >
-                            <i className={`fa-solid ${specialMode === 'day' ? 'fa-xmark' : 'fa-calendar-day'} mr-2`}></i>
-                            {specialMode === 'day' ? 'Cancel' : 'Mark Special Day'}
-                        </button>
-                    )}
-                    <button
-                        onClick={() => setSpecialMode(specialMode === 'period' ? 'none' : 'period')}
-                        className={`px-4 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${specialMode === 'period' ? 'bg-slate-200 text-slate-800' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}`}
-                    >
-                        <i className={`fa-solid ${specialMode === 'period' ? 'fa-xmark' : 'fa-stopwatch'} mr-2`}></i>
-                        {specialMode === 'period' ? 'Cancel' : 'Mark Special Period'}
-                    </button>
-                </div>
             </div>
+
+            <div className="flex flex-wrap gap-2 px-1">
+                {(!currentUser || currentUser.role === 'admin') && (
+                    <button
+                        onClick={() => setSpecialMode(specialMode === 'day' ? 'none' : 'day')}
+                        className={`px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center gap-2 shadow-sm ${specialMode === 'day' ? 'bg-slate-800 text-white shadow-lg' : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200/50'}`}
+                    >
+                        <i className={`fa-solid ${specialMode === 'day' ? 'fa-xmark' : 'fa-calendar-day'} text-xs`}></i>
+                        {specialMode === 'day' ? 'Cancel' : 'Mark Special Day'}
+                    </button>
+                )}
+                <button
+                    onClick={() => setSpecialMode(specialMode === 'period' ? 'none' : 'period')}
+                    className={`px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center gap-2 shadow-sm ${specialMode === 'period' ? 'bg-slate-800 text-white shadow-lg' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-200/50'}`}
+                >
+                    <i className={`fa-solid ${specialMode === 'period' ? 'fa-xmark' : 'fa-stopwatch'} text-xs`}></i>
+                    {specialMode === 'period' ? 'Cancel' : 'Mark Special Period'}
+                </button>
+                {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'principal') && (
+                    <button
+                        onClick={() => setShowLeaveModal(true)}
+                        className="px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] bg-emerald-600 text-white hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200 border border-emerald-500"
+                    >
+                        <i className="fa-solid fa-file-signature text-xs"></i>
+                        Leave Permission
+                    </button>
+                )}
+            </div>
+
+
+            {/* Substitution / Additional Class Banner */}
+            {selectedClass && selectedSubject && (
+                <div className={`p-5 rounded-2xl border transition-all animate-in slide-in-from-left-4 ${isAdditional ? 'bg-indigo-50 border-indigo-200 shadow-md' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-all ${isAdditional ? 'bg-indigo-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500'}`}>
+                                <i className="fa-solid fa-person-chalkboard"></i>
+                            </div>
+                            <div>
+                                <h4 className={`text-sm font-black tracking-tight ${isAdditional ? 'text-indigo-900' : 'text-slate-900'}`}>
+                                    Faculty Takeover / Substitution
+                                </h4>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                    Is this an additional or substitution class?
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className="relative">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={isAdditional}
+                                        onChange={(e) => setIsAdditional(e.target.checked)}
+                                        className="sr-only"
+                                    />
+                                    <div className={`w-10 h-5 rounded-full transition-colors ${isAdditional ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
+                                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${isAdditional ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                </div>
+                                <span className={`text-xs font-black uppercase tracking-widest ${isAdditional ? 'text-indigo-600' : 'text-slate-400'}`}>Mark as Additional</span>
+                            </label>
+
+                            {isAdditional && (
+                                <div className="animate-in fade-in zoom-in-95 duration-200">
+                                    <select
+                                        value={substitutedSubjectId}
+                                        onChange={(e) => setSubstitutedSubjectId(e.target.value)}
+                                        className="bg-white border border-indigo-200 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Replaces (Optional)</option>
+                                        {subjects.filter(s => s.targetClasses.includes(selectedClass) && s.id !== selectedSubject).map(s => (
+                                            <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {specialMode !== 'none' ? (
                 <div className={`${specialMode === 'day' ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'} p-6 rounded-2xl border shadow-sm animate-in fade-in slide-in-from-top-4`}>
@@ -708,6 +961,10 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                 onToggle={handleToggleAttendance}
                                 reason={absentReasons[student.id] || ''}
                                 onReasonChange={handleReasonChange}
+                                isAuthorized={authorizedAbsences.has(student.id)}
+                                onToggleAuthorization={handleToggleAuthorization}
+                                onCyclePermission={handleCyclePermission}
+                                permissionType={leavePermissions[student.id]}
                             />
                         ))}
                     </div>
@@ -725,6 +982,93 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center">
                     <i className="fa-solid fa-clipboard-user text-4xl text-slate-300 mb-4"></i>
                     <p className="text-slate-500">Please select a class and subject to mark attendance.</p>
+                </div>
+            )}
+
+            {/* Leave Permission Modal */}
+            {showLeaveModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-500 border border-slate-100">
+                        <div className="p-8 pb-4 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-black text-slate-900 tracking-tight">Pre-authorize Absence</h3>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Grant Principal/Medical Permission</p>
+                            </div>
+                            <button onClick={() => setShowLeaveModal(false)} className="w-10 h-10 rounded-full bg-slate-50 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
+                                <i className="fa-solid fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div className="p-8 pt-4 space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Select Student</label>
+                                <div className="relative group">
+                                    <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors"></i>
+                                    <select
+                                        value={leaveStudentId}
+                                        onChange={(e) => setLeaveStudentId(e.target.value)}
+                                        className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-100 focus:ring-4 focus:ring-emerald-50 font-bold text-slate-700 appearance-none transition-all shadow-sm"
+                                    >
+                                        <option value="">Select a student...</option>
+                                        {students.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
+                                            <option key={s.id} value={s.id}>{s.name} ({s.className})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Leave Date</label>
+                                    <input 
+                                        type="date"
+                                        value={leaveDate}
+                                        onChange={(e) => setLeaveDate(e.target.value)}
+                                        className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-100 focus:ring-4 focus:ring-emerald-50 font-bold text-slate-700 transition-all shadow-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Permission Type</label>
+                                    <select
+                                        value={leaveType}
+                                        onChange={(e) => setLeaveType(e.target.value as any)}
+                                        className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-100 focus:ring-4 focus:ring-emerald-50 font-bold text-slate-700 appearance-none transition-all shadow-sm"
+                                    >
+                                        <option value="Principal">Principal (Green)</option>
+                                        <option value="Medical">Medical (Orange)</option>
+                                        <option value="Other">Other (Blue/White)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 flex gap-3">
+                                <button
+                                    onClick={() => setShowLeaveModal(false)}
+                                    className="flex-1 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSavePermission}
+                                    disabled={!leaveStudentId || isSaving}
+                                    className="flex-[2] py-4 bg-slate-900 text-white font-black uppercase tracking-widest rounded-2xl shadow-xl hover:bg-slate-800 disabled:opacity-50 disabled:grayscale transition-all transform active:scale-95"
+                                >
+                                    {isSaving ? 'Processing...' : 'Grant Permission'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50/50 p-6 border-t border-slate-100">
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+                                    <i className="fa-solid fa-circle-info"></i>
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-tight">
+                                    Once granted, this student will be automatically highlighted in the attendance marking sheet with the selected color code for the specified date.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -13,7 +13,9 @@ import {
 import { BaseDataService } from './BaseDataService';
 import { 
     AttendanceRecord, 
-    AcademicCalendarEntry
+    AcademicCalendarEntry,
+    LeavePermission,
+    LeavePermissionType
 } from '../../../domain/entities/types';
 import { AcademicService } from './AcademicService';
 
@@ -39,6 +41,10 @@ import { AcademicService } from './AcademicService';
  */
 
 export class AttendanceService extends BaseDataService {
+    private leavePermissionsCollection = 'leave_permissions';
+    private recordsCache: Map<string, AttendanceRecord[]> = new Map();
+    private cacheExpiry = 1000 * 60 * 5; // 5 minutes cache
+
     constructor(private academicService: AcademicService) {
         super();
     }
@@ -126,6 +132,9 @@ export class AttendanceService extends BaseDataService {
                                 absentReasons: pData.absentReasons || {},
                                 markedBy: pData.markedBy || '',
                                 markedAt: pData.markedAt || 0,
+                                isAdditional: pData.isAdditional || false,
+                                substitutedSubjectId: pData.substitutedSubjectId || null,
+                                principalApprovedAbsences: pData.principalApprovedAbsences || [],
                                 academicYear: data.academicYear,
                                 semester: data.semester
                             });
@@ -298,6 +307,9 @@ export class AttendanceService extends BaseDataService {
                 absentReasons: periodData.absentReasons || {},
                 markedBy: periodData.markedBy || '',
                 markedAt: periodData.markedAt || 0,
+                isAdditional: periodData.isAdditional || false,
+                substitutedSubjectId: periodData.substitutedSubjectId || null,
+                principalApprovedAbsences: periodData.principalApprovedAbsences || [],
                 academicYear: data.academicYear,
                 semester: data.semester
             }));
@@ -342,9 +354,16 @@ export class AttendanceService extends BaseDataService {
                     absentStudentIds: record.absentStudentIds,
                     absentReasons: record.absentReasons || {},
                     markedBy: record.markedBy,
-                    markedAt: record.markedAt
+                    markedAt: record.markedAt,
+                    isAdditional: record.isAdditional || false,
+                    substitutedSubjectId: record.substitutedSubjectId || null,
+                    principalApprovedAbsences: record.principalApprovedAbsences || [],
+                    granularPermissions: record.granularPermissions || {}
                 }
             });
+
+            // Invalidate cache
+            this.recordsCache.delete(termKey);
 
             return docId;
         } catch (error) {
@@ -360,6 +379,14 @@ export class AttendanceService extends BaseDataService {
     public async getAllAttendanceRecords(termKey?: string): Promise<AttendanceRecord[]> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();
+            
+            // Return cached data if valid
+            const cached = this.recordsCache.get(activeTerm);
+            if (cached && (Date.now() - (this as any).lastFetchTime < this.cacheExpiry)) {
+                console.log(`[AttendanceService] Returning cached records for ${activeTerm}`);
+                return cached;
+            }
+
             const q = query(
                 collection(this.db!, this.attendanceCollection),
                 where('termKey', '==', activeTerm)
@@ -383,13 +410,25 @@ export class AttendanceService extends BaseDataService {
                         absentReasons: periodData.absentReasons || {},
                         markedBy: periodData.markedBy || '',
                         markedAt: periodData.markedAt || 0,
+                        isAdditional: periodData.isAdditional || false,
+                        substitutedSubjectId: periodData.substitutedSubjectId || null,
+                        principalApprovedAbsences: periodData.principalApprovedAbsences || [],
+                        granularPermissions: periodData.granularPermissions || {},
                         academicYear: data.academicYear,
                         semester: data.semester
                     });
                 });
             });
             
-            return allRecords.sort((a, b) => b.markedAt - a.markedAt);
+            const results = allRecords.sort((a, b) => {
+                const dateCompare = b.date.localeCompare(a.date);
+                if (dateCompare !== 0) return dateCompare;
+                return (b.markedAt || 0) - (a.markedAt || 0);
+            });
+
+            this.recordsCache.set(activeTerm, results);
+            (this as any).lastFetchTime = Date.now();
+            return results;
         } catch (error) {
             console.error('Error fetching all attendance records:', error);
             return [];
@@ -410,6 +449,49 @@ export class AttendanceService extends BaseDataService {
             return docRef.id;
         } catch (error) {
             console.error('Error marking special day:', error);
+            throw error;
+        }
+    }
+    /**
+     * Get pre-logged leave permissions for a specific date.
+     */
+    public async getLeavePermissions(date: string, termKey?: string): Promise<LeavePermission[]> {
+        try {
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const q = query(
+                collection(this.db!, this.leavePermissionsCollection),
+                where('date', '==', date),
+                where('termKey', '==', activeTerm)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeavePermission));
+        } catch (error) {
+            console.error('Error fetching leave permissions:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Save a new leave permission (Principal/Medical/Other).
+     */
+    public async saveLeavePermission(permission: Omit<LeavePermission, 'id'>): Promise<string> {
+        try {
+            const docRef = await addDoc(collection(this.db!, this.leavePermissionsCollection), this.sanitize({
+                ...permission,
+                createdAt: Date.now()
+            }));
+            return docRef.id;
+        } catch (error) {
+            console.error('Error saving leave permission:', error);
+            throw error;
+        }
+    }
+
+    public async deleteLeavePermission(id: string): Promise<void> {
+        try {
+            await deleteDoc(doc(this.db!, this.leavePermissionsCollection, id));
+        } catch (error) {
+            console.error('Error deleting leave permission:', error);
             throw error;
         }
     }

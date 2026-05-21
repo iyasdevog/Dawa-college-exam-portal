@@ -134,12 +134,20 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
 
     // Extract watchlist data
     const averageWatchlist = useMemo(() => 
-        aggregates.filter(a => a.average < 75).sort((a, b) => a.average - b.average), 
-    [aggregates]);
+        aggregates
+            .filter(a => {
+                const matchesClass = selectedClass === 'All' || a.student.className === selectedClass;
+                return matchesClass && a.average < 75;
+            })
+            .sort((a, b) => a.average - b.average), 
+    [aggregates, selectedClass]);
 
     const subjectShortages = useMemo(() => {
         const list: Array<{ studentName: string; subjectName: string; percentage: number; className: string }> = [];
         aggregates.forEach(a => {
+            const matchesClass = selectedClass === 'All' || a.student.className === selectedClass;
+            if (!matchesClass) return;
+
             a.breakdown.forEach(b => {
                 if (b.isShortage) {
                     list.push({
@@ -152,11 +160,37 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
             });
         });
         return list.sort((a, b) => a.percentage - b.percentage);
-    }, [aggregates]);
+    }, [aggregates, selectedClass]);
 
     const viewingAggregate = useMemo(() => 
         aggregates.find(a => a.student.id === selectedStudentId), 
     [aggregates, selectedStudentId]);
+
+    // Faculty Takeover Stats (Substitution Report)
+    const takeoverStats = useMemo(() => {
+        const stats: Array<{ facultyName: string; className: string; count: number }> = [];
+        const map: Record<string, Record<string, number>> = {};
+
+        attendanceRecords.forEach(record => {
+            if (record.isAdditional) {
+                const subjectId = record.subjectId.split('_')[0];
+                const subject = subjects.find(s => s.id === subjectId);
+                const faculty = subject?.facultyName || record.markedBy || 'Unknown Faculty';
+                
+                if (!map[faculty]) map[faculty] = {};
+                if (!map[faculty][record.className]) map[faculty][record.className] = 0;
+                map[faculty][record.className]++;
+            }
+        });
+
+        Object.entries(map).forEach(([faculty, classes]) => {
+            Object.entries(classes).forEach(([className, count]) => {
+                stats.push({ facultyName: faculty, className, count });
+            });
+        });
+
+        return stats.sort((a, b) => b.count - a.count);
+    }, [attendanceRecords, subjects]);
 
     if (isLoading) {
         return (
@@ -168,44 +202,59 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
     }
 
     return (
-        <div className="flex flex-col lg:flex-row gap-8">
-            {/* Main Stats Summary Table */}
-            <div className="flex-1 space-y-6">
-                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div>
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight">Active Student Pulse</h2>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Aggregate Attendance Monitoring</p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                            <div className="relative flex-1 md:w-48">
-                                <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                                <input 
-                                    type="text" 
-                                    placeholder="Search student..." 
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-slate-900/10 outline-none transition-all"
-                                />
-                            </div>
-                            <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value as any)}
-                                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none"
-                            >
-                                <option value="attendance-asc">Attendance (Low First)</option>
-                                <option value="attendance-desc">Attendance (High First)</option>
-                                <option value="adno-asc">Admission Number</option>
-                            </select>
-                            <select
-                                value={selectedClass}
-                                onChange={(e) => setSelectedClass(e.target.value)}
-                                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none"
-                            >
-                                {classes.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
+        <div className="space-y-8">
+            {/* Global Filters Header */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+                <div>
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Attendance Pulse</h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5 whitespace-nowrap">Real-time Statistical Monitoring</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64">
+                        <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input 
+                            type="text" 
+                            placeholder="Search student name or admit no..." 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-slate-900/10 outline-none transition-all"
+                        />
                     </div>
+                    <div className="flex items-center gap-3">
+                        <select
+                            value={selectedClass}
+                            onChange={(e) => setSelectedClass(e.target.value)}
+                            className="px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-slate-900/10 transition-all cursor-pointer min-w-[120px]"
+                        >
+                            {classes.map(c => <option key={c} value={c}>{c === 'All' ? 'All Classes' : c}</option>)}
+                        </select>
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as any)}
+                            className="px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-slate-900/10 transition-all cursor-pointer"
+                        >
+                            <option value="attendance-asc">Low Attendance</option>
+                            <option value="attendance-desc">High Attendance</option>
+                            <option value="adno-asc">Admit ID</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-8">
+                {/* Main Stats Summary Table */}
+                <div className="flex-1 space-y-6">
+                    <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-between mb-6 px-2">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Attendance Roster
+                            </h3>
+                            <span className="text-[10px] font-black text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                                {filteredAggregates.length} Students Listed
+                            </span>
+                        </div>
+
 
                     <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
                         <table className="w-full text-left border-collapse">
@@ -284,7 +333,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                                     <i className="fa-solid fa-percent"></i>
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-black tracking-tight">Average Risk</h3>
+                                    <h3 className="text-lg font-black tracking-tight">Average Risk {selectedClass !== 'All' ? `(${selectedClass})` : ''}</h3>
                                     <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Overall &lt; 75%</p>
                                 </div>
                             </div>
@@ -316,7 +365,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-black text-rose-900 uppercase tracking-widest flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                                Subject Shortages
+                                Subject Shortages {selectedClass !== 'All' ? `(${selectedClass})` : ''}
                             </h3>
                             <span className="text-xs font-black text-rose-400 uppercase tracking-widest">{subjectShortages.length} Cases</span>
                         </div>
@@ -339,6 +388,40 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                             )}
                         </div>
                     </div>
+                </div>
+
+                {/* 3. Faculty Takeover Report (New) */}
+                <div className="bg-indigo-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+                    <div className="relative z-10 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white text-lg border border-white/20">
+                                    <i className="fa-solid fa-person-chalkboard"></i>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black tracking-tight uppercase tracking-widest">Faculty Takeovers</h3>
+                                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Additional Classes Marked</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto no-scrollbar">
+                            {takeoverStats.length === 0 ? (
+                                <div className="py-8 text-center text-white/30 font-bold text-[10px] border border-white/5 rounded-[2rem] bg-white/5 uppercase tracking-widest">No takeover sessions recorded.</div>
+                            ) : (
+                                takeoverStats.map((item, idx) => (
+                                    <div key={idx} className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10 flex justify-between items-center group/item hover:bg-white/20 transition-all">
+                                        <div className="min-w-0 pr-2">
+                                            <div className="font-black text-[11px] leading-tight text-white/90">{item.facultyName}</div>
+                                            <div className="text-[8px] font-bold text-indigo-400 uppercase mt-0.5">{item.className}</div>
+                                        </div>
+                                        <div className="px-3 py-1 bg-indigo-500 rounded-lg text-xs font-black text-white shrink-0 shadow-lg">{item.count}</div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                    <i className="fa-solid fa-chalkboard-user absolute -right-10 -bottom-10 text-[10rem] text-white/5 pointer-events-none group-hover:scale-110 transition-transform"></i>
                 </div>
             </div>
 
