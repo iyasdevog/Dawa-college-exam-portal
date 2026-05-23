@@ -7,7 +7,6 @@ import { AttendanceService } from './modules/AttendanceService';
 import { AdministrativeService } from './modules/AdministrativeService';
 import { CurriculumService } from './modules/CurriculumService';
 import { SemesterMigrationService } from './modules/SemesterMigrationService';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 import { 
     StudentRecord, 
@@ -20,7 +19,6 @@ import {
     ApplicationStatus,
     PerformanceLevel,
     SubjectMarks,
-    SpecialDay,
     ClassReleaseSettings,
     CurriculumEntry
 } from '../../domain/entities/types';
@@ -48,8 +46,8 @@ export class DataService extends BaseDataService {
     }
 
     // --- Curriculum Domain ---
-    async getAllCurriculum(): Promise<CurriculumEntry[]> {
-        return this.curriculumService.getAllCurriculum();
+    async getAllCurriculum(termKey?: string): Promise<CurriculumEntry[]> {
+        return this.curriculumService.getAllCurriculum(termKey);
     }
 
     async addCurriculumEntry(entry: Omit<CurriculumEntry, 'id'>): Promise<string> {
@@ -145,78 +143,7 @@ export class DataService extends BaseDataService {
 
         // Auto-sync Curriculum when Subject Details are updated
         if (updates.details) {
-            try {
-                let subjectConfigName = updates.name || '';
-                let subjectType = updates.subjectType || 'general';
-                if (!subjectConfigName) {
-                    const allSubs = await this.getAllSubjects();
-                    const sub = allSubs.find(s => s.id === id);
-                    if (sub) {
-                        subjectConfigName = sub.name;
-                        subjectType = sub.subjectType;
-                    }
-                }
-
-                // Infer curriculum stage & stream
-                const stageStr = (updates.details.stage || '').toLowerCase();
-                let curStage: 'Foundational' | 'Undergraduate' | 'Post Graduate' = 'Foundational';
-                if (stageStr.includes('undergraduate')) curStage = 'Undergraduate';
-                else if (stageStr.includes('post')) curStage = 'Post Graduate';
-
-                let stream: '3-Year' | '5-Year' | 'None' = 'None';
-                const semText = String(updates.details.semester || '').trim();
-                const semNum = parseInt(semText) || 1;
-
-                if (curStage === 'Foundational') {
-                    stream = '3-Year';
-                    if (stageStr.includes('5') || semText.includes('5') || ['7','8','9','10'].includes(semText)) {
-                        stream = '5-Year';
-                    }
-                }
-
-                // Format curriculum portions from course units
-                let portionsStr = (updates.details.courseContent || [])
-                    .map(c => `Unit ${c.unit}: ${c.description || ''}`.trim())
-                    .filter(c => c !== 'Unit :')
-                    .join('\n\n');
-                
-                if (!portionsStr) {
-                    portionsStr = updates.details.summaryAndJustification || 'No syllabus available.';
-                }
-
-                const termKey = this.getCurrentTermKey();
-                const [targetYear, targetSemester] = termKey.split('-').length === 3 
-                    ? [`${termKey.split('-')[0]}-${termKey.split('-')[1]}`, termKey.split('-')[2]]
-                    : [termKey.split('-')[0], termKey.split('-')[1]];
-
-                const curriculumData = {
-                    stage: curStage,
-                    stream: stream,
-                    semester: semNum,
-                    subjectCode: id, // Typically acts as code
-                    subjectName: subjectConfigName || updates.details.courseName || 'Unknown Subject',
-                    subjectType: subjectType,
-                    learningPeriod: updates.details.totalHours || 'TBD',
-                    portions: portionsStr.trim(),
-                    academicYear: targetYear,
-                    termKey: termKey
-                };
-
-                const curricula = await this.getAllCurriculum();
-                // Match by name AND term to allow historical versions of the same subject
-                const existing = curricula.find(c => 
-                    (c.subjectCode === id) || 
-                    (c.subjectName === curriculumData.subjectName && (c.termKey === termKey || c.academicYear === targetYear))
-                );
-
-                if (existing) {
-                    await this.updateCurriculumEntry(existing.id, curriculumData);
-                } else {
-                    await this.addCurriculumEntry(curriculumData);
-                }
-            } catch (err) {
-                console.error("Auto Sync Curriculum Error:", err);
-            }
+            await this.curriculumService.syncSubjectToCurriculum(id, updates);
         }
     }
 
@@ -341,54 +268,14 @@ export class DataService extends BaseDataService {
     public async normalizeAllFacultyNames(): Promise<number> {
         try {
             const count = await this.academicService.normalizeAllFacultyNames();
-            // Self-heal: ensure active classes exist in customClasses if they were stranded
+            // Self-heal: ensure active classes exist in customClasses
             const students = await this.studentService.getAllStudents('All');
             const activeCustomClasses = new Set<string>();
             students.forEach(s => {
                 if (s.currentClass && s.currentClass.match(/^[A-Z0-9- ]+$/i)) activeCustomClasses.add(s.currentClass);
             });
             
-            if (this.db) {
-                // Add them to Settings global customClasses if missing
-                const adminSettingsRef = doc(this.db, 'settings', 'global_admin_settings');
-                const adminSettingsDoc = await getDoc(adminSettingsRef);
-                
-                // ALSO fetch the orphaned 'global' doc where disabledClasses might be stuck!
-                const orphanedGlobalRef = doc(this.db, 'settings', 'global');
-                const orphanedGlobalDoc = await getDoc(orphanedGlobalRef);
-                const orphanedDisabledClasses = orphanedGlobalDoc.exists() ? (orphanedGlobalDoc.data().disabledClasses || []) : [];
-
-                if (adminSettingsDoc.exists()) {
-                    const settings = adminSettingsDoc.data();
-                    const existingCustomClasses: string[] = settings.customClasses || [];
-                    let existingDisabledClasses: string[] = settings.disabledClasses || [];
-                    
-                    let hasChanges = false;
-                    
-                    // Recover orphaned disabled classes
-                    orphanedDisabledClasses.forEach((cls: string) => {
-                        if (!existingDisabledClasses.includes(cls)) {
-                            existingDisabledClasses.push(cls);
-                            hasChanges = true;
-                        }
-                    });
-
-                    Array.from(activeCustomClasses).forEach(cls => {
-                        if (!existingCustomClasses.includes(cls) && cls !== 'All') { // Quick heuristic
-                            existingCustomClasses.push(cls);
-                            hasChanges = true;
-                        }
-                    });
-                    
-                    if (hasChanges) {
-                        await updateDoc(adminSettingsRef, {
-                            customClasses: Array.from(new Set(existingCustomClasses)),
-                            disabledClasses: Array.from(new Set(existingDisabledClasses))
-                        });
-                        console.log('Self-Healed stranded custom/disabled classes');
-                    }
-                }
-            }
+            await this.settingsService.healStrandedClasses(activeCustomClasses);
             return count;
         } catch (e) {
             console.error('Error in optimization/heal:', e);
@@ -575,7 +462,7 @@ export class DataService extends BaseDataService {
         return this.administrativeService.deleteAllSupplementaryExams();
     }
 
-    async alignDataToTerms(): Promise<{ specialDaysFixed: number; calendarFixed: number }> {
+    async alignDataToTerms(): Promise<{ specialDaysFixed: number; calendarFixed: number; leaveFixed: number; curriculumFixed: number }> {
         return this.administrativeService.alignDataToTerms();
     }
 
@@ -778,12 +665,20 @@ export class DataService extends BaseDataService {
         return this.attendanceService.getLeavePermissions(date, termKey);
     }
 
+    async getAllLeavePermissions(termKey?: string): Promise<any[]> {
+        return this.attendanceService.getAllLeavePermissions(termKey);
+    }
+
     async saveLeavePermission(permission: any): Promise<string> {
         return this.attendanceService.saveLeavePermission(permission);
     }
 
     async deleteLeavePermission(id: string): Promise<void> {
         return this.attendanceService.deleteLeavePermission(id);
+    }
+
+    subscribeToGlobalSettings(callback: (settings: GlobalSettings) => void): () => void {
+        return this.settingsService.subscribeToGlobalSettings(callback);
     }
 }
 

@@ -196,7 +196,9 @@ export class AdministrativeService extends BaseDataService {
                 this.examTimetablesCollection,
                 this.hallTicketSettingsCollection,
                 this.academicCalendarCollection,
-                this.generatorConfigsCollection
+                this.generatorConfigsCollection,
+                this.leavePermissionsCollection,
+                this.curriculumCollection
             ];
 
             for (const colName of collectionsToBackup) {
@@ -322,7 +324,8 @@ export class AdministrativeService extends BaseDataService {
                 this.clearAllData('class_configs'),
                 this.clearAllData('timetable'),
                 this.clearAllData('exam_timetable'),
-                this.clearAllData('curriculum')
+                this.clearAllData('curriculum'),
+                this.clearAllData(this.leavePermissionsCollection)
             ]);
             
             // We manually wipe settings to guarantee a fresh state without corrupting the singleton paradigm completely
@@ -389,7 +392,8 @@ export class AdministrativeService extends BaseDataService {
                 'class_configs',
                 'timetable',
                 'exam_timetable',
-                'curriculum'
+                'curriculum',
+                this.leavePermissionsCollection
             ];
 
             const genericRestored: Record<string, number> = {};
@@ -480,27 +484,28 @@ export class AdministrativeService extends BaseDataService {
             const applicationsRaw = data[this.applicationsCollection.toLowerCase()] || [];
             const supplementaryRaw = data[this.supplementaryExamsCollection.toLowerCase()] || [];
             
+            const leaveRaw = data[this.leavePermissionsCollection.toLowerCase()] || [];
+            const curriculumRaw = data[this.curriculumCollection.toLowerCase()] || [];
+            
             let studentsRestored = 0;
             let subjectsRestored = 0;
             let applicationsRestored = 0;
             let suppRestored = 0;
+            let leaveRestored = 0;
+            let curriculumRestored = 0;
             let skipped = 0;
 
             // 1. Process Subjects
             if (subjectsRaw.length > 0) {
                 await this.runBatchedOperation(subjectsRaw, (batch, sub) => {
-                    // Restore if it matches OR if we are forcing migration
                     const isSameTerm = sub.academicYear === year && sub.activeSemester === sem;
                     if (isSameTerm || forceOverwrite) {
                         const subRef = doc(this.db, this.subjectsCollection, sub.id);
                         const { id, ...subData } = sub;
-                        
-                        // Force migration if term is different
                         if (!isSameTerm) {
                             subData.academicYear = year;
                             subData.activeSemester = sem;
                         }
-                        
                         batch.set(subRef, subData, { merge: true });
                         subjectsRestored++;
                     } else {
@@ -513,15 +518,11 @@ export class AdministrativeService extends BaseDataService {
             if (studentsRaw.length > 0) {
                 await this.runBatchedOperation(studentsRaw, (batch, stud) => {
                     const studRef = doc(this.db, this.studentsCollection, stud.id);
-                    
                     const backupHistory = stud.academicHistory || {};
                     let termRecord = backupHistory[termKey];
-                    
                     if (!termRecord) {
-                        // Attempt to find ANY history if specific term is missing
                         const anyHistoryKey = Object.keys(backupHistory)[0];
                         const sourceHistory = anyHistoryKey ? backupHistory[anyHistoryKey] : null;
-                        
                         termRecord = {
                             className: sourceHistory?.className || stud.currentClass || stud.className || 'Unknown',
                             semester: sem,
@@ -532,19 +533,15 @@ export class AdministrativeService extends BaseDataService {
                             performanceLevel: sourceHistory?.performanceLevel || stud.performanceLevel || 'Pending'
                         };
                     }
-
-                    // Prepare update data with dot-notation for nested history preservation
                     const { id, academicHistory, ...topLevelData } = stud;
                     const studentUpdate: any = {
                         ...topLevelData,
                         [`academicHistory.${termKey}`]: termRecord
                     };
-
                     if (forceOverwrite) {
                         studentUpdate.currentClass = termRecord.className;
                         studentUpdate.semester = sem;
                     }
-
                     batch.set(studRef, studentUpdate, { merge: true });
                     studentsRestored++;
                 });
@@ -557,12 +554,10 @@ export class AdministrativeService extends BaseDataService {
                     if (isSameTerm || forceOverwrite) {
                         const appRef = doc(this.db, this.applicationsCollection, app.id);
                         const { id, ...appData } = app;
-                        
                         if (!isSameTerm) {
                             appData.appliedYear = year;
                             appData.appliedSemester = sem;
                         }
-                        
                         batch.set(appRef, appData, { merge: true });
                         applicationsRestored++;
                     } else {
@@ -578,11 +573,9 @@ export class AdministrativeService extends BaseDataService {
                     if (isSameTerm || forceOverwrite) {
                         const examRef = doc(this.db, this.supplementaryExamsCollection, exam.id);
                         const { id, ...examData } = exam;
-                        
                         if (!isSameTerm) {
                             examData.examTerm = termKey;
                         }
-
                         batch.set(examRef, examData, { merge: true });
                         suppRestored++;
                     } else {
@@ -591,9 +584,42 @@ export class AdministrativeService extends BaseDataService {
                 });
             }
 
+            // 5. Process Leave Permissions
+            if (leaveRaw.length > 0) {
+                await this.runBatchedOperation(leaveRaw, (batch, lp) => {
+                    const lpTerm = lp.termKey || (lp.date ? this.getCurrentTermKey() : null); // Failsafe
+                    const isSameTerm = lpTerm === termKey;
+                    if (isSameTerm || forceOverwrite) {
+                        const lpRef = doc(this.db, this.leavePermissionsCollection, lp.id);
+                        const { id, ...lpData } = lp;
+                        if (!isSameTerm) lpData.termKey = termKey;
+                        batch.set(lpRef, lpData, { merge: true });
+                        leaveRestored++;
+                    } else {
+                        skipped++;
+                    }
+                });
+            }
+
+            // 6. Process Curriculum
+            if (curriculumRaw.length > 0) {
+                await this.runBatchedOperation(curriculumRaw, (batch, curr) => {
+                    const isSameTerm = curr.termKey === termKey;
+                    if (isSameTerm || forceOverwrite) {
+                        const currRef = doc(this.db, this.curriculumCollection, curr.id);
+                        const { id, ...currData } = curr;
+                        if (!isSameTerm) currData.termKey = termKey;
+                        batch.set(currRef, currData, { merge: true });
+                        curriculumRestored++;
+                    } else {
+                        skipped++;
+                    }
+                });
+            }
+
             this.invalidateCache();
             return { 
-                processed: studentsRestored + subjectsRestored + applicationsRestored + suppRestored,
+                processed: studentsRestored + subjectsRestored + applicationsRestored + suppRestored + leaveRestored + curriculumRestored,
                 studentsRestored,
                 subjectsRestored,
                 attendanceRestored: 0,
@@ -611,11 +637,13 @@ export class AdministrativeService extends BaseDataService {
         }
     }
 
-    public async alignDataToTerms(): Promise<{ specialDaysFixed: number; calendarFixed: number }> {
+    public async alignDataToTerms(): Promise<{ specialDaysFixed: number; calendarFixed: number; leaveFixed: number; curriculumFixed: number }> {
         try {
             const termKey = this.getCurrentTermKey();
             let specialDaysFixed = 0;
             let calendarFixed = 0;
+            let leaveFixed = 0;
+            let curriculumFixed = 0;
 
             const specialDays = await getDocs(collection(this.db, this.specialDaysCollection));
             await this.runBatchedOperation(specialDays.docs, (batch, d) => {
@@ -635,7 +663,25 @@ export class AdministrativeService extends BaseDataService {
                 }
             });
 
-            return { specialDaysFixed, calendarFixed };
+            const leave = await getDocs(collection(this.db, this.leavePermissionsCollection));
+            await this.runBatchedOperation(leave.docs, (batch, d) => {
+                const data = d.data();
+                if (!data.termKey) {
+                    batch.update(d.ref, { termKey });
+                    leaveFixed++;
+                }
+            });
+
+            const curriculum = await getDocs(collection(this.db, this.curriculumCollection));
+            await this.runBatchedOperation(curriculum.docs, (batch, d) => {
+                const data = d.data();
+                if (!data.termKey) {
+                    batch.update(d.ref, { termKey });
+                    curriculumFixed++;
+                }
+            });
+
+            return { specialDaysFixed, calendarFixed, leaveFixed, curriculumFixed };
         } catch (error) {
             console.error('Error aligning data:', error);
             throw error;

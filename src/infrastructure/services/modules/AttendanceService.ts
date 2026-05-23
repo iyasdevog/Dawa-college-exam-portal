@@ -41,7 +41,6 @@ import { AcademicService } from './AcademicService';
  */
 
 export class AttendanceService extends BaseDataService {
-    private leavePermissionsCollection = 'leave_permissions';
     private recordsCache: Map<string, AttendanceRecord[]> = new Map();
     private cacheExpiry = 1000 * 60 * 5; // 5 minutes cache
 
@@ -472,12 +471,32 @@ export class AttendanceService extends BaseDataService {
     }
 
     /**
+     * Get all pre-logged leave permissions for a specific term.
+     */
+    public async getAllLeavePermissions(termKey?: string): Promise<LeavePermission[]> {
+        try {
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const q = query(
+                collection(this.db!, this.leavePermissionsCollection),
+                where('termKey', '==', activeTerm)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeavePermission));
+        } catch (error) {
+            console.error('Error fetching all leave permissions:', error);
+            return [];
+        }
+    }
+
+    /**
      * Save a new leave permission (Principal/Medical/Other).
      */
     public async saveLeavePermission(permission: Omit<LeavePermission, 'id'>): Promise<string> {
         try {
+            const termKey = (permission as any).termKey || this.getCurrentTermKey();
             const docRef = await addDoc(collection(this.db!, this.leavePermissionsCollection), this.sanitize({
                 ...permission,
+                termKey,
                 createdAt: Date.now()
             }));
             return docRef.id;

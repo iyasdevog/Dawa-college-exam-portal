@@ -150,6 +150,17 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const [leaveStudentId, setLeaveStudentId] = useState('');
     const [leaveType, setLeaveType] = useState<'Principal' | 'Medical' | 'Other'>('Principal');
     const [leaveDate, setLeaveDate] = useState(new Date().toISOString().split('T')[0]);
+    const [leaveApprovedBy, setLeaveApprovedBy] = useState('');
+    const [leaveNote, setLeaveNote] = useState('');
+
+    const facultyList = useMemo(() => {
+        const names = subjects.map(s => s.facultyName).filter(Boolean) as string[];
+        const uniqueNames = [...new Set(names)];
+        if (currentUser?.name && !uniqueNames.includes(currentUser.name)) {
+            uniqueNames.push(currentUser.name);
+        }
+        return uniqueNames.sort();
+    }, [subjects, currentUser]);
 
     const classes = useMemo(() => [...new Set(students.map(s => s.className))], [students]);
     const filteredSubjects = useMemo(() => {
@@ -548,11 +559,15 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 className: student?.className || 'Unknown',
                 date: leaveDate,
                 type: leaveType,
-                termKey: activeTerm
+                termKey: activeTerm,
+                approvedBy: leaveApprovedBy || currentUser?.name || 'Principal',
+                note: leaveNote
             });
             alert('Leave permission saved successfully!');
             setShowLeaveModal(false);
             setLeaveStudentId('');
+            setLeaveApprovedBy('');
+            setLeaveNote('');
             loadAttendance();
         } catch (error) {
             alert('Failed to save leave permission.');
@@ -1038,6 +1053,34 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                         <option value="Medical">Medical (Orange)</option>
                                         <option value="Other">Other (Blue/White)</option>
                                     </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Authorized By</label>
+                                    <select
+                                        value={leaveApprovedBy}
+                                        onChange={(e) => setLeaveApprovedBy(e.target.value)}
+                                        className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-100 focus:ring-4 focus:ring-emerald-50 font-bold text-slate-700 appearance-none transition-all shadow-sm"
+                                    >
+                                        <option value="">Select Faculty...</option>
+                                        {facultyList.map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                        <option value="Principal">Principal</option>
+                                        <option value="Office">Office</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Reason</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="Reason for leave..."
+                                        value={leaveNote}
+                                        onChange={(e) => setLeaveNote(e.target.value)}
+                                        className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-100 focus:ring-4 focus:ring-emerald-50 font-bold text-slate-700 transition-all shadow-sm"
+                                    />
                                 </div>
                             </div>
 

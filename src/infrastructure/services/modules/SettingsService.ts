@@ -4,7 +4,8 @@ import {
     getDoc,
     getDocs,
     updateDoc,
-    setDoc
+    setDoc,
+    onSnapshot
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
 import { 
@@ -185,6 +186,61 @@ export class SettingsService extends BaseDataService {
             await setDoc(docRef, settings, { merge: true });
         } catch (error) {
             console.error('Error updating release settings:', error);
+            throw error;
+        }
+    }
+
+    public subscribeToGlobalSettings(callback: (settings: GlobalSettings) => void): () => void {
+        const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+        return onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const settings = docSnap.data() as GlobalSettings;
+                callback(settings);
+            }
+        });
+    }
+
+    public async healStrandedClasses(activeCustomClasses: Set<string>): Promise<void> {
+        try {
+            const adminSettingsRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            const adminSettingsDoc = await getDoc(adminSettingsRef);
+            
+            const orphanedGlobalRef = doc(this.db, this.settingsCollection, 'global');
+            const orphanedGlobalDoc = await getDoc(orphanedGlobalRef);
+            const orphanedDisabledClasses = orphanedGlobalDoc.exists() ? (orphanedGlobalDoc.data().disabledClasses || []) : [];
+
+            if (adminSettingsDoc.exists()) {
+                const settings = adminSettingsDoc.data();
+                const existingCustomClasses: string[] = settings.customClasses || [];
+                let existingDisabledClasses: string[] = settings.disabledClasses || [];
+                
+                let hasChanges = false;
+                
+                // Recover orphaned disabled classes
+                orphanedDisabledClasses.forEach((cls: string) => {
+                    if (!existingDisabledClasses.includes(cls)) {
+                        existingDisabledClasses.push(cls);
+                        hasChanges = true;
+                    }
+                });
+
+                Array.from(activeCustomClasses).forEach(cls => {
+                    if (!existingCustomClasses.includes(cls) && cls !== 'All') {
+                        existingCustomClasses.push(cls);
+                        hasChanges = true;
+                    }
+                });
+                
+                if (hasChanges) {
+                    await updateDoc(adminSettingsRef, {
+                        customClasses: Array.from(new Set(existingCustomClasses)),
+                        disabledClasses: Array.from(new Set(existingDisabledClasses))
+                    });
+                    console.log('SettingsService: Self-Healed stranded custom/disabled classes');
+                }
+            }
+        } catch (error) {
+            console.error('Error healing settings:', error);
             throw error;
         }
     }

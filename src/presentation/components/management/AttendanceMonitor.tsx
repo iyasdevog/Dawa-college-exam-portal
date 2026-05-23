@@ -15,6 +15,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const { isMobile } = useMobile();
     const { activeTerm } = useTerm();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
+    const [leavePermissions, setLeavePermissions] = useState<any[]>([]);
     const [timetables, setTimetables] = useState<TimetableEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedClass, setSelectedClass] = useState<string>('All');
@@ -133,12 +134,14 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const loadRecords = useCallback(async () => {
         setIsLoading(true);
         try {
-            const [data, tData] = await Promise.all([
+            const [data, tData, lData] = await Promise.all([
                 dataService.getAllAttendanceRecords(activeTerm),
-                dataService.getAllTimetables(activeTerm)
+                dataService.getAllTimetables(activeTerm),
+                dataService.getAllLeavePermissions(activeTerm)
             ]);
             setRecords(data);
             setTimetables(tData || []);
+            setLeavePermissions(lData || []);
         } catch (error) {
             console.error('Error loading records:', error);
         } finally {
@@ -513,7 +516,13 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                     })}
                 </div>
             ) : viewMode === 'principal-monitor' ? (
-                <PrincipalMonitor students={students} subjects={subjects} records={records} />
+                <PrincipalMonitor 
+                    students={students} 
+                    subjects={subjects} 
+                    records={records} 
+                    leavePermissions={leavePermissions}
+                    onRefresh={loadRecords}
+                />
             ) : (
                 <div className="flex flex-col lg:flex-row gap-8">
                     <div className="flex-1 space-y-6">

@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
 import { dataService } from '../../infrastructure/services/dataService';
 import { BaseDataService } from '../../infrastructure/services/modules/BaseDataService';
 import { GlobalSettings } from '../../domain/entities/types';
@@ -56,36 +55,28 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         setIsLoading(true);
-        const settingsRef = doc(dataService.getDb(), 'settings', 'global_admin_settings');
-        const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const settings = docSnap.data() as GlobalSettings;
-                
-                // Update System State
-                if (settings.currentAcademicYear) setSystemAcademicYear(settings.currentAcademicYear);
-                if (settings.currentSemester) setSystemSemester(settings.currentSemester as 'Odd' | 'Even');
+        const unsubscribe = dataService.subscribeToGlobalSettings((settings) => {
+            // Update System State
+            if (settings.currentAcademicYear) setSystemAcademicYear(settings.currentAcademicYear);
+            if (settings.currentSemester) setSystemSemester(settings.currentSemester as 'Odd' | 'Even' | 'Bridge');
 
-                // Update Viewing State ONLY if user hasn't manually picked a different term
-                if (!hasManuallySwitched) {
-                    if (settings.currentAcademicYear) setCurrentAcademicYear(settings.currentAcademicYear);
-                    if (settings.currentSemester) setCurrentSemester(settings.currentSemester as 'Odd' | 'Even');
-                }
-                
-                BaseDataService.updateStaticSettings(settings);
-
-                const availableYears = settings.availableYears || [];
-                const uniqueYears = Array.from(new Set(availableYears.map(tk => {
-                    const lastHyphenIndex = tk.lastIndexOf('-');
-                    if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
-                        return tk.substring(0, lastHyphenIndex);
-                    }
-                    return tk;
-                }))).sort().reverse();
-                setTermOptions(uniqueYears);
+            // Update Viewing State ONLY if user hasn't manually picked a different term
+            if (!hasManuallySwitched) {
+                if (settings.currentAcademicYear) setCurrentAcademicYear(settings.currentAcademicYear);
+                if (settings.currentSemester) setCurrentSemester(settings.currentSemester as 'Odd' | 'Even' | 'Bridge');
             }
-            setIsLoading(false);
-        }, (error) => {
-            console.error('Error in settings listener:', error);
+            
+            BaseDataService.updateStaticSettings(settings);
+
+            const availableYears = settings.availableYears || [];
+            const uniqueYears = Array.from(new Set(availableYears.map(tk => {
+                const lastHyphenIndex = tk.lastIndexOf('-');
+                if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
+                    return tk.substring(0, lastHyphenIndex);
+                }
+                return tk;
+            }))).sort().reverse();
+            setTermOptions(uniqueYears);
             setIsLoading(false);
         });
 

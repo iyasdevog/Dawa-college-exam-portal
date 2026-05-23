@@ -56,7 +56,7 @@ const Management: React.FC = () => {
         // We reuse curriculum state for global suggestions if needed, but curriculum is specific
         // Let's ensure curriculum is also loaded if we're on subjects tab
         if (tabId === 'subjects' && !loadedData.has('curriculum')) {
-           const currData = await dataService.getAllCurriculum();
+           const currData = await dataService.getAllCurriculum(activeTerm);
            setCurriculum(currData);
         }
         setCustomClasses(settings.customClasses || []);
@@ -69,7 +69,7 @@ const Management: React.FC = () => {
       }
 
       if (tabId === 'curriculum') {
-        const currData = await dataService.getAllCurriculum();
+        const currData = await dataService.getAllCurriculum(activeTerm);
         setCurriculum(currData);
       }
 

@@ -46,6 +46,7 @@ export abstract class BaseDataService {
     protected readonly academicCalendarCollection = 'academicCalendar';
     protected readonly generatorConfigsCollection = 'generatorConfigs';
     protected readonly curriculumCollection = 'curriculum';
+    protected readonly leavePermissionsCollection = 'leave_permissions';
 
     // Cache
     protected studentsCache = new Map<string, StudentRecord[]>();

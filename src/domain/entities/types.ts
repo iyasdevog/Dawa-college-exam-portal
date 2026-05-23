@@ -256,6 +256,8 @@ export type LeavePermissionType = 'Principal' | 'Medical' | 'Other';
 export interface LeavePermission {
   id: string;
   studentId: string;
+  studentName?: string;
+  className?: string;
   date: string; // YYYY-MM-DD
   type: LeavePermissionType;
   note?: string;
