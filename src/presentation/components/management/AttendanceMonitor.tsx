@@ -4,6 +4,7 @@ import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { useTerm } from '../../viewmodels/TermContext';
 import StudentAttendanceStats from './StudentAttendanceStats';
+import PrincipalMonitor from './PrincipalMonitor';
 
 interface AttendanceMonitorProps {
     students: StudentRecord[];
@@ -20,7 +21,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewingRecord, setViewingRecord] = useState<AttendanceRecord | null>(null);
-    const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats' | 'subject-report'>('records');
+    const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats' | 'subject-report' | 'principal-monitor'>('records');
     const [selectedAnalyticsClass, setSelectedAnalyticsClass] = useState<string | null>(null);
     const [timelineDate, setTimelineDate] = useState<'today' | 'tomorrow'>('today');
     const [facultyFilter, setFacultyFilter] = useState('All');
@@ -151,16 +152,22 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
 
     const filteredRecords = useMemo(() => {
         const query = searchTerm.toLowerCase();
-        return records.filter(record => {
-            const matchesClass = selectedClass === 'All' || record.className === selectedClass;
-            const matchesSubject = selectedSubject === 'All' || record.subjectId === selectedSubject;
-            if (!matchesClass || !matchesSubject) return false;
-            if (query) {
-                const subject = subjectMap[record.subjectId];
-                return (subject?.name.toLowerCase().includes(query)) || (record.className.toLowerCase().includes(query));
-            }
-            return true;
-        });
+        return records
+            .filter(record => {
+                const matchesClass = selectedClass === 'All' || record.className === selectedClass;
+                const matchesSubject = selectedSubject === 'All' || record.subjectId === selectedSubject;
+                if (!matchesClass || !matchesSubject) return false;
+                if (query) {
+                    const subject = subjectMap[record.subjectId];
+                    return (subject?.name.toLowerCase().includes(query)) || (record.className.toLowerCase().includes(query));
+                }
+                return true;
+            })
+            .sort((a, b) => {
+                const dateCompare = b.date.localeCompare(a.date);
+                if (dateCompare !== 0) return dateCompare;
+                return (b.markedAt || 0) - (a.markedAt || 0);
+            });
     }, [records, selectedClass, selectedSubject, searchTerm, subjectMap]);
 
     const getLocalDateString = useCallback((offsetDays: number = 0) => {
@@ -204,12 +211,35 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
 
             if (scheduledPeriods.length > 0) {
                 scheduledPeriods.forEach(sp => {
+                    // 1. Try to find the exact scheduled subject record
                     const matchingRecord = dayRecords.find(r => r.subjectId === sp.subjectId && r.className === sp.className && !matchedRecordIds.has(r.id));
+                    
                     if (matchingRecord) {
                         matchedRecordIds.add(matchingRecord.id);
                         results.push({ period: sp, record: matchingRecord, type: 'scheduled', sortByTime: startTime });
                     } else {
-                        results.push({ period: sp, record: null, type: 'scheduled', sortByTime: startTime });
+                        // 2. Check if a substitution was marked specifically replacing this subject
+                        const substitutionRecord = dayRecords.find(r => r.substitutedSubjectId === sp.subjectId && r.className === sp.className && !matchedRecordIds.has(r.id));
+                        
+                        if (substitutionRecord) {
+                            matchedRecordIds.add(substitutionRecord.id);
+                            results.push({ period: sp, record: substitutionRecord, type: 'substitution', sortByTime: startTime });
+                        } else {
+                            // 3. Check if ANY record was marked in this time slot for this class (Takeover)
+                            const takeoverRecord = dayRecords.find(r => {
+                                if (matchedRecordIds.has(r.id)) return false;
+                                if (r.className !== sp.className) return false;
+                                const markedTime = new Date(r.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                                return markedTime >= startTime && markedTime <= endTime;
+                            });
+                            
+                            if (takeoverRecord) {
+                                matchedRecordIds.add(takeoverRecord.id);
+                                results.push({ period: sp, record: takeoverRecord, type: 'takeover', sortByTime: startTime });
+                            } else {
+                                results.push({ period: sp, record: null, type: 'scheduled', sortByTime: startTime });
+                            }
+                        }
                     }
                 });
             } else {
@@ -305,30 +335,36 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 </div>
             </div>
 
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full lg:w-fit self-center overflow-x-auto no-scrollbar">
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full lg:w-fit self-center overflow-x-auto no-scrollbar scroll-smooth snap-x">
                 <button
                     onClick={() => setViewMode('records')}
-                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${viewMode === 'records' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all snap-start flex-shrink-0 ${viewMode === 'records' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                 >
                     Attendance Feed
                 </button>
                 <button
                     onClick={() => setViewMode('analytics')}
-                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${viewMode === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all snap-start flex-shrink-0 ${viewMode === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                 >
                     Class Stats
                 </button>
                 <button
                     onClick={() => setViewMode('student-stats')}
-                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${viewMode === 'student-stats' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all snap-start flex-shrink-0 ${viewMode === 'student-stats' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                 >
                     Individual Analytics
                 </button>
                 <button
                     onClick={() => setViewMode('subject-report')}
-                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${viewMode === 'subject-report' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all snap-start flex-shrink-0 ${viewMode === 'subject-report' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
                 >
                     Subject Report
+                </button>
+                <button
+                    onClick={() => setViewMode('principal-monitor')}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all snap-start flex-shrink-0 ${viewMode === 'principal-monitor' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                    Principal Monitor
                 </button>
             </div>
 
@@ -476,6 +512,8 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                         );
                     })}
                 </div>
+            ) : viewMode === 'principal-monitor' ? (
+                <PrincipalMonitor students={students} subjects={subjects} records={records} />
             ) : (
                 <div className="flex flex-col lg:flex-row gap-8">
                     <div className="flex-1 space-y-6">
@@ -592,23 +630,35 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                             <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto hide-scrollbar">
                                 {activeSchedule.map((item, i) => {
                                     const isMarked = !!item.record;
+                                    const isTakeover = item.type === 'takeover' || item.type === 'substitution';
                                     const isFree = item.type === 'free';
                                     const nowStr = new Date().getHours().toString().padStart(2, '0') + ':' + new Date().getMinutes().toString().padStart(2, '0');
                                     const isUpcoming = timelineDate === 'tomorrow' || item.sortByTime > nowStr;
                                     const isLeave = item.period?.subjectName?.toLowerCase().includes('leave') || item.period?.leave;
                                     
+                                    const subjectId = item.record?.subjectId || item.period?.subjectId;
+                                    const facultyName = subjectId ? subjectMap[subjectId]?.facultyName : null;
+
                                     let color = 'text-slate-400 bg-slate-50 border-slate-100';
-                                    let tag = 'Free';
+                                    let tag = facultyName || 'Free';
                                     let tagColor = 'bg-slate-100 text-slate-400';
                                     let borderL = 'border-l-transparent';
                                     let dot = 'bg-slate-200';
 
                                     if (isMarked) {
-                                        color = 'text-emerald-700 bg-emerald-50 border-emerald-100';
-                                        tag = 'Marked';
-                                        tagColor = 'bg-emerald-100 text-emerald-800';
-                                        borderL = 'border-l-emerald-500';
-                                        dot = 'bg-emerald-500';
+                                        if (isTakeover) {
+                                            color = 'text-indigo-700 bg-indigo-50 border-indigo-100';
+                                            tag = `TAKEOVER: ${facultyName || 'Faculty'}`;
+                                            tagColor = 'bg-indigo-100 text-indigo-800';
+                                            borderL = 'border-l-indigo-500';
+                                            dot = 'bg-indigo-500';
+                                        } else {
+                                            color = 'text-emerald-700 bg-emerald-50 border-emerald-100';
+                                            tag = facultyName || 'Marked';
+                                            tagColor = 'bg-emerald-100 text-emerald-800';
+                                            borderL = 'border-l-emerald-500';
+                                            dot = 'bg-emerald-500';
+                                        }
                                     } else if (isLeave) {
                                         color = 'text-amber-700 bg-amber-50 border-amber-100';
                                         tag = 'Leave';
@@ -617,13 +667,13 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                         dot = 'bg-amber-500';
                                     } else if (isUpcoming) {
                                         color = 'text-blue-700 bg-blue-50 border-blue-100';
-                                        tag = 'Upcoming';
+                                        tag = facultyName || 'Upcoming';
                                         tagColor = 'bg-blue-100 text-blue-800';
                                         borderL = 'border-l-blue-500';
                                         dot = 'bg-blue-500';
                                     } else if (!isFree) {
                                         color = 'text-rose-700 bg-rose-50 border-rose-100';
-                                        tag = 'Unmarked';
+                                        tag = facultyName || 'Unmarked';
                                         tagColor = 'bg-rose-100 text-rose-800';
                                         borderL = 'border-l-rose-500';
                                         dot = 'bg-rose-500';
@@ -686,18 +736,38 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                     <span className="w-3 h-3 rounded-full bg-rose-500"></span>
                                     Absent Students
                                 </h5>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {viewingRecord.absentStudentIds.length > 0 ? (
-                                        viewingRecord.absentStudentIds.map(id => (
-                                            <div key={id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-rose-500 font-black text-[10px] border border-slate-200">{studentMap[id]?.adNo.slice(-3)}</div>
-                                                <div className="min-w-0">
-                                                    <p className="font-black text-slate-800 text-sm truncate">{studentMap[id]?.name}</p>
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase">{studentMap[id]?.adNo}</p>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {viewingRecord.absentStudentIds.length > 0 ? (
+                                                        viewingRecord.absentStudentIds.map(id => {
+                                                            const isAuthLeave = viewingRecord.principalApprovedAbsences?.includes(id);
+                                                            return (
+                                                                <div key={id} className={`p-4 rounded-2xl border transition-all ${isAuthLeave ? 'bg-blue-50/50 border-blue-100 ring-2 ring-blue-50' : 'bg-slate-50 border-slate-100'}`}>
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] border shadow-sm ${isAuthLeave ? 'bg-blue-600 text-white border-blue-500' : 'bg-white text-rose-500 border-slate-200'}`}>
+                                                                            {isAuthLeave ? <i className="fa-solid fa-shield-check"></i> : studentMap[id]?.adNo.slice(-3)}
+                                                                        </div>
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <p className="font-black text-slate-800 text-sm truncate">{studentMap[id]?.name}</p>
+                                                                                {isAuthLeave && (
+                                                                                    <span className="text-[8px] font-black uppercase text-blue-600 tracking-widest bg-blue-100 px-1.5 py-0.5 rounded-md">Auth</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <p className="text-[9px] font-bold text-slate-400 uppercase">{studentMap[id]?.adNo}</p>
+                                                                        </div>
+                                                                        {viewingRecord.absentReasons?.[id] && (
+                                                                            <i className="fa-solid fa-comment-dots text-slate-300" title={viewingRecord.absentReasons[id]}></i>
+                                                                        )}
+                                                                    </div>
+                                                                    {viewingRecord.absentReasons?.[id] && (
+                                                                        <div className="mt-2 text-[9px] font-bold text-slate-500 italic bg-white/50 p-2 rounded-lg border border-slate-100">
+                                                                            "{viewingRecord.absentReasons[id]}"
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
                                         <p className="text-center col-span-full py-8 text-emerald-600 font-bold">No absentees!</p>
                                     )}
                                 </div>
