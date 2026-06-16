@@ -7,8 +7,10 @@ import { useTerm } from '../../viewmodels/TermContext';
 interface AttendanceManagementProps {
     subjects: SubjectConfig[];
     students: StudentRecord[];
-    currentUser?: any; // Add this
+    currentUser?: any;
     onRefresh: () => void;
+    presetRecord?: AttendanceRecord | null;
+    onClearPreset?: () => void;
 }
 
 // Memoized student row - re-renders ONLY when this student's attendance status changes
@@ -21,7 +23,11 @@ const StudentAttendanceRow = memo(({
     isAuthorized,
     onToggleAuthorization,
     onCyclePermission,
-    permissionType
+    permissionType,
+    isRecovered,
+    onToggleRecovery,
+    recoveredReason,
+    onRecoveredReasonChange
 }: { 
     student: StudentRecord, 
     isPresent: boolean, 
@@ -31,7 +37,11 @@ const StudentAttendanceRow = memo(({
     isAuthorized?: boolean,
     onToggleAuthorization?: (id: string) => void,
     onCyclePermission?: (id: string) => void,
-    permissionType?: 'Principal' | 'Medical' | 'Other'
+    permissionType?: 'Principal' | 'Medical' | 'Other',
+    isRecovered?: boolean,
+    onToggleRecovery?: (id: string) => void,
+    recoveredReason?: string,
+    onRecoveredReasonChange?: (id: string, reason: string) => void
 }) => (
     <div className="border-b border-slate-50 last:border-0">
         <div
@@ -112,13 +122,42 @@ const StudentAttendanceRow = memo(({
                             {permissionType || (isAuthorized ? 'Auth' : 'Permission')}
                         </span>
                     </button>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onToggleRecovery) onToggleRecovery(student.id);
+                        }}
+                        className={`px-6 py-3 rounded-2xl border-2 flex items-center justify-center gap-3 transition-all active:scale-95 ${
+                            isRecovered
+                                ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-200'
+                                : 'bg-white border-slate-100 text-slate-400 hover:border-amber-200 hover:text-amber-600 hover:bg-amber-50/30'
+                        }`}
+                    >
+                        <i className={`fa-solid ${isRecovered ? 'fa-arrows-rotate' : 'fa-clock-rotate-left'} text-sm`}></i>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                            {isRecovered ? 'Recovered' : 'Recover'}
+                        </span>
+                    </button>
                 </div>
+                {isRecovered && (
+                    <div className="mt-3 relative group">
+                        <i className="fa-solid fa-tasks absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-300 text-xs group-focus-within:text-amber-500 transition-colors"></i>
+                        <input
+                            type="text"
+                            placeholder="Special task completed (Recovery reason)..."
+                            value={recoveredReason || ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => onRecoveredReasonChange?.(student.id, e.target.value)}
+                            className="w-full text-sm pl-10 pr-4 py-3 bg-amber-50/30 border-2 border-amber-100/50 rounded-2xl focus:bg-white focus:border-amber-200 focus:ring-4 focus:ring-amber-50 outline-none font-bold text-slate-600 placeholder:text-amber-300 transition-all"
+                        />
+                    </div>
+                )}
             </div>
         )}
     </div>
 ));
 
-const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, students, currentUser, onRefresh }) => {
+const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, students, currentUser, onRefresh, presetRecord, onClearPreset }) => {
     const { isMobile } = useMobile();
     const { currentAcademicYear, currentSemester, activeTerm } = useTerm();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -127,6 +166,8 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const [selectedSession, setSelectedSession] = useState('1');
     const [attendanceData, setAttendanceData] = useState<Record<string, boolean>>({});
     const [absentReasons, setAbsentReasons] = useState<Record<string, string>>({});
+    const [recoveredStudentIds, setRecoveredStudentIds] = useState<Set<string>>(new Set());
+    const [recoveredReasons, setRecoveredReasons] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [specialMode, setSpecialMode] = useState<'none' | 'day' | 'period'>('none');
     const [specialDayType, setSpecialDayType] = useState<'Leave' | 'Program'>('Leave');
@@ -144,6 +185,15 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const [showAllSubjects, setShowAllSubjects] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Cascading Reset: When class changes, clear subject if it's no longer valid
+    useEffect(() => {
+        if (selectedClass && !showAllSubjects) {
+            const valid = subjects.some(s => s.id === selectedSubject && s.targetClasses.includes(selectedClass));
+            if (!valid) setSelectedSubject('');
+        }
+        setSearchQuery('');
+    }, [selectedClass, showAllSubjects]);
     const [authorizedAbsences, setAuthorizedAbsences] = useState<Set<string>>(new Set());
     const [leavePermissions, setLeavePermissions] = useState<Record<string, 'Principal' | 'Medical' | 'Other'>>({});
     const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -258,11 +308,16 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                     if (record.absentReasons?.[id]) initialReasons[id] = record.absentReasons[id];
                     if (record.principalApprovedAbsences?.includes(id)) authorizedSet.add(id);
                 });
+                const recoveredSet = new Set(record.recoveredStudentIds || []);
+                setRecoveredStudentIds(recoveredSet);
+                setRecoveredReasons(record.recoveredReasons || {});
                 setAuthorizedAbsences(authorizedSet);
             } else {
                 console.log(`[Attendance] No record for subject: ${effectiveSubjectId}. Defaulting to all present.`);
                 filteredStudents.forEach(s => initialAttendance[s.id] = true);
                 setAuthorizedAbsences(new Set());
+                setRecoveredStudentIds(new Set());
+                setRecoveredReasons({});
             }
             const permissions = await dataService.getLeavePermissions(selectedDate, activeTerm);
             const permMap: Record<string, any> = {};
@@ -307,6 +362,16 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         loadAttendance();
         loadRecentHistory();
     }, [loadAttendance, loadRecentHistory]);
+
+    useEffect(() => {
+        if (presetRecord) {
+            setSelectedClass(presetRecord.className);
+            setSelectedSubject(presetRecord.subjectId.split('_')[0]);
+            setSelectedSession(presetRecord.subjectId.includes('_') ? presetRecord.subjectId.split('_')[1] : '1');
+            setSelectedDate(presetRecord.date);
+            if (onClearPreset) onClearPreset();
+        }
+    }, [presetRecord, onClearPreset]);
 
     const handleSelectRecentRecord = (record: AttendanceRecord) => {
         const actualSubjectId = record.subjectId.split('_')[0];
@@ -406,6 +471,27 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     }, []);
 
 
+    const handleToggleRecovery = useCallback((studentId: string) => {
+        setRecoveredStudentIds(prev => {
+            const next = new Set(prev);
+            if (next.has(studentId)) {
+                next.delete(studentId);
+                setRecoveredReasons(reasons => {
+                    const nextR = { ...reasons };
+                    delete nextR[studentId];
+                    return nextR;
+                });
+            } else {
+                next.add(studentId);
+            }
+            return next;
+        });
+    }, []);
+
+    const handleRecoveredReasonChange = useCallback((studentId: string, reason: string) => {
+        setRecoveredReasons(prev => ({ ...prev, [studentId]: reason }));
+    }, []);
+
     const handleReasonChange = useCallback((studentId: string, reason: string) => {
         setAbsentReasons(prev => ({ ...prev, [studentId]: reason }));
     }, []);
@@ -440,6 +526,10 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                         presentStudentIds: data.present,
                         absentStudentIds: data.absent,
                         absentReasons: data.reasons,
+                        recoveredStudentIds: Array.from(recoveredStudentIds).filter(id => data.absent.includes(id)),
+                        recoveredReasons: Object.fromEntries(
+                            Object.entries(recoveredReasons).filter(([id]) => data.absent.includes(id))
+                        ),
                         markedBy: currentUser?.name || 'System Admin',
                         markedAt: Date.now(),
                         academicYear: currentAcademicYear,
@@ -469,6 +559,10 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                     presentStudentIds: presentIds,
                     absentStudentIds: absentIds,
                     absentReasons: recordReasons,
+                    recoveredStudentIds: Array.from(recoveredStudentIds).filter(id => absentIds.includes(id)),
+                    recoveredReasons: Object.fromEntries(
+                        Object.entries(recoveredReasons).filter(([id]) => absentIds.includes(id))
+                    ),
                     principalApprovedAbsences: Array.from(authorizedAbsences),
                     granularPermissions: Object.fromEntries(
                         Array.from(authorizedAbsences).map(id => [id, leavePermissions[id] || 'Principal'])
@@ -980,6 +1074,10 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                 onToggleAuthorization={handleToggleAuthorization}
                                 onCyclePermission={handleCyclePermission}
                                 permissionType={leavePermissions[student.id]}
+                                isRecovered={recoveredStudentIds.has(student.id)}
+                                onToggleRecovery={handleToggleRecovery}
+                                recoveredReason={recoveredReasons[student.id]}
+                                onRecoveredReasonChange={handleRecoveredReasonChange}
                             />
                         ))}
                     </div>

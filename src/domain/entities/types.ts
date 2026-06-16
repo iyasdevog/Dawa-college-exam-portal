@@ -14,6 +14,7 @@ export interface SubjectMarks {
   total: number;
   status: 'Passed' | 'Failed' | 'Pending';
   isSupplementary?: boolean; // Indicates if this is a supplementary exam
+  applicationType?: 'revaluation' | 'improvement' | 'external-supp' | 'internal-supp' | 'special-supp';
   supplementaryYear?: number; // Year of the supplementary exam
   previousMarks?: {
     int: number | 'A';
@@ -34,11 +35,12 @@ export interface SupplementaryExam {
   originalSemester: 'Odd' | 'Even' | 'Bridge';
   originalYear: number;
   supplementaryYear: number;
-  status: 'Pending' | 'Completed';
+  status: 'Pending' | 'Completed' | 'Passed' | 'Failed';
   marks?: SubjectMarks;
   previousMarks?: {
     int: number | 'A';
     ext: number | 'A';
+    total?: number;
   };
   examTerm?: string;
   appliedAt?: number;
@@ -273,7 +275,9 @@ export interface AttendanceRecord {
   className: string;
   presentStudentIds: string[];
   absentStudentIds: string[];
+  recoveredStudentIds?: string[]; // Students who made up for their absence
   absentReasons?: Record<string, string>; // Maps studentId to reason
+  recoveredReasons?: Record<string, string>; // Tasks/reasons for recovery
   markedBy: string; // Teacher name/ID
   markedAt: number; // Timestamp
   isAdditional?: boolean; // If this was a substitution or extra class

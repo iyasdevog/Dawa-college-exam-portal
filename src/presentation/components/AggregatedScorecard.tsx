@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
+import { isSameSubject } from '../../domain/utils/subjectUtils';
 
 interface AggregatedScorecardProps {
     student: StudentRecord;
@@ -163,10 +164,17 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allS
                             
                             termSupps.forEach(su => {
                                 if (su.marks) {
-                                    termMarks[su.subjectId] = {
+                                    // Use robust matching to find the correct subject ID in termRecord.marks
+                                    const matchingOriginalSubjectId = Object.keys(termRecord.marks || {}).find(origId => 
+                                        isSameSubject(origId, allSubjects.find(s => s.id === origId)?.name, su.subjectId, su.subjectName)
+                                    );
+                                    
+                                    const targetId = matchingOriginalSubjectId || su.subjectId;
+                                    
+                                    termMarks[targetId] = {
                                         ...su.marks,
                                         isSupplementary: true,
-                                        previousMarks: termRecord.marks?.[su.subjectId] || su.previousMarks
+                                        previousMarks: termRecord.marks?.[targetId] || su.previousMarks
                                     } as any;
                                 }
                             });

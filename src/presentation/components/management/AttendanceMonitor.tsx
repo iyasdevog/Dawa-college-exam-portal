@@ -9,9 +9,10 @@ import PrincipalMonitor from './PrincipalMonitor';
 interface AttendanceMonitorProps {
     students: StudentRecord[];
     subjects: SubjectConfig[];
+    onEditRecord?: (record: AttendanceRecord) => void;
 }
 
-const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subjects }) => {
+const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subjects, onEditRecord }) => {
     const { isMobile } = useMobile();
     const { activeTerm } = useTerm();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
@@ -444,7 +445,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                         </div>
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-3 mt-6">
+                                    <div className="grid grid-cols-3 gap-2 mt-6">
                                         <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100/50">
                                             <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Present</p>
                                             <p className="text-xl font-black text-emerald-700">{session.presentStudentIds.length}</p>
@@ -453,6 +454,28 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                             <p className="text-[9px] font-black text-rose-600 uppercase tracking-widest mb-1">Absent</p>
                                             <p className="text-xl font-black text-rose-700">{session.absentStudentIds.length}</p>
                                         </div>
+                                        <div className="bg-amber-50/50 p-3 rounded-2xl border border-amber-100/50">
+                                            <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Recovered</p>
+                                            <p className="text-xl font-black text-amber-700">{session.recoveredStudentIds?.length || 0}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2 mt-4">
+                                        <button 
+                                            onClick={() => setViewingRecord(session)}
+                                            className="flex-1 px-4 py-2 bg-slate-100 text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all"
+                                        >
+                                            View
+                                        </button>
+                                        {onEditRecord && (
+                                            <button 
+                                                onClick={() => onEditRecord(session)}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2"
+                                            >
+                                                <i className="fa-solid fa-pen-to-square"></i>
+                                                Edit
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -730,14 +753,18 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-10 space-y-10 hide-scrollbar">
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="p-8 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 text-center">
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="p-6 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 text-center">
                                     <p className="text-[10px] font-black text-emerald-600 uppercase mb-2">Present</p>
-                                    <h4 className="text-5xl font-black text-emerald-900">{viewingRecord.presentStudentIds.length}</h4>
+                                    <h4 className="text-4xl font-black text-emerald-900">{viewingRecord.presentStudentIds.length}</h4>
                                 </div>
-                                <div className="p-8 bg-rose-50 rounded-[2.5rem] border border-rose-100 text-center">
+                                <div className="p-6 bg-rose-50 rounded-[2.5rem] border border-rose-100 text-center">
                                     <p className="text-[10px] font-black text-rose-600 uppercase mb-2">Absent</p>
-                                    <h4 className="text-5xl font-black text-rose-900">{viewingRecord.absentStudentIds.length}</h4>
+                                    <h4 className="text-4xl font-black text-rose-900">{viewingRecord.absentStudentIds.length}</h4>
+                                </div>
+                                <div className="p-6 bg-amber-50 rounded-[2.5rem] border border-amber-100 text-center">
+                                    <p className="text-[10px] font-black text-amber-600 uppercase mb-2">Recovered</p>
+                                    <h4 className="text-4xl font-black text-amber-900">{viewingRecord.recoveredStudentIds?.length || 0}</h4>
                                 </div>
                             </div>
                             <div className="space-y-4 text-left">
@@ -749,28 +776,32 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                                     {viewingRecord.absentStudentIds.length > 0 ? (
                                                         viewingRecord.absentStudentIds.map(id => {
                                                             const isAuthLeave = viewingRecord.principalApprovedAbsences?.includes(id);
+                                                            const isRecovered = viewingRecord.recoveredStudentIds?.includes(id);
                                                             return (
-                                                                <div key={id} className={`p-4 rounded-2xl border transition-all ${isAuthLeave ? 'bg-blue-50/50 border-blue-100 ring-2 ring-blue-50' : 'bg-slate-50 border-slate-100'}`}>
+                                                                <div key={id} className={`p-4 rounded-2xl border transition-all ${isRecovered ? 'bg-amber-50/50 border-amber-100 ring-2 ring-amber-50' : isAuthLeave ? 'bg-blue-50/50 border-blue-100 ring-2 ring-blue-50' : 'bg-slate-50 border-slate-100'}`}>
                                                                     <div className="flex items-center gap-4">
-                                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] border shadow-sm ${isAuthLeave ? 'bg-blue-600 text-white border-blue-500' : 'bg-white text-rose-500 border-slate-200'}`}>
-                                                                            {isAuthLeave ? <i className="fa-solid fa-shield-check"></i> : studentMap[id]?.adNo.slice(-3)}
+                                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] border shadow-sm ${isRecovered ? 'bg-amber-500 text-white border-amber-400' : isAuthLeave ? 'bg-blue-600 text-white border-blue-500' : 'bg-white text-rose-500 border-slate-200'}`}>
+                                                                            {isRecovered ? <i className="fa-solid fa-arrows-rotate"></i> : isAuthLeave ? <i className="fa-solid fa-shield-check"></i> : studentMap[id]?.adNo.slice(-3)}
                                                                         </div>
                                                                         <div className="min-w-0 flex-1">
                                                                             <div className="flex items-center gap-2">
                                                                                 <p className="font-black text-slate-800 text-sm truncate">{studentMap[id]?.name}</p>
-                                                                                {isAuthLeave && (
+                                                                                {isRecovered && (
+                                                                                    <span className="text-[8px] font-black uppercase text-amber-600 tracking-widest bg-amber-100 px-1.5 py-0.5 rounded-md">Recovered</span>
+                                                                                )}
+                                                                                {isAuthLeave && !isRecovered && (
                                                                                     <span className="text-[8px] font-black uppercase text-blue-600 tracking-widest bg-blue-100 px-1.5 py-0.5 rounded-md">Auth</span>
                                                                                 )}
                                                                             </div>
                                                                             <p className="text-[9px] font-bold text-slate-400 uppercase">{studentMap[id]?.adNo}</p>
                                                                         </div>
-                                                                        {viewingRecord.absentReasons?.[id] && (
-                                                                            <i className="fa-solid fa-comment-dots text-slate-300" title={viewingRecord.absentReasons[id]}></i>
+                                                                        {(viewingRecord.recoveredReasons?.[id] || viewingRecord.absentReasons?.[id]) && (
+                                                                            <i className="fa-solid fa-comment-dots text-slate-300" title={viewingRecord.recoveredReasons?.[id] || viewingRecord.absentReasons?.[id]}></i>
                                                                         )}
                                                                     </div>
-                                                                    {viewingRecord.absentReasons?.[id] && (
+                                                                    {(viewingRecord.recoveredReasons?.[id] || viewingRecord.absentReasons?.[id]) && (
                                                                         <div className="mt-2 text-[9px] font-bold text-slate-500 italic bg-white/50 p-2 rounded-lg border border-slate-100">
-                                                                            "{viewingRecord.absentReasons[id]}"
+                                                                            "{viewingRecord.recoveredReasons?.[id] || viewingRecord.absentReasons?.[id]}"
                                                                         </div>
                                                                     )}
                                                                 </div>

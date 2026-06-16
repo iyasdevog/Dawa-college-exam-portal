@@ -72,11 +72,27 @@ export class DataService extends BaseDataService {
     }
 
     async getStudentByAdNo(adNo: string, termKey?: string): Promise<StudentRecord | null> {
-        return this.studentService.getStudentByAdNo(adNo, termKey);
+        const student = await this.studentService.getStudentByAdNo(adNo, termKey);
+        if (student) {
+            const suppExams = await this.supplementaryService.getSupplementaryExamsByStudent(student.id);
+            return {
+                ...student,
+                supplementaryExams: suppExams
+            } as any;
+        }
+        return null;
     }
 
     async getStudentById(id: string): Promise<StudentRecord | null> {
-        return this.studentService.getStudentById(id);
+        const student = await this.studentService.getStudentById(id);
+        if (student) {
+            const suppExams = await this.supplementaryService.getSupplementaryExamsByStudent(student.id);
+            return {
+                ...student,
+                supplementaryExams: suppExams
+            } as any;
+        }
+        return null;
     }
 
     async getStudentsByClass(className: string, termKey?: string): Promise<StudentRecord[]> {

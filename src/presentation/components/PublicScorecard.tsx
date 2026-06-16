@@ -6,6 +6,7 @@ import { dataService } from '../../infrastructure/services/dataService';
 import { useTerm } from '../viewmodels/TermContext';
 import { TermSelector } from './TermSelector';
 import AggregatedScorecard from './AggregatedScorecard';
+import { isSameSubject, normalizeSubjectName } from '../../domain/utils/subjectUtils';
 
 
 interface PublicScorecardProps {
@@ -60,7 +61,10 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
 
     // Merged marks mapping
     const suppExams = result?.supplementaryExams || [];
-    const completedSuppIds = new Set(suppExams.filter(su => su.status === 'Completed').map(su => su.subjectId.toLowerCase().trim()));
+    const completedSuppIds = new Set(suppExams
+        .filter(su => su.status === 'Completed' || su.status === 'Passed' || su.status === 'Failed')
+        .map(su => su.subjectId.toLowerCase().trim())
+    );
     const originalMarkIds = new Set(Object.keys(displayMarks).map(id => id.toLowerCase().trim()));
 
     let resultSubjects = result ? subjects.filter(s => {
@@ -86,11 +90,11 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
     }) : [];
     
     // De-duplicate resultSubjects based on normalized names to handle case-variant legacy IDs
-    const seenSubjects = new Set<string>();
+    const seenSubjectNames = new Set<string>();
     resultSubjects = resultSubjects.filter(s => {
-        const key = (s.name || s.id).toLowerCase().trim();
-        if (seenSubjects.has(key)) return false;
-        seenSubjects.add(key);
+        const normalizedName = normalizeSubjectName(s.name || s.id);
+        if (seenSubjectNames.has(normalizedName)) return false;
+        seenSubjectNames.add(normalizedName);
         return true;
     });
 
@@ -113,32 +117,74 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
     });
 
     if (isSuppReleased) {
-        // Merge completed supplementary marks
-        const completedSupps = suppExams.filter(su => su.status === 'Completed' && su.marks);
-        completedSupps.forEach(su => {
-            if (su.marks) {
-                const sId = su.subjectId.toLowerCase().trim();
-                // Find corresponding subject in resultSubjects (matching by name or ID)
-                const targetSubject = resultSubjects.find(rs => 
-                    rs.id.toLowerCase().trim() === sId || 
-                    (rs.name && su.subjectName && rs.name.toLowerCase().trim() === su.subjectName.toLowerCase().trim())
-                );
+        // Merge completed/processed supplementary marks
+        const processedSupps = suppExams
+            .filter(su => (su.status === 'Completed' || su.status === 'Passed' || su.status === 'Failed') && su.marks)
+            // Sort by updatedAt descending so the latest one wins if duplicates exist
+            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-                if (targetSubject) {
-                    const originalMarks = markLookup[sId];
-                    finalMarks[targetSubject.id] = {
-                        ...su.marks,
-                        isSupplementary: true,
-                        previousMarks: originalMarks || su.previousMarks
-                    } as any;
+        processedSupps.forEach(su => {
+            if (!su.subjectId) return;
+
+            const sId = su.subjectId.toLowerCase().trim();
+            // Match by normalized ID or Name
+            let targetSubject = resultSubjects.find(rs => 
+                isSameSubject(rs.id, rs.name, su.subjectId, su.subjectName)
+            );
+
+            // VIRTUAL SUBJECT: If supplementary subject is not part of the current term's curriculum,
+            // we create a virtual subject entry so it shows up in the scorecard.
+            if (!targetSubject) {
+                const globalSubject = subjects.find(s => s.id === su.subjectId);
+                targetSubject = {
+                    id: su.subjectId,
+                    name: globalSubject?.name || ((su.subjectName && !/^[a-zA-Z0-9]{15,}$/.test(su.subjectName)) ? su.subjectName : su.subjectId),
+                    arabicName: globalSubject?.arabicName || su.subjectName,
+                    maxINT: su.maxINT || globalSubject?.maxINT || 30,
+                    maxEXT: su.maxEXT || globalSubject?.maxEXT || 70,
+                    subjectType: 'general',
+                    targetClasses: [result?.currentClass || '']
+                } as any;
+                resultSubjects.push(targetSubject!);
+            }
+
+            if (targetSubject) {
+                const originalMark = markLookup[targetSubject.id.toLowerCase().trim()];
+                
+                // Calculate previous total for display if missing
+                // Prefer su.previousMarks if originalMark is missing or empty
+                let prevMarks = (originalMark && Object.keys(originalMark).length > 0) ? originalMark : su.previousMarks;
+                
+                if (prevMarks && prevMarks.total === undefined) {
+                    const intVal = typeof prevMarks.int === 'number' ? prevMarks.int : 0;
+                    const extVal = typeof prevMarks.ext === 'number' ? prevMarks.ext : 0;
+                    prevMarks = { ...prevMarks, total: intVal + extVal };
                 }
+
+                // Construct the merged mark with proper fallbacks for Max values
+                const mergedMark = {
+                    ...su.marks,
+                    isSupplementary: true,
+                    applicationType: su.applicationType,
+                    // Prefer supplementary metadata if it's non-zero, otherwise fallback to global subject config
+                    maxINT: (su.maxINT && su.maxINT > 0) ? su.maxINT : (targetSubject.maxINT || 0),
+                    maxEXT: (su.maxEXT && su.maxEXT > 0) ? su.maxEXT : (targetSubject.maxEXT || 0),
+                    previousMarks: prevMarks
+                };
+
+                finalMarks[targetSubject.id] = mergedMark as any;
             }
         });
 
         if (!isResultsReleased) {
-            // ONLY SHOW supplementary subjects
-            const suppSubjectIds = new Set(completedSupps.map(su => su.subjectId.toLowerCase().trim()));
-            resultSubjects = resultSubjects.filter(s => suppSubjectIds.has(s.id.toLowerCase().trim()));
+            // ONLY SHOW supplementary subjects if regular results are not released
+            const suppSubjectIds = new Set(processedSupps.map(su => su.subjectId.toLowerCase().trim()));
+            const suppSubjectNames = new Set(processedSupps.map(su => su.subjectName?.toLowerCase().trim()).filter(Boolean));
+            
+            resultSubjects = resultSubjects.filter(s => 
+                suppSubjectIds.has(s.id.toLowerCase().trim()) || 
+                (s.name && suppSubjectNames.has(s.name.toLowerCase().trim()))
+            );
         }
     }
 
@@ -343,8 +389,15 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                         <h5 className="font-black text-slate-800 text-base leading-tight mb-1 flex items-center gap-2">
                                                             {subject.name}
                                                             {marks?.isSupplementary && (
-                                                                <span className="bg-orange-100 text-orange-700 text-[9px] px-2 py-0.5 rounded uppercase tracking-widest font-bold">
-                                                                    Supp
+                                                                <span className={`text-[8px] px-1.5 py-0.5 rounded border uppercase tracking-wider font-bold ${
+                                                                    marks.applicationType === 'special-supp' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                                                                    marks.applicationType === 'revaluation' ? 'bg-sky-100 text-sky-700 border-sky-200' :
+                                                                    marks.applicationType === 'improvement' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                                                    'bg-orange-100 text-orange-700 border-orange-200'
+                                                                }`}>
+                                                                    {marks.applicationType === 'special-supp' ? 'Special Supp' :
+                                                                     marks.applicationType === 'revaluation' ? 'Revaluation' :
+                                                                     marks.applicationType === 'improvement' ? 'Improvement' : 'Supp'}
                                                                 </span>
                                                             )}
                                                         </h5>
@@ -460,8 +513,15 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                             <p className="font-bold text-slate-800 text-sm tracking-tight print:text-xs flex items-center gap-2">
                                                                 {subject.name}
                                                                 {marks?.isSupplementary && (
-                                                                    <span className="bg-orange-100/80 text-orange-700 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">
-                                                                        Supp
+                                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded border uppercase tracking-wider font-bold ${
+                                                                        marks.applicationType === 'special-supp' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                                                                        marks.applicationType === 'revaluation' ? 'bg-sky-100 text-sky-700 border-sky-200' :
+                                                                        marks.applicationType === 'improvement' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                                                        'bg-orange-100 text-orange-700 border-orange-200'
+                                                                    }`}>
+                                                                        {marks.applicationType === 'special-supp' ? 'Special Supp' :
+                                                                         marks.applicationType === 'revaluation' ? 'Revaluation' :
+                                                                         marks.applicationType === 'improvement' ? 'Improvement' : 'Supp'}
                                                                     </span>
                                                                 )}
                                                             </p>

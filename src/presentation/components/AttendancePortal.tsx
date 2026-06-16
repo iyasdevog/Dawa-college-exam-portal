@@ -23,6 +23,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [presetRecord, setPresetRecord] = useState<any>(null);
 
     const isAdmin = currentUser?.role === 'admin';
 
@@ -134,12 +135,18 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                             subjects={subjects}
                             currentUser={currentUser}
                             onRefresh={loadData}
+                            presetRecord={presetRecord}
+                            onClearPreset={() => setPresetRecord(null)}
                         />
                     )}
                     {activeTab === 'monitor' && (
                         <AttendanceMonitor
                             students={students}
                             subjects={subjects}
+                            onEditRecord={(record) => {
+                                setPresetRecord(record);
+                                setActiveTab('marking');
+                            }}
                         />
                     )}
                     {activeTab === 'calendar' && (

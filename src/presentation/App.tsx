@@ -101,10 +101,10 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'admin' && password === 'pleasecareful') {
+    if (username === import.meta.env.VITE_ADMIN_USER && password === import.meta.env.VITE_ADMIN_PASSWORD) {
       const adminUser = User.create({
         id: 'admin-001',
-        username: 'admin',
+        username: import.meta.env.VITE_ADMIN_USER,
         role: 'admin',
         name: 'System Administrator',
         assignedClasses: []
@@ -112,10 +112,10 @@ const App: React.FC = () => {
       setCurrentUser(adminUser);
       setIsLoggedIn(true);
       setMode('admin');
-    } else if (username === 'Teacher' && password === 'Teacher') {
+    } else if (username === import.meta.env.VITE_FACULTY_PASSWORD && password === import.meta.env.VITE_FACULTY_PASSWORD) {
       const teacherUser = User.create({
         id: 'teacher-001',
-        username: 'Teacher',
+        username: import.meta.env.VITE_FACULTY_PASSWORD,
         role: 'teacher',
         name: 'Faculty',
         assignedClasses: []

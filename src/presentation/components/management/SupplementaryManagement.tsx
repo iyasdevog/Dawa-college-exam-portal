@@ -15,7 +15,10 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
     // Searchable dropdown state
     const [studentSearchTerm, setStudentSearchTerm] = useState('');
     const [showStudentDropdown, setShowStudentDropdown] = useState(false);
+    const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
+    const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const subjectDropdownRef = useRef<HTMLDivElement>(null);
 
     // Filter students based on search term (name or adNo)
     const filteredSearchStudents = useMemo(() => {
@@ -28,11 +31,25 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             .sort((a, b) => a.name.localeCompare(b.name));
     }, [students, studentSearchTerm]);
 
-    // Close dropdown when clicking outside
+    // Filter subjects based on search term
+    const filteredSearchSubjects = useMemo(() => {
+        if (!subjectSearchTerm.trim()) {
+            return subjects.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        const term = subjectSearchTerm.toLowerCase();
+        return subjects
+            .filter(s => s.name.toLowerCase().includes(term) || s.id.toLowerCase().includes(term))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [subjects, subjectSearchTerm]);
+
+    // Close dropdowns when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setShowStudentDropdown(false);
+            }
+            if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(event.target as Node)) {
+                setShowSubjectDropdown(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -888,17 +905,61 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
 
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1">Subject</label>
-                                    <select
-                                        value={supplementaryForm.subjectId}
-                                        onChange={e => setSupplementaryForm(prev => ({ ...prev, subjectId: e.target.value }))}
-                                        className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-orange-500 outline-none transition-all font-medium"
-                                        required
-                                    >
-                                        <option value="">Select Subject</option>
-                                        {subjects.sort((a, b) => a.name.localeCompare(b.name)).map(s => (
-                                            <option key={s.id} value={s.id}>{s.name}</option>
-                                        ))}
-                                    </select>
+                                    <div className="relative" ref={subjectDropdownRef}>
+                                        <div 
+                                            className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus-within:border-orange-500 transition-all font-medium flex items-center justify-between cursor-pointer"
+                                            onClick={() => setShowSubjectDropdown(!showSubjectDropdown)}
+                                        >
+                                            <span className={supplementaryForm.subjectId ? 'text-slate-900' : 'text-slate-500'}>
+                                                {supplementaryForm.subjectId 
+                                                    ? subjects.find(s => s.id === supplementaryForm.subjectId)?.name
+                                                    : 'Search Subject...'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${showSubjectDropdown ? 'rotate-180' : ''}`}></i>
+                                        </div>
+
+                                        {showSubjectDropdown && (
+                                            <div className="absolute z-[70] w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 flex flex-col overflow-hidden">
+                                                <div className="p-2 border-b border-slate-100 bg-slate-50">
+                                                    <div className="relative">
+                                                        <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder="Type to search..." 
+                                                            value={subjectSearchTerm}
+                                                            onChange={(e) => setSubjectSearchTerm(e.target.value)}
+                                                            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-y-auto flex-1 p-1 option-list">
+                                                    {filteredSearchSubjects.length > 0 ? (
+                                                        filteredSearchSubjects.map(s => (
+                                                            <div 
+                                                                key={s.id}
+                                                                className={`px-4 py-3 hover:bg-orange-50 cursor-pointer rounded-lg flex items-center justify-between ${supplementaryForm.subjectId === s.id ? 'bg-orange-50 text-orange-700 font-bold' : 'text-slate-700'}`}
+                                                                onClick={() => {
+                                                                    setSupplementaryForm(prev => ({ ...prev, subjectId: s.id }));
+                                                                    setShowSubjectDropdown(false);
+                                                                    setSubjectSearchTerm('');
+                                                                }}
+                                                            >
+                                                                <span>{s.name}</span>
+                                                                <span className="text-[10px] bg-white px-2 py-0.5 rounded shadow-sm border border-slate-100 text-slate-400 font-mono">
+                                                                    {s.id.slice(0, 8)}...
+                                                                </span>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="p-4 text-center text-sm text-slate-500">
+                                                            No subjects found matching "{subjectSearchTerm}"
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Original Marks Preview — shown after student + subject are selected, except for PreviousYear / Repeat */}
