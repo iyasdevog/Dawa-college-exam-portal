@@ -217,29 +217,29 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             </header>
 
             <main className="max-w-7xl mx-auto mt-4 sm:mt-8 px-4 sm:px-6">
-                <nav className="flex items-center gap-1 sm:gap-2 mb-6 sm:mb-8 bg-white p-1.5 sm:p-2 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto no-scrollbar whitespace-nowrap">
+                <nav className="flex items-center gap-1 sm:gap-2 mb-6 sm:mb-8 bg-white p-1.5 sm:p-2 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setActiveTab('marks-entry')}
-                        className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'marks-entry' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`shrink-0 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'marks-entry' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
                         <i className="fa-solid fa-pen-to-square mr-2"></i> Marks
                     </button>
                     <button
                         onClick={() => setActiveTab('upload-tracker')}
-                        className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'upload-tracker' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`shrink-0 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'upload-tracker' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
                         <i className="fa-solid fa-chart-line mr-2"></i> Tracker
                     </button>
                     <button
                         onClick={() => setActiveTab('recovery')}
-                        className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'recovery' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`shrink-0 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'recovery' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
                         <i className="fa-solid fa-clock-rotate-left mr-2"></i> Recovery
                     </button>
                     {(currentUser?.role === 'admin') && (
                         <button
                             onClick={() => setActiveTab('release-settings')}
-                            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'release-settings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
+                            className={`shrink-0 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'release-settings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
                         >
                             <i className="fa-solid fa-bullhorn mr-2"></i> Settings
                         </button>
