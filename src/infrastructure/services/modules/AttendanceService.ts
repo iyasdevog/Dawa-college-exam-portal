@@ -83,7 +83,7 @@ export class AttendanceService extends BaseDataService {
                     for (const [periodKey, periodData] of Object.entries(periods)) {
                         if (periodKey === subject.id || periodKey.startsWith(`${subject.id}_`)) {
                             totalClasses++;
-                            if ((periodData as any).presentStudentIds?.includes(studentId)) {
+                            if ((periodData as any).presentStudentIds?.includes(studentId) || (periodData as any).recoveredStudentIds?.includes(studentId)) {
                                 totalPresent++;
                             }
                         }
@@ -274,7 +274,7 @@ export class AttendanceService extends BaseDataService {
             const records = await this.getAttendanceForStudent(studentId, subjectId, termKey);
             if (records.length === 0) return 100;
             
-            const presentCount = records.filter(r => r.presentStudentIds.includes(studentId)).length;
+            const presentCount = records.filter(r => r.presentStudentIds.includes(studentId) || r.recoveredStudentIds?.includes(studentId)).length;
             const percentage = (presentCount / records.length) * 100;
             return Math.round(percentage * 10) / 10;
         } catch (error) {
@@ -521,6 +521,60 @@ export class AttendanceService extends BaseDataService {
             await deleteDoc(doc(this.db!, this.leavePermissionsCollection, id));
         } catch (error) {
             console.error('Error deleting leave permission:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Recover a specified number of absent periods for a student in a subject.
+     */
+    public async recoverAbsences(studentId: string, subjectId: string, count: number | 'all', termKey: string): Promise<void> {
+        try {
+            const records = await this.getAttendanceForStudent(studentId, subjectId, termKey);
+            // Filter records where student was absent and not yet recovered
+            const absentRecords = records.filter(r => 
+                r.absentStudentIds.includes(studentId) && 
+                !r.recoveredStudentIds?.includes(studentId)
+            );
+
+            // Sort by date descending (recover recent ones first)
+            absentRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+            const toRecoverCount = count === 'all' ? absentRecords.length : Math.min(count, absentRecords.length);
+            const recordsToUpdate = absentRecords.slice(0, toRecoverCount);
+
+            for (const record of recordsToUpdate) {
+                const updatedRecoveredStudentIds = [...(record.recoveredStudentIds || [])];
+                if (!updatedRecoveredStudentIds.includes(studentId)) {
+                    updatedRecoveredStudentIds.push(studentId);
+                }
+                const updatedRecoveredReasons = { 
+                    ...(record.recoveredReasons || {}),
+                    [studentId]: 'Recovered by teacher'
+                };
+
+                // Save back to db
+                await this.markAttendance({
+                    date: record.date,
+                    subjectId: record.subjectId,
+                    className: record.className,
+                    presentStudentIds: record.presentStudentIds,
+                    absentStudentIds: record.absentStudentIds,
+                    recoveredStudentIds: updatedRecoveredStudentIds,
+                    absentReasons: record.absentReasons || {},
+                    recoveredReasons: updatedRecoveredReasons,
+                    markedBy: record.markedBy,
+                    markedAt: record.markedAt,
+                    isAdditional: record.isAdditional,
+                    substitutedSubjectId: record.substitutedSubjectId,
+                    principalApprovedAbsences: record.principalApprovedAbsences,
+                    granularPermissions: record.granularPermissions,
+                    semester: record.semester,
+                    academicYear: record.academicYear
+                });
+            }
+        } catch (error) {
+            console.error('Error recovering absences:', error);
             throw error;
         }
     }

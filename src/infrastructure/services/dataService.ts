@@ -693,6 +693,10 @@ export class DataService extends BaseDataService {
         return this.attendanceService.deleteLeavePermission(id);
     }
 
+    async recoverAbsences(studentId: string, subjectId: string, count: number | 'all', termKey: string): Promise<void> {
+        return this.attendanceService.recoverAbsences(studentId, subjectId, count, termKey);
+    }
+
     subscribeToGlobalSettings(callback: (settings: GlobalSettings) => void): () => void {
         return this.settingsService.subscribeToGlobalSettings(callback);
     }

@@ -15,8 +15,15 @@ const StudentAttendancePortal: React.FC = () => {
         subject: SubjectConfig; 
         percentage: number; 
         present: number; 
+        recovered: number;
         total: number;
-        absentRecords: Array<{ date: string; className: string; reason?: string }>;
+        absentRecords: Array<{ 
+            date: string; 
+            className: string; 
+            reason?: string; 
+            isRecovered?: boolean; 
+            recoveredReason?: string; 
+        }>;
     }>>([]);
     const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
     const [error, setError] = useState('');
@@ -48,14 +55,17 @@ const StudentAttendancePortal: React.FC = () => {
                 const records = await dataService.getAttendanceForStudent(foundStudent.id, subject.id, selectedTermKey);
                 const total = records.length;
                 const present = records.filter(r => r.presentStudentIds.includes(foundStudent.id)).length;
-                const percentage = total > 0 ? (present / total) * 100 : 100;
+                const recovered = records.filter(r => r.absentStudentIds.includes(foundStudent.id) && r.recoveredStudentIds?.includes(foundStudent.id)).length;
+                const percentage = total > 0 ? ((present + recovered) / total) * 100 : 100;
 
                 const absentRecords = records
                     .filter(r => r.absentStudentIds.includes(foundStudent.id))
                     .map(r => ({
                         date: r.date,
                         className: r.className,
-                        reason: r.absentReasons?.[foundStudent.id]
+                        reason: r.absentReasons?.[foundStudent.id],
+                        isRecovered: r.recoveredStudentIds?.includes(foundStudent.id),
+                        recoveredReason: r.recoveredReasons?.[foundStudent.id]
                     }))
                     .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -63,6 +73,7 @@ const StudentAttendancePortal: React.FC = () => {
                     subject,
                     percentage,
                     present,
+                    recovered,
                     total,
                     absentRecords
                 };
@@ -170,15 +181,26 @@ const StudentAttendancePortal: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-4">
-                                        <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-100 flex">
                                             <div
-                                                className={`h-full transition-all duration-1000 rounded-full ${stat.percentage < 75 ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                                                style={{ width: `${stat.percentage}%` }}
+                                                className={`h-full transition-all duration-1000 ${stat.percentage < 75 ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                                                style={{ width: `${stat.total > 0 ? (stat.present / stat.total) * 100 : 100}%` }}
                                             ></div>
+                                            {stat.recovered > 0 && (
+                                                <div
+                                                    className="h-full bg-amber-500 transition-all duration-1000 border-l border-white"
+                                                    style={{ width: `${(stat.recovered / stat.total) * 100}%` }}
+                                                ></div>
+                                            )}
                                         </div>
                                         <div className="flex justify-between items-center bg-slate-50/50 p-2 rounded-xl border border-slate-100/50">
                                             <span className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Attendance Log</span>
-                                            <span className="text-sm font-black text-slate-900 mr-2">{stat.present}<span className="text-slate-300 mx-1.5">/</span>{stat.total}</span>
+                                            <span className="text-sm font-black text-slate-900 mr-2">
+                                                {stat.present}
+                                                {stat.recovered > 0 && <span className="text-amber-600 font-bold text-xs"> + {stat.recovered} rec</span>}
+                                                <span className="text-slate-300 mx-1.5">/</span>
+                                                {stat.total}
+                                            </span>
                                         </div>
                                         {stat.percentage < 75 && (
                                             <div className="flex items-center gap-2 text-rose-600 bg-rose-50/80 backdrop-blur-sm p-3 rounded-xl border border-rose-100">
@@ -206,31 +228,46 @@ const StudentAttendancePortal: React.FC = () => {
                                         {stat.absentRecords.length > 0 ? (
                                             <div className="space-y-4">
                                                 {stat.absentRecords.map((absent, i) => (
-                                                    <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm relative overflow-hidden group">
-                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-400 rounded-full opacity-60"></div>
+                                                    <div key={i} className={`p-5 rounded-2xl border shadow-sm relative overflow-hidden group transition-all duration-300 ${absent.isRecovered ? 'bg-amber-50/30 border-amber-200' : 'bg-white border-slate-200/60'}`}>
+                                                        <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-full opacity-60 ${absent.isRecovered ? 'bg-amber-500' : 'bg-rose-450'}`}></div>
                                                         <div className="flex justify-between items-start">
                                                             <div className="flex flex-col gap-1">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-[13px] font-black text-slate-900 leading-none">{getDayOfWeek(absent.date)}</span>
-                                                                    <span className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase tracking-tighter border border-slate-200/50">{absent.className}</span>
+                                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black border uppercase tracking-tighter ${
+                                                                        absent.isRecovered 
+                                                                            ? 'bg-amber-100 text-amber-700 border-amber-250' 
+                                                                            : 'bg-rose-100 text-rose-700 border-rose-250'
+                                                                    }`}>{absent.isRecovered ? 'Recovered' : 'Absent'}</span>
                                                                 </div>
                                                                 <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 mt-1">
                                                                     <i className="fa-regular fa-calendar text-[10px]"></i>
                                                                     {formatDate(absent.date)}
                                                                 </span>
                                                             </div>
-                                                            <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
-                                                                <i className="fa-solid fa-calendar-xmark text-xs"></i>
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${absent.isRecovered ? 'bg-amber-100/50 text-amber-600' : 'bg-rose-50 text-rose-500'}`}>
+                                                                <i className={`fa-solid ${absent.isRecovered ? 'fa-square-check' : 'fa-calendar-xmark text-xs'}`}></i>
                                                             </div>
                                                         </div>
                                                         {absent.reason && (
-                                                            <div className="mt-3 pt-3 border-t border-slate-50 flex items-start gap-2.5 bg-emerald-50/30 -mx-5 -mb-5 p-4 rounded-b-2xl">
-                                                                <div className="w-6 h-6 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                                    <i className="fa-solid fa-comment-dots text-[10px] text-emerald-600"></i>
+                                                            <div className="mt-3 pt-3 border-t border-slate-50 flex items-start gap-2.5 bg-rose-50/20 -mx-5 p-4">
+                                                                <div className="w-6 h-6 bg-rose-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                                    <i className="fa-solid fa-comment-dots text-[10px] text-rose-600"></i>
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.1em] mb-0.5 leading-none">Teacher Remark</p>
-                                                                    <p className="text-[11px] font-medium text-slate-600 italic">"{absent.reason}"</p>
+                                                                    <p className="text-[9px] font-black text-rose-605 uppercase tracking-[0.1em] mb-0.5 leading-none">Excuse Reason</p>
+                                                                    <p className="text-[11px] font-medium text-slate-650 italic">"{absent.reason}"</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {absent.isRecovered && (
+                                                            <div className="mt-2 pt-2 border-t border-slate-50 flex items-start gap-2.5 bg-amber-50/40 -mx-5 -mb-5 p-4 rounded-b-2xl">
+                                                                <div className="w-6 h-6 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                                    <i className="fa-solid fa-shield-halved text-[10px] text-amber-600"></i>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[9px] font-black text-amber-605 uppercase tracking-[0.1em] mb-0.5 leading-none">Recovery Info</p>
+                                                                    <p className="text-[11px] font-medium text-slate-650 italic">"{absent.recoveredReason || 'Recovered by teacher'}"</p>
                                                                 </div>
                                                             </div>
                                                         )}
