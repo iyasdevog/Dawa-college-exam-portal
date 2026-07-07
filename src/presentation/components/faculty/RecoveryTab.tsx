@@ -70,7 +70,7 @@ const RecoveryTab: React.FC = () => {
         const lower = searchTerm.toLowerCase();
         return allStudents.filter(s =>
             s.name.toLowerCase().includes(lower) ||
-            s.adNo.toLowerCase().includes(lower)
+            String(s.adNo || '').toLowerCase().includes(lower)
         );
     }, [searchTerm, allStudents]);
 

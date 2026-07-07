@@ -11,6 +11,7 @@ import MasterTimetable from './management/MasterTimetable';
 import StudentAttendanceStats from './management/StudentAttendanceStats';
 import { useTerm } from '../viewmodels/TermContext';
 import { User } from '../../domain/entities/User';
+import RecoveryTab from './faculty/RecoveryTab';
 
 interface AttendancePortalProps {
     currentUser?: User | null;
@@ -30,6 +31,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
     const tabs = [
         { id: 'marking', label: 'Attendance Marking', icon: 'fa-clipboard-user' },
         { id: 'monitor', label: 'Academic Monitor', icon: 'fa-chart-pie' },
+        { id: 'recovery', label: 'Attendance Recovery', icon: 'fa-clock-rotate-left' },
         ...(isAdmin ? [
             { id: 'calendar', label: 'Academic Calendar', icon: 'fa-calendar-check' },
             { id: 'generator', label: 'Timetable Generator', icon: 'fa-wand-magic-sparkles' },
@@ -148,6 +150,9 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                                 setActiveTab('marking');
                             }}
                         />
+                    )}
+                    {activeTab === 'recovery' && (
+                        <RecoveryTab />
                     )}
                     {activeTab === 'calendar' && (
                         <AcademicCalendar />
