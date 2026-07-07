@@ -252,6 +252,25 @@ export class DataService extends BaseDataService {
         return this.attendanceService.getAcademicCalendar(termKey);
     }
 
+    /**
+     * Transfer a student from one optional subject to another within the same class/term.
+     * Migrates both marks (AcademicService) and attendance records (AttendanceService).
+     * Also updates subject enrollment arrays so the student appears on future attendance sheets.
+     */
+    async transferStudentSubject(
+        studentId: string,
+        className: string,
+        oldSubjectId: string,
+        newSubjectId: string,
+        termKey?: string
+    ): Promise<void> {
+        const activeTerm = termKey || this.getCurrentTermKey();
+        // Step 1: Migrate marks & re-enroll in subjects
+        await this.academicService.transferStudentSubjectMarks(studentId, oldSubjectId, newSubjectId, activeTerm);
+        // Step 2: Migrate attendance records
+        await this.attendanceService.transferStudentSubjectAttendance(studentId, className, oldSubjectId, newSubjectId, activeTerm);
+    }
+
     // --- Administrative ---
     async getAllApplications(termKey?: string): Promise<StudentApplication[]> {
         return this.administrativeService.getAllApplications(termKey);

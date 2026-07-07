@@ -298,6 +298,79 @@ export class AcademicService extends BaseDataService {
         }
     }
 
+    /**
+     * Transfer a student's marks from one optional subject to another within the same term.
+     * Used when a student switches subjects (class stays the same).
+     *
+     * Steps:
+     *  1. Read existing marks for oldSubjectId.
+     *  2. Copy them to newSubjectId in the term's academic history.
+     *  3. Delete marks for oldSubjectId.
+     *  4. Re-enroll the student in newSubjectId, remove from oldSubjectId.
+     *  5. Recalculate term metrics (grandTotal, average, performanceLevel).
+     */
+    public async transferStudentSubjectMarks(
+        studentId: string,
+        oldSubjectId: string,
+        newSubjectId: string,
+        termKey: string
+    ): Promise<void> {
+        try {
+            const studentDocRef = doc(this.db, this.studentsCollection, studentId);
+            const studentSnap = await getDoc(studentDocRef);
+            if (!studentSnap.exists()) throw new Error('Student not found');
+
+            const data = studentSnap.data();
+            const termData = (data.academicHistory || {})[termKey] || {};
+            const currentMarks: Record<string, SubjectMarks> = { ...(termData.marks || {}) };
+            const currentMetadata: Record<string, any> = { ...(termData.subjectMetadata || {}) };
+
+            // Move marks: copy old → new, delete old
+            if (currentMarks[oldSubjectId]) {
+                currentMarks[newSubjectId] = { ...currentMarks[oldSubjectId] };
+                delete currentMarks[oldSubjectId];
+            }
+            if (currentMetadata[oldSubjectId]) {
+                currentMetadata[newSubjectId] = { ...currentMetadata[oldSubjectId] };
+                delete currentMetadata[oldSubjectId];
+            }
+
+            // Enrich metadata for new subject if possible
+            const newSubject = await this.getSubjectById(newSubjectId);
+            if (newSubject) {
+                currentMetadata[newSubjectId] = {
+                    name: newSubject.name,
+                    arabicName: newSubject.arabicName,
+                    maxINT: newSubject.maxINT,
+                    maxEXT: newSubject.maxEXT,
+                    passingTotal: newSubject.passingTotal,
+                    facultyName: newSubject.facultyName,
+                    subjectType: newSubject.subjectType
+                };
+            }
+
+            const allSubjects = await this.getRawAllSubjects();
+            const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
+
+            await updateDoc(studentDocRef, {
+                [`academicHistory.${termKey}.marks`]: currentMarks,
+                [`academicHistory.${termKey}.subjectMetadata`]: currentMetadata,
+                [`academicHistory.${termKey}.grandTotal`]: grandTotal,
+                [`academicHistory.${termKey}.average`]: average,
+                [`academicHistory.${termKey}.performanceLevel`]: performanceLevel
+            });
+
+            // Update enrollment: remove from old, add to new (for elective subjects)
+            await this.unenrollStudentFromSubject(oldSubjectId, studentId);
+            await this.enrollStudentInSubject(newSubjectId, studentId);
+
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error transferring student subject marks:', error);
+            throw error;
+        }
+    }
+
     public async updateMarks(studentId: string, subjectId: string, marks: Partial<SubjectMarks>, termKey?: string): Promise<void> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();

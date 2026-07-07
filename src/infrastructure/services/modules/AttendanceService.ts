@@ -528,6 +528,101 @@ export class AttendanceService extends BaseDataService {
     /**
      * Recover a specified number of absent periods for a student in a subject.
      */
+    /**
+     * Transfer a student's attendance from one subject to another within the same class.
+     * Used when a student switches optional subjects (e.g. Basic English → Communicative English).
+     *
+     * For every daily attendance document in the term for this class:
+     *  1. Remove the student's IDs from oldSubjectId periods.
+     *  2. Copy those IDs into the newSubjectId period (creating it if not present).
+     *  3. Also enroll the student in the target subject so they appear in future attendance sheets.
+     */
+    public async transferStudentSubjectAttendance(
+        studentId: string,
+        className: string,
+        oldSubjectId: string,
+        newSubjectId: string,
+        termKey: string
+    ): Promise<void> {
+        try {
+            const dbClassName = this.getDatabaseClassName(termKey, className);
+            const q = query(
+                collection(this.db!, this.attendanceCollection),
+                where('className', '==', dbClassName),
+                where('termKey', '==', termKey)
+            );
+            const snapshot = await getDocs(q);
+
+            for (const docSnap of snapshot.docs) {
+                const data = docSnap.data();
+                const periods: Record<string, any> = data.periods || {};
+
+                // Find the period key that matches oldSubjectId
+                const oldPeriodKey = Object.keys(periods).find(
+                    k => k === oldSubjectId || k.startsWith(`${oldSubjectId}_`)
+                );
+
+                if (!oldPeriodKey) continue; // Student had no record in this subject for this day
+
+                const oldPeriod = periods[oldPeriodKey];
+                const isPresent = oldPeriod.presentStudentIds?.includes(studentId);
+                const isAbsent = oldPeriod.absentStudentIds?.includes(studentId);
+                const isRecovered = oldPeriod.recoveredStudentIds?.includes(studentId);
+
+                if (!isPresent && !isAbsent) continue; // Student not in this record
+
+                // Build the updated old period data — remove this student
+                const updatedOldPeriod = {
+                    ...oldPeriod,
+                    presentStudentIds: (oldPeriod.presentStudentIds || []).filter((id: string) => id !== studentId),
+                    absentStudentIds: (oldPeriod.absentStudentIds || []).filter((id: string) => id !== studentId),
+                    recoveredStudentIds: (oldPeriod.recoveredStudentIds || []).filter((id: string) => id !== studentId),
+                };
+
+                // Build the updated new period data — insert this student
+                const existingNewPeriod = periods[newSubjectId] || {
+                    presentStudentIds: [],
+                    absentStudentIds: [],
+                    recoveredStudentIds: [],
+                    absentReasons: {},
+                    recoveredReasons: {},
+                    markedBy: oldPeriod.markedBy || '',
+                    markedAt: oldPeriod.markedAt || Date.now(),
+                    isAdditional: false,
+                    substitutedSubjectId: null,
+                    principalApprovedAbsences: [],
+                    granularPermissions: {}
+                };
+
+                const updatedNewPeriod = {
+                    ...existingNewPeriod,
+                    presentStudentIds: isPresent && !existingNewPeriod.presentStudentIds.includes(studentId)
+                        ? [...existingNewPeriod.presentStudentIds, studentId]
+                        : existingNewPeriod.presentStudentIds,
+                    absentStudentIds: isAbsent && !existingNewPeriod.absentStudentIds.includes(studentId)
+                        ? [...existingNewPeriod.absentStudentIds, studentId]
+                        : existingNewPeriod.absentStudentIds,
+                    recoveredStudentIds: isRecovered && !existingNewPeriod.recoveredStudentIds.includes(studentId)
+                        ? [...existingNewPeriod.recoveredStudentIds, studentId]
+                        : existingNewPeriod.recoveredStudentIds,
+                };
+
+                // Write back via merged update
+                const docRef = doc(this.db!, this.attendanceCollection, docSnap.id);
+                await updateDoc(docRef, {
+                    [`periods.${oldPeriodKey}`]: updatedOldPeriod,
+                    [`periods.${newSubjectId}`]: updatedNewPeriod,
+                });
+            }
+
+            // Invalidate cache
+            this.recordsCache.delete(termKey);
+        } catch (error) {
+            console.error('Error transferring student subject attendance:', error);
+            throw error;
+        }
+    }
+
     public async recoverAbsences(studentId: string, subjectId: string, count: number | 'all', termKey: string): Promise<void> {
         try {
             const records = await this.getAttendanceForStudent(studentId, subjectId, termKey);

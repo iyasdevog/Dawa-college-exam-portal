@@ -5,6 +5,124 @@ import { useTerm } from '../../viewmodels/TermContext';
 
 const RecoveryTab: React.FC = () => {
     const { activeTerm } = useTerm();
+
+    // --- Sub-tab state ---
+    const [subTab, setSubTab] = useState<'recovery' | 'transfer'>('recovery');
+
+    // ── Transfer sub-tab state ──────────────────────────────────────────────
+    const [txSearchTerm, setTxSearchTerm] = useState('');
+    const [txAllStudents, setTxAllStudents] = useState<StudentRecord[]>([]);
+    const [txSelectedStudent, setTxSelectedStudent] = useState<StudentRecord | null>(null);
+    const [txAllSubjects, setTxAllSubjects] = useState<SubjectConfig[]>([]);
+    const [txStudentSubjects, setTxStudentSubjects] = useState<SubjectConfig[]>([]); // elective subjects student is enrolled in
+    const [txFromSubjectId, setTxFromSubjectId] = useState('');
+    const [txToSubjectId, setTxToSubjectId] = useState('');
+    const [txStatus, setTxStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [txMessage, setTxMessage] = useState('');
+    const [txIsLoading, setTxIsLoading] = useState(false);
+
+    // Matching students for transfer search
+    const txMatchingStudents = useMemo(() => {
+        if (!txSearchTerm.trim()) return [];
+        const lower = txSearchTerm.toLowerCase();
+        return txAllStudents.filter(s =>
+            s.name.toLowerCase().includes(lower) ||
+            String(s.adNo || '').toLowerCase().includes(lower)
+        );
+    }, [txSearchTerm, txAllStudents]);
+
+    // All elective subjects for the student's class (excluding current enrollment)
+    const txAvailableTargets = useMemo(() => {
+        if (!txSelectedStudent || !txFromSubjectId) return [];
+        return txAllSubjects.filter(s =>
+            s.id !== txFromSubjectId &&
+            s.subjectType === 'elective' &&
+            (s.targetClasses || []).includes(txSelectedStudent.className)
+        );
+    }, [txAllSubjects, txSelectedStudent, txFromSubjectId]);
+
+    // Load students + subjects when transfer tab is opened
+    useEffect(() => {
+        if (subTab !== 'transfer') return;
+        const load = async () => {
+            setTxIsLoading(true);
+            try {
+                const [students, subjects] = await Promise.all([
+                    dataService.getAllStudents(activeTerm),
+                    dataService.getAllSubjects(activeTerm),
+                ]);
+                setTxAllStudents(students);
+                setTxAllSubjects(subjects);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setTxIsLoading(false);
+            }
+        };
+        load();
+    }, [subTab, activeTerm]);
+
+    // When a transfer student is selected, find their enrolled elective subjects
+    const handleTxSelectStudent = useCallback(async (student: StudentRecord) => {
+        setTxSelectedStudent(student);
+        setTxSearchTerm('');
+        setTxFromSubjectId('');
+        setTxToSubjectId('');
+        setTxStatus('idle');
+        setTxMessage('');
+        setTxIsLoading(true);
+        try {
+            // Derive enrolled elective subjects from txAllSubjects
+            const electiveSubjects = txAllSubjects.filter(s =>
+                s.subjectType === 'elective' &&
+                (s.targetClasses || []).includes(student.className) &&
+                (s.enrolledStudents || []).includes(student.id)
+            );
+            setTxStudentSubjects(electiveSubjects);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setTxIsLoading(false);
+        }
+    }, [txAllSubjects]);
+
+    const handleExecuteTransfer = useCallback(async () => {
+        if (!txSelectedStudent || !txFromSubjectId || !txToSubjectId) return;
+        const fromSubject = txAllSubjects.find(s => s.id === txFromSubjectId);
+        const toSubject = txAllSubjects.find(s => s.id === txToSubjectId);
+        const confirm = window.confirm(
+            `Transfer ${txSelectedStudent.name} from "${fromSubject?.name}" to "${toSubject?.name}"?\n\n` +
+            `This will move all attendance records and marks to the new subject. This cannot be undone.`
+        );
+        if (!confirm) return;
+
+        setTxStatus('loading');
+        setTxMessage('Transferring records...');
+        try {
+            await dataService.transferStudentSubject(
+                txSelectedStudent.id,
+                txSelectedStudent.className,
+                txFromSubjectId,
+                txToSubjectId,
+                activeTerm
+            );
+            setTxStatus('success');
+            setTxMessage(`✓ ${txSelectedStudent.name} has been transferred from "${fromSubject?.name}" to "${toSubject?.name}". They will now appear in the new subject's attendance sheets.`);
+            // Refresh elective list for this student
+            const updated = txAllSubjects.filter(s =>
+                s.subjectType === 'elective' &&
+                (s.targetClasses || []).includes(txSelectedStudent.className) &&
+                (s.id === txToSubjectId || ((s.enrolledStudents || []).includes(txSelectedStudent.id) && s.id !== txFromSubjectId))
+            );
+            setTxStudentSubjects(updated);
+            setTxFromSubjectId('');
+            setTxToSubjectId('');
+        } catch (e) {
+            console.error(e);
+            setTxStatus('error');
+            setTxMessage('Transfer failed. Please try again.');
+        }
+    }, [txSelectedStudent, txFromSubjectId, txToSubjectId, txAllSubjects, activeTerm]);
     const [searchTerm, setSearchTerm] = useState('');
     const [allStudents, setAllStudents] = useState<StudentRecord[]>([]);
     const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
@@ -195,6 +313,178 @@ const RecoveryTab: React.FC = () => {
 
     return (
         <div className="px-4 md:px-0 mt-8 space-y-6">
+
+            {/* Sub-tab switcher */}
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full sm:w-fit overflow-x-auto no-scrollbar">
+                <button
+                    onClick={() => setSubTab('recovery')}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex-shrink-0 flex items-center gap-2 ${subTab === 'recovery' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                    <i className="fa-solid fa-clock-rotate-left" /> Recovery
+                </button>
+                <button
+                    onClick={() => setSubTab('transfer')}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex-shrink-0 flex items-center gap-2 ${subTab === 'transfer' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                    <i className="fa-solid fa-right-left" /> Subject Transfer
+                </button>
+            </div>
+
+            {/* ── Transfer Panel ─────────────────────────────────────────── */}
+            {subTab === 'transfer' && (
+                <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-200 space-y-6">
+                    <div>
+                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-1">
+                            <i className="fa-solid fa-right-left mr-2 text-violet-600" />
+                            Student Subject Transfer
+                        </h3>
+                        <p className="text-slate-500 text-sm">
+                            Move a student from one optional subject (e.g. Basic English) to another (e.g. Communicative English)
+                            within the same class. All existing attendance records and marks will be migrated — the student will
+                            appear in the new subject's attendance sheet immediately.
+                        </p>
+                    </div>
+
+                    {txIsLoading && (
+                        <div className="flex items-center gap-3 text-slate-500 text-sm font-bold py-4">
+                            <div className="loader-ring" /> Loading…
+                        </div>
+                    )}
+
+                    {/* Student Search */}
+                    {!txIsLoading && (
+                        <div className="relative max-w-md">
+                            <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">
+                                Search Student
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={txSearchTerm}
+                                    onChange={(e) => setTxSearchTerm(e.target.value)}
+                                    placeholder="Enter name or Admission No…"
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 transition-all font-bold text-sm"
+                                />
+                                <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                            </div>
+
+                            {txMatchingStudents.length > 0 && (
+                                <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border-2 border-slate-100 shadow-2xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 p-2">
+                                    {txMatchingStudents.map(s => (
+                                        <button
+                                            key={s.id}
+                                            onClick={() => handleTxSelectStudent(s)}
+                                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-violet-50 transition-colors text-left"
+                                        >
+                                            <div className="w-9 h-9 bg-violet-100 rounded-xl flex items-center justify-center shrink-0">
+                                                <i className="fa-solid fa-user text-violet-600 text-sm" />
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-slate-900 text-sm leading-tight">{s.name}</p>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.className} · Ad# {s.adNo}</p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Selected student + transfer form */}
+                    {txSelectedStudent && !txIsLoading && (
+                        <div className="space-y-5 pt-2 border-t border-slate-100">
+                            {/* Student badge */}
+                            <div className="flex items-center gap-3 bg-violet-50 border border-violet-100 rounded-2xl px-5 py-4">
+                                <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center text-white shrink-0">
+                                    <i className="fa-solid fa-user" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-black text-slate-900 text-base leading-tight truncate">{txSelectedStudent.name}</p>
+                                    <p className="text-[10px] text-violet-500 font-black uppercase tracking-widest">{txSelectedStudent.className} · Ad# {txSelectedStudent.adNo}</p>
+                                </div>
+                                <button
+                                    onClick={() => { setTxSelectedStudent(null); setTxStatus('idle'); setTxMessage(''); }}
+                                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-all shrink-0"
+                                >
+                                    <i className="fa-solid fa-xmark text-sm" />
+                                </button>
+                            </div>
+
+                            {/* Enrolled elective subjects */}
+                            {txStudentSubjects.length === 0 ? (
+                                <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm text-amber-700 font-bold">
+                                    <i className="fa-solid fa-triangle-exclamation mr-2" />
+                                    This student is not enrolled in any elective subject. Transfer is only for elective/optional subjects.
+                                </div>
+                            ) : (
+                                <div className="grid gap-5 sm:grid-cols-2">
+                                    {/* FROM subject */}
+                                    <div>
+                                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">
+                                            <i className="fa-solid fa-arrow-right-from-bracket mr-1 text-rose-400" />
+                                            Transfer From (Current Subject)
+                                        </label>
+                                        <select
+                                            value={txFromSubjectId}
+                                            onChange={e => { setTxFromSubjectId(e.target.value); setTxToSubjectId(''); }}
+                                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-rose-500/10 focus:border-rose-400 transition-all outline-none"
+                                        >
+                                            <option value="">— Select current subject —</option>
+                                            {txStudentSubjects.map(s => (
+                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* TO subject */}
+                                    <div>
+                                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">
+                                            <i className="fa-solid fa-arrow-right-to-bracket mr-1 text-emerald-500" />
+                                            Transfer To (New Subject)
+                                        </label>
+                                        <select
+                                            value={txToSubjectId}
+                                            onChange={e => setTxToSubjectId(e.target.value)}
+                                            disabled={!txFromSubjectId}
+                                            className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all outline-none disabled:opacity-50"
+                                        >
+                                            <option value="">— Select new subject —</option>
+                                            {txAvailableTargets.map(s => (
+                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Confirm button */}
+                            {txFromSubjectId && txToSubjectId && txStatus !== 'success' && (
+                                <button
+                                    onClick={handleExecuteTransfer}
+                                    disabled={txStatus === 'loading'}
+                                    className="flex items-center gap-3 px-8 py-3 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white font-black text-sm rounded-2xl shadow-lg shadow-violet-200 transition-all"
+                                >
+                                    {txStatus === 'loading' ? (
+                                        <><div className="loader-ring-sm" /> Transferring…</>
+                                    ) : (
+                                        <><i className="fa-solid fa-right-left" /> Execute Transfer</>
+                                    )}
+                                </button>
+                            )}
+
+                            {/* Status message */}
+                            {txMessage && (
+                                <div className={`rounded-2xl px-5 py-4 text-sm font-bold border ${txStatus === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : txStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                                    {txMessage}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Recovery Panel ─────────────────────────────────────────── */}
+            {subTab === 'recovery' && (
             <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-200">
                 <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tighter">
                     <i className="fa-solid fa-clock-rotate-left mr-2 text-emerald-600"></i>
@@ -458,6 +748,7 @@ const RecoveryTab: React.FC = () => {
                     </div>
                 )}
             </div>
+            )} {/* end subTab recovery */}
 
             {/* Modal for Recovery Count configuration */}
             {recoveryModal && recoveryModal.isOpen && (

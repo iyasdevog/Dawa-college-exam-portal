@@ -10,7 +10,6 @@ import { useTerm } from '../viewmodels/TermContext';
 import UploadTrackerTab from './faculty/UploadTrackerTab';
 import ReleaseSettingsTab from './faculty/ReleaseSettingsTab';
 import MarksEntryTab from './faculty/MarksEntryTab';
-import RecoveryTab from './faculty/RecoveryTab';
 import { useFacultyEntry } from '../hooks/useFacultyEntry';
 
 interface FacultyEntryProps {
@@ -27,7 +26,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
     const { activeTerm } = useTerm();
 
-    const [activeTab, setActiveTab] = useState<'marks-entry' | 'upload-tracker' | 'release-settings' | 'recovery'>('marks-entry');
+    const [activeTab, setActiveTab] = useState<'marks-entry' | 'upload-tracker' | 'release-settings'>('marks-entry');
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
     const [selectedClass, setSelectedClass] = useState('');
     const [subjectType, setSubjectType] = useState<'general' | 'elective'>('general');
@@ -230,12 +229,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                     >
                         <i className="fa-solid fa-chart-line mr-2"></i> Tracker
                     </button>
-                    <button
-                        onClick={() => setActiveTab('recovery')}
-                        className={`shrink-0 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'recovery' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                        <i className="fa-solid fa-clock-rotate-left mr-2"></i> Recovery
-                    </button>
                     {(currentUser?.role === 'admin') && (
                         <button
                             onClick={() => setActiveTab('release-settings')}
@@ -284,9 +277,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                     />
                 )}
 
-                {activeTab === 'recovery' && (
-                    <RecoveryTab />
-                )}
             </main>
         </div>
     );

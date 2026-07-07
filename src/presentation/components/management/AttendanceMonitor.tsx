@@ -5,6 +5,7 @@ import { useMobile } from '../../hooks/useMobile';
 import { useTerm } from '../../viewmodels/TermContext';
 import StudentAttendanceStats from './StudentAttendanceStats';
 import PrincipalMonitor from './PrincipalMonitor';
+import RecoveryTab from '../faculty/RecoveryTab';
 
 interface AttendanceMonitorProps {
     students: StudentRecord[];
@@ -23,7 +24,7 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const [selectedSubject, setSelectedSubject] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewingRecord, setViewingRecord] = useState<AttendanceRecord | null>(null);
-    const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats' | 'subject-report' | 'principal-monitor'>('records');
+    const [viewMode, setViewMode] = useState<'records' | 'analytics' | 'student-stats' | 'subject-report' | 'principal-monitor' | 'recovery'>('records');
     const [selectedAnalyticsClass, setSelectedAnalyticsClass] = useState<string | null>(null);
     const [timelineDate, setTimelineDate] = useState<'today' | 'tomorrow'>('today');
     const [facultyFilter, setFacultyFilter] = useState('All');
@@ -370,6 +371,12 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                 >
                     Principal Monitor
                 </button>
+                <button
+                    onClick={() => setViewMode('recovery')}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all snap-start flex-shrink-0 ${viewMode === 'recovery' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                    Recovery & Transfer
+                </button>
             </div>
 
             {viewMode === 'subject-report' ? (
@@ -546,6 +553,8 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                     leavePermissions={leavePermissions}
                     onRefresh={loadRecords}
                 />
+            ) : viewMode === 'recovery' ? (
+                <RecoveryTab />
             ) : (
                 <div className="flex flex-col lg:flex-row gap-8">
                     <div className="flex-1 space-y-6">
