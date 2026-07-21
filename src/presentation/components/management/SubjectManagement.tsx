@@ -31,13 +31,22 @@ const SubjectRow = React.memo(({ subject, index, onEdit, onDelete, onManageEnrol
             </td>
             <td className="hidden sm:table-cell p-4 text-slate-600 text-sm">{subject.facultyName || '-'}</td>
             <td className="p-2 sm:p-4 text-center">
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] uppercase font-bold tracking-wider ${
-                    (subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 
-                    subject.subjectType === 'school_subject' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                    'bg-purple-50 text-purple-700 border border-purple-100'
-                }`}>
-                    {subject.subjectType === 'school_subject' ? 'School Subject' : (subject.subjectType || 'general')}
-                </span>
+                <div className="flex flex-col items-center gap-1">
+                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] uppercase font-bold tracking-wider ${
+                        (subject.subjectType || 'general') === 'general' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 
+                        subject.subjectType === 'school_subject' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                        'bg-purple-50 text-purple-700 border border-purple-100'
+                    }`}>
+                        {subject.subjectType === 'school_subject' ? 'School Subject' : (subject.subjectType || 'general')}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${
+                        subject.activeSemester === 'Odd' ? 'bg-amber-100 text-amber-800' :
+                        subject.activeSemester === 'Even' ? 'bg-sky-100 text-sky-800' :
+                        'bg-slate-100 text-slate-600'
+                    }`}>
+                        {subject.activeSemester || 'Both'} Sem
+                    </span>
+                </div>
             </td>
             <td className="p-2 sm:p-4 text-center font-mono text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">
                 {subject.maxEXT}<span className="text-slate-300 mx-0.5">/</span>{subject.maxINT}
@@ -350,9 +359,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
     };
 
     const handleDeleteSubject = useCallback(async (subject: SubjectConfig & { relatedIds?: string[] }, specificClass?: string) => {
-        const confirmMsg = specificClass
-            ? `Remove ${subject.name} from class ${specificClass}?`
-            : `Delete subject ${subject.name} entirely?`;
+        const confirmMsg = specificClass && subject.targetClasses && subject.targetClasses.length > 1
+            ? `Remove subject "${subject.name}" from class ${specificClass}?\n\nThis will keep the subject active for: ${subject.targetClasses.filter(c => c !== specificClass).join(', ')}.`
+            : `PERMANENTLY DELETE subject "${subject.name}" (${subject.activeSemester || 'Both'} Semester)?\n\nWARNING: This will delete the subject across all years and semesters, and disassociate any existing attendance or marks records linked to it. Are you sure?`;
 
         if (!confirm(confirmMsg)) return;
 
@@ -521,6 +530,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
     // Flatten subjects for the list tab
     const [subjectFacultyFilter, setSubjectFacultyFilter] = useState<string>('All');
     const [subjectClassFilter, setSubjectClassFilter] = useState<string>('All');
+    const [subjectSemesterFilter, setSubjectSemesterFilter] = useState<string>('All');
     const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
 
     // Get unique faculties for filter - Include historical for discovery
@@ -633,6 +643,13 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             });
         }
         
+        if (subjectSemesterFilter !== 'All') {
+            list = list.filter(s => {
+                const sem = (s as any).activeSemester || 'Both';
+                return sem === 'Both' || sem === subjectSemesterFilter;
+            });
+        }
+
         if (subjectSearchQuery.trim() !== '') {
             const query = subjectSearchQuery.toLowerCase();
             list = list.filter(s => 
@@ -642,7 +659,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         }
 
         return list;
-    }, [baseFlattenedSubjectList, subjectFacultyFilter, subjectClassFilter, subjectSearchQuery]);
+    }, [baseFlattenedSubjectList, subjectFacultyFilter, subjectClassFilter, subjectSemesterFilter, subjectSearchQuery]);
 
     // Syllabus Details Filters
     const [detailsNameFilter, setDetailsNameFilter] = useState('All');
@@ -750,6 +767,15 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                 {availableClasses.map(c => (
                                     <option key={c} value={c}>{c}</option>
                                 ))}
+                            </select>
+                            <select
+                                value={subjectSemesterFilter}
+                                onChange={(e) => setSubjectSemesterFilter(e.target.value)}
+                                className="w-full sm:w-auto p-3 sm:p-2 border border-slate-200 rounded-xl bg-white font-bold text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm"
+                            >
+                                <option value="All">All Semesters</option>
+                                <option value="Odd">Odd Semester</option>
+                                <option value="Even">Even Semester</option>
                             </select>
                         </div>
                         <div className="relative w-full sm:flex-1">

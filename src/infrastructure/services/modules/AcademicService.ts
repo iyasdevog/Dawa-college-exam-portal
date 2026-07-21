@@ -137,7 +137,7 @@ export class AcademicService extends BaseDataService {
 
                     if (!subjectYear) {
                         const hasYearSpecificVersion = allSubjects.some(s => 
-                            s.name === subject.name && 
+                            s.name.trim().toLowerCase() === subject.name.trim().toLowerCase() && 
                             s.academicYear && (s.academicYear === targetYear || targetYear.includes(s.academicYear || '')) &&
                             (s.activeSemester === 'Both' || s.activeSemester === targetSem)
                         );
