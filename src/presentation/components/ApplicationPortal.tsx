@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
-import { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord } from '../../domain/entities/types';
+import { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord, ClassReleaseSettings } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import { useTerm } from '../viewmodels/TermContext';
 
@@ -30,6 +30,42 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const { isMobile } = useMobile();
     const { termOptions, activeTerm } = useTerm();
     const [selectedTermKey, setSelectedTermKey] = useState(activeTerm);
+    const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
+
+    // Load release settings once to check application window
+    useEffect(() => {
+        dataService.getReleaseSettings().then(s => setReleaseSettings(s || {})).catch(() => {});
+    }, [activeTerm]);
+
+    // Compute application window status for the selected class
+    const applicationWindowStatus = useMemo(() => {
+        const settings = releaseSettings[className];
+        if (!settings) return { isOpen: false, reason: 'closed' as const, openDate: null as Date | null };
+        const now = new Date();
+        const openDate = settings.applicationWindowOpenDate ? new Date(settings.applicationWindowOpenDate) : null;
+        const closeDate = settings.applicationWindowCloseDate ? new Date(settings.applicationWindowCloseDate) : null;
+        if (settings.applicationWindowOpen) {
+            // Manually open — check if there's a close date that has passed
+            if (closeDate && closeDate <= now) return { isOpen: false, reason: 'closed' as const, openDate: null };
+            return { isOpen: true, reason: 'open' as const, openDate: null };
+        }
+        if (openDate && openDate <= now && (!closeDate || closeDate > now)) {
+            return { isOpen: true, reason: 'open' as const, openDate: null };
+        }
+        return { isOpen: false, reason: 'closed' as const, openDate };
+    }, [className, releaseSettings]);
+
+    // Also check if results are released for the selected class (students can't apply until results are out)
+    const isResultsReleased = useMemo(() => {
+        const settings = releaseSettings[className];
+        if (!settings) return false;
+        if (settings.isReleased) return true;
+        if (settings.releaseDate) return new Date(settings.releaseDate) <= new Date();
+        return false;
+    }, [className, releaseSettings]);
+
+    // Portal is locked if results not released OR application window not open
+    const isPortalLocked = !isResultsReleased || !applicationWindowStatus.isOpen;
     
     // Sync available classes based on selected term
     useEffect(() => {
@@ -104,23 +140,29 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     };
 
     const filteredDisplaySubjects = useMemo(() => {
-        if (!foundStudent || !foundStudent.marks) return subjects;
-        
+        // Prefer academicHistory marks for the selected term; fall back to flat marks
+        const termMarks = foundStudent?.academicHistory?.[selectedTermKey]?.marks
+            ?? foundStudent?.marks
+            ?? {};
+
+        if (!foundStudent) return subjects;
+
         return subjects.filter(subj => {
             // For elective subjects, only show if student is explicitly enrolled
             if (subj.subjectType === 'elective' && !subj.enrolledStudents?.includes(foundStudent.id)) {
                 return false;
             }
 
-            const mark = foundStudent.marks?.[subj.id];
-            
+            const mark = termMarks[subj.id];
+
             if (appType === 'revaluation' || appType === 'improvement') {
+                // Only allow applying for subjects they passed
                 return mark?.status === 'Passed';
             }
-            // For all supplementary types (including cases where no mark exists yet)
+            // For all supplementary types: subjects they failed, pending, or have no mark for
             return !mark || mark.status === 'Failed' || mark.status === 'Pending';
         });
-    }, [subjects, foundStudent, appType]);
+    }, [subjects, foundStudent, appType, selectedTermKey]);
 
     const toggleSubject = (subjectId: string) => {
         setSelectedSubjects(prev => 
@@ -343,6 +385,41 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                             )}
 
                             {view === 'apply' ? (
+                                isPortalLocked ? (
+                                    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                                        <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-6">
+                                            <i className="fa-solid fa-lock text-3xl text-slate-400"></i>
+                                        </div>
+                                        <h3 className="text-xl font-black text-slate-800 mb-2">Applications Closed</h3>
+                                        {!isResultsReleased ? (
+                                            <p className="text-sm text-slate-500 font-medium max-w-xs">
+                                                Results for <strong>{className}</strong> have not been published yet. Applications will open once results are released.
+                                            </p>
+                                        ) : (
+                                            <>
+                                                <p className="text-sm text-slate-500 font-medium max-w-xs">
+                                                    The application window for <strong>{className}</strong> is currently closed.
+                                                </p>
+                                                {applicationWindowStatus.openDate && (
+                                                    <div className="mt-4 px-5 py-3 bg-purple-50 border border-purple-200 rounded-2xl">
+                                                        <p className="text-xs font-black text-purple-700 uppercase tracking-widest">
+                                                            <i className="fa-solid fa-clock mr-2"></i>
+                                                            Opens on {applicationWindowStatus.openDate.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {applicationWindowStatus.openDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setView('status')}
+                                            className="mt-8 px-6 py-3 bg-slate-800 text-white rounded-2xl font-black text-sm hover:bg-slate-700 transition-all"
+                                        >
+                                            <i className="fa-solid fa-list-check mr-2"></i>
+                                            Check Existing Applications
+                                        </button>
+                                    </div>
+                                ) : (
                                 <form onSubmit={handleApply} className="space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="md:col-span-2 space-y-2">
@@ -420,9 +497,14 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className={`text-xs font-bold ${selectedSubjects.includes(s.id) ? 'text-emerald-900' : 'text-slate-600'}`}>{s.name}</span>
-                                                        {foundStudent?.marks?.[s.id] && (
-                                                            <span className="text-[9px] opacity-70 font-bold">Mark: {foundStudent.marks[s.id].total} ({foundStudent.marks[s.id].status})</span>
-                                                        )}
+                                                        {(() => {
+                                                            const termMark = (foundStudent?.academicHistory?.[selectedTermKey]?.marks ?? foundStudent?.marks ?? {})[s.id];
+                                                            return termMark ? (
+                                                                <span className={`text-[9px] opacity-70 font-bold ${termMark.status === 'Passed' ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                                    Mark: {termMark.total} ({termMark.status})
+                                                                </span>
+                                                            ) : null;
+                                                        })()}
                                                     </div>
                                                     {selectedSubjects.includes(s.id) && <i className="fa-solid fa-circle-check text-emerald-500"></i>}
                                                 </button>
@@ -543,6 +625,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                         </button>
                                     </div>
                                 </form>
+                                )
                             ) : (
                                 <div className="space-y-6 flex-1 flex flex-col">
                                     <div className="flex gap-3">

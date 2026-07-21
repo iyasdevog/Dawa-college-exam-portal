@@ -35,9 +35,10 @@ export class SupplementaryService extends BaseDataService {
             if (termKey && termKey !== 'All') {
                 q = query(q, where('examTerm', '==', termKey));
             }
-
             const snapshot = await getDocs(q);
-            const exams = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupplementaryExam));
+            const exams = snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() } as SupplementaryExam))
+                .filter(exam => !exam.isDeleted);
 
             // Enrich with student and subject details
             const [allStudents, allSubjects] = await Promise.all([
@@ -207,10 +208,40 @@ export class SupplementaryService extends BaseDataService {
 
     public async deleteSupplementaryExam(examId: string): Promise<void> {
         try {
+            await updateDoc(doc(this.db, this.supplementaryExamsCollection, examId), { isDeleted: true, deletedAt: Date.now() });
+        } catch (error) {
+            console.error('Error soft-deleting supplementary exam:', error);
+            throw error;
+        }
+    }
+
+    public async hardDeleteSupplementaryExam(examId: string): Promise<void> {
+        try {
             await deleteDoc(doc(this.db, this.supplementaryExamsCollection, examId));
         } catch (error) {
-            console.error('Error deleting supplementary exam:', error);
+            console.error('Error hard-deleting supplementary exam:', error);
             throw error;
+        }
+    }
+
+    public async restoreSupplementaryExam(examId: string): Promise<void> {
+        try {
+            await updateDoc(doc(this.db, this.supplementaryExamsCollection, examId), { isDeleted: false, deletedAt: null });
+        } catch (error) {
+            console.error('Error restoring supplementary exam:', error);
+            throw error;
+        }
+    }
+
+    public async getDeletedSupplementaryExams(): Promise<SupplementaryExam[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.supplementaryExamsCollection));
+            return snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() } as SupplementaryExam))
+                .filter(exam => exam.isDeleted);
+        } catch (error) {
+            console.error('Error fetching deleted supplementary exams:', error);
+            return [];
         }
     }
 

@@ -56,14 +56,16 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 setIsLoading(true);
                 setLoadingStage('initializing');
                 setLoadingProgress(25);
-                const [allSubjects, allStudentsData, termClasses] = await Promise.all([
+                const [allSubjects, allStudentsData, termClasses, relSettings] = await Promise.all([
                     dataService.getAllSubjects(activeTerm),
                     dataService.getAllStudents(activeTerm),
-                    dataService.getClassesByTerm(activeTerm)
+                    dataService.getClassesByTerm(activeTerm),
+                    dataService.getReleaseSettings()
                 ]);
                 setSubjects(allSubjects);
                 setAllStudents(allStudentsData);
                 setAvailableClasses(termClasses);
+                setReleaseSettings(relSettings || {});
                 setLoadingProgress(100);
             } catch (error) {
                 console.error('Error loading initial data:', error);
@@ -256,6 +258,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         isSaving={isSaving}
                         getTouchProps={getTouchProps}
                         studentRefs={studentRefs}
+                        isLockedForEditing={isLockedForEditing}
+                        isAdmin={isAdmin}
                     />
                 )}
 

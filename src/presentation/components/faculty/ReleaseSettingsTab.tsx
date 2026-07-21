@@ -110,6 +110,83 @@ const ReleaseSettingsTab: React.FC<ReleaseSettingsTabProps> = ({
                                     </div>
                                 </div>
 
+                                {/* Application Window */}
+                                <div className="pt-4 mt-2 border-t border-slate-200 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-bold text-purple-700">
+                                            <i className="fa-solid fa-pen-to-square mr-1"></i>
+                                            Application Window
+                                        </span>
+                                        <button
+                                            onClick={() => onUpdateSetting(cls, 'applicationWindowOpen', !settings.applicationWindowOpen)}
+                                            className={`w-12 h-6 rounded-full transition-all duration-300 relative ${settings.applicationWindowOpen ? 'bg-purple-500' : 'bg-slate-300'}`}
+                                        >
+                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${settings.applicationWindowOpen ? 'left-7' : 'left-1'}`}></div>
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400">
+                                        When open, students can submit supplementary / improvement applications for this class.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] font-bold text-purple-600 uppercase tracking-wider">Opens At</label>
+                                            <input
+                                                type="datetime-local"
+                                                value={settings.applicationWindowOpenDate ? settings.applicationWindowOpenDate.substring(0, 16) : ''}
+                                                onChange={(e) => onUpdateSetting(cls, 'applicationWindowOpenDate', e.target.value)}
+                                                className="w-full p-2 text-xs border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 bg-purple-50/30"
+                                                disabled={settings.applicationWindowOpen}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] font-bold text-rose-600 uppercase tracking-wider">Closes At</label>
+                                            <input
+                                                type="datetime-local"
+                                                value={settings.applicationWindowCloseDate ? settings.applicationWindowCloseDate.substring(0, 16) : ''}
+                                                onChange={(e) => onUpdateSetting(cls, 'applicationWindowCloseDate', e.target.value)}
+                                                className="w-full p-2 text-xs border border-rose-200 rounded-lg focus:ring-2 focus:ring-rose-500 bg-rose-50/30"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {(() => {
+                                        const now = new Date();
+                                        const openDate = settings.applicationWindowOpenDate ? new Date(settings.applicationWindowOpenDate) : null;
+                                        const closeDate = settings.applicationWindowCloseDate ? new Date(settings.applicationWindowCloseDate) : null;
+                                        const isOpen = settings.applicationWindowOpen ||
+                                            (openDate && openDate <= now && (!closeDate || closeDate > now));
+
+                                        if (settings.applicationWindowOpen) {
+                                            return (
+                                                <div className="text-[10px] font-bold text-purple-600 flex items-center gap-1">
+                                                    <i className="fa-solid fa-circle-dot animate-pulse"></i>
+                                                    Window is OPEN (manually)
+                                                    {closeDate && closeDate > now && ` — closes ${closeDate.toLocaleString()}`}
+                                                </div>
+                                            );
+                                        }
+                                        if (isOpen) {
+                                            return (
+                                                <div className="text-[10px] font-bold text-purple-600 flex items-center gap-1">
+                                                    <i className="fa-solid fa-circle-dot animate-pulse"></i>
+                                                    Window is OPEN (scheduled)
+                                                    {closeDate && closeDate > now && ` — closes ${closeDate.toLocaleString()}`}
+                                                </div>
+                                            );
+                                        }
+                                        if (openDate && openDate > now) {
+                                            return (
+                                                <div className="text-[10px] font-medium text-slate-500 flex items-center gap-1">
+                                                    <i className="fa-solid fa-clock"></i>
+                                                    Opens {openDate.toLocaleString()}
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                </div>
+
                                 {classSupps.length > 0 && (
                                     <div className="mt-4 pt-4 border-t border-slate-200">
                                         <button 

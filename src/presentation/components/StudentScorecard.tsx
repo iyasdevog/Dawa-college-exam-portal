@@ -469,6 +469,13 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
     const highestScore = markVals.length > 0 ? Math.max(...markVals.map(m => m.total)) : 0;
     const lowestScore = markVals.length > 0 ? Math.min(...markVals.map(m => m.total)) : 0;
 
+    // Calculate how many subjects this specific student is expected to take
+    const expectedSubjectsCount = useMemo(() => {
+        return classSubjects.filter(subj => 
+            subj.subjectType !== 'elective' || (subj.enrolledStudents && subj.enrolledStudents.includes(student.id))
+        ).length;
+    }, [classSubjects, student.id]);
+
     // Only show subjects that have marks recorded (exclude un-assessed subjects)
     const sortedSubjects = useMemo(() => {
         return classSubjects
@@ -571,7 +578,7 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
                     {[
                         { label: 'Total Marks', value: String(total), accent: 'text-slate-900' },
                         { label: 'Average', value: `${typeof average === 'number' ? average.toFixed(1) : average}%`, accent: 'text-blue-600' },
-                        { label: 'Subjects Cleared', value: `${passedCount}/${markVals.length}`, accent: passedCount === markVals.length ? 'text-emerald-600' : 'text-orange-500' },
+                        { label: 'Subjects Cleared', value: `${passedCount}/${expectedSubjectsCount}`, accent: passedCount === expectedSubjectsCount ? 'text-emerald-600' : 'text-orange-500' },
                         { label: 'Class Rank', value: `#${calculatedRank}`, accent: calculatedRank === 1 ? 'text-amber-500' : 'text-slate-800' },
                     ].map(({ label, value, accent }) => (
                         <div key={label} className="p-6 text-center print:p-1">

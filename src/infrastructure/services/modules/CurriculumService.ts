@@ -11,7 +11,9 @@ export class CurriculumService extends BaseDataService {
                 where('termKey', '==', activeTerm)
             );
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as CurriculumEntry));
+            return snapshot.docs
+                .map(doc => ({ id: doc.id, ...(doc.data() as any) } as CurriculumEntry))
+                .filter(curr => !curr.isDeleted);
         } catch (error) {
             console.error('Error fetching curriculum:', error);
             return [];
@@ -41,10 +43,42 @@ export class CurriculumService extends BaseDataService {
     public async deleteCurriculumEntry(id: string): Promise<void> {
         try {
             const docRef = doc(this.db, this.curriculumCollection, id);
+            await updateDoc(docRef, { isDeleted: true, deletedAt: Date.now() });
+        } catch (error) {
+            console.error('Error soft-deleting curriculum entry:', error);
+            throw error;
+        }
+    }
+
+    public async hardDeleteCurriculumEntry(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.curriculumCollection, id);
             await deleteDoc(docRef);
         } catch (error) {
-            console.error('Error deleting curriculum entry:', error);
+            console.error('Error hard-deleting curriculum entry:', error);
             throw error;
+        }
+    }
+
+    public async restoreCurriculumEntry(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.curriculumCollection, id);
+            await updateDoc(docRef, { isDeleted: false, deletedAt: null });
+        } catch (error) {
+            console.error('Error restoring curriculum entry:', error);
+            throw error;
+        }
+    }
+
+    public async getDeletedCurriculum(): Promise<CurriculumEntry[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.curriculumCollection));
+            return snapshot.docs
+                .map(doc => ({ id: doc.id, ...(doc.data() as any) } as CurriculumEntry))
+                .filter(curr => curr.isDeleted);
+        } catch (error) {
+            console.error('Error fetching deleted curriculum:', error);
+            return [];
         }
     }
 

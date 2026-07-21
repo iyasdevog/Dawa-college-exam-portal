@@ -52,6 +52,8 @@ export interface SupplementaryExam {
   subjectName?: string; // Fallback name from application if subject record missing
   maxINT?: number; // Snapshot of max marks for validation
   maxEXT?: number; // Snapshot of max marks for validation
+  isDeleted?: boolean; // For soft-deletes (Recycle Bin)
+  deletedAt?: number;
 }
 
 export interface SubjectSnapshot {
@@ -97,6 +99,8 @@ export interface StudentRecord {
   rank?: number;
   performanceLevel?: PerformanceLevel;
   importRowNumber?: number; // Track original import order
+  isDeleted?: boolean; // For soft-deletes (Recycle Bin)
+  deletedAt?: number;
 }
 
 export interface SemesterConfig {
@@ -184,6 +188,8 @@ export interface SubjectConfig {
   activeSemester?: 'Odd' | 'Even' | 'Both' | 'Bridge';
   academicYear?: string;
   details?: SubjectDetails;
+  isDeleted?: boolean; // For soft-deletes (Recycle Bin)
+  deletedAt?: number;
 }
 
 export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public' | 'attendance' | 'attendance-public' | 'student-attendance-portal';
@@ -193,6 +199,9 @@ export interface ReleaseSettings {
   releaseDate?: string; // ISO string format
   isSupplementaryReleased?: boolean; // For separate supplementary release
   supplementaryReleaseDate?: string; // ISO string format
+  applicationWindowOpen?: boolean; // Controls whether students can submit applications
+  applicationWindowOpenDate?: string; // Scheduled open date/time (ISO string)
+  applicationWindowCloseDate?: string; // Scheduled close date/time (ISO string)
 }
 
 export type ClassReleaseSettings = Record<string, ReleaseSettings>;
@@ -349,5 +358,7 @@ export interface CurriculumEntry {
   portions: string; // e.g., "Unit 1-4"
   academicYear?: string; // Added for historical tracking
   termKey?: string; // Added for historical tracking
+  isDeleted?: boolean; // For soft-deletes (Recycle Bin)
+  deletedAt?: number;
 }
 

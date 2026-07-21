@@ -527,11 +527,25 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
     }, [subjects]);
 
+    // Parse the current semester from activeTerm to use as initial default
+    const initialSemester = React.useMemo(() => {
+        if (!activeTerm) return 'All';
+        const parts = activeTerm.split('-');
+        const last = parts[parts.length - 1];
+        if (last === 'Odd' || last === 'Even') return last;
+        return 'All';
+    }, [activeTerm]);
+
     // Flatten subjects for the list tab
     const [subjectFacultyFilter, setSubjectFacultyFilter] = useState<string>('All');
     const [subjectClassFilter, setSubjectClassFilter] = useState<string>('All');
-    const [subjectSemesterFilter, setSubjectSemesterFilter] = useState<string>('All');
+    const [subjectSemesterFilter, setSubjectSemesterFilter] = useState<string>(initialSemester);
     const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
+
+    // Sync filter if activeTerm changes
+    useEffect(() => {
+        setSubjectSemesterFilter(initialSemester);
+    }, [initialSemester]);
 
     // Get unique faculties for filter - Include historical for discovery
     const uniqueFaculties = React.useMemo(() => {

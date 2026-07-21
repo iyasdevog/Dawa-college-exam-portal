@@ -243,9 +243,12 @@ export class StudentService extends BaseDataService {
         }
 
         try {
-            const querySnapshot = await getDocs(collection(this.db, this.studentsCollection));
-            const students = querySnapshot.docs.map(doc => this.processStudentRecord(doc.data(), doc.id, activeTerm));
-
+            const students = querySnapshot.docs
+                .map(doc => this.processStudentRecord(doc.data(), doc.id, activeTerm))
+                .filter(student => !student.isDeleted);
+            
+            // Further filter since we might be looking at historical data where class matches
+            // but the query wasn't strictly on the current active term
             students.sort((a, b) => {
                 if (a.importRowNumber !== undefined && b.importRowNumber !== undefined) {
                     return a.importRowNumber - b.importRowNumber;
@@ -373,11 +376,45 @@ export class StudentService extends BaseDataService {
 
     public async deleteStudent(id: string): Promise<void> {
         try {
+            const docRef = doc(this.db, this.studentsCollection, id);
+            await updateDoc(docRef, { isDeleted: true, deletedAt: Date.now() });
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error soft-deleting student:', error);
+            throw error;
+        }
+    }
+
+    public async hardDeleteStudent(id: string): Promise<void> {
+        try {
             await deleteDoc(doc(this.db, this.studentsCollection, id));
             this.invalidateCache();
         } catch (error) {
-            console.error('Error deleting student:', error);
+            console.error('Error hard-deleting student:', error);
             throw error;
+        }
+    }
+
+    public async restoreStudent(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.studentsCollection, id);
+            await updateDoc(docRef, { isDeleted: false, deletedAt: null });
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error restoring student:', error);
+            throw error;
+        }
+    }
+
+    public async getDeletedStudents(): Promise<StudentRecord[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.studentsCollection));
+            return snapshot.docs
+                .map(doc => this.processStudentRecord(doc.data(), doc.id, this.getCurrentTermKey()))
+                .filter(student => student.isDeleted);
+        } catch (error) {
+            console.error('Error fetching deleted students:', error);
+            return [];
         }
     }
 

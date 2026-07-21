@@ -10,6 +10,7 @@ import ClassManagement from './management/ClassManagement';
 import SettingsManagement from './management/SettingsManagement';
 import AttendanceManagement from './management/AttendanceManagement';
 import CurriculumManagement from './management/CurriculumManagement';
+import RecycleBinManagement from './management/RecycleBinManagement';
 import { useTerm } from '../viewmodels/TermContext';
 
 const Management: React.FC = () => {
@@ -36,6 +37,7 @@ const Management: React.FC = () => {
     { id: 'supplementary', label: 'Supplementary', icon: 'fa-redo' },
     { id: 'classes', label: 'Classes', icon: 'fa-chalkboard' },
     { id: 'settings', label: 'Settings', icon: 'fa-cog' },
+    { id: 'recycle-bin', label: 'Recycle Bin', icon: 'fa-trash-can' },
   ];
 
   const loadTabData = useCallback(async (tabId: string, force = false) => {
@@ -236,6 +238,10 @@ const Management: React.FC = () => {
               onRefresh={handleRefresh}
               onNavigate={setActiveTab}
             />
+          )}
+
+          {activeTab === 'recycle-bin' && (
+            <RecycleBinManagement />
           )}
         </div>
       </div>

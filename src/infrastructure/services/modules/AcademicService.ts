@@ -118,7 +118,9 @@ export class AcademicService extends BaseDataService {
             const targetSem = className ? this.getLogicalSemester(className, globalSem as any) : globalSem;
 
             const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
-            const allSubjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+            const allSubjects = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig))
+                .filter(subject => !subject.isDeleted);
             
             return allSubjects
                 .filter(subject => {
@@ -162,7 +164,9 @@ export class AcademicService extends BaseDataService {
     public async getRawSubjects(): Promise<SubjectConfig[]> {
         try {
             const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+            return snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig))
+                .filter(subject => !subject.isDeleted);
         } catch (error) {
             console.error('Error in getRawSubjects:', error);
             return [];
@@ -244,10 +248,45 @@ export class AcademicService extends BaseDataService {
     public async deleteSubject(id: string): Promise<void> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
-            await deleteDoc(docRef);
+            await updateDoc(docRef, { isDeleted: true, deletedAt: Date.now() });
+            this.invalidateCache();
         } catch (error) {
-            console.error('Error deleting subject:', error);
+            console.error('Error soft-deleting subject:', error);
             throw error;
+        }
+    }
+
+    public async hardDeleteSubject(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.subjectsCollection, id);
+            await deleteDoc(docRef);
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error hard-deleting subject:', error);
+            throw error;
+        }
+    }
+
+    public async restoreSubject(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.subjectsCollection, id);
+            await updateDoc(docRef, { isDeleted: false, deletedAt: null });
+            this.invalidateCache();
+        } catch (error) {
+            console.error('Error restoring subject:', error);
+            throw error;
+        }
+    }
+
+    public async getDeletedSubjects(): Promise<SubjectConfig[]> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            return snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig))
+                .filter(subject => subject.isDeleted);
+        } catch (error) {
+            console.error('Error fetching deleted subjects:', error);
+            return [];
         }
     }
 

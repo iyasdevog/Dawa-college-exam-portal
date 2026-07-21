@@ -632,42 +632,47 @@ export class AttendanceService extends BaseDataService {
                 !r.recoveredStudentIds?.includes(studentId)
             );
 
-            // Sort by date descending (recover recent ones first)
+            // Sort by date descending (recover most recent absences first)
             absentRecords.sort((a, b) => b.date.localeCompare(a.date));
 
             const toRecoverCount = count === 'all' ? absentRecords.length : Math.min(count, absentRecords.length);
             const recordsToUpdate = absentRecords.slice(0, toRecoverCount);
 
             for (const record of recordsToUpdate) {
+                // record.id = "${firestoreDocId}_${periodKey}" — split on last underscore-separated segment
+                // The virtualId format is: "${className}_${date}_${periodKey}" or similar.
+                // We need to extract the raw Firestore doc ID (everything before the period key).
+                // periodKey is record.subjectId (which can contain underscores).
+                // We know docId = record.id minus the trailing "_${record.subjectId}".
+                const periodKey = record.subjectId;
+                const suffix = `_${periodKey}`;
+                const firestoreDocId = record.id.endsWith(suffix)
+                    ? record.id.slice(0, record.id.length - suffix.length)
+                    : record.id;
+
                 const updatedRecoveredStudentIds = [...(record.recoveredStudentIds || [])];
                 if (!updatedRecoveredStudentIds.includes(studentId)) {
                     updatedRecoveredStudentIds.push(studentId);
                 }
-                const updatedRecoveredReasons = { 
+                const updatedRecoveredReasons = {
                     ...(record.recoveredReasons || {}),
                     [studentId]: 'Recovered by teacher'
                 };
 
-                // Save back to db
-                await this.markAttendance({
-                    date: record.date,
-                    subjectId: record.subjectId,
-                    className: record.className,
-                    presentStudentIds: record.presentStudentIds,
-                    absentStudentIds: record.absentStudentIds,
-                    recoveredStudentIds: updatedRecoveredStudentIds,
-                    absentReasons: record.absentReasons || {},
-                    recoveredReasons: updatedRecoveredReasons,
-                    markedBy: record.markedBy,
-                    markedAt: record.markedAt,
-                    isAdditional: record.isAdditional,
-                    substitutedSubjectId: record.substitutedSubjectId,
-                    principalApprovedAbsences: record.principalApprovedAbsences,
-                    granularPermissions: record.granularPermissions,
-                    semester: record.semester,
-                    academicYear: record.academicYear
+                // Directly update only the recoveredStudentIds and recoveredReasons
+                // for this specific period in the correct Firestore daily document.
+                // This avoids double-mapping className through markAttendance which
+                // would re-run getDatabaseClassName on an already-mapped historical name
+                // and produce the wrong document ID.
+                const docRef = doc(this.db!, this.attendanceCollection, firestoreDocId);
+                await updateDoc(docRef, {
+                    [`periods.${periodKey}.recoveredStudentIds`]: updatedRecoveredStudentIds,
+                    [`periods.${periodKey}.recoveredReasons`]: updatedRecoveredReasons,
                 });
             }
+
+            // Invalidate cache so fresh data is loaded after recovery
+            this.recordsCache.delete(termKey);
         } catch (error) {
             console.error('Error recovering absences:', error);
             throw error;
