@@ -596,23 +596,23 @@ export class AttendanceService extends BaseDataService {
 
                 const updatedNewPeriod = {
                     ...existingNewPeriod,
-                    presentStudentIds: isPresent && !existingNewPeriod.presentStudentIds.includes(studentId)
-                        ? [...existingNewPeriod.presentStudentIds, studentId]
-                        : existingNewPeriod.presentStudentIds,
-                    absentStudentIds: isAbsent && !existingNewPeriod.absentStudentIds.includes(studentId)
-                        ? [...existingNewPeriod.absentStudentIds, studentId]
-                        : existingNewPeriod.absentStudentIds,
-                    recoveredStudentIds: isRecovered && !existingNewPeriod.recoveredStudentIds.includes(studentId)
-                        ? [...existingNewPeriod.recoveredStudentIds, studentId]
-                        : existingNewPeriod.recoveredStudentIds,
+                    presentStudentIds: isPresent && !(existingNewPeriod.presentStudentIds || []).includes(studentId)
+                        ? [...(existingNewPeriod.presentStudentIds || []), studentId]
+                        : (existingNewPeriod.presentStudentIds || []),
+                    absentStudentIds: isAbsent && !(existingNewPeriod.absentStudentIds || []).includes(studentId)
+                        ? [...(existingNewPeriod.absentStudentIds || []), studentId]
+                        : (existingNewPeriod.absentStudentIds || []),
+                    recoveredStudentIds: isRecovered && !(existingNewPeriod.recoveredStudentIds || []).includes(studentId)
+                        ? [...(existingNewPeriod.recoveredStudentIds || []), studentId]
+                        : (existingNewPeriod.recoveredStudentIds || []),
                 };
+
+                periods[oldPeriodKey] = updatedOldPeriod;
+                periods[newSubjectId] = updatedNewPeriod;
 
                 // Write back via merged update
                 const docRef = doc(this.db!, this.attendanceCollection, docSnap.id);
-                await updateDoc(docRef, {
-                    [`periods.${oldPeriodKey}`]: updatedOldPeriod,
-                    [`periods.${newSubjectId}`]: updatedNewPeriod,
-                });
+                await updateDoc(docRef, { periods });
             }
 
             // Invalidate cache

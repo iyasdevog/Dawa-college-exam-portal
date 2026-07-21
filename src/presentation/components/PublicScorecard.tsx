@@ -6,7 +6,7 @@ import { dataService } from '../../infrastructure/services/dataService';
 import { useTerm } from '../viewmodels/TermContext';
 import { TermSelector } from './TermSelector';
 import AggregatedScorecard from './AggregatedScorecard';
-import { isSameSubject, normalizeSubjectName } from '../../domain/utils/subjectUtils';
+import { isSameSubject, normalizeSubjectName, getSubjectMaxMarks } from '../../domain/utils/subjectUtils';
 
 
 interface PublicScorecardProps {
@@ -376,7 +376,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                     </div>
                                     {resultSubjects.map((subject, index) => {
                                         const marks = finalMarks[subject.id];
-                                        const maxTotal = (subject.maxINT || 0) + (subject.maxEXT || 0);
+                                        const { maxINT, maxEXT, maxTotal } = getSubjectMaxMarks(subject);
                                         return (
                                             <div
                                                 key={subject.id}
@@ -435,10 +435,10 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                     <div className="bg-slate-100/50 rounded-xl p-2 text-center">
                                                         <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">EXT</p>
                                                         <p className="text-base font-black text-slate-900">
-                                                            {subject.maxEXT === 0 ? 'N/A' : (
+                                                            {maxEXT === 0 ? 'N/A' : (
                                                                 <>
                                                                     {marks?.ext ?? '-'}
-                                                                    <span className="text-[9px] text-slate-500 ml-0.5">/{subject.maxEXT}</span>
+                                                                    <span className="text-[9px] text-slate-500 ml-0.5">/{maxEXT}</span>
                                                                 </>
                                                             )}
                                                         </p>
@@ -447,7 +447,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                         <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">INT</p>
                                                         <p className="text-base font-black text-slate-900">
                                                             {marks?.int ?? '-'}
-                                                            <span className="text-[9px] text-slate-500 ml-0.5">/{subject.maxINT}</span>
+                                                            <span className="text-[9px] text-slate-500 ml-0.5">/{maxINT}</span>
                                                         </p>
                                                     </div>
                                                     <div className={`rounded-xl p-2 text-center shadow-sm ${marks?.status === 'Failed'
@@ -506,7 +506,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                         <tbody className="divide-y divide-slate-50 print:divide-slate-200">
                                             {resultSubjects.map(subject => {
                                                 const marks = finalMarks[subject.id];
-                                                const maxTotal = (subject.maxINT || 0) + (subject.maxEXT || 0);
+                                                const { maxINT, maxEXT, maxTotal } = getSubjectMaxMarks(subject);
                                                 return (
                                                     <tr key={subject.id} className="hover:bg-slate-50/30 transition-colors">
                                                         <td className="px-6 py-4 print:px-4 print:py-3">
@@ -546,10 +546,10 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                         <td className="px-4 py-4 text-center">
                                                             <div className="flex flex-col items-center">
                                                                 <span className={`text-sm font-black ${marks?.isSupplementary ? 'text-emerald-700' : 'text-slate-900'} print:text-xs`}>
-                                                                    {subject.maxEXT === 0 ? 'N/A' : (marks?.ext ?? '-')}
+                                                                    {maxEXT === 0 ? 'N/A' : (marks?.ext ?? '-')}
                                                                 </span>
                                                                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight opacity-70">
-                                                                    MAX {subject.maxEXT}
+                                                                    MAX {maxEXT}
                                                                 </span>
                                                             </div>
                                                         </td>
@@ -559,7 +559,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
                                                                     {marks?.int ?? '-'}
                                                                 </span>
                                                                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight opacity-70">
-                                                                    MAX {subject.maxINT}
+                                                                    MAX {maxINT}
                                                                 </span>
                                                             </div>
                                                         </td>

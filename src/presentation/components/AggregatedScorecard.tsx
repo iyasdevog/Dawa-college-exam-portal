@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
-import { isSameSubject } from '../../domain/utils/subjectUtils';
+import { isSameSubject, getSubjectMaxMarks } from '../../domain/utils/subjectUtils';
 
 interface AggregatedScorecardProps {
     student: StudentRecord;
@@ -33,7 +33,7 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allS
                 const subject = allSubjects.find(s => s.id.toLowerCase().trim() === sId);
                 if (subject) {
                     totalSubjectsCount++;
-                    const maxTotal = (subject.maxINT || 0) + (subject.maxEXT || 0);
+                    const { maxTotal } = getSubjectMaxMarks(subject);
                     totalMaxMarks += maxTotal;
                     totalMarksObtained += marks.total || 0;
 
@@ -56,7 +56,7 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allS
             currentSubjects.forEach(s => {
                 if (!existingSubjectIds.has(s.id.toLowerCase().trim())) {
                     totalSubjectsCount++;
-                    const maxTotal = (s.maxINT || 0) + (s.maxEXT || 0);
+                    const { maxTotal } = getSubjectMaxMarks(s);
                     totalMaxMarks += maxTotal;
                     // No marks obtained yet for pending subjects
                 }

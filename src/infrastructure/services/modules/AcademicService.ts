@@ -321,7 +321,8 @@ export class AcademicService extends BaseDataService {
             if (!studentSnap.exists()) throw new Error('Student not found');
 
             const data = studentSnap.data();
-            const termData = (data.academicHistory || {})[termKey] || {};
+            const academicHistory = { ...(data.academicHistory || {}) };
+            const termData = { ...(academicHistory[termKey] || {}) };
             const currentMarks: Record<string, SubjectMarks> = { ...(termData.marks || {}) };
             const currentMetadata: Record<string, any> = { ...(termData.subjectMetadata || {}) };
 
@@ -352,13 +353,23 @@ export class AcademicService extends BaseDataService {
             const allSubjects = await this.getRawAllSubjects();
             const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
 
-            await updateDoc(studentDocRef, {
-                [`academicHistory.${termKey}.marks`]: currentMarks,
-                [`academicHistory.${termKey}.subjectMetadata`]: currentMetadata,
-                [`academicHistory.${termKey}.grandTotal`]: grandTotal,
-                [`academicHistory.${termKey}.average`]: average,
-                [`academicHistory.${termKey}.performanceLevel`]: performanceLevel
-            });
+            // Reconstruct termData
+            termData.marks = currentMarks;
+            termData.subjectMetadata = currentMetadata;
+            termData.grandTotal = grandTotal;
+            termData.average = average;
+            termData.performanceLevel = performanceLevel;
+            
+            if (!termData.className) {
+                termData.className = data.currentClass || data.className || 'Unknown';
+            }
+            if (!termData.semester) {
+                termData.semester = this.getLogicalSemester(termData.className, termKey.includes('Even') ? 'Even' : (termKey.includes('Bridge') ? 'Bridge' : 'Odd'));
+            }
+
+            academicHistory[termKey] = termData;
+
+            await updateDoc(studentDocRef, { academicHistory });
 
             // Update enrollment: remove from old, add to new (for elective subjects)
             await this.unenrollStudentFromSubject(oldSubjectId, studentId);
@@ -418,20 +429,21 @@ export class AcademicService extends BaseDataService {
                 const allSubjects = await this.getRawAllSubjects();
                 const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
 
-                const updates: any = {
-                    [`academicHistory.${activeTerm}.marks`]: currentMarks,
-                    [`academicHistory.${activeTerm}.subjectMetadata`]: subjectMetadata,
-                    [`academicHistory.${activeTerm}.grandTotal`]: grandTotal,
-                    [`academicHistory.${activeTerm}.average`]: average,
-                    [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
-                };
+                // Reconstruct termData safely
+                termData.marks = currentMarks;
+                termData.subjectMetadata = subjectMetadata;
+                termData.grandTotal = grandTotal;
+                termData.average = average;
+                termData.performanceLevel = performanceLevel;
 
                 if (!termData.className) {
-                    updates[`academicHistory.${activeTerm}.className`] = data.currentClass || data.className || 'Unknown';
-                    updates[`academicHistory.${activeTerm}.semester`] = activeTerm.split('-').pop() || 'Odd';
+                    termData.className = data.currentClass || data.className || 'Unknown';
+                    termData.semester = this.getLogicalSemester(termData.className, activeTerm.includes('Even') ? 'Even' : (activeTerm.includes('Bridge') ? 'Bridge' : 'Odd'));
                 }
 
-                await updateDoc(studentDocRef, updates);
+                history[activeTerm] = termData;
+
+                await updateDoc(studentDocRef, { academicHistory: history });
                 this.invalidateCache();
             }
         } catch (error) {
@@ -942,20 +954,20 @@ export class AcademicService extends BaseDataService {
 
                 const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
 
-                const studentUpdate: any = {
-                    [`academicHistory.${activeTerm}.marks`]: currentMarks,
-                    [`academicHistory.${activeTerm}.subjectMetadata`]: subjectMetadata,
-                    [`academicHistory.${activeTerm}.grandTotal`]: grandTotal,
-                    [`academicHistory.${activeTerm}.average`]: average,
-                    [`academicHistory.${activeTerm}.performanceLevel`]: performanceLevel
-                };
+                termData.marks = currentMarks;
+                termData.subjectMetadata = subjectMetadata;
+                termData.grandTotal = grandTotal;
+                termData.average = average;
+                termData.performanceLevel = performanceLevel;
 
                 if (!termData.className) {
-                    studentUpdate[`academicHistory.${activeTerm}.className`] = data.currentClass || data.className || 'Unknown';
-                    studentUpdate[`academicHistory.${activeTerm}.semester`] = activeTerm.split('-').pop() || 'Odd';
+                    termData.className = data.currentClass || data.className || 'Unknown';
+                    termData.semester = this.getLogicalSemester(termData.className, activeTerm.includes('Even') ? 'Even' : (activeTerm.includes('Bridge') ? 'Bridge' : 'Odd'));
                 }
 
-                batch.update(studentDocRef, studentUpdate);
+                history[activeTerm] = termData;
+
+                batch.update(studentDocRef, { academicHistory: history });
                 count++;
                 
                 if (count >= 400) { // Safety limit for single batch

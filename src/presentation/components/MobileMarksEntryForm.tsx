@@ -3,6 +3,7 @@ import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import { FormValidator, FormValidationConfig, validationPresets } from '../utils/formValidation';
 import { screenReaderAnnouncer } from '../utils/accessibility';
+import { getSubjectMaxMarks } from '../../domain/utils/subjectUtils';
 import MobileFormInput from './MobileFormInput';
 import MobileButton from './MobileButton';
 
@@ -44,12 +45,14 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     const [validationErrors, setValidationErrors] = useState<{ ta?: string; ce?: string }>({});
     const [showValidation, setShowValidation] = useState(false);
 
+    const { maxINT, maxEXT, maxTotal } = getSubjectMaxMarks(subject);
+
     // Create validation configuration
     const validationConfig: FormValidationConfig = {
         ta: {
             rules: [
                 validationPresets.required('EXT marks are required'),
-                validationPresets.marks(subject.maxEXT, `EXT marks must be between 0 and ${subject.maxEXT}`)
+                validationPresets.marks(maxEXT, `EXT marks must be between 0 and ${maxEXT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
@@ -58,7 +61,7 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
         ce: {
             rules: [
                 validationPresets.required('INT marks are required'),
-                validationPresets.marks(subject.maxINT, `INT marks must be between 0 and ${subject.maxINT}`)
+                validationPresets.marks(maxINT, `INT marks must be between 0 and ${maxINT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
@@ -79,12 +82,11 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     const taValue = parseInt(marks.ta) || 0;
     const ceValue = parseInt(marks.ce) || 0;
     const total = taValue + ceValue;
-    const maxTotal = subject.maxINT + subject.maxEXT;
     const percentage = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
 
     // Determine pass/fail status
-    const minTA = Math.ceil(subject.maxINT * 0.5);
-    const minCE = Math.ceil(subject.maxEXT * 0.4);
+    const minTA = Math.ceil(maxINT * 0.5);
+    const minCE = Math.ceil(maxEXT * 0.4);
     const passedTA = taValue >= minTA;
     const passedCE = ceValue >= minCE;
     const overallStatus = passedTA && passedCE ? 'Passed' : 'Failed';
@@ -244,12 +246,12 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
             <div className={`grid gap-4 mb-6 ${isMobile && orientation === 'landscape' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {/* EXT Marks (Legacy TA) */}
                 <MobileFormInput
-                    label={`EXT Marks (Max: ${subject.maxEXT})`}
+                    label={`EXT Marks (Max: ${maxEXT})`}
                     type="number"
                     value={marks.ta}
                     placeholder="0"
                     min={0}
-                    max={subject.maxEXT}
+                    max={maxEXT}
                     required
                     error={showValidation ? validationErrors.ta : undefined}
                     validationState={
@@ -271,12 +273,12 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
 
                 {/* INT Marks (Legacy CE) */}
                 <MobileFormInput
-                    label={`INT Marks (Max: ${subject.maxINT})`}
+                    label={`INT Marks (Max: ${maxINT})`}
                     type="number"
                     value={marks.ce}
                     placeholder="0"
                     min={0}
-                    max={subject.maxINT}
+                    max={maxINT}
                     required
                     error={showValidation ? validationErrors.ce : undefined}
                     validationState={
@@ -416,7 +418,7 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
             <div className="sr-only" aria-live="polite">
                 {marks.ta && marks.ce && (
                     <div>
-                        Current marks: TA {marks.ta} out of {subject.maxINT}, CE {marks.ce} out of {subject.maxEXT}.
+                        Current marks: TA {marks.ta} out of {maxINT}, CE {marks.ce} out of {maxEXT}.
                         Total: {total} out of {maxTotal}. Status: {overallStatus}.
                     </div>
                 )}

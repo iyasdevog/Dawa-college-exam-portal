@@ -117,10 +117,10 @@ const RecoveryTab: React.FC = () => {
             setTxStudentSubjects(updated);
             setTxFromSubjectId('');
             setTxToSubjectId('');
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
             setTxStatus('error');
-            setTxMessage('Transfer failed. Please try again.');
+            setTxMessage(`Transfer failed: ${e.message || String(e)}`);
         }
     }, [txSelectedStudent, txFromSubjectId, txToSubjectId, txAllSubjects, activeTerm]);
     const [searchTerm, setSearchTerm] = useState('');
