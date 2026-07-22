@@ -139,7 +139,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
     filteredStudents, paginatedStudents, hasMore, setCurrentPage,
     currentStudentIndex, jumpToStudent, navigateToNext, navigateToPrevious,
     showScrollToTop, scrollToTop, isScrolling, getTouchProps,
-    studentRefs, handleKeyDown
+    studentRefs, handleKeyDown, isLockedForEditing, isAdmin
 }) => {
     // Cascading Reset: clear subject when class or type changes
     React.useEffect(() => {

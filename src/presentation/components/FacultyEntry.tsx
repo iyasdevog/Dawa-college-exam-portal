@@ -259,7 +259,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         getTouchProps={getTouchProps}
                         studentRefs={studentRefs}
                         isLockedForEditing={isLockedForEditing}
-                        isAdmin={isAdmin}
+                        isAdmin={false}
                     />
                 )}
 
