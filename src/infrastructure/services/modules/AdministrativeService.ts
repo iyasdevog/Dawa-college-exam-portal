@@ -237,7 +237,10 @@ export class AdministrativeService extends BaseDataService {
             // 1. Baseline: Always seed with configured active classes (system + custom)
             [...SYSTEM_CLASSES, ...custom]
                 .filter(c => c && c !== '-' && !disabled.includes(c))
-                .forEach(c => activeClassesSet.add(c));
+                .forEach(c => {
+                    const dbCls = this.getDatabaseClassName(requestedTermKey, c.trim());
+                    activeClassesSet.add(dbCls);
+                });
 
             // 3. Discover from Subject assignments
             const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
@@ -251,11 +254,16 @@ export class AdministrativeService extends BaseDataService {
                 const isYearMatch = !s.academicYear || s.academicYear === targetYear ||
                     (targetYear && (s.academicYear.includes(targetYear) || targetYear.includes(s.academicYear)));
                 if (isYearMatch && (!s.activeSemester || s.activeSemester === targetSem || s.activeSemester === 'Both')) {
-                    s.targetClasses.forEach(cls => { if (cls) activeClassesSet.add(cls.trim()); });
+                    s.targetClasses.forEach(cls => { 
+                        if (cls) {
+                            const dbCls = this.getDatabaseClassName(requestedTermKey, cls.trim());
+                            activeClassesSet.add(dbCls);
+                        } 
+                    });
                 }
             });
 
-            // 4. Filter, map to historical names, and deduplicate
+            // 4. Filter, map to historical names for requested term, and deduplicate
             const result = Array.from(new Set(
                 Array.from(activeClassesSet)
                     .filter(c => {
@@ -263,7 +271,7 @@ export class AdministrativeService extends BaseDataService {
 
                         // Specific Fix: HS1 and FS1 just joined in 2025-2026-Even.
                         // They must not appear in historical Odd semester filters/reports.
-                        if (requestedTermKey === '2025-2026-Odd' && (c === 'HS1' || c === 'FS1')) {
+                        if (requestedTermKey.endsWith('-Odd') && (c === 'HS1' || c === 'FS1')) {
                             return false;
                         }
 

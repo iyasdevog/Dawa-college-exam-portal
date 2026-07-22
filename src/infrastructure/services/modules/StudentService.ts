@@ -263,14 +263,22 @@ export class StudentService extends BaseDataService {
             const isCurrentTerm = activeTerm === currentGlobalTerm;
 
             const filteredStudents = students.filter(student => {
-                const isActive = student.isActive !== false;
+                if (student.isDeleted) return false;
                 if (activeTerm === 'All') {
                     return true; // Return everyone for raw data gathering
                 }
                 if (isCurrentTerm) {
-                    return isActive;
+                    // Current term: show all active students
+                    return student.isActive !== false;
                 } else {
-                    return !!(student.academicHistory && student.academicHistory[activeTerm]);
+                    // Historical term: show students who either:
+                    // 1. Have explicit history for this term (they were enrolled then), OR
+                    // 2. Are active students (they exist in the system and should be manageable)
+                    // This prevents the management view from showing empty student lists
+                    // when switching to a historical semester
+                    const hasTermHistory = !!(student.academicHistory && student.academicHistory[activeTerm]);
+                    const isActive = student.isActive !== false;
+                    return hasTermHistory || isActive;
                 }
             });
 

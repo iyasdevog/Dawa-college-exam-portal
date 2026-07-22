@@ -108,49 +108,41 @@ export abstract class BaseDataService {
      * Use this for presentation and reports in historical views.
      */
     public getHistoricalClassName(termKey: string | undefined, className: string): string {
-        if (!termKey || !className) return className;
+        if (!className) return className;
 
-        // Robust check for 2025-2026-Odd or 2025-Odd styles
-        const is2025Odd = (termKey === '2025-2026-Odd' || termKey === '2025-Odd' || termKey === '2025-26-Odd');
-        
-        if (is2025Odd) {
+        // First normalize any alias to DB canonical name
+        const dbClass = this.getDatabaseClassName(termKey, className);
+
+        // Robust check for Odd terms (2025-2026-Odd, 2025-Odd, or any term ending in -Odd)
+        const isOddTerm = !termKey || termKey.endsWith('-Odd') || termKey.includes('-Odd') || termKey === '2025-Odd';
+
+        if (isOddTerm) {
             const reverseMappings: Record<string, string> = {
                 'FS2': 'S1',
                 'FS3': 'S2',
                 'HS2': 'P1',
                 'HS3': 'P2',
-                // Adding missing ones just in case
                 'FS1': 'Bridge', 
                 'HS1': 'Prep'
             };
-            return reverseMappings[className] || className;
+            return reverseMappings[dbClass] || dbClass;
         }
 
-        return className;
+        return dbClass;
     }
 
-    /**
-     * Maps a historical class name back to its database/current identity.
-     * Use this when filtering database records (subjects, students) by a selected historical name.
-     */
-    public getDatabaseClassName(termKey: string | undefined, historicalName: string): string {
-        if (!termKey || !historicalName) return historicalName;
+    public getDatabaseClassName(_termKey: string | undefined, historicalName: string): string {
+        if (!historicalName) return historicalName;
 
-        const is2025Odd = (termKey === '2025-2026-Odd' || termKey === '2025-Odd' || termKey === '2025-26-Odd');
-
-        if (is2025Odd) {
-            const forwardMappings: Record<string, string> = {
-                'S1': 'FS2',
-                'S2': 'FS3',
-                'P1': 'HS2',
-                'P2': 'HS3',
-                'Bridge': 'FS1',
-                'Prep': 'HS1'
-            };
-            return forwardMappings[historicalName] || historicalName;
-        }
-
-        return historicalName;
+        const forwardMappings: Record<string, string> = {
+            'S1': 'FS2',
+            'S2': 'FS3',
+            'P1': 'HS2',
+            'P2': 'HS3',
+            'Bridge': 'FS1',
+            'Prep': 'HS1'
+        };
+        return forwardMappings[historicalName] || historicalName;
     }
 
     /**

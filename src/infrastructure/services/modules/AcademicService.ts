@@ -150,7 +150,7 @@ export class AcademicService extends BaseDataService {
                 })
                 .map(subject => ({
                     ...subject,
-                    targetClasses: (subject.targetClasses || []).map(c => this.getHistoricalClassName(activeTerm, c))
+                    targetClasses: (subject.targetClasses || []).map(c => this.getHistoricalClassName(activeTerm, this.getDatabaseClassName(activeTerm, c)))
                 }));
         } catch (error) {
             console.error('Error fetching all subjects:', error);
@@ -202,7 +202,7 @@ export class AcademicService extends BaseDataService {
                 maxEXT: Number(subject.maxEXT) || 0,
                 passingTotal: Number(subject.passingTotal) || 0,
                 facultyName: subject.facultyName ? normalizeName(subject.facultyName) : '',
-                targetClasses: subject.targetClasses || [],
+                targetClasses: (subject.targetClasses || []).map(c => this.getDatabaseClassName('2025-2026-Odd', c)),
                 subjectType: subject.subjectType || 'general',
                 // Only set electiveType for elective/school_subject types; use null for general  
                 electiveType: (subject.subjectType === 'elective' || subject.subjectType === 'school_subject')
@@ -231,6 +231,10 @@ export class AcademicService extends BaseDataService {
             
             if (updates.facultyName !== undefined) {
                 normalizedUpdates.facultyName = updates.facultyName ? normalizeName(updates.facultyName) : '';
+            }
+            
+            if (updates.targetClasses !== undefined) {
+                normalizedUpdates.targetClasses = (updates.targetClasses || []).map(c => this.getDatabaseClassName('2025-2026-Odd', c));
             }
             
             // Critical safeguard: ensure mandatory numeric fields don't become NaN
