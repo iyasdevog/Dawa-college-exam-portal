@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { StudentRecord, SubjectConfig, AttendanceRecord, SpecialDay, TimetableEntry } from '../../../domain/entities/types';
+import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { useTerm } from '../../viewmodels/TermContext';
@@ -186,10 +187,28 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
 
     const [searchQuery, setSearchQuery] = useState('');
 
+    const [termClasses, setTermClasses] = useState<string[]>([]);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadClasses = async () => {
+            try {
+                const fetched = await dataService.getClassesByTerm(activeTerm);
+                if (isMounted && fetched && fetched.length > 0) {
+                    setTermClasses(fetched);
+                }
+            } catch (err) {
+                console.error('Error fetching classes for attendance:', err);
+            }
+        };
+        loadClasses();
+        return () => { isMounted = false; };
+    }, [activeTerm]);
+
     // Cascading Reset: When class changes, clear subject if it's no longer valid
     useEffect(() => {
         if (selectedClass && !showAllSubjects) {
-            const valid = subjects.some(s => s.id === selectedSubject && s.targetClasses.includes(selectedClass));
+            const valid = subjects.some(s => s.id === selectedSubject && (s.targetClasses || []).includes(selectedClass));
             if (!valid) setSelectedSubject('');
         }
         setSearchQuery('');
@@ -212,10 +231,27 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
         return uniqueNames.sort();
     }, [subjects, currentUser]);
 
-    const classes = useMemo(() => [...new Set(students.map(s => s.className))], [students]);
+    const classes = useMemo(() => {
+        const studentClasses = students.map(s => s.className).filter(Boolean);
+        const subjectClasses = subjects.flatMap(s => s.targetClasses || []).filter(Boolean);
+        
+        const baseList = termClasses.length > 0 
+            ? termClasses 
+            : [...SYSTEM_CLASSES, ...studentClasses, ...subjectClasses];
+        
+        let list = [...new Set(baseList)].filter(Boolean);
+        list.sort();
+
+        if (currentUser && (currentUser.role === 'teacher' || currentUser.role === 'faculty') && currentUser.assignedClasses && currentUser.assignedClasses.length > 0) {
+            list = list.filter(c => currentUser.assignedClasses.includes(c));
+        }
+
+        return list;
+    }, [students, subjects, termClasses, currentUser, activeTerm]);
+
     const filteredSubjects = useMemo(() => {
         if (showAllSubjects) return subjects;
-        return subjects.filter(s => s.targetClasses.includes(selectedClass));
+        return subjects.filter(s => (s.targetClasses || []).includes(selectedClass));
     }, [subjects, selectedClass, showAllSubjects]);
     
     const subjectsMap = useMemo(() => {
@@ -884,7 +920,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                             className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-300"
                         >
                             <option value="">Select Subject</option>
-                            {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name} {showAllSubjects ? `(${s.targetClasses.join(', ')})` : ''}</option>)}
+                            {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name} {showAllSubjects ? `(${(s.targetClasses || []).join(', ')})` : ''}</option>)}
                         </select>
                     </div>
                 )}
@@ -976,7 +1012,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                                         className="bg-white border border-indigo-200 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-500"
                                     >
                                         <option value="">Replaces (Optional)</option>
-                                        {subjects.filter(s => s.targetClasses.includes(selectedClass) && s.id !== selectedSubject).map(s => (
+                                        {subjects.filter(s => (s.targetClasses || []).includes(selectedClass) && s.id !== selectedSubject).map(s => (
                                             <option key={s.id} value={s.id}>{s.name}</option>
                                         ))}
                                     </select>

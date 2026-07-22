@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AttendanceRecord, StudentRecord, SubjectConfig, TimetableEntry } from '../../../domain/entities/types';
+import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { useTerm } from '../../viewmodels/TermContext';
@@ -29,7 +30,17 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
     const [timelineDate, setTimelineDate] = useState<'today' | 'tomorrow'>('today');
     const [facultyFilter, setFacultyFilter] = useState('All');
 
-    const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))].sort(), [students]);
+    const [termClasses, setTermClasses] = useState<string[]>([]);
+    useEffect(() => {
+        dataService.getClassesByTerm(activeTerm).then(res => setTermClasses(res)).catch(() => {});
+    }, [activeTerm]);
+
+    const classes = useMemo(() => {
+        const studentClasses = students.map(s => s.className).filter(Boolean);
+        const subjectClasses = subjects.flatMap(s => s.targetClasses || []).filter(Boolean);
+        const base = termClasses.length > 0 ? termClasses : [...SYSTEM_CLASSES, ...studentClasses, ...subjectClasses];
+        return ['All', ...new Set(base)].sort();
+    }, [students, subjects, termClasses]);
 
     const uniqueFaculty = useMemo(() => {
         return ['All', ...new Set(subjects.map(s => s.facultyName).filter(Boolean) as string[])].sort();
