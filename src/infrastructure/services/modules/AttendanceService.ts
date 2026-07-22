@@ -105,47 +105,14 @@ export class AttendanceService extends BaseDataService {
     public async getAttendanceForStudent(studentId: string, subjectId: string, termKey?: string): Promise<AttendanceRecord[]> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();
-            const q = query(
-                collection(this.db!, this.attendanceCollection),
-                where('termKey', '==', activeTerm)
+            const allRecords = await this.getAllAttendanceRecords(activeTerm);
+            
+            return allRecords.filter(r => 
+                (r.subjectId === subjectId || r.subjectId.startsWith(`${subjectId}_`)) &&
+                (r.presentStudentIds.includes(studentId) || r.absentStudentIds.includes(studentId))
             );
-            const snapshot = await getDocs(q);
-
-            const records: AttendanceRecord[] = [];
-            for (const docSnap of snapshot.docs) {
-                const data = docSnap.data();
-                const periods = data.periods || {};
-                
-                for (const [periodKey, periodData] of Object.entries(periods)) {
-                    if (periodKey === subjectId || periodKey.startsWith(`${subjectId}_`)) {
-                        // Cast periodData to any to bypass TypeScript typing issues
-                        const pData: any = periodData;
-                        if (pData.presentStudentIds?.includes(studentId) || pData.absentStudentIds?.includes(studentId)) {
-                            records.push({
-                                id: `${docSnap.id}_${periodKey}`,
-                                date: data.date,
-                                subjectId: periodKey,
-                                className: this.getHistoricalClassName(activeTerm, data.className),
-                                presentStudentIds: pData.presentStudentIds || [],
-                                absentStudentIds: pData.absentStudentIds || [],
-                                absentReasons: pData.absentReasons || {},
-                                recoveredStudentIds: pData.recoveredStudentIds || [],
-                                recoveredReasons: pData.recoveredReasons || {},
-                                markedBy: pData.markedBy || '',
-                                markedAt: pData.markedAt || 0,
-                                isAdditional: pData.isAdditional || false,
-                                substitutedSubjectId: pData.substitutedSubjectId || null,
-                                principalApprovedAbsences: pData.principalApprovedAbsences || [],
-                                academicYear: data.academicYear,
-                                semester: data.semester
-                            });
-                        }
-                    }
-                }
-            }
-            return records;
         } catch (error) {
-            console.error('Error fetching attendance records:', error);
+            console.error('Error fetching attendance records for student:', error);
             return [];
         }
     }
@@ -155,44 +122,12 @@ export class AttendanceService extends BaseDataService {
      */
     public async getAttendanceForSubject(subjectId: string, activeTerm: string, className?: string): Promise<AttendanceRecord[]> {
         try {
-            const q = query(
-                collection(this.db!, this.attendanceCollection),
-                where('termKey', '==', activeTerm)
-            );
-            const snapshot = await getDocs(q);
-
-            const records: AttendanceRecord[] = [];
-            for (const docSnap of snapshot.docs) {
-                const data = docSnap.data();
-                
-                if (className && className !== 'All' && data.className !== className) {
-                    continue;
-                }
-
-                const periods = data.periods || {};
-                
-                for (const [periodKey, periodData] of Object.entries(periods)) {
-                    if (periodKey === subjectId || periodKey.startsWith(`${subjectId}_`)) {
-                        const pData: any = periodData;
-                        records.push({
-                            id: `${docSnap.id}_${periodKey}`,
-                            date: data.date,
-                            subjectId: periodKey,
-                            className: this.getHistoricalClassName(activeTerm, data.className),
-                            presentStudentIds: pData.presentStudentIds || [],
-                            absentStudentIds: pData.absentStudentIds || [],
-                            absentReasons: pData.absentReasons || {},
-                            recoveredStudentIds: pData.recoveredStudentIds || [],
-                            recoveredReasons: pData.recoveredReasons || {},
-                            markedBy: pData.markedBy || '',
-                            markedAt: pData.markedAt || 0,
-                            academicYear: data.academicYear,
-                            semester: data.semester
-                        });
-                    }
-                }
-            }
-            return records;
+            const allRecords = await this.getAllAttendanceRecords(activeTerm);
+            return allRecords.filter(r => {
+                const matchesSubject = r.subjectId === subjectId || r.subjectId.startsWith(`${subjectId}_`);
+                const matchesClass = !className || className === 'All' || r.className === className;
+                return matchesSubject && matchesClass;
+            });
         } catch (error) {
             console.error('Error fetching subject attendance:', error);
             return [];
@@ -657,40 +592,40 @@ export class AttendanceService extends BaseDataService {
             const recordsToUpdate = absentRecords.slice(0, toRecoverCount);
 
             for (const record of recordsToUpdate) {
-                // record.id = "${firestoreDocId}_${periodKey}" — split on last underscore-separated segment
-                // The virtualId format is: "${className}_${date}_${periodKey}" or similar.
-                // We need to extract the raw Firestore doc ID (everything before the period key).
-                // periodKey is record.subjectId (which can contain underscores).
-                // We know docId = record.id minus the trailing "_${record.subjectId}".
                 const periodKey = record.subjectId;
                 const suffix = `_${periodKey}`;
                 const firestoreDocId = record.id.endsWith(suffix)
                     ? record.id.slice(0, record.id.length - suffix.length)
                     : record.id;
 
-                const updatedRecoveredStudentIds = [...(record.recoveredStudentIds || [])];
-                if (!updatedRecoveredStudentIds.includes(studentId)) {
-                    updatedRecoveredStudentIds.push(studentId);
-                }
-                const updatedRecoveredReasons = {
-                    ...(record.recoveredReasons || {}),
-                    [studentId]: 'Recovered by teacher'
-                };
-
-                // Directly update only the recoveredStudentIds and recoveredReasons
-                // for this specific period in the correct Firestore daily document.
-                // This avoids double-mapping className through markAttendance which
-                // would re-run getDatabaseClassName on an already-mapped historical name
-                // and produce the wrong document ID.
                 const docRef = doc(this.db!, this.attendanceCollection, firestoreDocId);
-                await updateDoc(docRef, {
-                    [`periods.${periodKey}.recoveredStudentIds`]: updatedRecoveredStudentIds,
-                    [`periods.${periodKey}.recoveredReasons`]: updatedRecoveredReasons,
-                });
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const docData = docSnap.data();
+                    const periods = { ...(docData.periods || {}) };
+                    const period = { ...(periods[periodKey] || {}) };
+
+                    const currentRecovered = period.recoveredStudentIds || [];
+                    const updatedRecoveredStudentIds = Array.from(new Set([...currentRecovered, studentId]));
+                    const updatedRecoveredReasons = {
+                        ...(period.recoveredReasons || {}),
+                        [studentId]: 'Recovered by teacher'
+                    };
+
+                    periods[periodKey] = {
+                        ...period,
+                        recoveredStudentIds: updatedRecoveredStudentIds,
+                        recoveredReasons: updatedRecoveredReasons
+                    };
+
+                    await updateDoc(docRef, { periods });
+                }
             }
 
-            // Invalidate cache so fresh data is loaded after recovery
-            this.recordsCache.delete(termKey);
+            // Completely clear cache so fresh data is loaded on next fetch
+            this.recordsCache.clear();
+            (this as any).lastFetchTime = 0;
         } catch (error) {
             console.error('Error recovering absences:', error);
             throw error;
