@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SubjectConfig, StudentRecord, CurriculumEntry } from '../../../domain/entities/types';
+import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { normalizeName, shortenSubjectName } from '../../../infrastructure/services/formatUtils';
@@ -212,7 +213,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         const loadClasses = async () => {
             if (activeTerm) {
                 const classes = await dataService.getClassesByTerm(activeTerm);
-                setAvailableClasses(classes.length > 0 ? classes : CLASSES);
+                setAvailableClasses(classes.length > 0 ? classes : SYSTEM_CLASSES);
             }
         };
         loadClasses();

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
+import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../../hooks/useMobile';
 import { mobileStorage } from '../../../infrastructure/services/mobileUtils';
@@ -96,7 +97,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
     useEffect(() => {
         const loadClasses = async () => {
             const classes = await dataService.getClassesByTerm(activeTerm);
-            setAvailableClasses(classes.length > 0 ? classes : CLASSES);
+            setAvailableClasses(classes.length > 0 ? classes : SYSTEM_CLASSES);
         };
         loadClasses();
     }, [activeTerm]);

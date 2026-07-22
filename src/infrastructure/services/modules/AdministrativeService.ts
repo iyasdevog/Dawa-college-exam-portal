@@ -239,20 +239,6 @@ export class AdministrativeService extends BaseDataService {
                 .filter(c => c && c !== '-' && !disabled.includes(c))
                 .forEach(c => activeClassesSet.add(c));
 
-            // 2. Discover from actual Student Records
-            const studentsSnapshot = await getDocs(collection(this.db, this.studentsCollection));
-            studentsSnapshot.docs.forEach(docSnap => {
-                const data = docSnap.data() as StudentRecord;
-                if (!data) return;
-                const termRecord = data.academicHistory?.[requestedTermKey];
-                if (termRecord?.className) {
-                    activeClassesSet.add(termRecord.className.trim());
-                }
-                if (data.currentClass && data.isActive !== false) {
-                    activeClassesSet.add(data.currentClass.trim());
-                }
-            });
-
             // 3. Discover from Subject assignments
             const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
             const parts = requestedTermKey.split('-');

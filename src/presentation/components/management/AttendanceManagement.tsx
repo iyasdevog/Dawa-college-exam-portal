@@ -294,7 +294,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
 
     useEffect(() => {
         const loadAllTimetables = async () => {
-            const data = await dataService.getAllTimetables();
+            const data = await dataService.getAllTimetables(activeTerm);
             setAllTimetables(data);
         };
         loadAllTimetables();

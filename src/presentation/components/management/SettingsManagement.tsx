@@ -50,7 +50,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [allExistingClasses, setAllExistingClasses] = useState<string[]>([]);
     const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
     const [allExistingSubjects, setAllExistingSubjects] = useState<SubjectConfig[]>([]);
-    const [allExistingStudents, setAllExistingStudents] = useState<StudentRecord[]>([]);
+    const [allExistingStudentsCount, setAllExistingStudentsCount] = useState<number>(0);
     const [wizardFacultyAssignments, setWizardFacultyAssignments] = useState<Record<string, string>>({});
     const [newClassName, setNewClassName] = useState('');
     const [showAddSubjectForm, setShowAddSubjectForm] = useState(false);
@@ -122,8 +122,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
         const loadClasses = async () => {
             try {
-                const students = await dataService.getAllStudents('All');
-                const classes = Array.from(new Set(students.map(s => s.className))).filter(Boolean).sort();
+                const classes = await dataService.getClassesByTerm('All');
                 setActiveClasses(classes);
             } catch (error) {
                 console.error('Error loading classes:', error);
@@ -161,8 +160,8 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             setRenamingClass(null);
             
             // Refresh everything
-            const students = await dataService.getAllStudents('All');
-            setActiveClasses(Array.from(new Set(students.map(s => s.className))).filter(Boolean).sort());
+            const classes = await dataService.getClassesByTerm('All');
+            setActiveClasses(classes);
             await onRefresh();
         } catch (error) {
             console.error('Rename failed:', error);
@@ -372,21 +371,21 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
     const loadWizardData = async () => {
         try {
-            const [students, subjects] = await Promise.all([
-                dataService.getAllStudents('All'),
+            const [classes, subjects] = await Promise.all([
+                dataService.getClassesByTerm('All'),
                 dataService.getAllSubjects('All')
             ]);
             
-            // Derive unique classes from students + system defaults
+            // Derive unique classes from system defaults + current term classes
             const uniqueClasses = Array.from(new Set([
                 ...SYSTEM_CLASSES,
-                ...students.map(s => s.className)
+                ...classes
             ])).filter(Boolean).sort();
             
             setAllExistingClasses(uniqueClasses);
             setSelectedClasses(uniqueClasses); // Default to all
             setAllExistingSubjects(subjects);
-            setAllExistingStudents(students);
+            setAllExistingStudentsCount(0); // Removing heavy student fetch for wizard count
             setSelectedSubjectIds(subjects.map(s => s.id)); // Default to all
             
             // Initialize Faculty Assignments
@@ -1653,9 +1652,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
                                             <div className="grid grid-cols-1 gap-3">
                                                 <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
-                                                    <span className="text-sm text-slate-300 font-bold">Total Students in Selected Classes</span>
+                                                    <span className="text-sm text-slate-300 font-bold">Total Selected Classes</span>
                                                     <span className="text-2xl font-black text-purple-400">
-                                                        {allExistingStudents.filter(s => selectedClasses.includes(s.className)).length}
+                                                        {selectedClasses.length}
                                                     </span>
                                                 </div>
                                                 
