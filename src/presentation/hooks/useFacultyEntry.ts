@@ -43,6 +43,24 @@ export const useFacultyEntry = ({
 
     const { saveDraft, getDraft, deleteDraft } = useOfflineCapability();
 
+    // Initialize marks data when students change
+    useEffect(() => {
+        if (!selectedSubject || !students.length) {
+            setMarksData({});
+            return;
+        }
+        
+        const initialMarks: Record<string, { int: string; ext: string }> = {};
+        students.forEach(student => {
+            const m = student.marks?.[selectedSubject];
+            initialMarks[student.id] = {
+                int: m?.int === 'A' ? 'A' : (m?.int !== undefined && m?.int !== null && m?.int !== 0 ? String(m.int) : (m?.int === 0 ? '0' : '')),
+                ext: m?.ext === 'A' ? 'A' : (m?.ext !== undefined && m?.ext !== null && m?.ext !== 0 ? String(m.ext) : (m?.ext === 0 ? '0' : ''))
+            };
+        });
+        setMarksData(initialMarks);
+    }, [students, selectedSubject]);
+
     // Filtering logic
     const filteredStudents = useMemo(() => {
         if (!debouncedSearchQuery) return students;
@@ -210,9 +228,6 @@ export const useFacultyEntry = ({
                 // Only save if some part of the mark exists
                 if (marks && (marks.int || marks.ext)) {
                     let intToSave: number | 'A' = marks.int === 'A' ? 'A' : parseInt(marks.int);
-                    if (sub?.maxINT === 35 && intToSave !== 'A') {
-                        intToSave = (intToSave as number) * 2;
-                    }
                     
                     updates.push({
                         studentId: student.id,
@@ -287,9 +302,6 @@ export const useFacultyEntry = ({
                 const marks = marksData[student.id];
                 if (marks?.int) {
                     let intToSave: number | 'A' = marks.int === 'A' ? 'A' : parseInt(marks.int);
-                    if (sub?.maxINT === 35 && intToSave !== 'A') {
-                        intToSave = (intToSave as number) * 2;
-                    }
                     updates.push({
                         studentId: student.id,
                         subjectId: selectedSubject,

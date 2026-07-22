@@ -91,6 +91,8 @@ const StudentRow = React.memo(({
                     value={marks.ext || ''} 
                     onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)} 
                     onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')} 
+                    data-student={student.id}
+                    data-field="ext"
                     className={`w-20 p-2 border-2 rounded-xl text-center ${att < 75 || isLockedForEditing ? 'bg-red-50 opacity-60' : ''}`} 
                     disabled={att < 75 || isSaving || isLockedForEditing} 
                 />
@@ -101,6 +103,8 @@ const StudentRow = React.memo(({
                     value={marks.int || ''} 
                     onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)} 
                     onKeyDown={(e) => handleKeyDown(e, student.id, 'int')} 
+                    data-student={student.id}
+                    data-field="int"
                     className={`w-20 p-2 border-2 rounded-xl text-center ${selectedSubjectData?.maxEXT === 100 || att < 75 || isLockedForEditing ? 'bg-slate-100 opacity-60' : ''}`} 
                     disabled={selectedSubjectData?.maxEXT === 100 || att < 75 || isSaving || isLockedForEditing} 
                 />
@@ -332,12 +336,12 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-xs font-medium text-slate-600 mb-1">EXT (Max: {selectedSubjectData?.maxEXT})</label>
-                                            <input type="text" value={studentMarks.ext} onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${attendance < 75 ? 'bg-red-50 border-red-200 text-red-400' : ''}`} disabled={attendance < 75} />
+                                            <input type="text" data-student={student.id} data-field="ext" onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')} value={studentMarks.ext} onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${attendance < 75 ? 'bg-red-50 border-red-200 text-red-400' : ''}`} disabled={attendance < 75} />
                                             <div className={`mt-1 text-[10px] font-bold ${attendance < 75 ? 'text-red-600' : 'text-emerald-600'}`}>Attendance: {attendance.toFixed(0)}%</div>
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-slate-600 mb-1">INT (Max: {selectedSubjectData?.maxINT})</label>
-                                            <input type="text" value={studentMarks.int} onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxEXT === 100 || attendance < 75 ? 'bg-slate-100 text-slate-400' : ''}`} disabled={selectedSubjectData?.maxEXT === 100 || attendance < 75} />
+                                            <input type="text" data-student={student.id} data-field="int" onKeyDown={(e) => handleKeyDown(e, student.id, 'int')} value={studentMarks.int} onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxEXT === 100 || attendance < 75 ? 'bg-slate-100 text-slate-400' : ''}`} disabled={selectedSubjectData?.maxEXT === 100 || attendance < 75} />
                                         </div>
                                     </div>
                                 </div>
