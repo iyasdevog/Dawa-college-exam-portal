@@ -149,7 +149,6 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
 
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedStudent, setSelectedStudent] = useState('');
-    const [students, setStudents] = useState<StudentRecord[]>([]);
     const [classStudents, setClassStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
@@ -175,16 +174,12 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     const loadData = async () => {
         try {
             setIsLoading(true);
-            const [settings, allStudents, allSubjects, termClasses, supps] = await Promise.all([
+            const [settings, allSubjects, termClasses] = await Promise.all([
                 dataService.getGlobalSettings(),
-                dataService.getAllStudents(activeTerm),
                 dataService.getAllSubjects(activeTerm),
-                dataService.getClassesByTerm(activeTerm),
-                dataService.getAllSupplementaryExams('All')
+                dataService.getClassesByTerm(activeTerm)
             ]);
-            const enrichedStudents = enrichStudentsWithSupps(allStudents, supps, activeTerm);
             setBranding(settings);
-            setStudents(enrichedStudents);
             setSubjects(allSubjects);
             setAvailableClasses(termClasses);
             const allowed = (!currentUser || currentUser.role === 'admin' || currentUser.role === 'teacher')
