@@ -212,7 +212,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         const loadClasses = async () => {
             if (activeTerm) {
                 const classes = await dataService.getClassesByTerm(activeTerm);
-                setAvailableClasses(classes);
+                setAvailableClasses(classes.length > 0 ? classes : CLASSES);
             }
         };
         loadClasses();

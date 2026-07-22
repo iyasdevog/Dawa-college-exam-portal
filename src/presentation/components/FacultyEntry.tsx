@@ -64,7 +64,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 ]);
                 setSubjects(allSubjects);
                 setAllStudents(allStudentsData);
-                setAvailableClasses(termClasses);
+                setAvailableClasses(termClasses.length > 0 ? termClasses : CLASSES);
                 setReleaseSettings(relSettings || {});
                 setLoadingProgress(100);
             } catch (error) {

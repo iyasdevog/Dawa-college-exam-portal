@@ -96,7 +96,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
     useEffect(() => {
         const loadClasses = async () => {
             const classes = await dataService.getClassesByTerm(activeTerm);
-            setAvailableClasses(classes);
+            setAvailableClasses(classes.length > 0 ? classes : CLASSES);
         };
         loadClasses();
     }, [activeTerm]);

@@ -25,7 +25,7 @@ const ApplicationManagement: React.FC = () => {
 
     const loadClasses = async () => {
         const classes = await dataService.getClassesByTerm(activeTerm);
-        setAvailableClasses(classes);
+        setAvailableClasses(classes.length > 0 ? classes : CLASSES);
         // If current filter is not in new list, reset to 'all'
         if (filterClass !== 'all' && !classes.includes(filterClass)) {
             setFilterClass('all');
