@@ -456,10 +456,6 @@ Keep the analysis professional and actionable.`;
         return messages[performanceLevel as keyof typeof messages] || 'May Allah guide you in your educational journey and grant you success.';
     }
 
-    isAvailable(): boolean {
-        return this.genAI !== null && this.model !== null;
-    }
-
     getStatus(): { available: boolean; error?: string } {
         if (!this.isAvailable()) {
             return {

@@ -333,14 +333,14 @@ export class AttendanceService extends BaseDataService {
      */
     public async markAttendance(record: Omit<AttendanceRecord, 'id'>): Promise<string> {
         try {
-            const termKey = this.getCurrentTermKey(record.className);
+            const termKey = (record as any).termKey || this.getCurrentTermKey(record.className);
             const dbClassName = this.getDatabaseClassName(termKey, record.className);
             const docId = this.getDailyDocId(dbClassName, record.date);
             const docRef = doc(this.db!, this.attendanceCollection, docId);
             
             const parts = termKey.split('-');
-            const sem = parts.pop() as 'Odd' | 'Even';
-            const year = parts.join('-');
+            const sem = (record as any).semester || (parts.pop() as 'Odd' | 'Even');
+            const year = (record as any).academicYear || parts.join('-');
 
             // 1. Ensure the base daily document exists with correct metadata
             await setDoc(docRef, this.sanitize({
@@ -394,12 +394,30 @@ export class AttendanceService extends BaseDataService {
                 return cached;
             }
 
-            const q = query(
-                collection(this.db!, this.attendanceCollection),
-                where('termKey', '==', activeTerm)
-            );
-            const snapshot = await getDocs(q);
+            let q;
+            if (activeTerm === 'All') {
+                q = query(collection(this.db!, this.attendanceCollection));
+            } else {
+                q = query(
+                    collection(this.db!, this.attendanceCollection),
+                    where('termKey', '==', activeTerm)
+                );
+            }
+            let snapshot = await getDocs(q);
             
+            // Fallback: If snapshot is empty for a specific termKey, try fetching all and matching termKey or academicYear-semester
+            if (snapshot.empty && activeTerm !== 'All') {
+                const allSnap = await getDocs(collection(this.db!, this.attendanceCollection));
+                const filteredDocs = allSnap.docs.filter(docSnap => {
+                    const data = docSnap.data();
+                    const docTermKey = data.termKey || (data.academicYear && data.semester ? `${data.academicYear}-${data.semester}` : '');
+                    return docTermKey === activeTerm || docTermKey.replace('-20', '-') === activeTerm || activeTerm.replace('-20', '-') === docTermKey;
+                });
+                if (filteredDocs.length > 0) {
+                    snapshot = { docs: filteredDocs } as any;
+                }
+            }
+
             const allRecords: AttendanceRecord[] = [];
             
             snapshot.docs.forEach(docSnap => {

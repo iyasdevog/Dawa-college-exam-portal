@@ -243,6 +243,7 @@ export class StudentService extends BaseDataService {
         }
 
         try {
+            const querySnapshot = await getDocs(collection(this.db, this.studentsCollection));
             const students = querySnapshot.docs
                 .map(doc => this.processStudentRecord(doc.data(), doc.id, activeTerm))
                 .filter(student => !student.isDeleted);
