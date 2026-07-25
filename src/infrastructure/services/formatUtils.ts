@@ -43,7 +43,7 @@ export const shortenSubjectName = (name: string | null | undefined, shortName?: 
         'communicative arabic': 'C.Arabic',
         'communicative malayalam': 'C.Malayalam',
         'malayalam': 'Mal.',
-        'arabic': 'Ar.',
+        'arabic': 'Arabic',
         'english': 'English',
         'eng': 'English',
         'eng.': 'English',
