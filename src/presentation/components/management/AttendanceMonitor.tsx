@@ -92,15 +92,34 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
         }
     }, [classes]);
 
+    const subjectMap = useMemo(() => {
+        const map: Record<string, SubjectConfig> = {};
+        subjects.forEach(s => {
+            map[s.id] = s;
+            if (s.id) {
+                const base = s.id.split('_')[0];
+                map[base] = s;
+            }
+        });
+        return map;
+    }, [subjects]);
+
     // Analytics Calculation
     const analyticsData = useMemo(() => {
-        const classStats: Record<string, { present: number; total: number; subjects: Record<string, { present: number; total: number }> }> = {};
+        const classStats: Record<string, { 
+            present: number; 
+            total: number; 
+            subjects: Record<string, { present: number; total: number; sessionCount: number }> 
+        }> = {};
 
         records.forEach(record => {
             const className = record.className;
-            const subjectId = record.subjectId;
-            const present = record.presentStudentIds.length;
-            const total = present + record.absentStudentIds.length;
+            const rawSubId = record.subjectId || '';
+            const matchedSubject = subjectMap[rawSubId] || subjectMap[rawSubId.split('_')[0]];
+            const baseSubId = matchedSubject ? matchedSubject.id : (rawSubId.includes('_') ? rawSubId.split('_')[0] : rawSubId);
+
+            const present = record.presentStudentIds?.length || 0;
+            const total = present + (record.absentStudentIds?.length || 0);
 
             if (!classStats[className]) {
                 classStats[className] = { present: 0, total: 0, subjects: {} };
@@ -109,11 +128,12 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
             classStats[className].present += present;
             classStats[className].total += total;
 
-            if (!classStats[className].subjects[subjectId]) {
-                classStats[className].subjects[subjectId] = { present: 0, total: 0 };
+            if (!classStats[className].subjects[baseSubId]) {
+                classStats[className].subjects[baseSubId] = { present: 0, total: 0, sessionCount: 0 };
             }
-            classStats[className].subjects[subjectId].present += present;
-            classStats[className].subjects[subjectId].total += total;
+            classStats[className].subjects[baseSubId].present += present;
+            classStats[className].subjects[baseSubId].total += total;
+            classStats[className].subjects[baseSubId].sessionCount += 1;
         });
 
         return Object.entries(classStats)
@@ -127,16 +147,11 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                     .map(([subId, subStats]) => ({
                         subId,
                         present: subStats.present,
-                        total: subStats.total
+                        total: subStats.total,
+                        sessionCount: subStats.sessionCount
                     }))
             }));
-    }, [records]);
-    
-    const subjectMap = useMemo(() => {
-        const map: Record<string, SubjectConfig> = {};
-        subjects.forEach(s => map[s.id] = s);
-        return map;
-    }, [subjects]);
+    }, [records, subjectMap]);
 
     const studentMap = useMemo(() => {
         const map: Record<string, StudentRecord> = {};
@@ -536,13 +551,17 @@ const AttendanceMonitor: React.FC<AttendanceMonitorProps> = ({ students, subject
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 {subjectsList.map(sub => {
                                                     const subPercentage = sub.total > 0 ? (sub.present / sub.total) * 100 : 0;
+                                                    const subjectName = subjectMap[sub.subId]?.name || 'Course Subject';
                                                     return (
                                                         <div key={sub.subId} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
-                                                            <div className="min-w-0">
-                                                                <p className="text-[10px] font-black text-white truncate">{subjectMap[sub.subId]?.name || 'Unknown'}</p>
-                                                                <p className="text-[9px] font-bold text-slate-500">{sub.present}/{sub.total} sessions</p>
+                                                            <div className="min-w-0 pr-3">
+                                                                <p className="text-xs font-black text-white truncate">{subjectName}</p>
+                                                                <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                                                                    {sub.sessionCount} {sub.sessionCount === 1 ? 'session' : 'sessions'} conducted
+                                                                    <span className="text-slate-500 font-medium ml-1">({sub.present}/{sub.total} entries)</span>
+                                                                </p>
                                                             </div>
-                                                            <span className={`text-xs font-black ${subPercentage >= 75 ? 'text-emerald-400' : subPercentage >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                                                            <span className={`text-sm font-black shrink-0 ${subPercentage >= 75 ? 'text-emerald-400' : subPercentage >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
                                                                 {Math.round(subPercentage)}%
                                                             </span>
                                                         </div>
