@@ -29,6 +29,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
     const [sortBy, setSortBy] = useState<'attendance-asc' | 'attendance-desc' | 'adno-asc'>('attendance-asc');
+    const [eligibilityThreshold, setEligibilityThreshold] = useState(75);
 
     const classes = useMemo(() => ['All', ...new Set(students.map(s => s.className))], [students]);
 
@@ -36,8 +37,14 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
         const loadRecords = async () => {
             setIsLoading(true);
             try {
-                const records = await dataService.getAllAttendanceRecords(activeTerm);
+                const [records, settings] = await Promise.all([
+                    dataService.getAllAttendanceRecords(activeTerm),
+                    dataService.getGlobalSettings()
+                ]);
                 setAttendanceRecords(records);
+                if (settings) {
+                    setEligibilityThreshold(settings.minAttendancePercentage || 75);
+                }
             } catch (error) {
                 console.error('Error loading attendance records for stats:', error);
             } finally {
@@ -89,7 +96,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
             const breakdown = studentSubjects.map(sub => {
                 const stat = statsMap[s.id]?.[sub.id];
                 const percentage = stat && stat.total > 0 ? Math.round((stat.present / stat.total) * 100) : 100;
-                const isShortage = percentage < 75;
+                const isShortage = percentage < eligibilityThreshold;
                 if (isShortage) hasAnyShortage = true;
 
                 totalPresent += (stat?.present || 0);
@@ -108,7 +115,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                 breakdown
             } as StudentAggregate;
         });
-    }, [students, subjects, statsMap]);
+    }, [students, subjects, statsMap, eligibilityThreshold]);
 
     const filteredAggregates = useMemo(() => {
         const lowerSearch = searchQuery.toLowerCase();
@@ -137,10 +144,10 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
         aggregates
             .filter(a => {
                 const matchesClass = selectedClass === 'All' || a.student.className === selectedClass;
-                return matchesClass && a.average < 75;
+                return matchesClass && a.average < eligibilityThreshold;
             })
             .sort((a, b) => a.average - b.average), 
-    [aggregates, selectedClass]);
+    [aggregates, selectedClass, eligibilityThreshold]);
 
     const subjectShortages = useMemo(() => {
         const list: Array<{ studentName: string; subjectName: string; percentage: number; className: string }> = [];
@@ -334,7 +341,7 @@ const StudentAttendanceStats: React.FC<StudentAttendanceStatsProps> = ({ subject
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-black tracking-tight">Average Risk {selectedClass !== 'All' ? `(${selectedClass})` : ''}</h3>
-                                    <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Overall &lt; 75%</p>
+                                    <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Overall &lt; {eligibilityThreshold}%</p>
                                 </div>
                             </div>
                             <span className="text-2xl font-black text-white/20">{averageWatchlist.length}</span>

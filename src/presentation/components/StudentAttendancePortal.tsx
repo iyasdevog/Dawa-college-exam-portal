@@ -41,6 +41,7 @@ const StudentAttendancePortal: React.FC = () => {
     const [leavePermissions, setLeavePermissions] = useState<LeavePermission[]>([]);
     const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
     const [error, setError] = useState('');
+    const [eligibilityThreshold, setEligibilityThreshold] = useState(75);
 
     useEffect(() => {
         setSelectedTermKey(activeTerm);
@@ -57,7 +58,15 @@ const StudentAttendancePortal: React.FC = () => {
         setLeavePermissions([]);
 
         try {
-            const foundStudent = await dataService.getStudentByAdNo(adNo.trim(), selectedTermKey);
+            const [foundStudent, settings] = await Promise.all([
+                dataService.getStudentByAdNo(adNo.trim(), selectedTermKey),
+                dataService.getGlobalSettings()
+            ]);
+            
+            if (settings) {
+                setEligibilityThreshold(settings.minAttendancePercentage || 75);
+            }
+
             if (!foundStudent) {
                 setError(`No student found with admission number "${adNo.trim()}" in ${selectedTermKey}.`);
                 return;
@@ -191,7 +200,7 @@ const StudentAttendancePortal: React.FC = () => {
         });
 
         const overallPct = totalSessions > 0 ? Math.round(((totalPresent + totalRecovered) / totalSessions) * 100) : 100;
-        const isEligible = overallPct >= 75;
+        const isEligible = overallPct >= eligibilityThreshold;
 
         return {
             totalSessions,
@@ -328,7 +337,7 @@ const StudentAttendancePortal: React.FC = () => {
                                                     : 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-rose-500/10'
                                             }`}>
                                                 <i className={`fa-solid ${overallStats.isEligible ? 'fa-shield-check' : 'fa-triangle-exclamation'}`}></i>
-                                                {overallStats.isEligible ? 'Eligible (≥ 75%)' : 'Shortage Warning'}
+                                                {overallStats.isEligible ? `Eligible (≥ ${eligibilityThreshold}%)` : 'Shortage Warning'}
                                             </div>
                                         </div>
                                     </div>
