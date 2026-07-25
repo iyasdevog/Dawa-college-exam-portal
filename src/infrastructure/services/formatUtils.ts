@@ -17,9 +17,13 @@ export const toTitleCase = (str: string | null | undefined): string => {
 
 /**
  * Shortens long subject names into common abbreviations.
+ * If a custom shortName override is provided (set by faculty), it is used directly.
  */
-export const shortenSubjectName = (name: string | null | undefined): string => {
+export const shortenSubjectName = (name: string | null | undefined, shortName?: string | null): string => {
     if (!name) return '';
+
+    // Faculty-defined short name takes priority
+    if (shortName && shortName.trim()) return shortName.trim();
 
     const lowerName = name.toLowerCase().trim();
 
@@ -36,8 +40,8 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
         'ict': 'ICT',
         'it': 'ICT',
         'islamic history': 'Islamic Hist.',
-        'communicative arabic': 'C.Ar.',
-        'communicative malayalam': 'C.Ml.',
+        'communicative arabic': 'C.Arabic',
+        'communicative malayalam': 'C.Malayalam',
         'malayalam': 'Mal.',
         'arabic': 'Ar.',
         'english': 'English',
@@ -89,6 +93,7 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
 
     return name;
 };
+
 
 /**
  * Normalizes a name for comparison or storage.

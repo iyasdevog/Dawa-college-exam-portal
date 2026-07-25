@@ -177,6 +177,7 @@ export interface SubjectConfig {
   id: string;
   name: string;
   arabicName?: string;
+  shortName?: string; // Optional short display name suggested by faculty (used in compact tables/reports)
   maxINT: number;
   maxEXT: number;
   passingTotal: number;

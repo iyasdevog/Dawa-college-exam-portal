@@ -133,6 +133,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
     const [editingSubject, setEditingSubject] = useState<SubjectConfig | null>(null);
     const [subjectForm, setSubjectForm] = useState({
         name: '',
+        shortName: '',
         arabicName: '',
         maxINT: 30,
         maxEXT: 70,
@@ -223,6 +224,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         setEditingSubject(null);
         setSubjectForm({
             name: '',
+            shortName: '',
             arabicName: '',
             maxINT: 30,
             maxEXT: 70,
@@ -245,6 +247,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         setSubjectForm({
             ...subject,
             name: subject.name,
+            shortName: subject.shortName || '',
             arabicName: subject.arabicName || '',
             facultyName: subject.facultyName || '',
             targetClasses: subject.targetClasses || [],
@@ -321,6 +324,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
 
             const subjectData = {
                 name: normalizedName,
+                shortName: (subjectForm.shortName || '').trim(),
                 arabicName: (subjectForm.arabicName || '').trim(),
                 maxINT: Number(subjectForm.maxINT) || 0,
                 maxEXT: Number(subjectForm.maxEXT) || 0,
@@ -1064,6 +1068,22 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                                 <i className="fa-solid fa-arrow-left"></i>
                                                 Back to list
                                             </button>
+                                        </div>
+                                    )}
+
+                                    {subjectForm.name.length > 14 && (
+                                        <div className="mt-4 animate-in slide-in-from-top-1 duration-200">
+                                            <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Short Name (Optional)</label>
+                                            <input
+                                                type="text"
+                                                value={subjectForm.shortName || ''}
+                                                onChange={e => setSubjectForm(prev => ({ ...prev, shortName: e.target.value }))}
+                                                className="w-full p-3 bg-indigo-50 border-2 border-indigo-100 rounded-xl text-indigo-900 font-bold text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                                placeholder="e.g. C.Arabic"
+                                            />
+                                            <p className="text-[10px] text-indigo-500 mt-1 ml-1 font-medium">
+                                                Subject name is long. Suggest a short form for compact tables.
+                                            </p>
                                         </div>
                                     )}
                                 </div>
