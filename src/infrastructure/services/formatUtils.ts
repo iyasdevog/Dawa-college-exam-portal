@@ -36,6 +36,8 @@ export const shortenSubjectName = (name: string | null | undefined): string => {
         'ict': 'ICT',
         'it': 'ICT',
         'islamic history': 'Islamic Hist.',
+        'communicative arabic': 'Comm. Ar.',
+        'communicative malayalam': 'Comm. Mlm.',
         'malayalam': 'Mal.',
         'arabic': 'Ar.',
         'english': 'English',

@@ -322,6 +322,16 @@ export class AcademicService extends BaseDataService {
         }
     }
 
+    /** DEBUG: returns raw name + activeSemester for every subject so we can diagnose matching issues */
+    public async diagnosticSubjectNames(): Promise<{ name: string; activeSemester: string; id: string }[]> {
+        const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+        return snapshot.docs.map(d => ({
+            id: d.id,
+            name: d.data().name ?? '(no name)',
+            activeSemester: d.data().activeSemester ?? '(no field)',
+        }));
+    }
+
     public async updateSubject(id: string, updates: Partial<SubjectConfig>): Promise<void> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
