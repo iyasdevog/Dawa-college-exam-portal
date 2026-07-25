@@ -723,7 +723,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                         </span>
                     )}
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
+                <div className="flex gap-2 w-full sm:w-auto flex-wrap">
                     <button
                         onClick={async () => {
                             if (!confirm('This will normalize all subject names across the database to clean standardized uppercase titles (e.g. "doura" -> "DOURA"). Continue?')) return;
@@ -745,6 +745,38 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                     >
                         <i className="fa-solid fa-wand-magic-sparkles text-amber-500"></i>
                         <span>Standardize Names</span>
+                    </button>
+                    <button
+                        onClick={async () => {
+                            if (!confirm(
+                                'This will rename:\n' +
+                                '• Ar. / AR. → COMMUNICATIVE ARABIC (Even/Both semester)\n' +
+                                '• Mlm. / MLM. → COMMUNICATIVE MALAYALAM (Even/Both semester)\n' +
+                                '• Mlm. / MLM. → MALAYALAM (Odd semester)\n\n' +
+                                'Continue?'
+                            )) return;
+                            setIsOperating(true);
+                            try {
+                                const { updated, previews } = await dataService.applySubjectNameSubstitutions();
+                                if (updated === 0) {
+                                    alert('No subjects matched the Ar./Mlm. patterns. All already renamed or none found.');
+                                } else {
+                                    alert(`Updated ${updated} subjects:\n\n${previews.join('\n')}`);
+                                    await onRefresh();
+                                }
+                            } catch (error) {
+                                console.error('Error applying substitutions:', error);
+                                alert('Failed to apply name substitutions.');
+                            } finally {
+                                setIsOperating(false);
+                            }
+                        }}
+                        disabled={isOperating}
+                        className="px-3.5 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs border border-blue-200"
+                        title="Rename Ar. → COMMUNICATIVE ARABIC and Mlm. → COMMUNICATIVE MALAYALAM / MALAYALAM by semester"
+                    >
+                        <i className="fa-solid fa-language text-blue-500"></i>
+                        <span>Fix Ar./Mlm. Names</span>
                     </button>
                     <button
                         onClick={handleAddSubject}

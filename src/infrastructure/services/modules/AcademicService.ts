@@ -246,6 +246,63 @@ export class AcademicService extends BaseDataService {
         }
     }
 
+    /**
+     * Applies semester-specific name substitutions across all subjects:
+     *  - Even semester: "Ar." / "AR." → "COMMUNICATIVE ARABIC"
+     *  - Even semester: "Mlm." / "MLM." → "COMMUNICATIVE MALAYALAM"
+     *  - Odd  semester: "Mlm." / "MLM." → "MALAYALAM"
+     *  - "Both" semester subjects follow Even rules for Arabic, Odd rules for Malayalam.
+     *
+     * Matching is case-insensitive prefix/exact match on the trimmed name.
+     */
+    public async applySubjectNameSubstitutions(): Promise<{ updated: number; previews: string[] }> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            const previews: string[] = [];
+            let updated = 0;
+
+            const resolveNewName = (rawName: string, sem: string): string | null => {
+                const norm = rawName.trim().toUpperCase();
+
+                // Arabic: Even and Both
+                if ((sem === 'Even' || sem === 'Both') && (norm === 'AR.' || norm === 'AR' || norm.startsWith('AR.') && norm.length < 8)) {
+                    return 'COMMUNICATIVE ARABIC';
+                }
+
+                // Malayalam: Even and Both
+                if ((sem === 'Even' || sem === 'Both') && (norm === 'MLM.' || norm === 'MLM' || norm.startsWith('MLM.') && norm.length < 8)) {
+                    return 'COMMUNICATIVE MALAYALAM';
+                }
+
+                // Malayalam: Odd only
+                if (sem === 'Odd' && (norm === 'MLM.' || norm === 'MLM' || norm.startsWith('MLM.') && norm.length < 8)) {
+                    return 'MALAYALAM';
+                }
+
+                return null;
+            };
+
+            await this.runBatchedOperation(snapshot.docs, (batch, docSnap) => {
+                const data = docSnap.data();
+                const rawName = data.name || '';
+                const sem = data.activeSemester || 'Both';
+
+                const newName = resolveNewName(rawName, sem);
+                if (newName && newName !== rawName.trim().toUpperCase()) {
+                    batch.update(docSnap.ref, { name: newName });
+                    previews.push(`"${rawName.trim()}" [${sem}] → "${newName}"`);
+                    updated++;
+                }
+            });
+
+            this.invalidateCache();
+            return { updated, previews };
+        } catch (error) {
+            console.error('Error applying subject name substitutions:', error);
+            throw error;
+        }
+    }
+
     public async updateSubject(id: string, updates: Partial<SubjectConfig>): Promise<void> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
