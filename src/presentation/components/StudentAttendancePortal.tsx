@@ -74,12 +74,12 @@ const StudentAttendancePortal: React.FC = () => {
             const userLeaves = studentPermissions.filter(lp => lp.studentId === foundStudent.id);
             setLeavePermissions(userLeaves);
 
-            // Filter subjects: if subject has enrolledStudents defined, ensure student is enrolled
+            // Filter subjects: Include all core/mandatory class subjects, and electives where student is enrolled
             const studentSubjects = allClassSubjects.filter(sub => {
-                if (sub.enrolledStudents && sub.enrolledStudents.length > 0) {
-                    return sub.enrolledStudents.includes(foundStudent.id);
-                }
-                return true; // Default to true for class subjects
+                const isElective = sub.subjectType === 'elective';
+                if (!isElective) return true; // Core subjects are mandatory for all students in the class
+                if (!sub.enrolledStudents || sub.enrolledStudents.length === 0) return true;
+                return sub.enrolledStudents.includes(foundStudent.id);
             });
 
             // Calculate attendance stats per subject

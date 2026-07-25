@@ -304,10 +304,17 @@ export class AcademicService extends BaseDataService {
         const activeTerm = termKey || this.getCurrentTermKey();
         const subjects = await this.getAllSubjects(activeTerm, className);
         
+        const normalizedClassName = this.getHistoricalClassName(
+            activeTerm,
+            this.getDatabaseClassName(activeTerm, className)
+        );
+
         // Include subjects targeted for this class AND cross-class electives.
         // Consumers (like ApplicationPortal) handle student-level enrollment filtering.
         return subjects.filter(s => 
-            (s.targetClasses || []).includes(className) || 
+            (s.targetClasses || []).some(tc => 
+                tc === normalizedClassName || tc === className || this.getDatabaseClassName(activeTerm, tc) === this.getDatabaseClassName(activeTerm, className)
+            ) || 
             (s.subjectType === 'elective' && s.electiveType === 'cross-class')
         );
     }
