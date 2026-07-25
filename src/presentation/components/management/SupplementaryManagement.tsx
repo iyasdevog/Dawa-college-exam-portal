@@ -414,11 +414,19 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         }
     };
 
+    const subjectMap = useMemo(() => {
+        const map = new Map<string, SubjectConfig>();
+        subjects.forEach(s => {
+            map.set(s.id, s);
+            if (s.id && s.id.includes('_')) {
+                map.set(s.id.split('_')[0], s);
+            }
+        });
+        return map;
+    }, [subjects]);
+
     const filteredExams = useMemo(() => {
         return supplementaryExams.filter(exam => {
-            // Lifecycle Filter: Keep records visible even if passed, but allow status filtering.
-            // if (exam.status === 'Completed' && exam.marks?.status === 'Passed') return false;
-
             const appType = (exam.applicationType || '').toLowerCase();
             const matchesTab = activeTab === 'All' 
                 || (activeTab === 'PreviousYear' && exam.examType === 'PreviousYear')
@@ -429,7 +437,14 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 || (activeTab === 'special-supp' && appType === 'special-supp')
                 || (activeTab === 'CurrentSemester' && exam.examType === 'CurrentSemester' && !['revaluation', 'improvement'].includes(appType));
             const matchesClass = classFilter === 'All' || exam.studentClass === classFilter;
-            const matchesSubject = subjectFilter === 'All' || exam.subjectId === subjectFilter;
+            
+            const matchesSubject = subjectFilter === 'All' || (() => {
+                const targetNorm = subjectFilter.trim().toUpperCase();
+                const matchedSubject = subjectMap.get(exam.subjectId) || subjectMap.get(exam.subjectId?.split('_')[0]);
+                const examNorm = (exam.subjectName || matchedSubject?.name || '').trim().toUpperCase();
+                return examNorm === targetNorm || exam.subjectId === subjectFilter;
+            })();
+
             const matchesStatus = statusFilter === 'All' || exam.status === statusFilter;
             const matchesAttempt = attemptFilter === 'All' || exam.attemptNumber?.toString() === attemptFilter;
             const matchesSearch = !searchTerm.trim() || 
@@ -438,17 +453,36 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             
             return matchesTab && matchesClass && matchesSubject && matchesStatus && matchesAttempt && matchesSearch;
         });
-    }, [supplementaryExams, activeTab, classFilter, subjectFilter, statusFilter, attemptFilter, searchTerm]);
-
+    }, [supplementaryExams, activeTab, classFilter, subjectFilter, statusFilter, attemptFilter, searchTerm, subjectMap]);
 
     const uniqueClassesInSupp = useMemo(() => {
         return Array.from(new Set(supplementaryExams.map(e => e.studentClass).filter(Boolean))).sort();
     }, [supplementaryExams]);
 
     const uniqueSubjectsInSupp = useMemo(() => {
-        const subjectIdsSet = new Set(supplementaryExams.map(e => e.subjectId));
-        return subjects.filter(s => subjectIdsSet.has(s.id)).sort((a, b) => a.name.localeCompare(b.name));
-    }, [supplementaryExams, subjects]);
+        // Filter exams by selected class first so subjects depend on selected class
+        const relevantExams = classFilter === 'All' 
+            ? supplementaryExams 
+            : supplementaryExams.filter(e => e.studentClass === classFilter);
+
+        const map = new Map<string, { label: string; normName: string; count: number }>();
+
+        relevantExams.forEach(exam => {
+            const matchedSubject = subjectMap.get(exam.subjectId) || subjectMap.get(exam.subjectId?.split('_')[0]);
+            const rawName = exam.subjectName || matchedSubject?.name || 'Unknown';
+            const normName = rawName.trim().toUpperCase();
+            if (!normName) return;
+
+            if (!map.has(normName)) {
+                const displayName = matchedSubject?.name?.trim() || rawName.trim();
+                map.set(normName, { label: displayName, normName, count: 1 });
+            } else {
+                map.get(normName)!.count += 1;
+            }
+        });
+
+        return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+    }, [supplementaryExams, classFilter, subjectMap]);
 
     return (
         <div className="space-y-6">
@@ -577,10 +611,14 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                         <select 
                             value={subjectFilter}
                             onChange={(e) => setSubjectFilter(e.target.value)}
-                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:border-emerald-500"
+                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:border-emerald-500 max-w-[220px]"
                         >
-                            <option value="All">All Subjects</option>
-                            {uniqueSubjectsInSupp.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            <option value="All">All Subjects ({uniqueSubjectsInSupp.reduce((acc, curr) => acc + curr.count, 0)})</option>
+                            {uniqueSubjectsInSupp.map(s => (
+                                <option key={s.normName} value={s.normName}>
+                                    {s.label} ({s.count})
+                                </option>
+                            ))}
                         </select>
                         <select 
                             value={statusFilter}

@@ -154,6 +154,10 @@ export class DataService extends BaseDataService {
         return this.academicService.addSubject(subjectData);
     }
 
+    async standardizeSubjectNames(): Promise<number> {
+        return this.academicService.standardizeSubjectNames();
+    }
+
     async updateSubject(id: string, updates: Partial<SubjectConfig>): Promise<void> {
         await this.academicService.updateSubject(id, updates);
 

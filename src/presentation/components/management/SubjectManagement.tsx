@@ -723,15 +723,38 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                         </span>
                     )}
                 </div>
-                <button
-                    onClick={handleAddSubject}
-                    disabled={isOperating}
-                    className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
-                >
-                    <i className="fa-solid fa-plus text-xs"></i>
-                    <span className="block sm:hidden">Add</span>
-                    <span className="hidden sm:block">Add Subject</span>
-                </button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                        onClick={async () => {
+                            if (!confirm('This will normalize all subject names across the database to clean standardized uppercase titles (e.g. "doura" -> "DOURA"). Continue?')) return;
+                            setIsOperating(true);
+                            try {
+                                const count = await dataService.standardizeSubjectNames();
+                                alert(`Successfully standardized ${count} subject names.`);
+                                await onRefresh();
+                            } catch (error) {
+                                console.error('Error standardizing subjects:', error);
+                                alert('Failed to standardize subject names.');
+                            } finally {
+                                setIsOperating(false);
+                            }
+                        }}
+                        disabled={isOperating}
+                        className="px-3.5 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs border border-slate-200"
+                        title="Normalize all subject names to standardized uppercase titles"
+                    >
+                        <i className="fa-solid fa-wand-magic-sparkles text-amber-500"></i>
+                        <span>Standardize Names</span>
+                    </button>
+                    <button
+                        onClick={handleAddSubject}
+                        disabled={isOperating}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm text-xs"
+                    >
+                        <i className="fa-solid fa-plus text-xs"></i>
+                        <span>Add Subject</span>
+                    </button>
+                </div>
             </div>
 
             {/* Tabs */}

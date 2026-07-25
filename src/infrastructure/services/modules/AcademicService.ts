@@ -223,6 +223,29 @@ export class AcademicService extends BaseDataService {
         }
     }
 
+    public async standardizeSubjectNames(): Promise<number> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            let count = 0;
+
+            await this.runBatchedOperation(snapshot.docs, (batch, docSnap) => {
+                const data = docSnap.data();
+                const rawName = data.name || '';
+                const standardized = rawName.trim().toUpperCase();
+                if (rawName !== standardized && standardized.length > 0) {
+                    batch.update(docSnap.ref, { name: standardized });
+                    count++;
+                }
+            });
+
+            this.invalidateCache();
+            return count;
+        } catch (error) {
+            console.error('Error standardizing subject names:', error);
+            throw error;
+        }
+    }
+
     public async updateSubject(id: string, updates: Partial<SubjectConfig>): Promise<void> {
         try {
             const docRef = doc(this.db, this.subjectsCollection, id);
