@@ -120,15 +120,17 @@ const PublicAttendance: React.FC = () => {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [daySchedule, allSubjects, records, specials] = await Promise.all([
+            // Fetch the day's timetable and subjects scoped to the selected class
+            // so that timetable entry subjectId lookups always resolve correctly.
+            const [daySchedule, classSubjects, records, specials] = await Promise.all([
                 dataService.getTimetableByDay(dayOfWeek, activeTerm),
-                dataService.getAllSubjects(activeTerm),
+                dataService.getSubjectsByClass(selectedClass, activeTerm),
                 dataService.getAttendanceByClassAndDate(selectedClass, selectedDate),
                 dataService.getSpecialDays(activeTerm)
             ]);
 
             setTimetable(daySchedule);
-            setSubjects(allSubjects);
+            setSubjects(classSubjects);
             setAttendanceRecords(records);
             setSpecialDays(specials.filter(sd => sd.date === selectedDate));
         } catch (error) {
@@ -150,11 +152,19 @@ const PublicAttendance: React.FC = () => {
         return `${h}:${mStr || '00'} ${ampm}`;
     };
 
-    // Filter schedule for selected class
+    // Filter schedule: only entries for the selected class that have a valid name
     const classSchedule = useMemo(() => {
-        if (selectedClass === 'All') return timetable;
-        return timetable.filter(t => t.className === selectedClass);
-    }, [timetable, selectedClass]);
+        const filtered = selectedClass === 'All'
+            ? timetable
+            : timetable.filter(t => t.className === selectedClass);
+
+        // Keep only entries that have a resolvable subject name or a direct subjectName field
+        return filtered.filter(t => {
+            if (t.subjectName && t.subjectName.trim()) return true;
+            const found = subjects.find(s => s.id === t.subjectId);
+            return Boolean(found?.name);
+        });
+    }, [timetable, selectedClass, subjects]);
 
     return (
         <div className="max-w-3xl mx-auto p-3 md:p-6 space-y-6">
