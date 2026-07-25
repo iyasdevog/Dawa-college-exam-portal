@@ -65,19 +65,60 @@ const StudentAttendancePortal: React.FC = () => {
 
             setStudent(foundStudent);
 
-            // Fetch subjects and leave permissions in parallel
-            const [allClassSubjects, studentPermissions] = await Promise.all([
-                dataService.getSubjectsByClass(foundStudent.className, selectedTermKey),
-                dataService.getAllLeavePermissions(selectedTermKey)
+            // Resolve all alias forms of student's class name (e.g., HS1 <-> Prep)
+            const rawClass = foundStudent.className;
+            const dbClass = (dataService as any).getDatabaseClassName ? (dataService as any).getDatabaseClassName(selectedTermKey, rawClass) : rawClass;
+            const histClass = (dataService as any).getHistoricalClassName ? (dataService as any).getHistoricalClassName(selectedTermKey, rawClass) : rawClass;
+            const classAliases = Array.from(new Set([rawClass, dbClass, histClass].filter(Boolean)));
+
+            // Fetch subjects and leave permissions & attendance in parallel
+            const [primaryClassSubjects, dbClassSubjects, histClassSubjects, allTermSubjects, studentPermissions, allTermAttendance] = await Promise.all([
+                dataService.getSubjectsByClass(rawClass, selectedTermKey),
+                dbClass !== rawClass ? dataService.getSubjectsByClass(dbClass, selectedTermKey) : Promise.resolve([]),
+                histClass !== rawClass && histClass !== dbClass ? dataService.getSubjectsByClass(histClass, selectedTermKey) : Promise.resolve([]),
+                dataService.getAllSubjects(selectedTermKey),
+                dataService.getAllLeavePermissions(selectedTermKey),
+                dataService.getAllAttendanceRecords(selectedTermKey)
             ]);
 
             const userLeaves = studentPermissions.filter(lp => lp.studentId === foundStudent.id);
             setLeavePermissions(userLeaves);
 
-            // Filter subjects: Include all core/mandatory class subjects, and electives where student is enrolled
-            const studentSubjects = allClassSubjects.filter(sub => {
+            // Find subjects where attendance records exist for this student
+            const studentAttendanceSubjectIds = new Set<string>();
+            allTermAttendance.forEach(r => {
+                if (r.presentStudentIds?.includes(foundStudent.id) || r.absentStudentIds?.includes(foundStudent.id)) {
+                    const baseId = r.subjectId.includes('_') ? r.subjectId.split('_')[0] : r.subjectId;
+                    studentAttendanceSubjectIds.add(baseId);
+                    studentAttendanceSubjectIds.add(r.subjectId);
+                }
+            });
+
+            // Combine all candidate subjects
+            const subjectMap = new Map<string, SubjectConfig>();
+            [...primaryClassSubjects, ...dbClassSubjects, ...histClassSubjects].forEach(s => subjectMap.set(s.id, s));
+
+            allTermSubjects.forEach(s => {
+                const targets = s.targetClasses || [];
+                const isTargeted = targets.some(tc => 
+                    classAliases.includes(tc) || 
+                    classAliases.includes((dataService as any).getDatabaseClassName?.(selectedTermKey, tc)) || 
+                    classAliases.includes((dataService as any).getHistoricalClassName?.(selectedTermKey, tc))
+                );
+                const hasAttendance = studentAttendanceSubjectIds.has(s.id);
+
+                if (isTargeted || hasAttendance) {
+                    subjectMap.set(s.id, s);
+                }
+            });
+
+            const candidateSubjects = Array.from(subjectMap.values());
+
+            // Filter subjects: Include core subjects, subjects with existing attendance records, and electives student is enrolled in
+            const studentSubjects = candidateSubjects.filter(sub => {
+                if (studentAttendanceSubjectIds.has(sub.id)) return true;
                 const isElective = sub.subjectType === 'elective';
-                if (!isElective) return true; // Core subjects are mandatory for all students in the class
+                if (!isElective) return true;
                 if (!sub.enrolledStudents || sub.enrolledStudents.length === 0) return true;
                 return sub.enrolledStudents.includes(foundStudent.id);
             });
