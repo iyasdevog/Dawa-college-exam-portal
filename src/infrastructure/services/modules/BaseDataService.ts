@@ -122,8 +122,8 @@ export abstract class BaseDataService {
                 'FS3': 'S2',
                 'HS2': 'P1',
                 'HS3': 'P2',
-                'FS1': 'Bridge', 
-                'HS1': 'Prep'
+                'FS1': 'FS1', 
+                'HS1': 'HS1'
             };
             return reverseMappings[dbClass] || dbClass;
         }
