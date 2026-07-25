@@ -248,12 +248,12 @@ export class AcademicService extends BaseDataService {
 
     /**
      * Applies semester-specific name substitutions across all subjects:
-     *  - Even semester: "Ar." / "AR." → "COMMUNICATIVE ARABIC"
-     *  - Even semester: "Mlm." / "MLM." → "COMMUNICATIVE MALAYALAM"
-     *  - Odd  semester: "Mlm." / "MLM." → "MALAYALAM"
-     *  - "Both" semester subjects follow Even rules for Arabic, Odd rules for Malayalam.
+     *  - Even/Both semester: "Ar." / "AR." → "COMMUNICATIVE ARABIC"
+     *  - Even/Both semester: "Mlm." / "MLM." → "COMMUNICATIVE MALAYALAM"
+     *  - Odd  semester:      "Mlm." / "MLM." → "MALAYALAM"
      *
-     * Matching is case-insensitive prefix/exact match on the trimmed name.
+     * Semester matching is case-insensitive and handles all stored variants
+     * e.g. "Both Sem", "BOTH SEM", "Even Sem", "ODD", "odd", etc.
      */
     public async applySubjectNameSubstitutions(): Promise<{ updated: number; previews: string[] }> {
         try {
@@ -261,21 +261,40 @@ export class AcademicService extends BaseDataService {
             const previews: string[] = [];
             let updated = 0;
 
-            const resolveNewName = (rawName: string, sem: string): string | null => {
-                const norm = rawName.trim().toUpperCase();
+            /** Normalise any semester string to 'even' | 'odd' | 'both' */
+            const normSem = (raw: string): 'even' | 'odd' | 'both' => {
+                const s = raw.trim().toLowerCase();
+                if (s.startsWith('even')) return 'even';
+                if (s.startsWith('odd'))  return 'odd';
+                return 'both'; // "both sem", "both", "" → treat as both
+            };
 
-                // Arabic: Even and Both
-                if ((sem === 'Even' || sem === 'Both') && (norm === 'AR.' || norm === 'AR' || norm.startsWith('AR.') && norm.length < 8)) {
+            /** True if the name matches the Ar. abbreviation (any case) */
+            const isAr = (norm: string) =>
+                norm === 'AR.' || norm === 'AR' ||
+                (norm.startsWith('AR.') && norm.length < 8);
+
+            /** True if the name matches the Mlm. abbreviation (any case) */
+            const isMlm = (norm: string) =>
+                norm === 'MLM.' || norm === 'MLM' ||
+                (norm.startsWith('MLM.') && norm.length < 8);
+
+            const resolveNewName = (rawName: string, semRaw: string): string | null => {
+                const norm = rawName.trim().toUpperCase();
+                const sem  = normSem(semRaw);
+
+                // Arabic → COMMUNICATIVE ARABIC (Even or Both)
+                if (isAr(norm) && (sem === 'even' || sem === 'both')) {
                     return 'COMMUNICATIVE ARABIC';
                 }
 
-                // Malayalam: Even and Both
-                if ((sem === 'Even' || sem === 'Both') && (norm === 'MLM.' || norm === 'MLM' || norm.startsWith('MLM.') && norm.length < 8)) {
+                // Malayalam → COMMUNICATIVE MALAYALAM (Even or Both)
+                if (isMlm(norm) && (sem === 'even' || sem === 'both')) {
                     return 'COMMUNICATIVE MALAYALAM';
                 }
 
-                // Malayalam: Odd only
-                if (sem === 'Odd' && (norm === 'MLM.' || norm === 'MLM' || norm.startsWith('MLM.') && norm.length < 8)) {
+                // Malayalam → MALAYALAM (Odd only)
+                if (isMlm(norm) && sem === 'odd') {
                     return 'MALAYALAM';
                 }
 
@@ -283,14 +302,14 @@ export class AcademicService extends BaseDataService {
             };
 
             await this.runBatchedOperation(snapshot.docs, (batch, docSnap) => {
-                const data = docSnap.data();
+                const data    = docSnap.data();
                 const rawName = data.name || '';
-                const sem = data.activeSemester || 'Both';
+                const semRaw  = data.activeSemester || '';
 
-                const newName = resolveNewName(rawName, sem);
+                const newName = resolveNewName(rawName, semRaw);
                 if (newName && newName !== rawName.trim().toUpperCase()) {
                     batch.update(docSnap.ref, { name: newName });
-                    previews.push(`"${rawName.trim()}" [${sem}] → "${newName}"`);
+                    previews.push(`"${rawName.trim()}" [${semRaw || 'Both'}] → "${newName}"`);
                     updated++;
                 }
             });
