@@ -4,6 +4,7 @@ import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import StudentAttendancePortal from './StudentAttendancePortal';
+import PublicAttendance from './PublicAttendance';
 import HallTicketView from './HallTicketView';
 import { mobileStorage, preventIOSZoom } from '../../infrastructure/services/mobileUtils';
 import ClassResults from './ClassResults';
@@ -270,8 +271,9 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 <div className="flex justify-start md:justify-center bg-white/5 p-1 rounded-3xl mb-8 overflow-x-auto hide-scrollbar touch-pan-x print:hidden w-full md:w-fit mx-auto snap-x">
                     {[
                         { id: 'results', label: 'Results', icon: 'fa-file-invoice' },
-                        { id: 'hall-ticket', label: 'Tickets', icon: 'fa-id-card-clip' },
+                        { id: 'live', label: 'Live Today', icon: 'fa-calendar-check' },
                         { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' },
+                        { id: 'hall-ticket', label: 'Tickets', icon: 'fa-id-card-clip' },
                         { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' }
                     ].map(tab => (
                         <button
@@ -291,10 +293,14 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                         >
                             <i className={`fa-solid ${tab.icon} ${isMobile ? 'text-xs' : 'text-sm'}`}></i>
                             {tab.label}
+                            {tab.id === 'live' && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            )}
                         </button>
                     ))}
                 </div>
 
+                {subView === 'live' && <PublicAttendance />}
                 {subView === 'attendance' && <StudentAttendancePortal />}
                 {subView === 'curriculum' && <CurriculumOverview />}
                 {subView === 'hall-ticket' && (
