@@ -199,7 +199,58 @@ const RecoveryTab: React.FC = () => {
         setAttendanceData([]);
         setExpandedSubjectId(null);
         try {
-            const classSubjects = await dataService.getSubjectsByClass(student.className, activeTerm);
+            // Resolve all alias forms of student's class name (e.g., HS1 <-> Prep)
+            const rawClass = student.className;
+            const dbClass = (dataService as any).getDatabaseClassName ? (dataService as any).getDatabaseClassName(activeTerm, rawClass) : rawClass;
+            const histClass = (dataService as any).getHistoricalClassName ? (dataService as any).getHistoricalClassName(activeTerm, rawClass) : rawClass;
+            const classAliases = Array.from(new Set([rawClass, dbClass, histClass].filter(Boolean)));
+
+            const [primaryClassSubjects, dbClassSubjects, histClassSubjects, allTermSubjects, allTermAttendance] = await Promise.all([
+                dataService.getSubjectsByClass(rawClass, activeTerm),
+                dbClass !== rawClass ? dataService.getSubjectsByClass(dbClass, activeTerm) : Promise.resolve([]),
+                histClass !== rawClass && histClass !== dbClass ? dataService.getSubjectsByClass(histClass, activeTerm) : Promise.resolve([]),
+                dataService.getAllSubjects(activeTerm),
+                dataService.getAllAttendanceRecords(activeTerm)
+            ]);
+
+            // Find subjects where attendance records exist for this student
+            const studentAttendanceSubjectIds = new Set<string>();
+            allTermAttendance.forEach(r => {
+                if (r.presentStudentIds?.includes(student.id) || r.absentStudentIds?.includes(student.id)) {
+                    const baseId = r.subjectId.includes('_') ? r.subjectId.split('_')[0] : r.subjectId;
+                    studentAttendanceSubjectIds.add(baseId);
+                    studentAttendanceSubjectIds.add(r.subjectId);
+                }
+            });
+
+            // Combine all candidate subjects
+            const subjectMap = new Map<string, SubjectConfig>();
+            [...primaryClassSubjects, ...dbClassSubjects, ...histClassSubjects].forEach(s => subjectMap.set(s.id, s));
+
+            allTermSubjects.forEach(s => {
+                const targets = s.targetClasses || [];
+                const isTargeted = targets.some(tc => 
+                    classAliases.includes(tc) || 
+                    classAliases.includes((dataService as any).getDatabaseClassName?.(activeTerm, tc)) || 
+                    classAliases.includes((dataService as any).getHistoricalClassName?.(activeTerm, tc))
+                );
+                const hasAttendance = studentAttendanceSubjectIds.has(s.id);
+
+                if (isTargeted || hasAttendance) {
+                    subjectMap.set(s.id, s);
+                }
+            });
+
+            const candidateSubjects = Array.from(subjectMap.values());
+
+            // Filter subjects: Include core subjects, subjects with existing attendance records, and electives student is enrolled in
+            const classSubjects = candidateSubjects.filter(sub => {
+                if (studentAttendanceSubjectIds.has(sub.id)) return true;
+                const isElective = sub.subjectType === 'elective';
+                if (!isElective) return true;
+                if (!sub.enrolledStudents || sub.enrolledStudents.length === 0) return true;
+                return sub.enrolledStudents.includes(student.id);
+            });
             
             const stats = await Promise.all(classSubjects.map(async (subject) => {
                 const records = await dataService.getAttendanceForStudent(student.id, subject.id, activeTerm);
