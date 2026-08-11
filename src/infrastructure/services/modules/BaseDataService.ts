@@ -20,14 +20,18 @@ import {
 } from '../../../domain/entities/types';
 
 export abstract class BaseDataService {
-    protected db: Firestore | null = getDb();
+    protected get db(): Firestore {
+        const instance = getDb();
+        if (!instance) {
+            throw new Error("BaseDataService: Firestore database instance is null or not initialized.");
+        }
+        return instance;
+    }
     
     public async initializeDatabase(): Promise<void> {
-        if (!this.db) {
-            this.db = getDb();
-        }
-        if (!this.db) {
-            console.warn("BaseDataService: Database initialization failed or returned null.");
+        const instance = getDb();
+        if (!instance) {
+            console.warn("BaseDataService: Database initialization returned null.");
         }
         return Promise.resolve();
     }
@@ -260,7 +264,6 @@ export abstract class BaseDataService {
     }
 
     protected async getDocData<T>(collectionName: string, docId: string): Promise<T | null> {
-        if (!this.db) return null;
         try {
             const docRef = doc(this.db, collectionName, docId);
             const docSnap = await getDoc(docRef);
