@@ -20,6 +20,11 @@ export default defineConfig(({ mode }) => {
         manifestFilename: 'manifest.json',
         registerType: 'prompt',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-*'],
+        workbox: {
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
+        },
         manifest: {
           name: "Da'wa College Exam Portal",
           short_name: "Exam Portal",

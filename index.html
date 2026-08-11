@@ -157,6 +157,15 @@
     document.documentElement.classList.remove('no-js');
     document.documentElement.classList.add('js');
 
+    // Update service worker registrations to flush stale Chrome caches
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var i = 0; i < registrations.length; i++) {
+          registrations[i].update();
+        }
+      }).catch(function(e) {});
+    }
+
     // Basic feature detection for critical features
     (function () {
       var features = {
