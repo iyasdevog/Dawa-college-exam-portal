@@ -191,13 +191,20 @@ export class SettingsService extends BaseDataService {
     }
 
     public subscribeToGlobalSettings(callback: (settings: GlobalSettings) => void): () => void {
-        const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
-        return onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const settings = docSnap.data() as GlobalSettings;
-                callback(settings);
-            }
-        });
+        try {
+            const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+            return onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const settings = docSnap.data() as GlobalSettings;
+                    callback(settings);
+                }
+            }, (error) => {
+                console.warn("Firestore: Global settings subscription error:", error);
+            });
+        } catch (error) {
+            console.warn("Firestore: Could not initialize global settings subscription:", error);
+            return () => {};
+        }
     }
 
     public async healStrandedClasses(activeCustomClasses: Set<string>): Promise<void> {

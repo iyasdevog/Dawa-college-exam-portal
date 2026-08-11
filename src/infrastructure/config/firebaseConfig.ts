@@ -29,9 +29,8 @@ export const getDb = (): Firestore => {
       })
     });
   } catch (err) {
-    console.warn("Firestore: SecurityError while enabling persistence. Falling back to memory-only mode.", err);
-    // Explicitly fallback to memory-only by not passing localCache
-    dbInstance = initializeFirestore(app, {});
+    console.warn("Firestore: SecurityError while enabling persistence. Falling back to default getFirestore instance.", err);
+    dbInstance = getFirestore(app);
   }
 
   return dbInstance;
