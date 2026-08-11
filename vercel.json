@@ -6,17 +6,25 @@
     "framework": "vite",
     "rewrites": [
         {
-            "source": "/(.*)",
+            "source": "/((?!manifest\\.json|manifest\\.webmanifest|favicon\\.ico|apple-touch-icon.*|icon-.*|sw\\.js|registerSW\\.js|assets/).*)",
             "destination": "/index.html"
         }
     ],
     "headers": [
         {
-            "source": "/manifest.json",
+            "source": "/(manifest.json|manifest.webmanifest)",
             "headers": [
                 {
                     "key": "Content-Type",
                     "value": "application/manifest+json"
+                },
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                },
+                {
+                    "key": "Cache-Control",
+                    "value": "public, max-age=0, must-revalidate"
                 }
             ]
         },
