@@ -155,14 +155,6 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
     showScrollToTop, scrollToTop, isScrolling, getTouchProps,
     studentRefs, handleKeyDown
 }) => {
-    // Cascading Reset: clear subject when class or type changes
-    React.useEffect(() => {
-        if (selectedSubject) {
-            setSelectedSubject('');
-            setSearchQuery('');
-        }
-    }, [selectedClass, subjectType]);
-
     return (
         <>
 

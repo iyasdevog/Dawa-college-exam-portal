@@ -134,7 +134,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         } else {
             setSelectedSubject('');
         }
-    }, [selectedClass, subjects, subjectType, selectedSubject]);
+    }, [selectedClass, subjects, subjectType]);
 
     const loadStudentsByClass = useCallback(async () => {
         if (!selectedSubject) return;

@@ -80,10 +80,10 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     // Effect to force Doura view if results differ
     // Effect to handle view mode on result release
     useEffect(() => {
-        if (canViewScorecard && !hasSearched) {
+        if (canViewScorecard && !hasSearched && viewMode !== 'scorecard') {
             setViewMode('scorecard');
         }
-    }, [canViewScorecard, hasSearched]);
+    }, [canViewScorecard, hasSearched, viewMode]);
 
     // Mobile detection
     const { isMobile, isIOS } = useMobile();
