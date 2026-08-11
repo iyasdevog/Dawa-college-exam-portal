@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
 import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
