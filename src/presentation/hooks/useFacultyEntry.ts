@@ -110,14 +110,17 @@ export const useFacultyEntry = ({
         }
     };
 
+    const currentSubject = useMemo(() => {
+        if (!selectedSubject || !subjects.length) return undefined;
+        return subjects.find(s => s.id === selectedSubject);
+    }, [subjects, selectedSubject]);
+
     // Validation helpers - Refactored to separate logic from direct state dependency where possible
     const validationHelpers = useMemo(() => {
-        if (!selectedSubject) return null;
-        const subject = subjects.find(s => s.id === selectedSubject);
-        if (!subject) return null;
+        if (!currentSubject) return null;
 
-        const maxINT = subject.maxINT;
-        const maxEXT = subject.maxEXT;
+        const maxINT = currentSubject.maxINT;
+        const maxEXT = currentSubject.maxEXT;
         const minINT = Math.ceil(maxINT * 0.5);
         const minEXT = Math.ceil(maxEXT * 0.4);
 
@@ -127,54 +130,65 @@ export const useFacultyEntry = ({
             minINT,
             minEXT,
             calculateTotal: (int: string, ext: string) => {
-                const intVal = int === 'A' ? 0 : (parseInt(int) || 0);
-                const extVal = ext === 'A' ? 0 : (parseInt(ext) || 0);
+                const intVal = int === 'A' ? 0 : (parseInt(int, 10) || 0);
+                const extVal = ext === 'A' ? 0 : (parseInt(ext, 10) || 0);
                 return intVal + extVal;
             },
             getStatus: (int: string, ext: string) => {
                 if (!int && !ext) return 'Pending';
-                const iVal = int === 'A' ? 0 : (parseInt(int) || 0);
-                const eVal = ext === 'A' ? 0 : (parseInt(ext) || 0);
+                const iVal = int === 'A' ? 0 : (parseInt(int, 10) || 0);
+                const eVal = ext === 'A' ? 0 : (parseInt(ext, 10) || 0);
                 const passedINT = int === 'A' ? false : iVal >= minINT;
                 const passedEXT = ext === 'A' ? false : eVal >= minEXT;
                 return (passedINT && passedEXT) ? 'Passed' : 'Failed';
             }
         };
-    }, [subjects, selectedSubject]); // Removed marksData dependency to stop total re-renders
+    }, [currentSubject]);
 
     const invalidMarksInfo = useMemo(() => {
-        if (!validationHelpers) return { hasInvalid: false, count: 0 };
+        if (!validationHelpers || !students.length) return { hasInvalid: false, count: 0 };
         const { maxINT, maxEXT } = validationHelpers;
-        const invalidStudents = students.filter(student => {
-            const marks = marksData[student.id];
-            if (!marks) return false;
-            return (marks.int !== 'A' && parseInt(marks.int) > maxINT) || 
-                   (marks.ext !== 'A' && parseInt(marks.ext) > maxEXT);
-        });
-        return { hasInvalid: invalidStudents.length > 0, count: invalidStudents.length };
+        let invalidCount = 0;
+        for (let i = 0; i < students.length; i++) {
+            const marks = marksData[students[i].id];
+            if (marks) {
+                if ((marks.int !== 'A' && marks.int !== '' && parseInt(marks.int, 10) > maxINT) ||
+                    (marks.ext !== 'A' && marks.ext !== '' && parseInt(marks.ext, 10) > maxEXT)) {
+                    invalidCount++;
+                }
+            }
+        }
+        return { hasInvalid: invalidCount > 0, count: invalidCount };
     }, [students, marksData, validationHelpers]);
 
-    const completionStats = useMemo(() => ({
-        completed: students.filter(s => marksData[s.id]?.int && marksData[s.id]?.ext).length,
-        total: students.length
-    }), [students, marksData]);
+    const completionStats = useMemo(() => {
+        let completed = 0;
+        for (let i = 0; i < students.length; i++) {
+            const m = marksData[students[i].id];
+            if (m?.int && m?.ext) completed++;
+        }
+        return { completed, total: students.length };
+    }, [students, marksData]);
 
     const handleMarksChange = useCallback((studentId: string, field: 'int' | 'ext', value: string) => {
         const upperValue = value.toUpperCase();
         if (value && !/^\d*$/.test(value) && upperValue !== 'A') return;
 
-        const subject = subjects.find(s => s.id === selectedSubject);
-        if (subject && value && upperValue !== 'A') {
-            const numValue = parseInt(value);
-            const maxValue = field === 'int' ? subject.maxINT : subject.maxEXT;
+        if (currentSubject && value && upperValue !== 'A') {
+            const numValue = parseInt(value, 10);
+            const maxValue = field === 'int' ? currentSubject.maxINT : currentSubject.maxEXT;
             if (numValue > maxValue) return;
         }
 
-        setMarksData(prev => ({
-            ...prev,
-            [studentId]: { ...prev[studentId], [field]: upperValue }
-        }));
-    }, [subjects, selectedSubject]);
+        setMarksData(prev => {
+            const current = prev[studentId];
+            if (current && current[field] === upperValue) return prev;
+            return {
+                ...prev,
+                [studentId]: { ...current, [field]: upperValue }
+            };
+        });
+    }, [currentSubject]);
 
     const handleClearStudentMarks = useCallback(async (studentId: string, studentName: string) => {
         if (!selectedSubject) return;

@@ -136,7 +136,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     }, [selectedClass, subjects, subjectType, selectedSubject]);
 
-    const loadStudentsByClass = async () => {
+    const loadStudentsByClass = useCallback(async () => {
         if (!selectedSubject) return;
         try {
             setIsSaving(true);
@@ -166,12 +166,12 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         } finally {
             setIsSaving(false);
         }
-    };
+    }, [selectedSubject, activeTerm, subjects, subjectType, selectedClass]);
 
     // Load students when context changes
     useEffect(() => {
         loadStudentsByClass();
-    }, [selectedClass, selectedSubject, activeTerm, subjectType]);
+    }, [loadStudentsByClass]);
 
     const handleUpdateReleaseSetting = async (className: string, field: keyof ClassReleaseSettings[string], value: any) => {
         try {
@@ -196,6 +196,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         isOnline,
         loadStudentsByClass
     });
+
+    const selectedSubjectData = useMemo(() => subjects.find(s => s.id === selectedSubject), [subjects, selectedSubject]);
 
     if (isLoading) {
         return <ProgressiveLoadingSkeleton stage={loadingStage} progress={loadingProgress} />;
@@ -252,14 +254,12 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                         setSelectedSubject={setSelectedSubject}
                         allowedClasses={allowedClasses}
                         classSubjects={classSubjects}
-                        selectedSubjectData={subjects.find(s => s.id === selectedSubject)}
+                        selectedSubjectData={selectedSubjectData}
                         students={students}
                         attendanceStats={attendanceStats}
                         isSaving={isSaving}
                         getTouchProps={getTouchProps}
                         studentRefs={studentRefs}
-                        isLockedForEditing={isLockedForEditing}
-                        isAdmin={false}
                     />
                 )}
 

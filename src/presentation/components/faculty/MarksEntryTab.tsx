@@ -56,14 +56,14 @@ interface MarksEntryTabProps {
     getTouchProps: (fn: () => void) => any;
     studentRefs: React.MutableRefObject<{ [key: string]: HTMLDivElement | null }>;
     handleKeyDown: (e: React.KeyboardEvent, studentId: string, field: 'int' | 'ext') => void;
-    isLockedForEditing?: boolean;
-    isAdmin?: boolean;
 }
+
+const EMPTY_MARKS = { int: '', ext: '' };
 
 const StudentRow = React.memo(({ 
     student, index, marks, validationHelpers, handleMarksChange, handleKeyDown, 
     handleSaveEXTMarks, handleSaveINTMarks, handleClearStudentMarks, 
-    isSaving, att, selectedSubjectData, isLockedForEditing 
+    isSaving, att, selectedSubjectData 
 }: {
     student: StudentRecord;
     index: number;
@@ -77,7 +77,6 @@ const StudentRow = React.memo(({
     isSaving: boolean;
     att: number;
     selectedSubjectData: SubjectConfig | undefined;
-    isLockedForEditing?: boolean;
 }) => {
     const total = validationHelpers?.calculateTotal(marks.int, marks.ext) || 0;
     const status = validationHelpers?.getStatus(marks.int, marks.ext) || 'Pending';
@@ -93,8 +92,8 @@ const StudentRow = React.memo(({
                     onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')} 
                     data-student={student.id}
                     data-field="ext"
-                    className={`w-20 p-2 border-2 rounded-xl text-center ${att < 75 || isLockedForEditing ? 'bg-red-50 opacity-60' : ''}`} 
-                    disabled={att < 75 || isSaving || isLockedForEditing} 
+                    className={`w-20 p-2 border-2 rounded-xl text-center ${att < 75 ? 'bg-red-50 opacity-60' : ''}`} 
+                    disabled={att < 75 || isSaving} 
                 />
             </td>
             <td className="p-4 text-center">
@@ -105,8 +104,8 @@ const StudentRow = React.memo(({
                     onKeyDown={(e) => handleKeyDown(e, student.id, 'int')} 
                     data-student={student.id}
                     data-field="int"
-                    className={`w-20 p-2 border-2 rounded-xl text-center ${selectedSubjectData?.maxEXT === 100 || att < 75 || isLockedForEditing ? 'bg-slate-100 opacity-60' : ''}`} 
-                    disabled={selectedSubjectData?.maxEXT === 100 || att < 75 || isSaving || isLockedForEditing} 
+                    className={`w-20 p-2 border-2 rounded-xl text-center ${selectedSubjectData?.maxEXT === 100 || att < 75 ? 'bg-slate-100 opacity-60' : ''}`} 
+                    disabled={selectedSubjectData?.maxEXT === 100 || att < 75 || isSaving} 
                 />
             </td>
             <td className="p-4 text-center font-bold">{marks.int && marks.ext ? total : '-'}</td>
@@ -118,13 +117,24 @@ const StudentRow = React.memo(({
             <td className="p-4 text-center">
                 <div className="flex flex-col gap-1">
                     <div className="flex gap-1">
-                        <button onClick={() => handleSaveEXTMarks(student.id)} className="flex-1 bg-sky-50 text-sky-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.ext || isLockedForEditing}>Save EXT</button>
-                        <button onClick={() => handleSaveINTMarks(student.id)} className="flex-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.int || isLockedForEditing}>Save INT</button>
+                        <button onClick={() => handleSaveEXTMarks(student.id)} className="flex-1 bg-sky-50 text-sky-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.ext}>Save EXT</button>
+                        <button onClick={() => handleSaveINTMarks(student.id)} className="flex-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.int}>Save INT</button>
                     </div>
-                    <button onClick={() => handleClearStudentMarks(student.id, student.name)} className="bg-red-50 text-red-600 rounded text-xs p-1" disabled={isSaving || (!marks.int && !marks.ext) || isLockedForEditing}>Clear ALL</button>
+                    <button onClick={() => handleClearStudentMarks(student.id, student.name)} className="bg-red-50 text-red-600 rounded text-xs p-1" disabled={isSaving || (!marks.int && !marks.ext)}>Clear ALL</button>
                 </div>
             </td>
         </tr>
+    );
+}, (prev, next) => {
+    return (
+        prev.student.id === next.student.id &&
+        prev.index === next.index &&
+        prev.marks.int === next.marks.int &&
+        prev.marks.ext === next.marks.ext &&
+        prev.isSaving === next.isSaving &&
+        prev.att === next.att &&
+        prev.selectedSubjectData === next.selectedSubjectData &&
+        prev.validationHelpers === next.validationHelpers
     );
 });
 
@@ -143,7 +153,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
     filteredStudents, paginatedStudents, hasMore, setCurrentPage,
     currentStudentIndex, jumpToStudent, navigateToNext, navigateToPrevious,
     showScrollToTop, scrollToTop, isScrolling, getTouchProps,
-    studentRefs, handleKeyDown, isLockedForEditing, isAdmin
+    studentRefs, handleKeyDown
 }) => {
     // Cascading Reset: clear subject when class or type changes
     React.useEffect(() => {
@@ -155,20 +165,6 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 
     return (
         <>
-            {isLockedForEditing && (
-                <div className="mx-6 md:mx-0 mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex items-start gap-4 shadow-sm animate-in fade-in duration-200">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
-                        <i className="fa-solid fa-lock text-lg"></i>
-                    </div>
-                    <div>
-                        <h4 className="font-black text-amber-900 text-base mb-1">Marks Entry Locked</h4>
-                        <p className="text-xs text-amber-800 font-medium leading-relaxed">
-                            Results for <strong>{selectedClass}</strong> have been published. Teacher editing is currently locked to maintain data integrity.
-                            {isAdmin && <span className="block mt-1 font-bold text-amber-950">As an Admin, you are bypassing this lock.</span>}
-                        </p>
-                    </div>
-                </div>
-            )}
 
             <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-xl border-2 border-slate-200 mx-6 md:mx-0 print:hidden" style={{
                 background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
@@ -372,7 +368,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                             key={student.id}
                                             student={student}
                                             index={index}
-                                            marks={marksData[student.id] || { int: '', ext: '' }}
+                                            marks={marksData[student.id] || EMPTY_MARKS}
                                             validationHelpers={validationHelpers}
                                             handleMarksChange={handleMarksChange}
                                             handleKeyDown={handleKeyDown}
@@ -382,7 +378,6 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                             isSaving={isSaving}
                                             att={attendanceStats[student.id]?.percentage || 0}
                                             selectedSubjectData={selectedSubjectData}
-                                            isLockedForEditing={isLockedForEditing}
                                         />
                                     ))}
                                 </tbody>
@@ -391,12 +386,12 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                         <div className="p-6 border-t flex justify-between items-center">
                             <div className="text-sm text-slate-600">{completionStats.completed} / {completionStats.total} completed</div>
                             <div className="flex gap-2">
-                                <button onClick={() => handleSaveEXTMarks()} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold" disabled={isSaving || isLockedForEditing}>Save EXT</button>
-                                <button onClick={() => handleSaveINTMarks()} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold" disabled={isSaving || isLockedForEditing}>Save INT</button>
-                                <button onClick={handleClearINTMarks} className="px-4 py-2 border-2 border-orange-200 text-orange-700 rounded-xl font-bold" disabled={isSaving || isLockedForEditing}>Clear INT</button>
-                                <button onClick={handleClearEXTMarks} className="px-4 py-2 border-2 border-red-200 text-red-700 rounded-xl font-bold" disabled={isSaving || isLockedForEditing}>Clear EXT</button>
-                                <button onClick={handleClearAll} className="px-4 py-2 border border-slate-300 rounded-xl font-bold" disabled={isSaving || isLockedForEditing}>Clear All</button>
-                                <button onClick={handleSaveMarks} className={`px-6 py-2 rounded-xl font-bold text-white ${invalidMarksInfo.hasInvalid || isLockedForEditing ? 'bg-slate-400' : 'bg-emerald-600'}`} disabled={isSaving || invalidMarksInfo.hasInvalid || isLockedForEditing}>Save All Marks</button>
+                                <button onClick={() => handleSaveEXTMarks()} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold" disabled={isSaving}>Save EXT</button>
+                                <button onClick={() => handleSaveINTMarks()} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold" disabled={isSaving}>Save INT</button>
+                                <button onClick={handleClearINTMarks} className="px-4 py-2 border-2 border-orange-200 text-orange-700 rounded-xl font-bold" disabled={isSaving}>Clear INT</button>
+                                <button onClick={handleClearEXTMarks} className="px-4 py-2 border-2 border-red-200 text-red-700 rounded-xl font-bold" disabled={isSaving}>Clear EXT</button>
+                                <button onClick={handleClearAll} className="px-4 py-2 border border-slate-300 rounded-xl font-bold" disabled={isSaving}>Clear All</button>
+                                <button onClick={handleSaveMarks} className={`px-6 py-2 rounded-xl font-bold text-white ${invalidMarksInfo.hasInvalid ? 'bg-slate-400' : 'bg-emerald-600'}`} disabled={isSaving || invalidMarksInfo.hasInvalid}>Save All Marks</button>
                             </div>
                         </div>
                     </div>
@@ -409,10 +404,10 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                              {invalidMarksInfo.hasInvalid && <span className="text-red-600 animate-pulse">! {invalidMarksInfo.count} INVALID</span>}
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => handleSaveEXTMarks()} className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-bold text-xs" disabled={isSaving || isLockedForEditing}>Save EXT</button>
-                            <button onClick={() => handleSaveINTMarks()} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold text-xs" disabled={isSaving || isLockedForEditing}>Save INT</button>
+                            <button onClick={() => handleSaveEXTMarks()} className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-bold text-xs" disabled={isSaving}>Save EXT</button>
+                            <button onClick={() => handleSaveINTMarks()} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold text-xs" disabled={isSaving}>Save INT</button>
                         </div>
-                        <button onClick={handleSaveMarks} className={`w-full mt-2 py-4 rounded-xl font-black text-white shadow-lg ${invalidMarksInfo.hasInvalid || isLockedForEditing ? 'bg-slate-400' : 'bg-emerald-600'}`} disabled={isSaving || invalidMarksInfo.hasInvalid || isLockedForEditing}>SAVE ALL MARKS</button>
+                        <button onClick={handleSaveMarks} className={`w-full mt-2 py-4 rounded-xl font-black text-white shadow-lg ${invalidMarksInfo.hasInvalid ? 'bg-slate-400' : 'bg-emerald-600'}`} disabled={isSaving || invalidMarksInfo.hasInvalid}>SAVE ALL MARKS</button>
                     </div>
                 </div>
             ) : selectedSubject ? (
