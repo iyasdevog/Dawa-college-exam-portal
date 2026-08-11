@@ -85,19 +85,9 @@ const Management: React.FC = () => {
   }, [activeTerm, loadedData]);
 
   useEffect(() => {
-    // Reset loaded states when term changes
     setLoadedData(new Set());
     loadTabData(activeTab, true);
-  }, [activeTerm]);
-
-  useEffect(() => {
-    loadTabData(activeTab);
-  }, [activeTab, loadTabData]);
-
-  useEffect(() => {
-    // Initial data load for default tab
-    loadTabData(activeTab);
-  }, []);
+  }, [activeTerm, activeTab]);
 
   const handleRefresh = async () => {
     await loadTabData(activeTab, true);

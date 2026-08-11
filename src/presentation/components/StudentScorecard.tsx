@@ -160,13 +160,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     // Stable seed so Document IDs don't change on each re-render
     const printSeedRef = useRef(Date.now());
 
-    useEffect(() => {
-        const init = async () => {
-            const settings = await dataService.getGlobalSettings();
-            setBranding(settings);
-        };
-        init();
-    }, []);
+
 
     useEffect(() => { loadData(); }, [activeTerm, currentUser]);
     useEffect(() => { if (selectedClass) loadClassData(); }, [selectedClass, subjects]);

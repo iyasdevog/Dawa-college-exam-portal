@@ -52,7 +52,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         if (selectedClass) {
             loadClassData();
         }
-    }, [selectedClass, subjects, activeTerm]);
+    }, [selectedClass, subjects]);
 
     const loadData = async () => {
         try {
