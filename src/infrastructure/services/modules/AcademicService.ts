@@ -1019,16 +1019,15 @@ export class AcademicService extends BaseDataService {
     }
 
     public async clearSubjectMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
-        for (const id of studentIds) {
-            await this.clearStudentSubjectMarks(id, subjectId, termKey);
-        }
+        await Promise.all(studentIds.map(id => this.clearStudentSubjectMarks(id, subjectId, termKey)));
     }
 
     public async clearSubjectINTMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
         const activeTerm = termKey || this.getCurrentTermKey();
-        for (const id of studentIds) {
-            const studentDocRef = doc(this.db, this.studentsCollection, id);
-            const studentSnap = await getDoc(studentDocRef);
+        const studentSnaps = await Promise.all(studentIds.map(id => getDoc(doc(this.db, this.studentsCollection, id))));
+        for (let i = 0; i < studentSnaps.length; i++) {
+            const studentSnap = studentSnaps[i];
+            const id = studentIds[i];
             if (studentSnap.exists()) {
                 const marks = studentSnap.data().academicHistory?.[activeTerm]?.marks?.[subjectId];
                 if (marks) {
@@ -1040,9 +1039,10 @@ export class AcademicService extends BaseDataService {
 
     public async clearSubjectEXTMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
         const activeTerm = termKey || this.getCurrentTermKey();
-        for (const id of studentIds) {
-            const studentDocRef = doc(this.db, this.studentsCollection, id);
-            const studentSnap = await getDoc(studentDocRef);
+        const studentSnaps = await Promise.all(studentIds.map(id => getDoc(doc(this.db, this.studentsCollection, id))));
+        for (let i = 0; i < studentSnaps.length; i++) {
+            const studentSnap = studentSnaps[i];
+            const id = studentIds[i];
             if (studentSnap.exists()) {
                 const marks = studentSnap.data().academicHistory?.[activeTerm]?.marks?.[subjectId];
                 if (marks) {
@@ -1065,12 +1065,16 @@ export class AcademicService extends BaseDataService {
             studentUpdates.set(u.studentId, existing);
         });
 
+        const studentIds = Array.from(studentUpdates.keys());
+        const studentSnaps = await Promise.all(studentIds.map(id => getDoc(doc(this.db, this.studentsCollection, id))));
+
         const batch = writeBatch(this.db);
         let count = 0;
 
-        for (const [studentId, studentMarks] of studentUpdates.entries()) {
-            const studentDocRef = doc(this.db, this.studentsCollection, studentId);
-            const studentSnap = await getDoc(studentDocRef);
+        for (let i = 0; i < studentSnaps.length; i++) {
+            const studentSnap = studentSnaps[i];
+            const studentId = studentIds[i];
+            const studentMarks = studentUpdates.get(studentId) || [];
             
             if (studentSnap.exists()) {
                 const data = studentSnap.data();
@@ -1126,7 +1130,7 @@ export class AcademicService extends BaseDataService {
 
                 history[activeTerm] = termData;
 
-                batch.update(studentDocRef, { academicHistory: history });
+                batch.update(studentSnap.ref, { academicHistory: history });
                 count++;
                 
                 if (count >= 400) { // Safety limit for single batch
