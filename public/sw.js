@@ -1,5 +1,7 @@
 // "Killer" Service Worker
 // This worker is designed to replace a broken service worker and immediately unregister itself.
+// Workbox manifest injection placeholder
+const manifest = self.__WB_MANIFEST;
 
 self.addEventListener('install', (event) => {
     // Skip waiting to ensure this new worker activates immediately,

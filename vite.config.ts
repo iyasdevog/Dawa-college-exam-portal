@@ -17,14 +17,15 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.js',
+        injectManifest: {
+          injectionPoint: undefined
+        },
         manifestFilename: 'manifest.json',
         registerType: 'prompt',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-*'],
-        workbox: {
-          cleanupOutdatedCaches: true,
-          skipWaiting: true,
-          clientsClaim: true,
-        },
+        injectRegister: 'auto',
         manifest: {
           name: "Da'wa College Exam Portal",
           short_name: "Exam Portal",
