@@ -372,7 +372,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     <div className="bg-red-500/20 border border-red-500/30 rounded-3xl p-8 text-center print:hidden">
                                         <i className="fa-solid fa-user-xmark text-5xl text-red-400 mb-4 drop-shadow-lg"></i>
                                         <h4 className="text-red-300 font-black text-xl mb-1 uppercase tracking-widest">Ineligible</h4>
-                                        <p className="text-red-200/90">Your attendance is <strong className="text-white text-lg mx-1">{htStatus.attendance.toFixed(1)}%</strong>, which is below the minimum required {htStatus.required}%.</p>
+                                        <p className="text-red-200/90">Your attendance is <strong className="text-white text-lg mx-1">{typeof htStatus.attendance === 'number' ? htStatus.attendance.toFixed(1) : (htStatus.attendance ?? '0.0')}%</strong>, which is below the minimum required {htStatus.required}%.</p>
                                     </div>
                                 ) : htStudent && (
                                     <div className="bg-transparent">
@@ -574,31 +574,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
 
                 {hasSearched && result && (
                     <div className="w-full max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700 print:mt-0 print:max-w-full">
-                        <div className="flex gap-2 mb-8 bg-white/10 p-1 rounded-2xl border border-white/20 print:hidden">
-                            {canViewScorecard && (
-                                <button
-                                    onClick={() => setViewMode('scorecard')}
-                                    className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'scorecard' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <i className="fa-solid fa-file-invoice"></i> {isMobile ? (isOnlySupp ? 'Supp. Result' : 'Scorecard') : (isOnlySupp ? 'Supplementary Result' : 'My Scorecard')}
-                                </button>
-                            )}
-                                <button
-                                    onClick={() => setViewMode('class-rank')}
-                                    className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'class-rank' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <i className="fa-solid fa-ranking-star"></i> {isMobile ? 'Rankings' : 'Class Rankings'}
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('scorecard' as any)} // Overloaded as a trick or just use state
-                                    className="flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm text-amber-400 hover:text-amber-300 hover:bg-white/5 transition-all flex items-center justify-center gap-2"
-                                    id="view-transcript-btn"
-                                >
-                                    <i className="fa-solid fa-layer-group"></i> {isMobile ? 'Transcript' : 'Full Transcript'}
-                                </button>
-                        </div>
-
-                        {viewMode === 'scorecard' && !canViewScorecard ? (
+                        {!canViewScorecard ? (
                             <div className="bg-white rounded-[3rem] p-12 text-center shadow-xl border border-slate-200 animate-in fade-in zoom-in duration-500">
                                 <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
                                     <i className="fa-solid fa-clock-rotate-left text-4xl text-amber-500"></i>
@@ -614,16 +590,51 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                     <p className="text-emerald-600 font-bold text-sm">Ad No: {result.adNo}</p>
                                 </div>
                             </div>
-                        ) : viewMode === 'scorecard' ? (
-                            <Suspense fallback={<div className="p-12 text-center"><div className="loader-ring"></div></div>}>
-                                <div id="scorecard-container">
-                                    <PublicScorecard result={result} subjects={subjects} isResultsReleased={isResultsReleased} isSuppReleased={isSuppReleased} />
-                                </div>
-                            </Suspense>
                         ) : (
-                            <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl border border-slate-200">
-                                <ClassResults forcedClass={result.className} hideSelector={true} />
-                            </div>
+                            <>
+                                <div className="flex gap-2 mb-8 bg-white/10 p-1 rounded-2xl border border-white/20 print:hidden">
+                                    <button
+                                        onClick={() => setViewMode('scorecard')}
+                                        className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'scorecard' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        <i className="fa-solid fa-file-invoice"></i> {isMobile ? (isOnlySupp ? 'Supp. Result' : 'Scorecard') : (isOnlySupp ? 'Supplementary Result' : 'My Scorecard')}
+                                    </button>
+                                    {isResultsReleased && (
+                                        <button
+                                            onClick={() => setViewMode('class-rank')}
+                                            className={`flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2 ${viewMode === 'class-rank' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            <i className="fa-solid fa-ranking-star"></i> {isMobile ? 'Rankings' : 'Class Rankings'}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setViewMode('scorecard' as any)} // Overloaded as a trick or just use state
+                                        className="flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm text-amber-400 hover:text-amber-300 hover:bg-white/5 transition-all flex items-center justify-center gap-2"
+                                        id="view-transcript-btn"
+                                    >
+                                        <i className="fa-solid fa-layer-group"></i> {isMobile ? 'Transcript' : 'Full Transcript'}
+                                    </button>
+                                </div>
+
+                                {viewMode === 'scorecard' ? (
+                                    <Suspense fallback={<div className="p-12 text-center"><div className="loader-ring"></div></div>}>
+                                        <div id="scorecard-container">
+                                            <PublicScorecard result={result} subjects={subjects} isResultsReleased={isResultsReleased} isSuppReleased={isSuppReleased} />
+                                        </div>
+                                    </Suspense>
+                                ) : isResultsReleased ? (
+                                    <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl border border-slate-200">
+                                        <ClassResults forcedClass={result.className} hideSelector={true} />
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-[3rem] p-12 text-center shadow-xl border border-slate-200 animate-in fade-in zoom-in duration-500">
+                                        <h3 className="text-2xl font-black text-slate-800 mb-2">Rankings Not Released</h3>
+                                        <p className="text-slate-500 max-w-md mx-auto">
+                                            Class rankings and full class results are not available until regular results are released.
+                                        </p>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 )}

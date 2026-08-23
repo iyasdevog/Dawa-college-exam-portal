@@ -38,15 +38,25 @@ export const isSameSubject = (
 };
 
 /**
- * Gets the max marks for a subject, accounting for exceptional subjects like Doura and Arabic that are strictly out of 100 on EXT.
+ * Gets the max marks for a subject, accounting for exceptional subjects like Doura and Arabic.
+ * - If the subject's DB record explicitly configures a non-zero maxINT (e.g. 30 INT / 70 EXT split),
+ *   those configured values are respected and both INT and EXT fields will be enabled.
+ * - If maxINT is not configured (0 or absent), Doura/Arabic defaults to 100 EXT / 0 INT.
  */
 export const getSubjectMaxMarks = (subject: any, snap?: any) => {
     const name = snap?.name || subject?.name || '';
     const lowerName = name.toLowerCase().trim();
-    if (lowerName.includes('doura') || lowerName.includes('arabic') || lowerName.startsWith('ar.') || lowerName === 'ar') {
-        return { maxINT: 0, maxEXT: 100, maxTotal: 100 };
+    const isDouraOrArabic = lowerName.includes('doura') || lowerName.includes('arabic') || lowerName.startsWith('ar.') || lowerName === 'ar';
+
+    const configuredINT = snap?.maxINT ?? subject?.maxINT ?? 0;
+    const configuredEXT = snap?.maxEXT ?? subject?.maxEXT ?? 0;
+
+    if (isDouraOrArabic && configuredINT === 0) {
+        // No explicit split configured: treat as 100-mark external paper
+        return { maxINT: 0, maxEXT: configuredEXT || 100, maxTotal: configuredEXT || 100 };
     }
-    const maxINT = snap?.maxINT ?? subject?.maxINT ?? 0;
-    const maxEXT = snap?.maxEXT ?? subject?.maxEXT ?? 0;
+
+    const maxINT = configuredINT;
+    const maxEXT = configuredEXT;
     return { maxINT, maxEXT, maxTotal: maxINT + maxEXT };
 };

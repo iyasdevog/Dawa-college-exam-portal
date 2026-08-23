@@ -352,6 +352,42 @@ const RecoveryTab: React.FC = () => {
         }
     }, [selectedStudent, recoveryModal, recoverCount, customCountInput, activeTerm, loadStudentAttendance]);
 
+    const handleToggleCondonation = useCallback(async () => {
+        if (!selectedStudent) return;
+        const currentCondoned = selectedStudent.condonedTerms?.[activeTerm] === true;
+        const newStatus = !currentCondoned;
+        const confirm = window.confirm(
+            newStatus
+                ? `Mark ${selectedStudent.name} as having paid Condonation Fees for ${activeTerm}? This will clear their lack of attendance and enable marks entry.`
+                : `Revoke condonation status for ${selectedStudent.name} for ${activeTerm}?`
+        );
+        if (!confirm) return;
+
+        try {
+            setIsActionLoading(true);
+            const updatedCondonedTerms = { ...(selectedStudent.condonedTerms || {}) };
+            if (newStatus) {
+                updatedCondonedTerms[activeTerm] = true;
+            } else {
+                delete updatedCondonedTerms[activeTerm];
+            }
+            await dataService.updateStudent(selectedStudent.id, { condonedTerms: updatedCondonedTerms });
+            
+            // Update local state
+            const updatedStudent = { ...selectedStudent, condonedTerms: updatedCondonedTerms };
+            setSelectedStudent(updatedStudent);
+            // Refresh student list cache
+            setAllStudents(prev => prev.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+            
+            alert(`Condonation status updated successfully!`);
+        } catch (e: any) {
+            console.error(e);
+            alert(`Failed to update condonation: ${e.message || String(e)}`);
+        } finally {
+            setIsActionLoading(false);
+        }
+    }, [selectedStudent, activeTerm]);
+
     const getDayOfWeek = (dateStr: string) => {
         const d = new Date(dateStr);
         return new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(d);
@@ -597,15 +633,44 @@ const RecoveryTab: React.FC = () => {
                     <div className="space-y-6">
                         {/* Student card info */}
                         <div className="bg-slate-950 text-white p-6 rounded-[2rem] border border-slate-800 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="relative z-10 space-y-2">
-                                <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">
-                                    Selected Student Profile
-                                </span>
-                                <h4 className="text-2xl font-black">{selectedStudent.name}</h4>
-                                <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
-                                    <span>Class: {selectedStudent.className}</span>
-                                    <span className="w-1.5 h-1.5 bg-slate-700 rounded-full"></span>
-                                    <span>Ad No: {selectedStudent.adNo}</span>
+                            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+                                <div className="space-y-2">
+                                    <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">
+                                        Selected Student Profile
+                                    </span>
+                                    <h4 className="text-2xl font-black">{selectedStudent.name}</h4>
+                                    <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
+                                        <span>Class: {selectedStudent.className}</span>
+                                        <span className="w-1.5 h-1.5 bg-slate-700 rounded-full"></span>
+                                        <span>Ad No: {selectedStudent.adNo}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 self-start md:self-center">
+                                    {selectedStudent.condonedTerms?.[activeTerm] ? (
+                                        <div className="flex items-center gap-2 bg-indigo-900/50 border border-indigo-500/30 px-4 py-2.5 rounded-2xl shadow-lg">
+                                            <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse"></div>
+                                            <div className="text-left">
+                                                <p className="text-[9px] font-black uppercase text-indigo-400 tracking-wider leading-none mb-1">Condonation Status</p>
+                                                <p className="text-xs font-black text-indigo-200 leading-none">Condonation Paid</p>
+                                            </div>
+                                            <button 
+                                                onClick={handleToggleCondonation}
+                                                disabled={isActionLoading}
+                                                className="ml-4 text-xs font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                                            >
+                                                Revoke
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={handleToggleCondonation}
+                                            disabled={isActionLoading}
+                                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md flex items-center gap-2"
+                                        >
+                                            <i className="fa-solid fa-receipt"></i>
+                                            Mark Condonation Paid
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             <div className="absolute -right-6 -bottom-6 text-9 text-slate-800/40 rotate-12 pointer-events-none">
@@ -656,8 +721,16 @@ const RecoveryTab: React.FC = () => {
                                                             <span className="text-normal font-black text-amber-700 leading-none">+{Math.round(stat.recoveredPercentage)}%</span>
                                                         </div>
                                                     )}
-                                                    <div className={`px-4 py-2 rounded-2xl flex flex-col items-center font-black ${combinedPct < 75 ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-slate-900 text-white'}`}>
-                                                        <span className="text-[9px] uppercase tracking-tighter leading-none mb-0.5 opacity-80">Total</span>
+                                                    <div className={`px-4 py-2 rounded-2xl flex flex-col items-center font-black ${
+                                                        selectedStudent.condonedTerms?.[activeTerm]
+                                                            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                                                            : combinedPct < 75
+                                                                ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                                                                : 'bg-slate-900 text-white'
+                                                    }`}>
+                                                        <span className="text-[9px] uppercase tracking-tighter leading-none mb-0.5 opacity-80">
+                                                            {selectedStudent.condonedTerms?.[activeTerm] ? 'Condoned' : 'Total'}
+                                                        </span>
                                                         <span className="text-lg leading-none">{Math.round(combinedPct)}%</span>
                                                     </div>
                                                 </div>

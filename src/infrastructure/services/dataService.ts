@@ -124,11 +124,13 @@ export class DataService extends BaseDataService {
     }
 
     async isEligibleForHallTicket(studentId: string, className: string, termKey: string): Promise<{ eligible: boolean; percentage: number; required: number }> {
+        const student = await this.studentService.getStudentById(studentId);
         const percentage = await this.attendanceService.getOverallAttendance(studentId, className, termKey);
         const settings = await this.getGlobalSettings();
         const required = settings.minAttendancePercentage || 75; // Use dynamic setting, fallback to 75
+        const isCondoned = student?.condonedTerms?.[termKey] === true;
         return {
-            eligible: percentage >= required,
+            eligible: isCondoned || percentage >= required,
             percentage,
             required
         };

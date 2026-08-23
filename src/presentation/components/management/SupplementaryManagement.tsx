@@ -251,10 +251,9 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
             const passedINT = intVal !== 'A' && typeof intVal === 'number' && intVal >= minINT;
             const passedEXT = extVal !== 'A' && typeof extVal === 'number' && extVal >= minEXT;
             
-            const isNoInternal = editingExam.studentClass?.toUpperCase().includes('DOURA') || 
-                                 editingExam.subjectName?.toUpperCase().includes('DOURA') || 
-                                 resolvedMaxEXT === 100 || 
-                                 resolvedMaxINT === 0;
+            // No internal: purely determined by configuration (maxINT === 0).
+            // Note: Doura subjects with a 70/30 split (resolvedMaxINT > 0) are treated normally.
+            const isNoInternal = resolvedMaxINT === 0;
 
             const status = ((isNoInternal ? true : passedINT) && passedEXT) ? 'Passed' : 'Failed';
 
@@ -366,11 +365,8 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                     status: 'Passed'
                 };
                 
-                // Final safety: Only pass if they also passed INT (unless Doura or 100-mark paper)
-                const isDouraOrNoInt = exam.studentClass?.toUpperCase().includes('DOURA') || 
-                                       exam.subjectName?.toUpperCase().includes('DOURA') || 
-                                       Number(maxEXT) === 100 || 
-                                       Number(maxINT) === 0;
+                // Final safety: Only pass if they also passed INT (unless paper has no internal component)
+                const isDouraOrNoInt = Number(maxINT) === 0;
                 
                 if (!isDouraOrNoInt && currentInt < minINT) {
                     newMarks.status = 'Failed';
@@ -1216,62 +1212,38 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                     </h4>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className={`block text-[10px] font-bold mb-1 uppercase ${
-                                                ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
-                                                 editingExam?.applicationType !== 'improvement') ||
-                                                editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
-                                                editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
-                                                Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
-                                                Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
-                                                ? 'text-slate-400' : 'text-slate-500'
-                                            }`}>New INT</label>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA') || 
-                                                    editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
-                                                    Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
-                                                    Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
-                                                        ? (markEntryForm.prevInt || '0') :
-                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
-                                                     editingExam?.applicationType !== 'improvement')
-                                                        ? markEntryForm.prevInt 
-                                                        : markEntryForm.int
-                                                }
-                                                onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
-                                                disabled={
-                                                    ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
-                                                     editingExam?.applicationType !== 'improvement') ||
-                                                    editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
-                                                    editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
-                                                    Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
-                                                    Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
-                                                }
-                                                className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${
-                                                    (((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
-                                                      editingExam?.applicationType !== 'improvement') ||
-                                                     editingExam?.studentClass?.toUpperCase().includes('DOURA') ||
-                                                     editingExam?.subjectName?.toUpperCase().includes('DOURA') ||
-                                                     Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
-                                                     Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0)
-                                                    ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'
-                                                }`}
-                                                placeholder="Enter"
-                                                autoFocus
-                                            />
-                                            <p className="text-[9px] text-slate-400 mt-1">
-                                                {editingExam?.studentClass?.toUpperCase().includes('DOURA') || editingExam?.subjectName?.toUpperCase().includes('DOURA')
-                                                    ? 'Not applicable for DOURA'
-                                                    : Number(editingExam?.maxEXT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxEXT ?? 70) === 100 ||
-                                                      Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) === 0
-                                                        ? 'No Internal for 100-Mark Paper'
-                                                        : ((parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30) * 0.5) &&
-                                                           editingExam?.applicationType !== 'improvement')
-                                                            ? 'Passed Originally' 
-                                                            : editingExam?.applicationType === 'improvement'
-                                                                ? 'Improvement Entry'
-                                                                : `Max: ${editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30}`}
-                                            </p>
+                                            {(() => {
+                                                const resolvedExamMaxINT = Number(editingExam?.maxINT ?? subjects.find(s => s.id === editingExam?.subjectId)?.maxINT ?? 30);
+                                                const noInt = resolvedExamMaxINT === 0;
+                                                const prevIntPassed = !noInt &&
+                                                    (parseInt(markEntryForm.prevInt) || 0) >= Math.ceil(resolvedExamMaxINT * 0.5) &&
+                                                    editingExam?.applicationType !== 'improvement';
+                                                const intDisabled = noInt || prevIntPassed;
+                                                return (
+                                                    <>
+                                                        <label className={`block text-[10px] font-bold mb-1 uppercase ${intDisabled ? 'text-slate-400' : 'text-slate-500'}`}>New INT</label>
+                                                        <input
+                                                            type="text"
+                                                            value={
+                                                                noInt ? (markEntryForm.prevInt || '0') :
+                                                                prevIntPassed ? markEntryForm.prevInt :
+                                                                markEntryForm.int
+                                                            }
+                                                            onChange={(e) => setMarkEntryForm(prev => ({ ...prev, int: e.target.value }))}
+                                                            disabled={intDisabled}
+                                                            className={`w-full p-2 border border-emerald-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono text-sm shadow-inner ${intDisabled ? 'opacity-60 cursor-not-allowed bg-slate-100 text-slate-500' : 'bg-white'}`}
+                                                            placeholder="Enter"
+                                                            autoFocus
+                                                        />
+                                                        <p className="text-[9px] text-slate-400 mt-1">
+                                                            {noInt ? 'No Internal for this paper' :
+                                                             prevIntPassed ? 'Passed Originally' :
+                                                             editingExam?.applicationType === 'improvement' ? 'Improvement Entry' :
+                                                             `Max: ${resolvedExamMaxINT}`}
+                                                        </p>
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                         <div>
                                             <label className={`block text-[10px] font-bold mb-1 uppercase ${

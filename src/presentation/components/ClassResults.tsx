@@ -183,7 +183,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 return marks ? marks.total : '-';
             }),
             (student as any).displayTotal,
-            (student as any).displayAverage.toFixed(1),
+            typeof (student as any).displayAverage === 'number' ? (student as any).displayAverage.toFixed(1) : ((student as any).displayAverage || '0.0'),
             (student as any).displayPerformance
         ]);
 
@@ -340,7 +340,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-2xl font-black text-slate-900">{(student as any).displayTotal}</p>
-                                                        <p className="text-sm text-slate-600">{(student as any).displayAverage.toFixed(1)}%</p>
+                                                        <p className="text-sm text-slate-600">{typeof (student as any).displayAverage === 'number' ? (student as any).displayAverage.toFixed(1) : ((student as any).displayAverage || '0.0')}%</p>
                                                     </div>
                                                 </div>
 
@@ -356,33 +356,35 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                     </span>
                                                 </div>
 
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    {generalSubjects.map(subject => {
-                                                        const marks = (student as any).displayMarks[subject.id];
-                                                        return (
-                                                            <div key={subject.id} className="bg-slate-50 rounded-lg p-3">
-                                                                <p className="text-xs font-bold text-slate-600 uppercase mb-1">{shortenSubjectName(subject.name)}</p>
-                                                                {marks ? (
+                                                {!hideSelector && (
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {generalSubjects.map(subject => {
+                                                            const marks = (student as any).displayMarks[subject.id];
+                                                            return (
+                                                                <div key={subject.id} className="bg-slate-50 rounded-lg p-3">
+                                                                    <p className="text-xs font-bold text-slate-600 uppercase mb-1">{shortenSubjectName(subject.name)}</p>
+                                                                    {marks ? (
+                                                                        <div>
+                                                                            <p className={`text-lg font-bold ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{marks.total}</p>
+                                                                            <p className="text-xs text-slate-500">{subject.maxEXT === 0 ? 'N/A' : marks.ext}+{marks.int}</p>
+                                                                        </div>
+                                                                    ) : <span className="text-slate-400">-</span>}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {studentElective && (
+                                                            <div className="bg-slate-50 rounded-lg p-3 border border-indigo-100">
+                                                                <p className="text-xs font-bold text-indigo-600 uppercase mb-1">Elective ({shortenSubjectName(studentElective.name)})</p>
+                                                                {electiveMark ? (
                                                                     <div>
-                                                                        <p className={`text-lg font-bold ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{marks.total}</p>
-                                                                        <p className="text-xs text-slate-500">{subject.maxEXT === 0 ? 'N/A' : marks.ext}+{marks.int}</p>
-                                                                    </div>
-                                                                ) : <span className="text-slate-400">-</span>}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                    {studentElective && (
-                                                        <div className="bg-slate-50 rounded-lg p-3 border border-indigo-100">
-                                                            <p className="text-xs font-bold text-indigo-600 uppercase mb-1">Elective ({shortenSubjectName(studentElective.name)})</p>
-                                                            {electiveMark ? (
-                                                                <div>
                                                                         <p className={`text-lg font-bold ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{electiveMark.total}</p>
                                                                         <p className="text-xs text-slate-500">{electiveMark.ext}+{electiveMark.int}</p>
                                                                     </div>
-                                                            ) : <span className="text-slate-400">-</span>}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                                ) : <span className="text-slate-400">-</span>}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -397,13 +399,13 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                     <th className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 bg-slate-100 uppercase tracking-wider sticky top-0 left-0 z-[115] ${isMobile ? 'px-1 py-1.5 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px] print:static`} role="columnheader" scope="col" style={{ width: isMobile ? '40px' : '50px', minWidth: isMobile ? '40px' : '50px' }}>Rank</th>
                                                     <th className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 bg-slate-100 uppercase tracking-wider sticky top-0 z-[115] ${isMobile ? 'px-1 py-1.5 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px] print:static`} role="columnheader" scope="col" style={{ left: isMobile ? '40px' : '50px', width: isMobile ? '45px' : '65px', minWidth: isMobile ? '45px' : '65px', backgroundColor: '#f1f5f9' }}>Adm No</th>
                                                     <th className={`text-left font-bold text-slate-600 border-b-2 border-slate-300 bg-slate-100 uppercase tracking-wider sticky top-0 z-[115] ${isMobile ? 'px-1 py-1.5 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px] print:static`} role="columnheader" scope="col" style={{ left: isMobile ? '85px' : '115px', minWidth: isMobile ? '100px' : '130px', boxShadow: '2px 0 4px rgba(0,0,0,0.08)', backgroundColor: '#f1f5f9' }}>Student Name</th>
-                                                    {classSubjects.filter(s => s.subjectType !== 'elective').map(subject => (
+                                                    {!hideSelector && classSubjects.filter(s => s.subjectType !== 'elective').map(subject => (
                                                         <th key={subject.id} className={`text-center font-bold text-slate-600 border-b-2 border-slate-300 bg-slate-100 uppercase tracking-wider sticky top-0 z-[110] ${isMobile ? 'px-1 py-1.5 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col" style={{ maxWidth: isMobile ? '56px' : '72px', minWidth: isMobile ? '40px' : '54px', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: '1.2' }}>
                                                             {shortenSubjectName(subject.name)}
                                                         </th>
                                                     ))}
 
-                                                    {classSubjects.some(s => s.subjectType === 'elective') && (
+                                                    {!hideSelector && classSubjects.some(s => s.subjectType === 'elective') && (
                                                         <th className={`text-center font-bold text-indigo-600 border-b-2 border-slate-300 bg-indigo-50 uppercase tracking-wider sticky top-0 z-[110] ${isMobile ? 'px-1 py-1.5 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col">Elective</th>
                                                     )}
 
@@ -434,7 +436,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                 {isMobile && student.name.length > 14 ? student.name.substring(0, 14) + '..' : student.name}
                                                             </td>
 
-                                                            {classSubjects.filter(s => s.subjectType !== 'elective').map(subject => {
+                                                            {!hideSelector && classSubjects.filter(s => s.subjectType !== 'elective').map(subject => {
                                                                 const marks = (student as any).displayMarks[subject.id];
                                                                 return (
                                                                     <td key={subject.id} className={`text-center border-b border-slate-100 ${isMobile ? 'px-1 py-2' : 'px-2 py-2'} print:px-1 print:py-0.5 print:text-[10px]`}>
@@ -448,7 +450,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                 );
                                                             })}
 
-                                                            {classSubjects.some(s => s.subjectType === 'elective') && (
+                                                            {!hideSelector && classSubjects.some(s => s.subjectType === 'elective') && (
                                                                 <td className={`text-center border-b border-slate-100 bg-indigo-50/20 ${isMobile ? 'px-1 py-2' : 'px-2 py-2'} print:px-1 print:py-0.5 print:text-[10px]`}>
                                                                     {electiveMark ? (
                                                                         <div>
@@ -462,7 +464,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                             )}
 
                                                             <td className={`text-center font-black text-slate-900 border-b border-slate-100 ${isMobile ? 'px-1 py-1.5 text-sm' : 'px-2 py-2 text-lg'} print:px-1 print:py-0.5 print:text-[10px]`}>{(student as any).displayTotal}</td>
-                                                            <td className={`text-center font-bold text-slate-700 border-b border-slate-100 ${isMobile ? 'px-1 py-1.5 text-xs' : 'px-2 py-2 text-sm'} print:px-1 print:py-0.5 print:text-[10px]`}>{(student as any).displayAverage.toFixed(1)}%</td>
+                                                            <td className={`text-center font-bold text-slate-700 border-b border-slate-100 ${isMobile ? 'px-1 py-1.5 text-xs' : 'px-2 py-2 text-sm'} print:px-1 print:py-0.5 print:text-[10px]`}>{typeof (student as any).displayAverage === 'number' ? (student as any).displayAverage.toFixed(1) : ((student as any).displayAverage || '0.0')}%</td>
                                                             <td className={`text-center border-b border-slate-100 ${isMobile ? 'px-1 py-1.5' : 'px-2 py-2'} print:px-1 print:py-0.5`}>
                                                                 <span className={`inline-block px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${isMobile ? 'text-[8px]' : 'text-[10px]'} print:text-[8px] print:px-0 ${(student as any).displayPerformance.includes('Outstanding') ? 'bg-purple-100 text-purple-700' : (student as any).displayPerformance.includes('Excellent') ? 'bg-emerald-100 text-emerald-700' : (student as any).displayPerformance.includes('Very Good') ? 'bg-blue-100 text-blue-700' : (student as any).displayPerformance.includes('Good') ? 'bg-teal-100 text-teal-700' : (student as any).displayPerformance.includes('Average') ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                                                                     {isMobile ? ((student as any).displayPerformance === 'Needs Improvement' ? 'N.I.' : (student as any).displayPerformance) : (student as any).displayPerformance}

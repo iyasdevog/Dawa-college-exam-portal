@@ -2,6 +2,7 @@ import React from 'react';
 import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import OfflineStatusIndicator from '../OfflineStatusIndicator';
 import { shortenSubjectName } from '../../../infrastructure/services/formatUtils';
+import { useTerm } from '../../viewmodels/TermContext';
 
 interface MarksEntryTabProps {
     // Selection state
@@ -60,10 +61,10 @@ interface MarksEntryTabProps {
 
 const EMPTY_MARKS = { int: '', ext: '' };
 
-const StudentRow = React.memo(({ 
-    student, index, marks, validationHelpers, handleMarksChange, handleKeyDown, 
-    handleSaveEXTMarks, handleSaveINTMarks, handleClearStudentMarks, 
-    isSaving, att, selectedSubjectData 
+const StudentRow = React.memo(({
+    student, index, marks, validationHelpers, handleMarksChange, handleKeyDown,
+    handleSaveEXTMarks, handleSaveINTMarks, handleClearStudentMarks,
+    isSaving, att, selectedSubjectData, isCondoned
 }: {
     student: StudentRecord;
     index: number;
@@ -77,35 +78,57 @@ const StudentRow = React.memo(({
     isSaving: boolean;
     att: number;
     selectedSubjectData: SubjectConfig | undefined;
+    isCondoned: boolean;
 }) => {
     const total = validationHelpers?.calculateTotal(marks.int, marks.ext) || 0;
     const status = validationHelpers?.getStatus(marks.int, marks.ext) || 'Pending';
 
+    // A student is eligible if their attendance is >= 75% OR they have paid condonation fees
+    const isEligible = isCondoned || att >= 75;
+    // INT field is disabled only when maxINT is 0 (no internal component), not when maxEXT === 100 (since Doura can have 70 EXT + 30 INT)
+    const noInternal = (selectedSubjectData?.maxINT ?? 1) === 0;
+
     return (
         <tr className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-            <td className="p-4">{student.adNo}</td><td className="p-4">{student.name}</td>
+            <td className="p-4">{student.adNo}</td>
+            <td className="p-4">
+                <div>
+                    <span>{student.name}</span>
+                    {isCondoned && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase rounded tracking-wide">
+                            Condoned
+                        </span>
+                    )}
+                </div>
+            </td>
             <td className="p-4 text-center">
-                <input 
-                    type="text" 
-                    value={marks.ext || ''} 
-                    onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)} 
-                    onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')} 
+                <input
+                    type="text"
+                    value={marks.ext || ''}
+                    onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')}
                     data-student={student.id}
                     data-field="ext"
-                    className={`w-20 p-2 border-2 rounded-xl text-center ${att < 75 ? 'bg-red-50 opacity-60' : ''}`} 
-                    disabled={att < 75 || isSaving} 
+                    className={`w-20 p-2 border-2 rounded-xl text-center ${
+                        !isEligible ? 'bg-red-50 opacity-60' :
+                        isCondoned ? 'border-indigo-300' : ''
+                    }`}
+                    disabled={!isEligible || isSaving}
                 />
             </td>
             <td className="p-4 text-center">
-                <input 
-                    type="text" 
-                    value={marks.int || ''} 
-                    onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)} 
-                    onKeyDown={(e) => handleKeyDown(e, student.id, 'int')} 
+                <input
+                    type="text"
+                    value={marks.int || ''}
+                    onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, student.id, 'int')}
                     data-student={student.id}
                     data-field="int"
-                    className={`w-20 p-2 border-2 rounded-xl text-center ${selectedSubjectData?.maxEXT === 100 || att < 75 ? 'bg-slate-100 opacity-60' : ''}`} 
-                    disabled={selectedSubjectData?.maxEXT === 100 || att < 75 || isSaving} 
+                    className={`w-20 p-2 border-2 rounded-xl text-center ${
+                        noInternal || !isEligible ? 'bg-slate-100 opacity-60' :
+                        isCondoned ? 'border-indigo-300' : ''
+                    }`}
+                    disabled={noInternal || !isEligible || isSaving}
                 />
             </td>
             <td className="p-4 text-center font-bold">{marks.int && marks.ext ? total : '-'}</td>
@@ -133,6 +156,7 @@ const StudentRow = React.memo(({
         prev.marks.ext === next.marks.ext &&
         prev.isSaving === next.isSaving &&
         prev.att === next.att &&
+        prev.isCondoned === next.isCondoned &&
         prev.selectedSubjectData === next.selectedSubjectData &&
         prev.validationHelpers === next.validationHelpers
     );
@@ -155,6 +179,8 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
     showScrollToTop, scrollToTop, isScrolling, getTouchProps,
     studentRefs, handleKeyDown
 }) => {
+    const { activeTerm } = useTerm();
+
     return (
         <>
 
@@ -314,22 +340,66 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                             const isCurrent = index === currentStudentIndex;
                             const studentMarks = marksData[student.id] || { int: '', ext: '' };
                             const attendance = attendanceStats[student.id]?.percentage || 0;
+                            const isCondoned = student.condonedTerms?.[activeTerm] === true;
+                            const isEligible = isCondoned || attendance >= 75;
+                            const noInternal = (selectedSubjectData?.maxINT ?? 1) === 0;
 
                             return (
-                                <div key={student.id} ref={el => { if(studentRefs.current) studentRefs.current[student.id] = el; }} className={`bg-white rounded-xl p-3 border border-slate-200 shadow-sm transition-all ${isCurrent ? 'ring-2 ring-emerald-500 bg-emerald-50/50' : ''}`}>
+                                <div key={student.id} ref={el => { if(studentRefs.current) studentRefs.current[student.id] = el; }} className={`bg-white rounded-xl p-3 border shadow-sm transition-all ${
+                                    isCurrent ? 'ring-2 ring-emerald-500 bg-emerald-50/50' :
+                                    isCondoned ? 'border-indigo-200' : 'border-slate-200'
+                                }`}>
                                     <div className="flex items-center justify-between mb-2">
-                                        <div className="flex flex-col"><h3 className="font-bold text-slate-900 text-sm leading-tight">{student.name}</h3><p className="text-[10px] uppercase font-black text-slate-400">ADM: {student.adNo}</p></div>
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-1.5">
+                                                <h3 className="font-bold text-slate-900 text-sm leading-tight">{student.name}</h3>
+                                                {isCondoned && (
+                                                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase rounded tracking-wide">Condoned</span>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] uppercase font-black text-slate-400">ADM: {student.adNo}</p>
+                                        </div>
                                         <span className="px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-[10px] font-bold">{index + 1} / {students.length}</span>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-xs font-medium text-slate-600 mb-1">EXT (Max: {selectedSubjectData?.maxEXT})</label>
-                                            <input type="text" data-student={student.id} data-field="ext" onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')} value={studentMarks.ext} onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${attendance < 75 ? 'bg-red-50 border-red-200 text-red-400' : ''}`} disabled={attendance < 75} />
-                                            <div className={`mt-1 text-[10px] font-bold ${attendance < 75 ? 'text-red-600' : 'text-emerald-600'}`}>Attendance: {attendance.toFixed(0)}%</div>
+                                            <input
+                                                type="text"
+                                                data-student={student.id}
+                                                data-field="ext"
+                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'ext')}
+                                                value={studentMarks.ext}
+                                                onChange={(e) => handleMarksChange(student.id, 'ext', e.target.value)}
+                                                className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${
+                                                    !isEligible ? 'bg-red-50 border-red-200 text-red-400' :
+                                                    isCondoned ? 'border-indigo-300 focus:ring-indigo-500' : ''
+                                                }`}
+                                                disabled={!isEligible}
+                                            />
+                                            <div className={`mt-1 text-[10px] font-bold ${
+                                                isCondoned ? 'text-indigo-600' :
+                                                !isEligible ? 'text-red-600' : 'text-emerald-600'
+                                            }`}>
+                                                Attendance: {typeof attendance === 'number' ? attendance.toFixed(0) : '0'}%
+                                                {isCondoned && ' (Condoned)'}
+                                            </div>
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-slate-600 mb-1">INT (Max: {selectedSubjectData?.maxINT})</label>
-                                            <input type="text" data-student={student.id} data-field="int" onKeyDown={(e) => handleKeyDown(e, student.id, 'int')} value={studentMarks.int} onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${selectedSubjectData?.maxEXT === 100 || attendance < 75 ? 'bg-slate-100 text-slate-400' : ''}`} disabled={selectedSubjectData?.maxEXT === 100 || attendance < 75} />
+                                            <input
+                                                type="text"
+                                                data-student={student.id}
+                                                data-field="int"
+                                                onKeyDown={(e) => handleKeyDown(e, student.id, 'int')}
+                                                value={studentMarks.int}
+                                                onChange={(e) => handleMarksChange(student.id, 'int', e.target.value)}
+                                                className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 ${
+                                                    noInternal || !isEligible ? 'bg-slate-100 text-slate-400' :
+                                                    isCondoned ? 'border-indigo-300 focus:ring-indigo-500' : ''
+                                                }`}
+                                                disabled={noInternal || !isEligible}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -356,7 +426,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                 </thead>
                                 <tbody>
                                     {students.map((student, index) => (
-                                        <StudentRow 
+                                        <StudentRow
                                             key={student.id}
                                             student={student}
                                             index={index}
@@ -370,6 +440,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                             isSaving={isSaving}
                                             att={attendanceStats[student.id]?.percentage || 0}
                                             selectedSubjectData={selectedSubjectData}
+                                            isCondoned={student.condonedTerms?.[activeTerm] === true}
                                         />
                                     ))}
                                 </tbody>

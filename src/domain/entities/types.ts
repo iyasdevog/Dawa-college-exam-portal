@@ -88,6 +88,7 @@ export interface StudentRecord {
   currentClass: string; // The active class they are in right now
   isActive?: boolean; // Controls whether this student is actively enrolled in current workflows
   academicHistory?: Record<string, TermRecord>; // e.g. "2023-2024-Odd": { ... }
+  condonedTerms?: Record<string, boolean>; // Mapping of termKey -> isCondoned
 
   // Legacy fields for migration
   className?: string;

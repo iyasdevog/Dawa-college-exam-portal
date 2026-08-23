@@ -131,7 +131,7 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allS
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-slate-100/50 p-4 rounded-2xl border border-slate-200/50 text-center shadow-sm">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Overall Percentage</p>
-                        <p className="text-2xl font-black text-slate-900">{aggregatedStats.overallPercentage.toFixed(2)}%</p>
+                        <p className="text-2xl font-black text-slate-900">{typeof aggregatedStats.overallPercentage === 'number' ? aggregatedStats.overallPercentage.toFixed(2) : (aggregatedStats.overallPercentage ?? '0.00')}%</p>
                     </div>
                     <div className="bg-slate-100/50 p-4 rounded-2xl border border-slate-200/50 text-center shadow-sm">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Marks</p>

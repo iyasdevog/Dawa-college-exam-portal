@@ -1158,7 +1158,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                             {classStats.map((stat) => (
                                 <div key={stat.className} className="flex justify-between">
                                     <span className="text-slate-600">{stat.className}</span>
-                                    <span className="font-bold text-slate-900">{stat.average.toFixed(1)}%</span>
+                                    <span className="font-bold text-slate-900">{typeof stat.average === 'number' ? stat.average.toFixed(1) : (stat.average ?? '0.0')}%</span>
                                 </div>
                             ))}
                         </div>
@@ -1227,7 +1227,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                                         className="text-slate-600"
                                         style={getTypographyStyle('body-small')}
                                     >
-                                        {student.average.toFixed(1)}% avg
+                                        {typeof student.average === 'number' ? student.average.toFixed(1) : (student.average ?? '0.0')}% avg
                                     </p>
                                 </div>
                             </div>
