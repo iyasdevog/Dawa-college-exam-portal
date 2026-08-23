@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, ClassReleaseSettings, SupplementaryExam } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
 import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
@@ -38,11 +38,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const { getTouchProps } = useTouchInteraction();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [attendanceStats, setAttendanceStats] = useState<Record<string, { present: number; total: number; percentage: number }>>({});
-    const [supplementaryExams, setSupplementaryExams] = useState<any[]>([]);
-
-    const [loadingStage, setLoadingStage] = useState<'initializing' | 'loading-subjects' | 'loading-students' | 'preparing-interface'>('initializing');
-    const [loadingProgress, setLoadingProgress] = useState(0);
+    const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+    const [attendanceStats, setAttendanceStats] = useState<Record<string, { present: number; total: number; percentage: number }>>({}); 
+    const [supplementaryExams, setSupplementaryExams] = useState<SupplementaryExam[]>([]);
 
     const studentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const loadedSubjectIdRef = useRef<string>('');
@@ -54,8 +52,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         const loadInit = async () => {
             try {
                 setIsLoading(true);
-                setLoadingStage('initializing');
-                setLoadingProgress(25);
                 const [allSubjects, allStudentsData, termClasses, relSettings] = await Promise.all([
                     dataService.getAllSubjects(activeTerm),
                     dataService.getAllStudents(activeTerm),
@@ -66,7 +62,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 setAllStudents(allStudentsData);
                 setAvailableClasses(termClasses.length > 0 ? termClasses : CLASSES);
                 setReleaseSettings(relSettings || {});
-                setLoadingProgress(100);
             } catch (error) {
                 console.error('Error loading initial data:', error);
             } finally {
@@ -138,18 +133,21 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
     const loadStudentsByClass = useCallback(async () => {
         if (!selectedSubject) return;
+        let mounted = true;
         try {
-            setIsSaving(true);
+            setIsLoadingStudents(true);
             const studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject, activeTerm);
+            if (!mounted) return;
             const currentSub = subjects.find(s => s.id === selectedSubject);
             const isCrossClass = currentSub?.subjectType === 'elective' && currentSub?.electiveType === 'cross-class';
 
-            // For intra-class electivess and general/school subjects, only show students from selected class
-            // For cross-class electivess, show all enrolled regardless of class
+            // For intra-class electives and general/school subjects, only show students from selected class
+            // For cross-class electives, show all enrolled regardless of class
             const filteredByClass = (subjectType === 'elective' && isCrossClass)
                 ? studentsToShow
                 : studentsToShow.filter(s => s.className === selectedClass);
             
+            if (!mounted) return;
             setStudents(filteredByClass);
             loadedSubjectIdRef.current = selectedSubject;
 
@@ -160,12 +158,13 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                     return [s.id, { present: 0, total: 0, percentage }] as [string, { present: number; total: number; percentage: number }];
                 })
             );
-            setAttendanceStats(Object.fromEntries(attResults));
+            if (mounted) setAttendanceStats(Object.fromEntries(attResults));
         } catch (error) {
             console.error('Error loading students:', error);
         } finally {
-            setIsSaving(false);
+            if (mounted) setIsLoadingStudents(false);
         }
+        return () => { mounted = false; };
     }, [selectedSubject, activeTerm, subjects, subjectType, selectedClass]);
 
     // Load students when context changes
@@ -173,7 +172,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         loadStudentsByClass();
     }, [loadStudentsByClass]);
 
-    const handleUpdateReleaseSetting = async (className: string, field: keyof ClassReleaseSettings[string], value: any) => {
+    const handleUpdateReleaseSetting = async (className: string, field: keyof ClassReleaseSettings[string], value: boolean | string) => {
         try {
             const currentSetting = releaseSettings[className] || { isReleased: false };
             const updated = {
@@ -200,7 +199,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const selectedSubjectData = useMemo(() => subjects.find(s => s.id === selectedSubject), [subjects, selectedSubject]);
 
     if (isLoading) {
-        return <ProgressiveLoadingSkeleton stage={loadingStage} progress={loadingProgress} />;
+        return <ProgressiveLoadingSkeleton stage="initializing" progress={100} />;
     }
 
     return (

@@ -68,7 +68,6 @@ const TimetableManager: React.FC = () => {
         if (!aiInput.trim()) return;
         setIsExtracting(true);
         try {
-            console.log('Extracting from:', aiInput);
             await new Promise(resolve => setTimeout(resolve, 2000));
 
             if (activeSubTab === 'exam') {

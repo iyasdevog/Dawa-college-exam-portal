@@ -328,9 +328,7 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
     const loadAttendance = useCallback(async () => {
         if (!selectedClass || !selectedSubject || !selectedDate) return;
         try {
-            console.log(`[Attendance] Fetching: Class=${selectedClass}, Sub=${selectedSubject}, Session=${selectedSession}, Date=${selectedDate}`);
             const records = await dataService.getAttendanceByClassAndDate(selectedClass, selectedDate);
-            console.log(`[Attendance] Found ${records.length} records for this date/class`);
             
             const effectiveSubjectId = selectedSession === '1' ? selectedSubject : `${selectedSubject}_${selectedSession}`;
             const record = records.find(r => r.subjectId === effectiveSubjectId);
@@ -349,7 +347,6 @@ const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ subjects, s
                 setRecoveredReasons(record.recoveredReasons || {});
                 setAuthorizedAbsences(authorizedSet);
             } else {
-                console.log(`[Attendance] No record for subject: ${effectiveSubjectId}. Defaulting to all present.`);
                 filteredStudents.forEach(s => initialAttendance[s.id] = true);
                 setAuthorizedAbsences(new Set());
                 setRecoveredStudentIds(new Set());

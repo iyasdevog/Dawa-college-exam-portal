@@ -32,7 +32,6 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ onInstall, onDismis
         // Listen for beforeinstallprompt event
         const handleBeforeInstallPrompt = (e: Event) => {
             const event = e as BeforeInstallPromptEvent;
-            console.log('PWA: Before install prompt triggered');
 
             // Prevent the mini-infobar from appearing on mobile
             event.preventDefault();
@@ -50,7 +49,6 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ onInstall, onDismis
 
         // Listen for app installed event
         const handleAppInstalled = () => {
-            console.log('PWA: App installed successfully');
             setIsInstalled(true);
             setShowPrompt(false);
             setDeferredPrompt(null);
@@ -76,13 +74,9 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ onInstall, onDismis
             // Wait for the user to respond to the prompt
             const { outcome } = await deferredPrompt.userChoice;
 
-            console.log('PWA: User choice:', outcome);
-
             if (outcome === 'accepted') {
-                console.log('PWA: User accepted the install prompt');
                 onInstall?.();
             } else {
-                console.log('PWA: User dismissed the install prompt');
                 onDismiss?.();
             }
 

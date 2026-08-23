@@ -60,20 +60,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       try {
-        console.log('App: Initializing...');
-
         // Simple connectivity check
         setIsCloudActive(navigator.onLine);
 
         // Setup online/offline listeners
         const handleOnline = () => {
           setIsCloudActive(true);
-          console.log('App: Back online');
         };
 
         const handleOffline = () => {
           setIsCloudActive(false);
-          console.log('App: Gone offline');
         };
 
         window.addEventListener('online', handleOnline);
@@ -96,8 +92,6 @@ const App: React.FC = () => {
     initApp();
   }, []);
 
-  // PWA event handlers
-  // PWA event handlers removed
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();

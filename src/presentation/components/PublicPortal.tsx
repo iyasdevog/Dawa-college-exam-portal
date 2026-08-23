@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
-import { StudentRecord, SubjectConfig, ClassReleaseSettings, ExamTimetableEntry } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, ClassReleaseSettings, ExamTimetableEntry, GlobalSettings } from '../../domain/entities/types';
 import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
@@ -31,7 +31,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
     const [viewMode, setViewMode] = useState<'scorecard' | 'class-rank'>('scorecard');
     const [showAppPortal, setShowAppPortal] = useState(false);
-    const [branding, setBranding] = useState<any>(null);
+    const [branding, setBranding] = useState<GlobalSettings | null>(null);
     const [activeClasses, setActiveClasses] = useState<string[]>(SYSTEM_CLASSES);
 
     // Tabs state
@@ -607,13 +607,6 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                             <i className="fa-solid fa-ranking-star"></i> {isMobile ? 'Rankings' : 'Class Rankings'}
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => setViewMode('scorecard' as any)} // Overloaded as a trick or just use state
-                                        className="flex-1 py-4 px-6 rounded-xl font-black uppercase tracking-widest text-sm text-amber-400 hover:text-amber-300 hover:bg-white/5 transition-all flex items-center justify-center gap-2"
-                                        id="view-transcript-btn"
-                                    >
-                                        <i className="fa-solid fa-layer-group"></i> {isMobile ? 'Transcript' : 'Full Transcript'}
-                                    </button>
                                 </div>
 
                                 {viewMode === 'scorecard' ? (

@@ -156,7 +156,6 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
         if (savedConfig) {
             // Migration check: If it's the old 4-period layout or missing the 6:30 AM start, force update
             if (savedConfig.periodsPerDay !== 12 || savedConfig.timeSlots?.[0]?.startTime !== '06:30') {
-                console.log("Migrating older timetable config to new 12-slot layout");
                 const migratedConfig = {
                     ...defaultConfig,
                     subjectWeeklyHours: { ...defaultConfig.subjectWeeklyHours, ...savedConfig.subjectWeeklyHours },
