@@ -1,13 +1,53 @@
 /**
- * Simplified Storage Service
- * Provides basic local/session storage access with simple error handling.
+ * In-memory storage fallback when localStorage/sessionStorage are inaccessible
  */
+class MemoryStorage implements Storage {
+    private store = new Map<string, string>();
 
+    get length(): number {
+        return this.store.size;
+    }
+
+    clear(): void {
+        this.store.clear();
+    }
+
+    getItem(key: string): string | null {
+        return this.store.get(key) ?? null;
+    }
+
+    key(index: number): string | null {
+        return Array.from(this.store.keys())[index] ?? null;
+    }
+
+    removeItem(key: string): void {
+        this.store.delete(key);
+    }
+
+    setItem(key: string, value: string): void {
+        this.store.set(key, String(value));
+    }
+}
+
+/**
+ * Simplified Storage Service
+ * Provides basic local/session storage access with simple error handling and memory fallback.
+ */
 export class StorageFallbackService {
     private storage: Storage;
 
     constructor(useSession: boolean = false) {
-        this.storage = useSession ? sessionStorage : localStorage;
+        try {
+            const target = useSession ? window.sessionStorage : window.localStorage;
+            // Test if storage is actually writable/readable
+            const testKey = '__storage_test_key__';
+            target.setItem(testKey, testKey);
+            target.removeItem(testKey);
+            this.storage = target;
+        } catch {
+            console.warn('[Storage] Storage access denied or unavailable. Falling back to MemoryStorage.');
+            this.storage = new MemoryStorage();
+        }
     }
 
     getItem<T>(key: string): T | null {
@@ -45,4 +85,4 @@ export class StorageFallbackService {
     }
 }
 
-export const storageFallback = new StorageFallbackService();
+export const storageFallback = new StorageFallbackService();

@@ -4,6 +4,7 @@ import { ViewType } from '../../domain/entities/types';
 import { User } from '../../domain/entities/User';
 import { useMobileNavigation, useTouchInteraction } from '../hooks/useMobile';
 import { keyboardNavigation, screenReaderAnnouncer, ariaHelpers } from '../utils/accessibility';
+import { versionService } from '../../infrastructure/services/versionService';
 
 interface HamburgerMenuProps {
     activeView: ViewType;
@@ -219,16 +220,24 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 mt-auto border-t border-slate-800/50 bg-slate-950/50">
-                    <div className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-slate-800/30 border border-slate-700/30 mb-6">
-                        <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
-                            <i className="fa-solid fa-user-shield text-slate-400"></i>
+                <div className="p-6 mt-auto border-t border-slate-800/50 bg-slate-950/50 space-y-3">
+                    <button
+                        onClick={async () => {
+                            closeMobileMenu();
+                            await versionService.forceClearCacheAndReload();
+                        }}
+                        className="
+                          w-full flex items-center gap-4 px-5 py-4 rounded-2xl
+                          text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:bg-emerald-500/30
+                          transition-all duration-300 border border-emerald-500/20
+                          touch-target-min
+                        "
+                    >
+                        <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                            <i className="fa-solid fa-arrows-rotate text-emerald-400"></i>
                         </div>
-                        <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Access ID</p>
-                            <p className="text-xs font-mono text-slate-300">IDA-2025-01</p>
-                        </div>
-                    </div>
+                        <span className="font-black text-sm uppercase tracking-widest">Update App & Clear Cache</span>
+                    </button>
 
                     <button
                         {...getTouchProps(handleLogoutClick)}

@@ -13,6 +13,8 @@ import { TermSelector } from './TermSelector';
 import CurriculumOverview from './CurriculumOverview';
 import { useTerm } from '../viewmodels/TermContext';
 
+import { versionService } from '../../infrastructure/services/versionService';
+
 const PublicScorecard = React.lazy(() => import('./PublicScorecard'));
 
 interface PublicPortalProps {
@@ -254,15 +256,27 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     </div>
                 </div>
                 <div className="flex-1"></div>
-                <button
-                    type="button"
-                    onClick={onLoginClick}
-                    className={`font-black text-white/80 hover:text-white transition-all uppercase tracking-widest flex items-center gap-2 border border-white/20 rounded-xl hover:bg-white/10 touch-target-min ${isMobile ? 'text-[9px] px-3 py-2' : 'text-[10px] px-4 py-2'}`}
-                    style={{ WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}
-                >
-                    <i className={`fa-solid fa-shield-halved ${isMobile ? 'text-xs' : 'text-xs'}`}></i>
-                    {isMobile ? 'Faculty' : 'Faculty Access'}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => versionService.forceClearCacheAndReload()}
+                        title="Force refresh app and clear cached data"
+                        className={`font-black text-emerald-300 hover:text-white transition-all uppercase tracking-widest flex items-center gap-2 border border-emerald-500/30 bg-emerald-950/40 rounded-xl hover:bg-emerald-900/50 touch-target-min ${isMobile ? 'text-[9px] px-3 py-2' : 'text-[10px] px-4 py-2'}`}
+                        style={{ WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}
+                    >
+                        <i className="fa-solid fa-rotate text-xs animate-spin-slow"></i>
+                        {isMobile ? 'Update' : 'Update App'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onLoginClick}
+                        className={`font-black text-white/80 hover:text-white transition-all uppercase tracking-widest flex items-center gap-2 border border-white/20 rounded-xl hover:bg-white/10 touch-target-min ${isMobile ? 'text-[9px] px-3 py-2' : 'text-[10px] px-4 py-2'}`}
+                        style={{ WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}
+                    >
+                        <i className={`fa-solid fa-shield-halved ${isMobile ? 'text-xs' : 'text-xs'}`}></i>
+                        {isMobile ? 'Faculty' : 'Faculty Access'}
+                    </button>
+                </div>
             </nav>
 
 

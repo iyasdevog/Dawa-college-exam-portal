@@ -369,19 +369,18 @@ export const preventIOSZoom = (input: HTMLInputElement): void => {
         input.style.fontSize = '16px';
     }
 };
+import { storageFallback } from './StorageFallbackService';
+
 export const mobileStorage = {
     set: (key: string, value: any): boolean => {
         try {
             const serialized = JSON.stringify(value);
-
-            // Check if storage is approaching limits (mobile devices have smaller limits)
             const estimatedSize = new Blob([serialized]).size;
             if (estimatedSize > 1024 * 1024) { // 1MB limit for mobile
                 console.warn('Data size too large for mobile storage');
                 return false;
             }
-
-            localStorage.setItem(key, serialized);
+            storageFallback.setItem(key, value);
             return true;
         } catch (error) {
             console.error('Mobile storage set failed:', error);
@@ -391,8 +390,8 @@ export const mobileStorage = {
 
     get: <T>(key: string, defaultValue?: T): T | null => {
         try {
-            const item = localStorage.getItem(key);
-            return item ? JSON.parse(item) : defaultValue || null;
+            const result = storageFallback.getItem<T>(key);
+            return result !== null ? result : (defaultValue || null);
         } catch (error) {
             console.error('Mobile storage get failed:', error);
             return defaultValue || null;
@@ -401,7 +400,7 @@ export const mobileStorage = {
 
     remove: (key: string): boolean => {
         try {
-            localStorage.removeItem(key);
+            storageFallback.removeItem(key);
             return true;
         } catch (error) {
             console.error('Mobile storage remove failed:', error);
@@ -411,7 +410,7 @@ export const mobileStorage = {
 
     clear: (): boolean => {
         try {
-            localStorage.clear();
+            storageFallback.clear();
             return true;
         } catch (error) {
             console.error('Mobile storage clear failed:', error);
@@ -421,23 +420,22 @@ export const mobileStorage = {
 
     getUsage: (): { used: number; available: number } => {
         let used = 0;
-
         try {
-            for (let key in localStorage) {
-                if (localStorage.hasOwnProperty(key)) {
-                    used += localStorage[key].length + key.length;
+            if (typeof window !== 'undefined' && window.localStorage) {
+                for (let key in window.localStorage) {
+                    if (window.localStorage.hasOwnProperty(key)) {
+                        used += window.localStorage[key].length + key.length;
+                    }
                 }
             }
         } catch (error) {
             console.error('Failed to calculate storage usage:', error);
         }
 
-        // Estimate available space (mobile browsers typically have 5-10MB)
         const estimated = 5 * 1024 * 1024; // 5MB estimate
-
         return {
             used,
             available: Math.max(0, estimated - used),
         };
     },
-};
+};

@@ -52,7 +52,8 @@ export default defineConfig(({ mode }) => {
       'process.env.NODE_ENV': JSON.stringify(mode),
       // Remove development flags in production
       __DEV__: !isProduction,
-      __PROD__: isProduction
+      __PROD__: isProduction,
+      __APP_VERSION__: JSON.stringify(Date.now().toString())
     },
     resolve: {
       alias: {

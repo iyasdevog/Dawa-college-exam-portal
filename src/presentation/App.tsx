@@ -6,6 +6,7 @@ import { TermProvider } from './viewmodels/TermContext';
 import { ViewType, StudentRecord } from '../domain/entities/types';
 import { User } from '../domain/entities/User';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
+import { versionService } from '../infrastructure/services/versionService';
 
 // Lazy load components for code splitting
 const ApplicationManagement = lazy(() => import('./components/ApplicationManagement'));
@@ -62,6 +63,9 @@ const App: React.FC = () => {
       try {
         // Simple connectivity check
         setIsCloudActive(navigator.onLine);
+
+        // Check for new build versions and clear stale caches on mobile startup
+        await versionService.checkAndInvalidateStaleBuild();
 
         // Setup online/offline listeners
         const handleOnline = () => {

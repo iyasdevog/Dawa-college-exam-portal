@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { IErrorReporter } from '../../domain/interfaces/IErrorReporter';
+import { versionService } from '../../infrastructure/services/versionService';
 
 interface Props {
     children: ReactNode;
@@ -107,6 +108,10 @@ export class ApplicationErrorBoundary extends Component<Props, State> {
         window.location.reload();
     };
 
+    handleClearCacheAndReload = async () => {
+        await versionService.forceClearCacheAndReload();
+    };
+
     render() {
         if (this.state.hasError) {
             // Custom fallback UI provided
@@ -138,13 +143,13 @@ export class ApplicationErrorBoundary extends Component<Props, State> {
                             Application Error
                         </h1>
 
-                        <p className="text-slate-600 mb-6">
-                            The application encountered an unexpected error. Our team has been notified.
+                        <p className="text-slate-600 mb-6 text-sm">
+                            The application encountered an issue. Try refreshing or clearing cached app data on your phone.
                         </p>
 
-                        <div className="bg-slate-50 rounded-lg p-4 mb-6 text-left">
+                        <div className="bg-slate-50 rounded-lg p-4 mb-6 text-left border border-slate-200">
                             <p className="text-xs font-mono text-slate-500 mb-2">Error ID: {errorId}</p>
-                            <p className="text-sm text-slate-700">{error?.message}</p>
+                            <p className="text-sm font-mono text-slate-700 break-words">{error?.message}</p>
                         </div>
 
                         <div className="space-y-3">
@@ -159,9 +164,16 @@ export class ApplicationErrorBoundary extends Component<Props, State> {
 
                             <button
                                 onClick={this.handleReload}
-                                className="w-full bg-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-300 transition-colors"
+                                className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-900 transition-colors"
                             >
                                 Reload Application
+                            </button>
+
+                            <button
+                                onClick={this.handleClearCacheAndReload}
+                                className="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-broom"></i> Clear Cache & Force Update
                             </button>
                         </div>
                     </div>

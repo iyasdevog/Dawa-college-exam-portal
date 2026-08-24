@@ -7,6 +7,8 @@ import { useMobile, useMobileNavigation } from '../hooks/useMobile';
 import { TermSelector } from './TermSelector';
 import BottomNavigationBar from './BottomNavigationBar';
 
+import { versionService } from '../../infrastructure/services/versionService';
+
 interface LayoutProps {
   children: React.ReactNode;
   activeView: ViewType;
@@ -114,7 +116,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
           </button>
         ))}
       </nav>
-      <div className="p-6 border-t border-slate-800">
+      <div className="p-6 border-t border-slate-800 space-y-2">
+        <button
+          onClick={() => versionService.forceClearCacheAndReload()}
+          className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all min-h-[44px]"
+          title="Force update app and clear cached data"
+        >
+          <i className="fa-solid fa-arrows-rotate w-5"></i>
+          <span className="font-bold text-sm">Update App & Clear Cache</span>
+        </button>
+
         <button onClick={onLogout} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-400 hover:bg-red-500/10 transition-all min-h-[44px]">
           <i className="fa-solid fa-right-from-bracket w-5"></i>
           <span className="font-bold text-sm">Exit Admin</span>
