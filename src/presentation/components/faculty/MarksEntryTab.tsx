@@ -181,6 +181,65 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 }) => {
     const { activeTerm } = useTerm();
 
+    const handleDownloadTemplate = () => {
+        if (!students || students.length === 0) return;
+
+        const maxEXT = selectedSubjectData?.maxEXT ?? 70;
+        const maxINT = selectedSubjectData?.maxINT ?? 30;
+
+        const headers = [
+            'Sl No',
+            'Admission No',
+            'Student Name',
+            'Class',
+            'Subject',
+            `External Mark (Max ${maxEXT})`,
+            `Internal Mark (Max ${maxINT})`,
+            'Total Mark',
+            'Status'
+        ];
+
+        const rows = students.map((student, idx) => {
+            const studentMarks = marksData[student.id] || { int: '', ext: '' };
+            const total = validationHelpers?.calculateTotal(studentMarks.int, studentMarks.ext) || '';
+            const status = validationHelpers?.getStatus(studentMarks.int, studentMarks.ext) || 'Pending';
+            const studentClass = student.className || student.currentClass || selectedClass;
+
+            return [
+                idx + 1,
+                student.adNo || '',
+                student.name || '',
+                studentClass,
+                selectedSubjectData?.name || '',
+                studentMarks.ext !== undefined ? studentMarks.ext : '',
+                studentMarks.int !== undefined ? studentMarks.int : '',
+                studentMarks.int && studentMarks.ext ? total : '',
+                status
+            ];
+        });
+
+        const csvContent = '\uFEFF' + [headers, ...rows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const subjectClean = (selectedSubjectData?.name || 'Subject').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const classClean = (selectedClass || 'Class').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        link.href = url;
+        link.setAttribute('download', `${classClean}_${subjectClean}_MarkEntrySheet.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const handlePrintSheet = () => {
+        window.print();
+    };
+
     return (
         <>
 
@@ -257,6 +316,33 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                 <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded"><strong>Passing Rule:</strong> Students must achieve both INT minimum (50%) AND EXT minimum (40%) to pass</div>
                             </div>
                         </div>
+
+                        {students.length > 0 && (
+                            <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                                <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-file-invoice text-slate-500"></i>
+                                    INT &amp; EXT Mark Sheet Template ({students.length} students)
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleDownloadTemplate}
+                                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-sm active:scale-95 cursor-pointer"
+                                        title="Download INT & EXT Mark Entry Sheet / Template (CSV)"
+                                    >
+                                        <i className="fa-solid fa-download"></i>
+                                        <span>Download Template</span>
+                                    </button>
+                                    <button
+                                        onClick={handlePrintSheet}
+                                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-sm active:scale-95 cursor-pointer"
+                                        title="Print INT & EXT Mark Entry Sheet / Template"
+                                    >
+                                        <i className="fa-solid fa-print"></i>
+                                        <span>Print Template</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -410,9 +496,29 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 
                     {/* Desktop View */}
                     <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                        <div className="p-6 border-b border-slate-200 flex items-center justify-between flex-wrap gap-4">
                             <h2 className="text-xl font-black text-slate-900">{selectedSubjectData?.name} - {selectedClass} Class</h2>
-                            <div className="text-sm text-slate-600">{students.length} students</div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={handleDownloadTemplate}
+                                    className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 cursor-pointer"
+                                    title="Download INT & EXT Mark Entry Sheet / Template (CSV)"
+                                >
+                                    <i className="fa-solid fa-file-csv text-emerald-600"></i>
+                                    <span>Download Template</span>
+                                </button>
+                                <button
+                                    onClick={handlePrintSheet}
+                                    className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 cursor-pointer"
+                                    title="Print INT & EXT Mark Entry Sheet / Template"
+                                >
+                                    <i className="fa-solid fa-print text-slate-600"></i>
+                                    <span>Print Sheet</span>
+                                </button>
+                                <div className="text-sm text-slate-600 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                                    {students.length} students
+                                </div>
+                            </div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
@@ -477,6 +583,82 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                 <div className="mx-6 md:mx-0 py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-300"><i className="fa-solid fa-user-slash text-4xl text-slate-300 mb-4"></i><p className="text-slate-500 font-bold">No students found for this subject/class.</p></div>
             ) : (
                 <div className="mx-6 md:mx-0 py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-300"><i className="fa-solid fa-hand-pointer text-4xl text-slate-300 mb-4"></i><p className="text-slate-500 font-bold">Please select a class and subject to begin.</p></div>
+            )}
+
+            {/* Printable Mark Entry Sheet (Visible only during browser window.print()) */}
+            {selectedSubjectData && students.length > 0 && (
+                <div className="hidden print:block p-6 bg-white text-black font-sans text-xs">
+                    {/* Header Banner */}
+                    <div className="text-center border-b-2 border-black pb-4 mb-4">
+                        <h1 className="text-2xl font-black uppercase tracking-wider text-black">AIC DA'WA COLLEGE EXAM PORTAL</h1>
+                        <h2 className="text-sm font-bold uppercase tracking-widest text-black mt-1">OFFICIAL MARK ENTRY SHEET / REGISTER</h2>
+                    </div>
+
+                    {/* Info / Metadata Grid */}
+                    <div className="grid grid-cols-3 gap-2 border border-black p-3 mb-4 text-xs bg-white">
+                        <div><strong>Class:</strong> {selectedClass}</div>
+                        <div><strong>Subject:</strong> {selectedSubjectData.name} {selectedSubjectData.arabicName ? `(${selectedSubjectData.arabicName})` : ''}</div>
+                        <div><strong>Term:</strong> {activeTerm}</div>
+                        <div><strong>Faculty:</strong> {selectedSubjectData.facultyName || 'N/A'}</div>
+                        <div><strong>Max EXT:</strong> {selectedSubjectData.maxEXT} (Min: {Math.ceil(selectedSubjectData.maxEXT * 0.4)})</div>
+                        <div><strong>Max INT:</strong> {selectedSubjectData.maxINT} (Min: {Math.ceil(selectedSubjectData.maxINT * 0.5)})</div>
+                        <div><strong>Total Students:</strong> {students.length}</div>
+                        <div><strong>Passing Rule:</strong> INT &ge; 50% &amp; EXT &ge; 40%</div>
+                        <div><strong>Date Generated:</strong> {new Date().toLocaleDateString()}</div>
+                    </div>
+
+                    {/* Student Marks Table - Preserves exact list and order as in Mark Entry */}
+                    <table className="w-full border-collapse border border-black text-xs">
+                        <thead>
+                            <tr className="border-b-2 border-black font-bold text-center bg-white">
+                                <th className="border border-black p-1.5 w-10">Sl No</th>
+                                <th className="border border-black p-1.5 w-24">Adm No</th>
+                                <th className="border border-black p-1.5 text-left">Student Name</th>
+                                <th className="border border-black p-1.5 w-20">EXT ({selectedSubjectData.maxEXT})</th>
+                                <th className="border border-black p-1.5 w-20">INT ({selectedSubjectData.maxINT})</th>
+                                <th className="border border-black p-1.5 w-16">Total</th>
+                                <th className="border border-black p-1.5 w-20">Status</th>
+                                <th className="border border-black p-1.5 w-28">Signature</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {students.map((student, idx) => {
+                                const studentMarks = marksData[student.id] || { int: '', ext: '' };
+                                const total = validationHelpers?.calculateTotal(studentMarks.int, studentMarks.ext) || '';
+                                const status = validationHelpers?.getStatus(studentMarks.int, studentMarks.ext) || 'Pending';
+
+                                return (
+                                    <tr key={student.id} className="border-b border-black text-center">
+                                        <td className="border border-black p-1 font-mono">{idx + 1}</td>
+                                        <td className="border border-black p-1 font-mono font-semibold">{student.adNo}</td>
+                                        <td className="border border-black p-1 text-left font-medium">{student.name}</td>
+                                        <td className="border border-black p-1 font-mono">{studentMarks.ext || ''}</td>
+                                        <td className="border border-black p-1 font-mono">{studentMarks.int || ''}</td>
+                                        <td className="border border-black p-1 font-mono font-bold">{studentMarks.int && studentMarks.ext ? total : ''}</td>
+                                        <td className="border border-black p-1 font-semibold">{status}</td>
+                                        <td className="border border-black p-1"></td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+
+                    {/* Footer Signatures */}
+                    <div className="mt-12 flex justify-between items-end text-xs pt-6">
+                        <div className="text-center w-48 border-t border-black pt-1">
+                            <p className="font-bold">Faculty Signature</p>
+                            <p className="text-[10px]">({selectedSubjectData.facultyName || 'Subject Teacher'})</p>
+                        </div>
+                        <div className="text-center w-48 border-t border-black pt-1">
+                            <p className="font-bold">Verified By</p>
+                            <p className="text-[10px]">(HOD / Coordinator)</p>
+                        </div>
+                        <div className="text-center w-48 border-t border-black pt-1">
+                            <p className="font-bold">Controller of Examinations</p>
+                            <p className="text-[10px]">(Seal & Signature)</p>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );
