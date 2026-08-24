@@ -563,9 +563,10 @@ export class DataService extends BaseDataService {
     }
 
     async getEnrolledStudentsForSubject(subjectId: string, termKey?: string): Promise<StudentRecord[]> {
+        const activeTerm = termKey || this.getCurrentTermKey();
         const [subject, allStudents] = await Promise.all([
-            this.academicService.getSubjectById(subjectId),
-            this.studentService.getAllStudents(termKey)
+            this.academicService.getSubjectById(subjectId, activeTerm),
+            this.studentService.getAllStudents(activeTerm)
         ]);
         
         if (!subject) return [];
@@ -576,10 +577,19 @@ export class DataService extends BaseDataService {
             return allStudents.filter(s => studentIds.includes(s.id));
         } else {
             // General: All students who were in the target classes at that time
-            const targetClasses = subject.targetClasses || [];
+            const rawTargetClasses = subject.targetClasses || [];
+            const expandedTargetClasses = new Set<string>();
+            rawTargetClasses.forEach(c => {
+                expandedTargetClasses.add(c);
+                expandedTargetClasses.add(this.getHistoricalClassName(activeTerm, c));
+                expandedTargetClasses.add(this.getDatabaseClassName(activeTerm, c));
+            });
+
             return allStudents.filter(s => {
-                // s.className is already resolved to the term's class in processStudentRecord
-                return targetClasses.includes(s.className || '');
+                const sClass = s.className || s.currentClass || '';
+                const histClass = this.getHistoricalClassName(activeTerm, sClass);
+                const dbClass = this.getDatabaseClassName(activeTerm, sClass);
+                return expandedTargetClasses.has(sClass) || expandedTargetClasses.has(histClass) || expandedTargetClasses.has(dbClass);
             });
         }
     }

@@ -141,11 +141,18 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             const currentSub = subjects.find(s => s.id === selectedSubject);
             const isCrossClass = currentSub?.subjectType === 'elective' && currentSub?.electiveType === 'cross-class';
 
-            // For intra-class electives and general/school subjects, only show students from selected class
+            // For intra-class electives and general/school subjects, match student class (with alias fallbacks)
             // For cross-class electives, show all enrolled regardless of class
             const filteredByClass = (subjectType === 'elective' && isCrossClass)
                 ? studentsToShow
-                : studentsToShow.filter(s => s.className === selectedClass);
+                : studentsToShow.filter(s => {
+                    const sClass = s.className || s.currentClass || '';
+                    const histClass = dataService.getHistoricalClassName(activeTerm, sClass);
+                    const dbClass = dataService.getDatabaseClassName(activeTerm, sClass);
+                    const selHist = dataService.getHistoricalClassName(activeTerm, selectedClass);
+                    const selDb = dataService.getDatabaseClassName(activeTerm, selectedClass);
+                    return sClass === selectedClass || histClass === selHist || dbClass === selDb || sClass === selDb || dbClass === selectedClass;
+                });
             
             if (!mounted) return;
             setStudents(filteredByClass);

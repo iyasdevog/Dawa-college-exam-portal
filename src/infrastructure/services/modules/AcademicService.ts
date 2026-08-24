@@ -596,7 +596,7 @@ export class AcademicService extends BaseDataService {
                 termData.performanceLevel = performanceLevel;
 
                 if (!termData.className) {
-                    termData.className = data.currentClass || data.className || 'Unknown';
+                    termData.className = this.getHistoricalClassName(activeTerm, data.currentClass || data.className || 'Unknown');
                     termData.semester = this.getLogicalSemester(termData.className, activeTerm.includes('Even') ? 'Even' : (activeTerm.includes('Bridge') ? 'Bridge' : 'Odd'));
                 }
 
@@ -1124,7 +1124,7 @@ export class AcademicService extends BaseDataService {
                 termData.performanceLevel = performanceLevel;
 
                 if (!termData.className) {
-                    termData.className = data.currentClass || data.className || 'Unknown';
+                    termData.className = this.getHistoricalClassName(activeTerm, data.currentClass || data.className || 'Unknown');
                     termData.semester = this.getLogicalSemester(termData.className, activeTerm.includes('Even') ? 'Even' : (activeTerm.includes('Bridge') ? 'Bridge' : 'Odd'));
                 }
 
