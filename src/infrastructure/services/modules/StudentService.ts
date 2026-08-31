@@ -429,11 +429,11 @@ export class StudentService extends BaseDataService {
 
     public async promoteStudents(studentIds: string[], targetClass: string, targetYear: string, targetSemester: 'Odd' | 'Even'): Promise<void> {
         try {
-            const batch = writeBatch(this.db);
             const termKey = `${targetYear}-${targetSemester}`;
 
+            // Phase 1: Resolve all student docs before batching (no async inside batch processor)
+            const resolvedOps: { ref: any; history: Record<string, any> }[] = [];
             for (const id of studentIds) {
-                const docRef = doc(this.db, this.studentsCollection, id);
                 const student = await this.getStudentById(id);
                 if (student) {
                     const academicHistory = { ...student.academicHistory };
@@ -446,13 +446,18 @@ export class StudentService extends BaseDataService {
                         rank: 0,
                         performanceLevel: 'Pending' as PerformanceLevel
                     };
-                    batch.update(docRef, {
-                        currentClass: targetClass,
-                        academicHistory
+                    resolvedOps.push({
+                        ref: doc(this.db, this.studentsCollection, id),
+                        history: academicHistory
                     });
                 }
             }
-            await batch.commit();
+
+            // Phase 2: Batched writes (safe 450-op chunks)
+            await this.runBatchedOperation(resolvedOps, (batch, op) => {
+                batch.update(op.ref, { currentClass: targetClass, academicHistory: op.history });
+            });
+
             this.invalidateCache();
         } catch (error) {
             console.error('Error promoting students:', error);

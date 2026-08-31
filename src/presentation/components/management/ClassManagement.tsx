@@ -18,6 +18,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     const [showPromoteForm, setShowPromoteForm] = useState(false);
     const [sourceClass, setSourceClass] = useState('');
     const [targetClass, setTargetClass] = useState('');
+    const [customTargetClass, setCustomTargetClass] = useState('');
     const [isPromoting, setIsPromoting] = useState(false);
     const [newClassName, setNewClassName] = useState('');
     const [editingClass, setEditingClass] = useState<string | null>(null);
@@ -27,21 +28,39 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     const [isOperating, setIsOperating] = useState(false);
     const [isReconciling, setIsReconciling] = useState(false);
     const [discoveredClasses, setDiscoveredClasses] = useState<string[]>([]);
+    const [historicalClassMap, setHistoricalClassMap] = useState<Record<string, string>>({});
 
     React.useEffect(() => {
         const loadSettings = async () => {
             const { dataService } = await import('../../../infrastructure/services/dataService');
             
-            // Also load discovered classes for the active term
+            // Load discovered classes for the active term
             const classes = await dataService.getClassesByTerm(activeTerm);
             setDiscoveredClasses(classes);
+
+            // Build alias mapping for active term
+            const map: Record<string, string> = {};
+            CLASSES.forEach(c => {
+                const hist = dataService.getHistoricalClassName(activeTerm, c);
+                const dbCls = dataService.getDatabaseClassName(activeTerm, c);
+                map[c] = hist;
+                map[hist] = c;
+                map[dbCls] = hist;
+            });
+            setHistoricalClassMap(map);
         };
         loadSettings();
     }, [students, activeTerm]);
 
     const getAllClasses = () => {
         const standardClasses = CLASSES.filter(c => !disabledClasses.includes(c));
-        return [...standardClasses, ...customClasses];
+        const cleanCustomClasses = customClasses.filter(c => 
+            c && 
+            !CLASSES.includes(c) && 
+            !['S1', 'S2', 'P1', 'P2', 'Bridge', 'Prep'].includes(c) &&
+            !disabledClasses.includes(c)
+        );
+        return Array.from(new Set([...standardClasses, ...cleanCustomClasses]));
     };
 
     const handleAddClass = () => {
@@ -125,25 +144,34 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     const handlePromoteStudentsClick = (className: string) => {
         setSourceClass(className);
         setTargetClass('');
+        setCustomTargetClass('');
         setShowPromoteForm(true);
     };
 
     const confirmPromotion = async () => {
-        if (!targetClass) {
-            alert('Please select a target class to promote students to.');
+        const finalTargetClass = targetClass === '__CUSTOM__' ? customTargetClass.trim() : targetClass;
+
+        if (!finalTargetClass) {
+            alert('Please select or enter a valid target class to promote students to.');
             return;
         }
 
-        if (!confirm(`Are you sure you want to promote ALL students from ${sourceClass} to ${targetClass}? This operation cannot be undone automatically.`)) return;
+        if (!confirm(`Are you sure you want to promote ALL students from ${sourceClass} to ${finalTargetClass}? This operation cannot be undone automatically.`)) return;
 
         try {
             setIsPromoting(true);
             const { dataService } = await import('../../../infrastructure/services/dataService');
             const settings = await dataService.getGlobalSettings();
             const termKey = `${settings.currentAcademicYear}-${settings.currentSemester}`;
+
+            // Save new custom class name to settings if custom
+            if (targetClass === '__CUSTOM__' && !getAllClasses().includes(finalTargetClass)) {
+                const updatedCustom = Array.from(new Set([...customClasses, finalTargetClass]));
+                await onUpdateCustomClasses(updatedCustom);
+            }
             
-            await dataService.promoteClass(sourceClass, targetClass, termKey);
-            alert(`Successfully promoted students from ${sourceClass} to ${targetClass}.`);
+            await dataService.promoteClass(sourceClass, finalTargetClass, termKey);
+            alert(`Successfully promoted students from ${sourceClass} to ${finalTargetClass}.`);
             setShowPromoteForm(false);
             onRefresh();
         } catch (error) {
@@ -208,15 +236,23 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
 
     // Card rendering implementation
     const renderClassCard = (className: string, isActive: boolean) => {
-        const classStudents = students.filter(s => s.className === className);
+        const histCls = historicalClassMap[className] || className;
+        
+        const classStudents = students.filter(s => {
+            const sClass = s.className;
+            const sCurrent = s.currentClass;
+            return sClass === className || sClass === histCls || sCurrent === className || sCurrent === histCls;
+        });
+
         const classStudentIds = new Set(classStudents.map(s => s.id));
 
         // Count all subjects that are "for" this class:
-        // 1. General/school subjects with this class in targetClasses
-        // 2. Electives with this class in targetClasses (intra-class)
+        // 1. General/school subjects with this class or alias in targetClasses
+        // 2. Electives with this class or alias in targetClasses (intra-class)
         // 3. Cross-class electives where at least one enrolled student belongs to this class
         const classSubjects = subjects.filter(s => {
-            const inTargetClasses = (s.targetClasses || []).includes(className);
+            const targetClasses = s.targetClasses || [];
+            const inTargetClasses = targetClasses.some(tc => tc === className || tc === histCls);
             if (inTargetClasses) return true;
             // Cross-class electives enrolled by students of this class
             if (s.subjectType === 'elective' && s.electiveType === 'cross-class') {
@@ -311,8 +347,12 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {(() => {
                     const allList = getAllClasses();
-                    const activeList = allList.filter(cls => discoveredClasses.includes(cls));
-                    const inactiveList = allList.filter(cls => !discoveredClasses.includes(cls));
+                    const isClassActive = (cls: string) => {
+                        const hist = historicalClassMap[cls] || cls;
+                        return discoveredClasses.includes(cls) || discoveredClasses.includes(hist);
+                    };
+                    const activeList = allList.filter(isClassActive);
+                    const inactiveList = allList.filter(cls => !isClassActive(cls));
 
                     return (
                         <>
@@ -485,8 +525,22 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
                                     {getAllClasses().filter(c => c !== sourceClass).map(c => (
                                         <option key={c} value={c}>{c}</option>
                                     ))}
+                                    <option value="__CUSTOM__">+ Create Custom / Bridge Class Name...</option>
                                 </select>
                             </div>
+                            {targetClass === '__CUSTOM__' && (
+                                <div className="animate-in fade-in zoom-in-95 duration-150">
+                                    <label className="block text-xs font-black text-purple-600 uppercase tracking-widest mb-2 ml-1">Custom Class Name</label>
+                                    <input 
+                                        type="text" 
+                                        value={customTargetClass}
+                                        onChange={(e) => setCustomTargetClass(e.target.value)}
+                                        placeholder="e.g. Bridge-1 or FS3-Bridge"
+                                        className="w-full p-4 bg-purple-50/50 border-2 border-purple-200 rounded-2xl text-slate-900 font-bold focus:border-purple-600 outline-none"
+                                        autoFocus
+                                    />
+                                </div>
+                            )}
                             <div className="flex gap-4 pt-2">
                                 <button onClick={() => setShowPromoteForm(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all">Cancel</button>
                                 <button onClick={confirmPromotion} className="flex-1 py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-all shadow-lg shadow-purple-200">Confirm</button>

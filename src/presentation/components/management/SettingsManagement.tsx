@@ -54,6 +54,8 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [wizardFacultyAssignments, setWizardFacultyAssignments] = useState<Record<string, string>>({});
     const [newClassName, setNewClassName] = useState('');
     const [showAddSubjectForm, setShowAddSubjectForm] = useState(false);
+    const [showSimilarSubjectModal, setShowSimilarSubjectModal] = useState(false);
+    const [similarSubjectPairs, setSimilarSubjectPairs] = useState<{ sub1: string; sub2: string }[]>([]);
     const [newSubjectDataInput, setNewSubjectDataInput] = useState({
         name: '',
         facultyName: '',
@@ -264,8 +266,31 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         }
     };
 
-    const handleStartNewSemester = async () => {
+    const handleStartNewSemester = async (skipSimilarCheck = false) => {
         if (!currentSettings) return;
+
+        // Check for similar/duplicate subject names before finalizing launch
+        if (!skipSimilarCheck && selectedSubjectIds.length > 1) {
+            const selectedSubs = allExistingSubjects.filter(s => selectedSubjectIds.includes(s.id));
+            const pairs: { sub1: string; sub2: string }[] = [];
+            const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            for (let i = 0; i < selectedSubs.length; i++) {
+                for (let j = i + 1; j < selectedSubs.length; j++) {
+                    const n1 = normalize(selectedSubs[i].name);
+                    const n2 = normalize(selectedSubs[j].name);
+                    if (n1 === n2 || (n1.length > 4 && n2.length > 4 && (n1.includes(n2) || n2.includes(n1)))) {
+                        pairs.push({ sub1: selectedSubs[i].name, sub2: selectedSubs[j].name });
+                    }
+                }
+            }
+
+            if (pairs.length > 0) {
+                setSimilarSubjectPairs(pairs);
+                setShowSimilarSubjectModal(true);
+                return;
+            }
+        }
 
         try {
             setIsOperating(true);
@@ -310,7 +335,15 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                 semesters: [...existingSemesters.filter((s:any) => s.termKey !== targetTermKey), newSemesterConfig]
             });
 
-            // 2. Process Subjects (Carry-over/Select) with Dynamic Faculty
+            // 2. Stamp any unbound legacy subjects with prior academic year so they don't leak into new year
+            const priorYear = currentSettings.currentAcademicYear || '2025-2026';
+            for (const sub of allExistingSubjects) {
+                if (!sub.academicYear) {
+                    await dataService.updateSubject(sub.id, { academicYear: priorYear });
+                }
+            }
+
+            // 2.1 Process Subjects (Carry-over/Select) with Dynamic Faculty
             if (selectedSubjectIds.length > 0) {
                 const subjectsToClone = allExistingSubjects.filter(s => selectedSubjectIds.includes(s.id));
                 
@@ -330,19 +363,24 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                             enrolledStudents: sub.subjectType === 'elective' ? [] : (subData.enrolledStudents || []),
                             academicYear: derivedYear,
                             activeSemester: newSemesterData.semester as 'Odd' | 'Even',
-                            facultyName: assignedFaculty // Using the dynamic name from wizard
+                            facultyName: assignedFaculty // Using the dynamic name from wizard (empty if cleared)
                         });
                     }
                 }
             }
 
-            // 2.3 Save custom classes to LocalStorage so they appear
+            // 2.3 Save truly custom classes to LocalStorage (filtering out standard system classes)
+            const systemNames = [...SYSTEM_CLASSES, 'S1', 'S2', 'P1', 'P2', 'Bridge', 'Prep'];
             const existingCustomStr = localStorage.getItem('customClasses');
             let existingCustom: string[] = [];
             if (existingCustomStr) {
                 try { existingCustom = JSON.parse(existingCustomStr); } catch (e) {}
             }
-            const mergedCustom = Array.from(new Set([...existingCustom, ...selectedClasses]));
+            const customSelectedClasses = selectedClasses.filter(c => !systemNames.includes(c));
+            const mergedCustom = Array.from(new Set([
+                ...existingCustom.filter(c => !systemNames.includes(c)), 
+                ...customSelectedClasses
+            ]));
             localStorage.setItem('customClasses', JSON.stringify(mergedCustom));
 
             // 3. Clone Active Students into the new Semester
@@ -634,6 +672,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                     try {
                                         setIsOperating(true);
                                         const facultyRes = await dataService.normalizeAllFacultyNames();
+                                        const orphanRes = await dataService.repairOrphanedSubjects();
                                         const statusRes = await dataService.recalculateAllMarkStatuses(activeTerm);
                                         const totalsRes = await dataService.recalculateAllStudentTotals(activeTerm);
                                         const perfRes = await dataService.recalculateAllStudentPerformanceLevels(activeTerm);
@@ -641,6 +680,9 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
 
                                         let message = `✅ Optimization Complete!\n\n`;
                                         message += `- Standardized ${facultyRes} faculty names\n`;
+                                        if (orphanRes.fixed > 0) {
+                                            message += `- Repaired ${orphanRes.fixed} orphaned subjects (re-linked to ${orphanRes.targetYear})\n`;
+                                        }
                                         message += `- Updated ${statusRes.updated} mark statuses\n`;
                                         message += `- Recalculated ${totalsRes.updated} student record totals\n`;
                                         message += `- Applied new grading logic to ${perfRes.updated} students\n`;
@@ -1738,6 +1780,60 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                     )}
                                 </div>
                             </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Similar Subjects Warning Modal */}
+            {showSimilarSubjectModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl w-full max-w-lg p-8 shadow-2xl space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-4 text-amber-600">
+                            <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-2xl shadow-inner">
+                                <i className="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-slate-900">Similar Subjects Detected</h3>
+                                <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mt-0.5">Potential Duplicates Warning</p>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-slate-600 font-bold leading-relaxed">
+                            The system noticed subject names with similar or matching titles carrying over to the new semester. Please review them to avoid duplicate subject records:
+                        </p>
+
+                        <div className="space-y-2 max-h-48 overflow-y-auto p-4 bg-amber-50/60 rounded-2xl border border-amber-200/60">
+                            {similarSubjectPairs.map((pair, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs font-bold bg-white p-3 rounded-xl border border-amber-100 shadow-sm">
+                                    <span className="text-slate-800">{pair.sub1}</span>
+                                    <i className="fa-solid fa-arrows-left-right text-amber-400 mx-2 text-[10px]"></i>
+                                    <span className="text-slate-800">{pair.sub2}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                            <button
+                                onClick={() => {
+                                    setShowSimilarSubjectModal(false);
+                                    setWizardStep(3);
+                                }}
+                                className="flex-1 py-3.5 px-4 bg-purple-100 text-purple-800 rounded-2xl font-bold text-xs hover:bg-purple-200 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-pen-to-square"></i>
+                                Review & Fix in Step 3
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowSimilarSubjectModal(false);
+                                    handleStartNewSemester(true);
+                                }}
+                                className="flex-1 py-3.5 px-4 bg-amber-600 text-white rounded-2xl font-bold text-xs hover:bg-amber-700 transition-all shadow-lg shadow-amber-200 flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-solid fa-arrow-right"></i>
+                                Ignore & Continue
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -97,10 +97,28 @@ export class AcademicService extends BaseDataService {
         return { grandTotal, average, performanceLevel };
     }
 
+    /**
+     * Cache for filtered subjects, keyed by termKey.
+     */
+    private filteredSubjectsCache: Map<string, SubjectConfig[]> = new Map();
+
+    /**
+     * Override base invalidateCache to also clear the per-term subject cache.
+     */
+    public override invalidateCache(): void {
+        super.invalidateCache();
+        this.filteredSubjectsCache.clear();
+    }
+
     public async getAllSubjects(termKey?: string, className?: string): Promise<SubjectConfig[]> {
         try {
             const activeTerm = termKey || this.getCurrentTermKey();
             
+            // Return from cache if valid — keyed by term only (className filters are cheap)
+            if (this.isCacheValid() && !className && this.filteredSubjectsCache.has(activeTerm)) {
+                return this.filteredSubjectsCache.get(activeTerm)!;
+            }
+
             // Robust parsing: Semester is the part after the LAST hyphen
             const lastHyphenIndex = activeTerm.lastIndexOf('-');
             let targetYear = '';
@@ -122,36 +140,43 @@ export class AcademicService extends BaseDataService {
                 .map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig))
                 .filter(subject => !subject.isDeleted);
             
-            return allSubjects
-                .filter(subject => {
-                    const subjectYear = subject.academicYear;
-                    
-                    // Use strict matching for year to prevent "2026" matching "2025-2026"
-                    const isYearMatch = !subjectYear || subjectYear === targetYear;
+            // Determine the canonical fallback year for subjects with no academicYear field.
+            // Use the configured available years to pick the right default.
+            const availableYears: string[] = BaseDataService.currentGlobalSettings?.availableYears || ['2025-2026'];
+            const defaultYear = availableYears[0] || '2025-2026';
 
-                    if (subject.activeSemester && subject.activeSemester !== 'Both' && subject.activeSemester !== targetSem) {
-                        return false;
-                    }
-                    
-                    if (subjectYear && !isYearMatch) {
-                        return false;
-                    }
+            const semOk = (subject: SubjectConfig) => {
+                if (!targetSem) return true;
+                if (!subject.activeSemester || subject.activeSemester === 'Both') return true;
+                return subject.activeSemester === targetSem;
+            };
 
-                    if (!subjectYear) {
-                        const hasYearSpecificVersion = allSubjects.some(s => 
-                            s.name.trim().toLowerCase() === subject.name.trim().toLowerCase() && 
-                            s.academicYear && (s.academicYear === targetYear || targetYear.includes(s.academicYear || '')) &&
-                            (s.activeSemester === 'Both' || s.activeSemester === targetSem)
-                        );
-                        if (hasYearSpecificVersion) return false;
-                    }
-                    
-                    return true;
-                })
-                .map(subject => ({
-                    ...subject,
-                    targetClasses: (subject.targetClasses || []).map(c => this.getHistoricalClassName(activeTerm, this.getDatabaseClassName(activeTerm, c)))
-                }));
+            // Primary filter: subjects whose academicYear matches targetYear,
+            // OR subjects with no academicYear that belong to the default/legacy year (when it equals targetYear).
+            let result = allSubjects.filter(subject => {
+                const subjectYear = subject.academicYear || defaultYear;
+                if (targetYear && subjectYear !== targetYear) return false;
+                return semOk(subject);
+            });
+
+            // Safety net: if the strict filter returns nothing, try subjects with blank/missing
+            // academicYear regardless of year — this recovers from orphaned subjects after
+            // a test academic year is created and then deleted.
+            if (result.length === 0 && targetYear) {
+                result = allSubjects.filter(s => (!s.academicYear || s.academicYear === '') && semOk(s));
+            }
+
+            const mapped = result.map(subject => ({
+                ...subject,
+                targetClasses: (subject.targetClasses || []).map(c => this.getHistoricalClassName(activeTerm, this.getDatabaseClassName(activeTerm, c)))
+            }));
+
+            // Only cache full-term queries (not className-specific ones)
+            if (!className) {
+                this.filteredSubjectsCache.set(activeTerm, mapped);
+                if (!this.isCacheValid()) this.cacheTimestamp = Date.now();
+            }
+            return mapped;
         } catch (error) {
             console.error('Error fetching all subjects:', error);
             return [];
@@ -162,15 +187,7 @@ export class AcademicService extends BaseDataService {
      * Gets all subjects without any term-based filtering for global discovery.
      */
     public async getRawSubjects(): Promise<SubjectConfig[]> {
-        try {
-            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
-            return snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig))
-                .filter(subject => !subject.isDeleted);
-        } catch (error) {
-            console.error('Error in getRawSubjects:', error);
-            return [];
-        }
+        return this.getRawAllSubjects().then(all => all.filter(s => !s.isDeleted));
     }
 
     public async getSubjectById(id: string, termKey?: string): Promise<SubjectConfig | null> {
@@ -195,6 +212,7 @@ export class AcademicService extends BaseDataService {
 
     public async addSubject(subject: Omit<SubjectConfig, 'id'>): Promise<string> {
         try {
+            const activeTerm = this.getCurrentTermKey();
             const normalizedSubject = {
                 name: subject.name || '',
                 arabicName: subject.arabicName || '',
@@ -202,9 +220,10 @@ export class AcademicService extends BaseDataService {
                 maxEXT: Number(subject.maxEXT) || 0,
                 passingTotal: Number(subject.passingTotal) || 0,
                 facultyName: subject.facultyName ? normalizeName(subject.facultyName) : '',
-                targetClasses: (subject.targetClasses || []).map(c => this.getDatabaseClassName('2025-2026-Odd', c)),
+                // Use the current activeTerm for class name normalization, not a hardcoded term
+                targetClasses: (subject.targetClasses || []).map(c => this.getDatabaseClassName(activeTerm, c)),
                 subjectType: subject.subjectType || 'general',
-                // Only set electiveType for elective/school_subject types; use null for general  
+                // Only set electiveType for elective/school_subject types; null for general
                 electiveType: (subject.subjectType === 'elective' || subject.subjectType === 'school_subject')
                     ? (subject.electiveType || 'intra-class')
                     : null,
@@ -341,9 +360,11 @@ export class AcademicService extends BaseDataService {
             if (updates.facultyName !== undefined) {
                 normalizedUpdates.facultyName = updates.facultyName ? normalizeName(updates.facultyName) : '';
             }
-            
+
             if (updates.targetClasses !== undefined) {
-                normalizedUpdates.targetClasses = (updates.targetClasses || []).map(c => this.getDatabaseClassName('2025-2026-Odd', c));
+                // Use activeTerm for correct class name normalization (not hardcoded old term)
+                const activeTerm = this.getCurrentTermKey();
+                normalizedUpdates.targetClasses = (updates.targetClasses || []).map(c => this.getDatabaseClassName(activeTerm, c));
             }
             
             // Critical safeguard: ensure mandatory numeric fields don't become NaN
@@ -636,11 +657,80 @@ export class AcademicService extends BaseDataService {
     }
 
     /**
-     * Internal raw fetch for all subjects, bypassing filters.
+     * Internal raw fetch for ALL subjects (including deleted), bypassing term filters.
+     * Results are NOT cached to ensure callers get the full picture for recalculation.
      */
     public async getRawAllSubjects(): Promise<SubjectConfig[]> {
-        const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectConfig));
+        try {
+            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+            return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SubjectConfig));
+        } catch (error) {
+            console.error('Error fetching raw subjects:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Repair orphaned subjects — subjects whose academicYear field was set to a year
+     * that no longer exists in the configured available years (e.g. after a test year
+     * was created then deleted). Re-tags them to the current active academic year so
+     * they become visible again in the subject catalog and class reports.
+     *
+     * @returns Summary: how many subjects were scanned, fixed, and which years were found
+     */
+    public async repairOrphanedSubjects(targetYear?: string): Promise<{
+        scanned: number;
+        fixed: number;
+        orphanYears: string[];
+        targetYear: string;
+    }> {
+        try {
+            const settings = BaseDataService.currentGlobalSettings;
+            const activeYear = targetYear ||
+                (settings?.currentAcademicYear) ||
+                '2025-2026';
+
+            const configuredYears = new Set<string>(
+                (settings?.availableYears || [activeYear])
+            );
+
+            // Always treat blank/missing academicYear as belonging to the FIRST configured year
+            const allSubjects = await this.getRawAllSubjects();
+            const orphans: { id: string; currentYear: string }[] = [];
+
+            for (const s of allSubjects) {
+                if (s.isDeleted) continue; // Skip soft-deleted subjects
+                const subjectYear = s.academicYear || '';
+                // A subject is orphaned if its year is set to something real but not configured
+                if (subjectYear && !configuredYears.has(subjectYear)) {
+                    orphans.push({ id: s.id, currentYear: subjectYear });
+                }
+            }
+
+            const orphanYears = [...new Set(orphans.map(o => o.currentYear))];
+
+            if (orphans.length === 0) {
+                return { scanned: allSubjects.length, fixed: 0, orphanYears: [], targetYear: activeYear };
+            }
+
+            // Batch update orphaned subjects to use the active/target year
+            await this.runBatchedOperation(orphans, (batch, orphan) => {
+                const ref = doc(this.db, this.subjectsCollection, orphan.id);
+                batch.update(ref, { academicYear: activeYear });
+            });
+
+            this.invalidateCache();
+
+            return {
+                scanned: allSubjects.length,
+                fixed: orphans.length,
+                orphanYears,
+                targetYear: activeYear
+            };
+        } catch (error) {
+            console.error('Error repairing orphaned subjects:', error);
+            throw error;
+        }
     }
 
     /**
@@ -844,11 +934,6 @@ export class AcademicService extends BaseDataService {
 
 
 
-
-
-
-
-
     public async exportMarksToExcel(className: string, termKey: string): Promise<void> {
         try {
             const studentsSnapshot = await getDocs(collection(this.db, this.studentsCollection));
@@ -1023,33 +1108,17 @@ export class AcademicService extends BaseDataService {
     }
 
     public async clearSubjectINTMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
-        const activeTerm = termKey || this.getCurrentTermKey();
-        const studentSnaps = await Promise.all(studentIds.map(id => getDoc(doc(this.db, this.studentsCollection, id))));
-        for (let i = 0; i < studentSnaps.length; i++) {
-            const studentSnap = studentSnaps[i];
-            const id = studentIds[i];
-            if (studentSnap.exists()) {
-                const marks = studentSnap.data().academicHistory?.[activeTerm]?.marks?.[subjectId];
-                if (marks) {
-                    await this.updateMarks(id, subjectId, { ...marks, int: 0 }, termKey);
-                }
-            }
-        }
+        if (!studentIds.length) return;
+        // Use bulkUpdateMarks for efficient batched writes instead of sequential per-student awaits
+        const updates = studentIds.map(studentId => ({ studentId, subjectId, marks: { int: 0 as number } }));
+        return this.bulkUpdateMarks(updates, termKey);
     }
 
     public async clearSubjectEXTMarks(subjectId: string, studentIds: string[], termKey?: string): Promise<void> {
-        const activeTerm = termKey || this.getCurrentTermKey();
-        const studentSnaps = await Promise.all(studentIds.map(id => getDoc(doc(this.db, this.studentsCollection, id))));
-        for (let i = 0; i < studentSnaps.length; i++) {
-            const studentSnap = studentSnaps[i];
-            const id = studentIds[i];
-            if (studentSnap.exists()) {
-                const marks = studentSnap.data().academicHistory?.[activeTerm]?.marks?.[subjectId];
-                if (marks) {
-                    await this.updateMarks(id, subjectId, { ...marks, ext: 0 }, termKey);
-                }
-            }
-        }
+        if (!studentIds.length) return;
+        // Use bulkUpdateMarks for efficient batched writes instead of sequential per-student awaits
+        const updates = studentIds.map(studentId => ({ studentId, subjectId, marks: { ext: 0 as number } }));
+        return this.bulkUpdateMarks(updates, termKey);
     }
 
     public async bulkUpdateMarks(updates: Array<{ studentId: string, subjectId: string, marks: Partial<SubjectMarks>, maxINT?: number, maxEXT?: number }>, termKey?: string): Promise<void> {
@@ -1068,79 +1137,90 @@ export class AcademicService extends BaseDataService {
         const studentIds = Array.from(studentUpdates.keys());
         const studentSnaps = await Promise.all(studentIds.map(id => getDoc(doc(this.db, this.studentsCollection, id))));
 
-        const batch = writeBatch(this.db);
+        // Process in Firestore-safe batches of 400 writes per batch
+        const SAFE_BATCH_SIZE = 400;
+        let batch = writeBatch(this.db);
         let count = 0;
+
+        const flushBatch = async () => {
+            if (count > 0) {
+                await batch.commit();
+                batch = writeBatch(this.db); // IMPORTANT: create a fresh batch after commit
+                count = 0;
+            }
+        };
 
         for (let i = 0; i < studentSnaps.length; i++) {
             const studentSnap = studentSnaps[i];
             const studentId = studentIds[i];
             const studentMarks = studentUpdates.get(studentId) || [];
             
-            if (studentSnap.exists()) {
-                const data = studentSnap.data();
-                const history = data.academicHistory || {};
-                const termData = history[activeTerm] || { marks: {}, subjectMetadata: {} };
-                const currentMarks = { ...termData.marks };
-                const subjectMetadata = { ...termData.subjectMetadata };
+            if (!studentSnap.exists()) continue;
 
-                studentMarks.forEach(u => {
-                    const existingMark = currentMarks[u.subjectId] || {};
-                    const newInt = u.marks.int !== undefined ? (u.marks.int === 'A' ? 'A' : Number(u.marks.int) || 0) : (existingMark.int || 0);
-                    const newExt = u.marks.ext !== undefined ? (u.marks.ext === 'A' ? 'A' : Number(u.marks.ext) || 0) : (existingMark.ext || 0);
-                    
-                    const subConfig = allSubjects.find(s => s.id === u.subjectId);
-                    const mINT = u.maxINT ?? subConfig?.maxINT ?? 30;
-                    const mEXT = u.maxEXT ?? subConfig?.maxEXT ?? 70;
+            const data = studentSnap.data();
+            const history = data.academicHistory || {};
+            const termData = history[activeTerm] || { marks: {}, subjectMetadata: {} };
+            const currentMarks = { ...termData.marks };
+            const subjectMetadata = { ...termData.subjectMetadata };
 
-                    const updatedMark: SubjectMarks = {
-                        ...existingMark,
-                        int: newInt,
-                        ext: newExt,
-                        total: (newInt === 'A' ? 0 : newInt) + (newExt === 'A' ? 0 : newExt),
-                        status: (newInt !== 'A' && newExt !== 'A' && newInt >= Math.ceil(mINT * 0.5) && newExt >= Math.ceil(mEXT * 0.4)) ? 'Passed' : 'Failed',
-                        updatedAt: Date.now()
-                    };
-                    currentMarks[u.subjectId] = updatedMark;
-                    
-                    if (subConfig && !subjectMetadata[u.subjectId]) {
-                        subjectMetadata[u.subjectId] = {
-                            name: subConfig.name,
-                            arabicName: subConfig.arabicName,
-                            maxINT: subConfig.maxINT,
-                            maxEXT: subConfig.maxEXT,
-                            passingTotal: subConfig.passingTotal,
-                            facultyName: subConfig.facultyName,
-                            subjectType: subConfig.subjectType
-                        };
-                    }
-                });
+            // Build subject ID lookup map for O(1) lookups
+            const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
 
-                const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
-
-                termData.marks = currentMarks;
-                termData.subjectMetadata = subjectMetadata;
-                termData.grandTotal = grandTotal;
-                termData.average = average;
-                termData.performanceLevel = performanceLevel;
-
-                if (!termData.className) {
-                    termData.className = this.getHistoricalClassName(activeTerm, data.currentClass || data.className || 'Unknown');
-                    termData.semester = this.getLogicalSemester(termData.className, activeTerm.includes('Even') ? 'Even' : (activeTerm.includes('Bridge') ? 'Bridge' : 'Odd'));
-                }
-
-                history[activeTerm] = termData;
-
-                batch.update(studentSnap.ref, { academicHistory: history });
-                count++;
+            for (const u of studentMarks) {
+                const existingMark = currentMarks[u.subjectId] || {};
+                const newInt = u.marks.int !== undefined ? (u.marks.int === 'A' ? 'A' : Number(u.marks.int) || 0) : (existingMark.int || 0);
+                const newExt = u.marks.ext !== undefined ? (u.marks.ext === 'A' ? 'A' : Number(u.marks.ext) || 0) : (existingMark.ext || 0);
                 
-                if (count >= 400) { // Safety limit for single batch
-                    await batch.commit();
-                    count = 0;
+                const subConfig = subjectMap.get(u.subjectId);
+                const mINT = u.maxINT ?? subConfig?.maxINT ?? 30;
+                const mEXT = u.maxEXT ?? subConfig?.maxEXT ?? 70;
+
+                const updatedMark: SubjectMarks = {
+                    ...existingMark,
+                    int: newInt,
+                    ext: newExt,
+                    total: (newInt === 'A' ? 0 : newInt) + (newExt === 'A' ? 0 : newExt),
+                    status: (newInt !== 'A' && newExt !== 'A' && newInt >= Math.ceil(mINT * 0.5) && newExt >= Math.ceil(mEXT * 0.4)) ? 'Passed' : 'Failed',
+                    updatedAt: Date.now()
+                };
+                currentMarks[u.subjectId] = updatedMark;
+                
+                if (subConfig && !subjectMetadata[u.subjectId]) {
+                    subjectMetadata[u.subjectId] = {
+                        name: subConfig.name,
+                        arabicName: subConfig.arabicName,
+                        maxINT: subConfig.maxINT,
+                        maxEXT: subConfig.maxEXT,
+                        passingTotal: subConfig.passingTotal,
+                        facultyName: subConfig.facultyName,
+                        subjectType: subConfig.subjectType
+                    };
                 }
+            }
+
+            const { grandTotal, average, performanceLevel } = this.calculateTermMetrics(currentMarks, allSubjects);
+
+            termData.marks = currentMarks;
+            termData.subjectMetadata = subjectMetadata;
+            termData.grandTotal = grandTotal;
+            termData.average = average;
+            termData.performanceLevel = performanceLevel;
+
+            if (!termData.className) {
+                termData.className = this.getHistoricalClassName(activeTerm, data.currentClass || data.className || 'Unknown');
+                termData.semester = this.getLogicalSemester(termData.className, activeTerm.includes('Even') ? 'Even' : (activeTerm.includes('Bridge') ? 'Bridge' : 'Odd'));
+            }
+
+            history[activeTerm] = termData;
+            batch.update(studentSnap.ref, { academicHistory: history });
+            count++;
+
+            if (count >= SAFE_BATCH_SIZE) {
+                await flushBatch();
             }
         }
 
-        if (count > 0) await batch.commit();
+        await flushBatch();
         this.invalidateCache();
     }
 

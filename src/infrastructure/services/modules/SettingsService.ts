@@ -13,7 +13,10 @@ import {
     StudentRecord,
     ClassReleaseSettings
 } from '../../../domain/entities/types';
+import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
 import { StudentService } from './StudentService';
+
+const SYSTEM_AND_HISTORICAL = [...SYSTEM_CLASSES, 'S1', 'S2', 'P1', 'P2', 'Bridge', 'Prep'];
 
 export class SettingsService extends BaseDataService {
     constructor(private studentService: StudentService) {
@@ -26,6 +29,9 @@ export class SettingsService extends BaseDataService {
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const data = docSnap.data() as any;
+                const rawCustom: string[] = data.customClasses || [];
+                const cleanCustom = rawCustom.filter(c => c && !SYSTEM_AND_HISTORICAL.includes(c));
+
                 BaseDataService.currentGlobalSettings = {
                     currentAcademicYear: data.currentAcademicYear || '2025-2026',
                     currentSemester: data.currentSemester || 'Odd',
@@ -34,7 +40,7 @@ export class SettingsService extends BaseDataService {
                     attendanceEndDate: data.attendanceEndDate || '2026-08-31',
                     minAttendancePercentage: data.minAttendancePercentage || 75,
                     semesters: data.semesters || [],
-                    customClasses: data.customClasses || [],
+                    customClasses: cleanCustom,
                     disabledClasses: data.disabledClasses || [],
                     institutionName: data.institutionName || 'Islamic Dawa Academy',
                     contactEmail: data.contactEmail || 'examinations@aicdawacollege.edu.in',
@@ -232,15 +238,17 @@ export class SettingsService extends BaseDataService {
                 });
 
                 Array.from(activeCustomClasses).forEach(cls => {
-                    if (!existingCustomClasses.includes(cls) && cls !== 'All') {
+                    if (!existingCustomClasses.includes(cls) && cls !== 'All' && !SYSTEM_AND_HISTORICAL.includes(cls)) {
                         existingCustomClasses.push(cls);
                         hasChanges = true;
                     }
                 });
                 
-                if (hasChanges) {
+                const cleanCustom = existingCustomClasses.filter(c => c && !SYSTEM_AND_HISTORICAL.includes(c));
+
+                if (hasChanges || cleanCustom.length !== existingCustomClasses.length) {
                     await updateDoc(adminSettingsRef, {
-                        customClasses: Array.from(new Set(existingCustomClasses)),
+                        customClasses: Array.from(new Set(cleanCustom)),
                         disabledClasses: Array.from(new Set(existingDisabledClasses))
                     });
                     console.log('SettingsService: Self-Healed stranded custom/disabled classes');

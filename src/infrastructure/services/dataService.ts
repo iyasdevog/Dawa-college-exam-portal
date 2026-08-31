@@ -487,6 +487,10 @@ export class DataService extends BaseDataService {
         return this.settingsService.syncAllAvailableYears();
     }
 
+    async repairOrphanedSubjects(targetYear?: string): Promise<{ scanned: number; fixed: number; orphanYears: string[]; targetYear: string }> {
+        return this.academicService.repairOrphanedSubjects(targetYear);
+    }
+
 
     async cleanAndSyncApplications(targetTermKey: string): Promise<{ synced: number; duplicatesDeleted: number; rejectedDeleted: number; notRegistered: number }> {
         return this.administrativeService.cleanAndSyncApplications(targetTermKey);

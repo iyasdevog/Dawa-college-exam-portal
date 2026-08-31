@@ -253,7 +253,8 @@ export abstract class BaseDataService {
         this.subjectsCache = null;
         this.supplementaryCache.clear();
         this.cacheTimestamp = 0;
-        BaseDataService.currentGlobalSettings = null;
+        // NOTE: Do NOT null out currentGlobalSettings here; that causes a full reload
+        // on every cache invalidation. Settings are only refreshed on explicit user action.
     }
 
     protected getMarkValue(mark: any): number {
@@ -294,7 +295,7 @@ export abstract class BaseDataService {
             throw new Error("Cannot run batched operation: Database not initialized.");
         }
         let totalProcessed = 0;
-        const BATCH_SIZE = 500;
+        const BATCH_SIZE = 450; // Stay safely under Firestore's 500-op limit
 
         for (let i = 0; i < items.length; i += BATCH_SIZE) {
             const batch = writeBatch(this.db);

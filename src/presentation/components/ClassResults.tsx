@@ -123,7 +123,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             setStudents(rankedStudents);
 
             // Filter subjects for this class - include electives by enrollment OR by marks presence
-            const potentialSubjects = subjects.filter(s => {
+            let potentialSubjects = subjects.filter(s => {
                 if ((s.targetClasses || []).includes(selectedClass)) return true;
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
                 if (s.subjectType === 'elective' && classStudents.some(cs => {
@@ -133,6 +133,42 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 })) return true;
                 return false;
             });
+
+            // ──────────────────────────────────────────────────────────────────────
+            // FALLBACK: If the live subject catalog returned nothing (e.g. after a test
+            // academic year was created and deleted, leaving subjects orphaned), reconstruct
+            // synthetic SubjectConfig objects from the subjectMetadata snapshots that were
+            // saved inside each student's academic history when marks were entered.
+            // This ensures subject columns always appear as long as student marks exist.
+            // ──────────────────────────────────────────────────────────────────────
+            if (potentialSubjects.length === 0) {
+                const snapshotMap = new Map<string, any>();
+                classStudents.forEach(cs => {
+                    const termData = cs.academicHistory?.[activeTerm];
+                    if (!termData?.marks) return;
+                    // Use subjectMetadata first (richest), fall back to subject name from marks key
+                    Object.keys(termData.marks).forEach(subId => {
+                        if (!snapshotMap.has(subId)) {
+                            const snapshot = termData.subjectMetadata?.[subId];
+                            snapshotMap.set(subId, {
+                                id: subId,
+                                name: snapshot?.name || subId,
+                                arabicName: snapshot?.arabicName || '',
+                                maxINT: snapshot?.maxINT ?? 30,
+                                maxEXT: snapshot?.maxEXT ?? 70,
+                                passingTotal: snapshot?.passingTotal ?? 40,
+                                facultyName: snapshot?.facultyName || '',
+                                subjectType: snapshot?.subjectType || 'general',
+                                targetClasses: [selectedClass],
+                                activeSemester: 'Both',
+                                enrolledStudents: [],
+                                academicYear: '' // synthetic
+                            } as SubjectConfig);
+                        }
+                    });
+                });
+                potentialSubjects = Array.from(snapshotMap.values());
+            }
 
             // Hide subjects that have no marks entered for ANY student in this view
             const filteredSubjects = potentialSubjects.filter(s => {

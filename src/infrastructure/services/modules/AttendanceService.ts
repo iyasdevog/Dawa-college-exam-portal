@@ -43,6 +43,7 @@ import { AcademicService } from './AcademicService';
 export class AttendanceService extends BaseDataService {
     private recordsCache: Map<string, AttendanceRecord[]> = new Map();
     private cacheExpiry = 1000 * 60 * 5; // 5 minutes cache
+    private lastFetchTime = 0;
 
     constructor(private academicService: AcademicService) {
         super();
@@ -324,8 +325,7 @@ export class AttendanceService extends BaseDataService {
             
             // Return cached data if valid
             const cached = this.recordsCache.get(activeTerm);
-            if (cached && (Date.now() - (this as any).lastFetchTime < this.cacheExpiry)) {
-                console.log(`[AttendanceService] Returning cached records for ${activeTerm}`);
+            if (cached && (Date.now() - this.lastFetchTime < this.cacheExpiry)) {
                 return cached;
             }
 
@@ -389,7 +389,7 @@ export class AttendanceService extends BaseDataService {
             });
 
             this.recordsCache.set(activeTerm, results);
-            (this as any).lastFetchTime = Date.now();
+            this.lastFetchTime = Date.now();
             return results;
         } catch (error) {
             console.error('Error fetching all attendance records:', error);
@@ -625,7 +625,7 @@ export class AttendanceService extends BaseDataService {
 
             // Completely clear cache so fresh data is loaded on next fetch
             this.recordsCache.clear();
-            (this as any).lastFetchTime = 0;
+            this.lastFetchTime = 0;
         } catch (error) {
             console.error('Error recovering absences:', error);
             throw error;

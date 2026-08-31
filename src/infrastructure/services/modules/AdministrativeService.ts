@@ -251,8 +251,8 @@ export class AdministrativeService extends BaseDataService {
             subjectsSnap.docs.forEach(doc => {
                 const s = doc.data() as SubjectConfig;
                 if (!s || !s.targetClasses) return;
-                const isYearMatch = !s.academicYear || s.academicYear === targetYear ||
-                    (targetYear && (s.academicYear.includes(targetYear) || targetYear.includes(s.academicYear)));
+                const sYear = s.academicYear || '2025-2026';
+                const isYearMatch = targetYear && sYear === targetYear;
                 if (isYearMatch && (!s.activeSemester || s.activeSemester === targetSem || s.activeSemester === 'Both')) {
                     s.targetClasses.forEach(cls => { 
                         if (cls) {
@@ -1594,7 +1594,8 @@ export class AdministrativeService extends BaseDataService {
         let classesNormalized = 0;
         if (settingsSnap.exists()) {
             const customClasses: string[] = settingsSnap.data().customClasses || [];
-            const normalized = Array.from(new Set(customClasses.map(c => c.trim()))).filter(c => !SYSTEM_CLASSES.includes(c));
+            const systemAndHist = [...SYSTEM_CLASSES, 'S1', 'S2', 'P1', 'P2', 'Bridge', 'Prep'];
+            const normalized = Array.from(new Set(customClasses.map(c => c.trim()))).filter(c => c && !systemAndHist.includes(c));
             if (JSON.stringify(normalized) !== JSON.stringify(customClasses)) {
                 await updateDoc(settingsRef, { customClasses: normalized });
                 classesNormalized = customClasses.length - normalized.length;

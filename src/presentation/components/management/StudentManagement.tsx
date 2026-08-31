@@ -87,6 +87,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
     const [promotionStage, setPromotionStage] = useState({
         fromClass: '',
         toClass: '',
+        customToClass: '',
         isPromoting: false
     });
 
@@ -354,29 +355,39 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
     };
 
     const handlePromoteClass = async () => {
-        if (!promotionStage.fromClass || !promotionStage.toClass) {
-            alert('Please select both source and target classes');
+        const targetClass = promotionStage.toClass === '__CUSTOM__' ? promotionStage.customToClass.trim() : promotionStage.toClass;
+
+        if (!promotionStage.fromClass || !targetClass) {
+            alert('Please select or enter both source and target classes');
             return;
         }
         
-        if (promotionStage.fromClass === promotionStage.toClass) {
+        if (promotionStage.fromClass === targetClass) {
             alert('Source and target classes cannot be the same');
             return;
         }
 
-        const confirmMsg = `Are you sure you want to promote ALL active students from ${promotionStage.fromClass} to ${promotionStage.toClass}? \n\nThis will update their current class and create new academic records for the active term.`;
+        const confirmMsg = `Are you sure you want to promote ALL active students from ${promotionStage.fromClass} to ${targetClass}? \n\nThis will update their current class and create new academic records for the active term.`;
         if (!confirm(confirmMsg)) return;
 
         try {
             setPromotionStage(prev => ({ ...prev, isPromoting: true }));
             const settings = await dataService.getGlobalSettings();
             const termKey = `${settings.currentAcademicYear}-${settings.currentSemester}`;
+
+            // Save custom class if new
+            if (promotionStage.toClass === '__CUSTOM__' && targetClass) {
+                const currentCustom: string[] = settings.customClasses || [];
+                if (!currentCustom.includes(targetClass)) {
+                    await dataService.updateGlobalSettings({ customClasses: [...currentCustom, targetClass] });
+                }
+            }
             
-            await dataService.promoteClass(promotionStage.fromClass, promotionStage.toClass, termKey);
+            await dataService.promoteClass(promotionStage.fromClass, targetClass, termKey);
             await onRefresh();
-            alert(`Promotion from ${promotionStage.fromClass} to ${promotionStage.toClass} completed successfully!`);
+            alert(`Promotion from ${promotionStage.fromClass} to ${targetClass} completed successfully!`);
             setShowPromoteModal(false);
-            setPromotionStage({ fromClass: '', toClass: '', isPromoting: false });
+            setPromotionStage({ fromClass: '', toClass: '', customToClass: '', isPromoting: false });
         } catch (error) {
             console.error('Promotion failed:', error);
             alert(`Promotion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -748,7 +759,20 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
                                         {availableClasses.map(cls => (
                                             <option key={cls} value={cls}>{cls}</option>
                                         ))}
+                                        <option value="__CUSTOM__">+ Create Custom / Bridge Class Name...</option>
                                     </select>
+                                    {promotionStage.toClass === '__CUSTOM__' && (
+                                        <div className="mt-3 animate-in fade-in zoom-in-95 duration-150">
+                                            <input 
+                                                type="text"
+                                                value={promotionStage.customToClass}
+                                                onChange={(e) => setPromotionStage(prev => ({ ...prev, customToClass: e.target.value }))}
+                                                placeholder="e.g. Bridge-1 or FS3-Bridge"
+                                                className="w-full p-4 bg-amber-50/50 border-2 border-amber-200 rounded-2xl text-slate-900 font-bold focus:border-amber-500 outline-none text-sm"
+                                                autoFocus
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

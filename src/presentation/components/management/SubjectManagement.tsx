@@ -220,6 +220,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         loadClasses();
     }, [activeTerm]);
 
+    const currentYear = activeTerm ? activeTerm.split('-').slice(0, 2).join('-') : '2025-2026';
+
     const handleAddSubject = () => {
         setEditingSubject(null);
         setSubjectForm({
@@ -235,7 +237,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             electiveType: 'intra-class',
             activeSemester: 'Both',
             enrolledStudents: [],
-            academicYear: ''
+            academicYear: currentYear
         });
         setIsCreatingNewSubject(false);
         setIsCreatingNewFaculty(false);
@@ -337,7 +339,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                     : null,
                 enrolledStudents: subjectForm.enrolledStudents || [],
                 activeSemester: subjectForm.activeSemester || 'Both',
-                academicYear: subjectForm.academicYear || ''
+                academicYear: subjectForm.academicYear || currentYear
             };
 
             if (editingSubject) {

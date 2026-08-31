@@ -291,9 +291,19 @@ export class SupplementaryService extends BaseDataService {
         }>
     ): Promise<void> {
         try {
-            const batch = writeBatch(this.db);
             const allSubs = await this.academicService.getRawAllSubjects();
+            
+            const SAFE_BATCH_SIZE = 400;
+            let batch = writeBatch(this.db);
             let count = 0;
+
+            const flushBatch = async () => {
+                if (count > 0) {
+                    await batch.commit();
+                    batch = writeBatch(this.db); // Create a fresh batch after every flush
+                    count = 0;
+                }
+            };
 
             for (const update of updates) {
                 const docRef = doc(this.db, this.supplementaryExamsCollection, update.examId);
@@ -320,7 +330,6 @@ export class SupplementaryService extends BaseDataService {
                         const student = await this.studentService.getStudentById(exam.studentId);
                         
                         if (student && student.academicHistory) {
-                            // Find the matching term key case-insensitively
                             const historyKeys = Object.keys(student.academicHistory);
                             const targetTermNormalized = targetTerm.toLowerCase().trim();
                             const actualTermKey = historyKeys.find(k => k.toLowerCase().trim() === targetTermNormalized);
@@ -331,69 +340,66 @@ export class SupplementaryService extends BaseDataService {
                                 
                                 const oldMark = updatedMarks[exam.subjectId] || {};
                             
-                            let finalInt = update.marks.int;
-                            let finalExt = update.marks.ext;
-                            let finalTotal = update.marks.total;
+                                let finalInt = update.marks.int;
+                                let finalExt = update.marks.ext;
+                                let finalTotal = update.marks.total;
 
-                            if (exam.applicationType === 'improvement') {
-                                const prevInt = parseInt(((oldMark as any).int as any) || '0', 10);
-                                const prevExt = parseInt(((oldMark as any).ext as any) || '0', 10);
-                                const currentInt = typeof update.marks.int === 'number' ? update.marks.int : 0;
-                                const currentExt = typeof update.marks.ext === 'number' ? update.marks.ext : 0;
-                                
-                                finalInt = Math.max(prevInt, currentInt);
-                                finalExt = Math.max(prevExt, currentExt);
-                                finalTotal = finalInt + finalExt;
-                            }
-                            
-                            updatedMarks[exam.subjectId] = {
-                                ...oldMark,
-                                ...update.marks,
-                                int: finalInt,
-                                ext: finalExt,
-                                total: finalTotal,
-                                status: update.marks.status,
-                                isSupplementary: true,
-                                supplementaryYear: exam.supplementaryYear
-                            };
-
-                            const { grandTotal, average, performanceLevel } = this.academicService.calculateTermMetrics(updatedMarks, allSubs);
-                            
-                            const studentDocRef = doc(this.db, this.studentsCollection, exam.studentId);
-                            batch.update(studentDocRef, {
-                                [`academicHistory.${actualTermKey}.marks`]: updatedMarks,
-                                [`academicHistory.${actualTermKey}.grandTotal`]: grandTotal,
-                                [`academicHistory.${actualTermKey}.average`]: average,
-                                [`academicHistory.${actualTermKey}.performanceLevel`]: performanceLevel
-                            });
-                            count++;
-
-                            this.studentService.updateStudentInCache(exam.studentId, {
-                                academicHistory: {
-                                    ...student.academicHistory,
-                                    [actualTermKey]: {
-                                        ...history,
-                                        marks: updatedMarks,
-                                        grandTotal,
-                                        average,
-                                        performanceLevel
-                                    }
+                                if (exam.applicationType === 'improvement') {
+                                    const prevInt = parseInt(((oldMark as any).int as any) || '0', 10);
+                                    const prevExt = parseInt(((oldMark as any).ext as any) || '0', 10);
+                                    const currentInt = typeof update.marks.int === 'number' ? update.marks.int : 0;
+                                    const currentExt = typeof update.marks.ext === 'number' ? update.marks.ext : 0;
+                                    
+                                    finalInt = Math.max(prevInt, currentInt);
+                                    finalExt = Math.max(prevExt, currentExt);
+                                    finalTotal = finalInt + finalExt;
                                 }
-                            });
+                                
+                                updatedMarks[exam.subjectId] = {
+                                    ...oldMark,
+                                    ...update.marks,
+                                    int: finalInt,
+                                    ext: finalExt,
+                                    total: finalTotal,
+                                    status: update.marks.status,
+                                    isSupplementary: true,
+                                    supplementaryYear: exam.supplementaryYear
+                                };
+
+                                const { grandTotal, average, performanceLevel } = this.academicService.calculateTermMetrics(updatedMarks, allSubs);
+                                
+                                const studentDocRef = doc(this.db, this.studentsCollection, exam.studentId);
+                                batch.update(studentDocRef, {
+                                    [`academicHistory.${actualTermKey}.marks`]: updatedMarks,
+                                    [`academicHistory.${actualTermKey}.grandTotal`]: grandTotal,
+                                    [`academicHistory.${actualTermKey}.average`]: average,
+                                    [`academicHistory.${actualTermKey}.performanceLevel`]: performanceLevel
+                                });
+                                count++;
+
+                                this.studentService.updateStudentInCache(exam.studentId, {
+                                    academicHistory: {
+                                        ...student.academicHistory,
+                                        [actualTermKey]: {
+                                            ...history,
+                                            marks: updatedMarks,
+                                            grandTotal,
+                                            average,
+                                            performanceLevel
+                                        }
+                                    }
+                                });
+                            }
                         }
                     }
                 }
-            }
 
-            if (count >= 400) {
-                    await batch.commit();
-                    count = 0;
+                if (count >= SAFE_BATCH_SIZE) {
+                    await flushBatch();
                 }
             }
 
-            if (count > 0) {
-                await batch.commit();
-            }
+            await flushBatch();
         } catch (error) {
             console.error('Error in bulk update supplementary marks:', error);
             throw error;
