@@ -36,7 +36,7 @@ export class DataService extends BaseDataService {
     constructor() {
         super();
         this.studentService = new StudentService();
-        this.academicService = new AcademicService();
+        this.academicService = new AcademicService(this.studentService);
         this.supplementaryService = new SupplementaryService(this.studentService, this.academicService);
         this.settingsService = new SettingsService(this.studentService);
         this.attendanceService = new AttendanceService(this.academicService);

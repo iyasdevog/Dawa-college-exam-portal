@@ -11,6 +11,7 @@ import {
     writeBatch
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
+import { StudentService } from './StudentService';
 import { 
     SubjectConfig, 
     SubjectMarks, 
@@ -25,6 +26,13 @@ import { normalizeName } from '../formatUtils';
 import { ExcelUtils } from '../../utils/excelUtils';
 
 export class AcademicService extends BaseDataService {
+    private studentService?: StudentService;
+
+    constructor(studentService?: StudentService) {
+        super();
+        this.studentService = studentService;
+    }
+
     /**
      * Calculates the performance level (O, A+, etc.) based on subject marks.
      */
@@ -108,6 +116,7 @@ export class AcademicService extends BaseDataService {
     public override invalidateCache(): void {
         super.invalidateCache();
         this.filteredSubjectsCache.clear();
+        this.studentService?.invalidateCache();
     }
 
     public async getAllSubjects(termKey?: string, className?: string): Promise<SubjectConfig[]> {

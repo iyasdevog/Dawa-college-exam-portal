@@ -283,17 +283,18 @@ export const useFacultyEntry = ({
 
             for (const student of targetStudents) {
                 const marks = marksData[student.id];
-                if (marks?.ext) {
+                if (marks?.ext !== undefined && marks?.ext !== '') {
                     updates.push({
                         studentId: student.id,
                         subjectId: selectedSubject,
-                        ext: marks.ext === 'A' ? 'A' : parseInt(marks.ext)
+                        ext: marks.ext === 'A' ? 'A' : parseInt(marks.ext, 10)
                     });
                 }
             }
 
             if (isOnline && updates.length > 0) {
                 await dataService.bulkUpdateEXTMarks(updates, activeTerm);
+                updates.forEach(u => deleteDraft(u.studentId, selectedSubject, activeTerm));
                 await loadStudentsByClass();
             }
             if (studentId) alert('EXT marks saved!');
@@ -302,7 +303,7 @@ export const useFacultyEntry = ({
         } finally {
             setOperationLoading({ type: null });
         }
-    }, [selectedSubject, students, marksData, activeTerm, isOnline, loadStudentsByClass]);
+    }, [selectedSubject, students, marksData, activeTerm, isOnline, loadStudentsByClass, deleteDraft]);
 
     const handleSaveINTMarks = useCallback(async (studentId?: string) => {
         if (!selectedSubject) return;
@@ -314,8 +315,8 @@ export const useFacultyEntry = ({
 
             for (const student of targetStudents) {
                 const marks = marksData[student.id];
-                if (marks?.int) {
-                    let intToSave: number | 'A' = marks.int === 'A' ? 'A' : parseInt(marks.int);
+                if (marks?.int !== undefined && marks?.int !== '') {
+                    let intToSave: number | 'A' = marks.int === 'A' ? 'A' : parseInt(marks.int, 10);
                     updates.push({
                         studentId: student.id,
                         subjectId: selectedSubject,
@@ -326,6 +327,7 @@ export const useFacultyEntry = ({
 
             if (isOnline && updates.length > 0) {
                 await dataService.bulkUpdateMarks(updates, activeTerm);
+                updates.forEach(u => deleteDraft(u.studentId, selectedSubject, activeTerm));
                 await loadStudentsByClass();
             }
             if (studentId) alert('INT marks saved!');
@@ -334,7 +336,7 @@ export const useFacultyEntry = ({
         } finally {
             setOperationLoading({ type: null });
         }
-    }, [selectedSubject, students, marksData, subjects, activeTerm, isOnline, loadStudentsByClass]);
+    }, [selectedSubject, students, marksData, subjects, activeTerm, isOnline, loadStudentsByClass, deleteDraft]);
 
     const handleClearINTMarks = useCallback(async () => {
         if (!selectedSubject) return;
