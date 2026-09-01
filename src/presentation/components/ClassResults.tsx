@@ -199,8 +199,21 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             setStudents(rankedStudents);
 
             // Filter subjects for this class - include electives by enrollment OR by marks presence
+            const matchClassAlias = (clsList: string[], cls: string) => {
+                if (!clsList || !cls) return false;
+                if (clsList.includes(cls)) return true;
+                const aliases: Record<string, string[]> = {
+                    'S1': ['FS2'], 'FS2': ['S1'],
+                    'S2': ['FS3'], 'FS3': ['S2'],
+                    'P1': ['HS2'], 'HS2': ['P1'],
+                    'P2': ['HS3'], 'HS3': ['P2']
+                };
+                const equivalent = aliases[cls] || [];
+                return equivalent.some(alias => clsList.includes(alias));
+            };
+
             let potentialSubjects = subjects.filter(s => {
-                if ((s.targetClasses || []).includes(selectedClass)) return true;
+                if (matchClassAlias(s.targetClasses || [], selectedClass)) return true;
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
                 if (s.subjectType === 'elective' && classStudents.some(cs => {
                     const termData = getStudentTermData(cs, activeTerm, selectedClass);
@@ -261,12 +274,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 });
             });
 
-            // Deduplicate subjects by normalized name (case-insensitive & trimmed)
+            // Deduplicate subjects by type + normalized name (case-insensitive & trimmed)
             const uniqueSubjectsMap = new Map<string, SubjectConfig>();
             filteredSubjects.forEach(s => {
-                const normName = s.name.trim().toLowerCase();
-                if (!uniqueSubjectsMap.has(normName)) {
-                    uniqueSubjectsMap.set(normName, s);
+                const key = `${s.subjectType || 'general'}_${s.name.trim().toLowerCase()}`;
+                if (!uniqueSubjectsMap.has(key)) {
+                    uniqueSubjectsMap.set(key, s);
                 }
             });
             const classSubjects = Array.from(uniqueSubjectsMap.values());
