@@ -73,25 +73,28 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     };
 
     const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
-        const exact = student.academicHistory?.[targetTerm];
-        if (exact?.marks && Object.keys(exact.marks).length > 0) return exact;
+        let termRec: any = null;
 
-        if (student.academicHistory) {
+        const exact = student.academicHistory?.[targetTerm];
+        if (exact?.marks && Object.keys(exact.marks).length > 0) {
+            termRec = exact;
+        } else if (student.academicHistory) {
             const classMatchKey = Object.keys(student.academicHistory).find(k => {
                 const h = student.academicHistory![k];
                 return (h.className === targetClass || !targetClass) && h.marks && Object.keys(h.marks).length > 0;
             });
-            if (classMatchKey) return student.academicHistory[classMatchKey];
-
-            const anyMatchKey = Object.keys(student.academicHistory).find(k => {
-                const h = student.academicHistory![k];
-                return h.marks && Object.keys(h.marks).length > 0;
-            });
-            if (anyMatchKey) return student.academicHistory[anyMatchKey];
+            if (classMatchKey) termRec = student.academicHistory[classMatchKey];
+            else {
+                const anyMatchKey = Object.keys(student.academicHistory).find(k => {
+                    const h = student.academicHistory![k];
+                    return h.marks && Object.keys(h.marks).length > 0;
+                });
+                if (anyMatchKey) termRec = student.academicHistory[anyMatchKey];
+            }
         }
 
-        if (student.marks && Object.keys(student.marks).length > 0) {
-            return {
+        if (!termRec && student.marks && Object.keys(student.marks).length > 0) {
+            termRec = {
                 className: student.currentClass || student.className || targetClass,
                 semester: student.semester || 'Odd',
                 marks: student.marks,
@@ -103,14 +106,52 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             };
         }
 
-        return exact || {
-            className: student.currentClass || student.className || targetClass,
-            semester: 'Odd',
-            marks: {},
-            grandTotal: 0,
-            average: 0,
-            rank: 0,
-            performanceLevel: 'Not Assessed'
+        if (!termRec) {
+            termRec = exact || {
+                className: student.currentClass || student.className || targetClass,
+                semester: 'Odd',
+                marks: {},
+                grandTotal: 0,
+                average: 0,
+                rank: 0,
+                performanceLevel: 'Not Assessed'
+            };
+        }
+
+        const marksObj = termRec.marks || {};
+        const markEntries = Object.values(marksObj) as any[];
+        let totalSum = termRec.grandTotal || 0;
+        let avgVal = termRec.average || 0;
+        let perfLevel = termRec.performanceLevel || 'Not Assessed';
+
+        if (markEntries.length > 0) {
+            let calculatedSum = 0;
+            let failCount = 0;
+            let validSubjectCount = 0;
+
+            markEntries.forEach(m => {
+                const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
+                calculatedSum += subTotal;
+                if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validSubjectCount++;
+                if (m.status === 'Failed') failCount++;
+            });
+
+            if (totalSum === 0 && calculatedSum > 0) {
+                totalSum = calculatedSum;
+            }
+            if (avgVal === 0 && validSubjectCount > 0 && calculatedSum > 0) {
+                avgVal = Math.round((calculatedSum / validSubjectCount) * 10) / 10;
+            }
+            if ((perfLevel === 'Not Assessed' || perfLevel === 'Pending') && calculatedSum > 0) {
+                perfLevel = failCount > 0 ? 'Failed' : 'Passed';
+            }
+        }
+
+        return {
+            ...termRec,
+            grandTotal: totalSum,
+            average: avgVal,
+            performanceLevel: perfLevel
         };
     };
 

@@ -528,9 +528,8 @@ export class StudentService extends BaseDataService {
                 // Current semester: include if current or primary matches
                 return s.currentClass === className || s.className === className;
             } else {
-                // Historical semester: ONLY include if they were in this class AT THAT TIME
-                // className at this point is already resolved to termData.className in processStudentRecord
-                return s.className === className;
+                const termClass = s.academicHistory?.[activeTerm]?.className;
+                return s.className === className || s.currentClass === className || termClass === className;
             }
         });
     }

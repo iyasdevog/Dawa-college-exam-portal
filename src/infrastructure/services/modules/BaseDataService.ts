@@ -215,22 +215,40 @@ export abstract class BaseDataService {
             performanceLevel: 'Pending' as PerformanceLevel
         };
 
+        let grandTotal = currentTotals.grandTotal || 0;
+        let average = currentTotals.average || 0;
+        let performanceLevel = currentTotals.performanceLevel || ('Pending' as PerformanceLevel);
+
+        if (rawMarks && Object.keys(rawMarks).length > 0) {
+            const markEntries = Object.values(rawMarks) as any[];
+            let calculatedSum = 0;
+            let failCount = 0;
+            let validCount = 0;
+
+            markEntries.forEach(m => {
+                const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
+                calculatedSum += subTotal;
+                if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validCount++;
+                if (m.status === 'Failed') failCount++;
+            });
+
+            if (grandTotal === 0 && calculatedSum > 0) {
+                grandTotal = calculatedSum;
+            }
+            if (average === 0 && validCount > 0 && calculatedSum > 0) {
+                average = Math.round((calculatedSum / validCount) * 10) / 10;
+            }
+            if ((performanceLevel === 'Pending' || performanceLevel === 'Not Assessed') && calculatedSum > 0) {
+                performanceLevel = failCount > 0 ? 'Failed' : 'Passed';
+            }
+        }
+
         // Strict class name resolution: If we are looking for a historical term, 
-        // we should NOT fallback to currentClass if the history entry exists but is incomplete.
-        // However, if the history entry is entirely missing, we might still want the fallback 
-        // for "legacy" students who haven't been migrated yet (handled by the migration logic above).
+        // fallback to currentClass if termData.className is not explicitly defined.
         let displayClassName = termData?.className;
         
-        // Only fallback to currentClass if this IS the current term or if no history exists at all
         if (!displayClassName) {
-            const isCurrentTerm = currentTermKey === this.getCurrentTermKey();
-            if (isCurrentTerm || !termData) {
-                displayClassName = currentClass;
-            } else {
-                // For historical terms WITH data but NO className, we mark it as Unknown
-                // to prevent promoted classes (like HS1) from appearing in old reports (like S2).
-                displayClassName = 'Unknown';
-            }
+            displayClassName = currentClass || 'Unknown';
         }
         
         const normalizedClassName = this.getHistoricalClassName(currentTermKey, displayClassName);
@@ -245,10 +263,10 @@ export abstract class BaseDataService {
             semester: this.getLogicalSemester(normalizedClassName, (currentTermKey.split('-').length === 3 
                 ? currentTermKey.split('-')[2] as 'Odd' | 'Even' | 'Bridge'
                 : currentTermKey.split('-')[1] as 'Odd' | 'Even' | 'Bridge')),
-            grandTotal: currentTotals.grandTotal,
-            average: currentTotals.average,
-            rank: currentTotals.rank,
-            performanceLevel: currentTotals.performanceLevel as PerformanceLevel
+            grandTotal,
+            average,
+            performanceLevel,
+            rank: currentTotals.rank || 0
         } as StudentRecord;
     }
 
