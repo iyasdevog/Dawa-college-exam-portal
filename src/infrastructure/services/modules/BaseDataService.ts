@@ -186,15 +186,26 @@ export abstract class BaseDataService {
         // 2. Normalize and calculate data for the REQUESTED term
         const isLegacyTermMatch = (data.termKey === currentTermKey) || (!data.termKey && currentTermKey === '2025-2026-Odd');
 
-        const termData = academicHistory[currentTermKey] || (isLegacyTermMatch && data.marks && Object.keys(data.marks).length > 0 ? {
-            className: currentClass,
-            semester: data.semester || (currentTermKey.includes('Odd') ? 'Odd' : 'Even'),
-            marks: data.marks,
-            grandTotal: data.grandTotal || 0,
-            average: data.average || 0,
-            rank: data.rank || 0,
-            performanceLevel: data.performanceLevel || 'Pending'
-        } : undefined);
+        // Only trust the history entry as the termData if it actually HAS marks.
+        // Auto-initialization writes empty { marks: {} } entries that must not shadow legacy marks.
+        const historyEntry = academicHistory[currentTermKey];
+        const historyEntryHasMarks = historyEntry?.marks && Object.keys(historyEntry.marks).length > 0;
+
+        const termData = historyEntryHasMarks
+            ? historyEntry
+            : (isLegacyTermMatch && data.marks && Object.keys(data.marks).length > 0
+                ? {
+                    // Preserve className/rank from the empty history entry if available
+                    className: historyEntry?.className || currentClass,
+                    semester: historyEntry?.semester || data.semester || (currentTermKey.includes('Odd') ? 'Odd' : 'Even'),
+                    marks: data.marks,
+                    grandTotal: data.grandTotal || 0,
+                    average: data.average || 0,
+                    rank: historyEntry?.rank || data.rank || 0,
+                    performanceLevel: data.performanceLevel || 'Pending'
+                }
+                : historyEntry  // Fall back to the entry itself (may be empty, for metadata like className)
+            );
         const rawMarks = termData?.marks || {};
 
         const normalizedMarks: Record<string, SubjectMarks> = {};

@@ -74,19 +74,25 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     };
 
     const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
-        let termRec: any = student.academicHistory?.[targetTerm];
+        // Only use the history entry if it ACTUALLY has marks.
+        // Auto-initialization creates empty { marks: {} } entries which must NOT block legacy fallback.
+        const historyEntry = student.academicHistory?.[targetTerm];
+        const historyHasMarks = historyEntry?.marks && Object.keys(historyEntry.marks).length > 0;
+        let termRec: any = historyHasMarks ? historyEntry : null;
 
-        // Fall back to top-level marks ONLY if this student's legacy term matches targetTerm
+        // Fall back to top-level marks when the history entry is empty/missing.
+        // For legacy students: marks live at the top-level with an optional termKey.
         if (!termRec) {
             const isLegacyTermMatch = (student as any).termKey === targetTerm || (!(student as any).termKey && targetTerm === '2025-2026-Odd');
             if (isLegacyTermMatch && student.marks && Object.keys(student.marks).length > 0) {
                 termRec = {
-                    className: student.currentClass || student.className || targetClass,
-                    semester: student.semester || (targetTerm.includes('Odd') ? 'Odd' : 'Even'),
+                    // Prefer the stored className from history (even if empty marks), then currentClass
+                    className: historyEntry?.className || student.currentClass || student.className || targetClass,
+                    semester: historyEntry?.semester || student.semester || (targetTerm.includes('Odd') ? 'Odd' : 'Even'),
                     marks: student.marks,
                     grandTotal: student.grandTotal || 0,
                     average: student.average || 0,
-                    rank: student.rank || 0,
+                    rank: historyEntry?.rank || student.rank || 0,
                     performanceLevel: student.performanceLevel || 'Not Assessed',
                     subjectMetadata: (student as any).subjectMetadata
                 };

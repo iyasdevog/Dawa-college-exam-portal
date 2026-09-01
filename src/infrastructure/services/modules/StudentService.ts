@@ -524,25 +524,26 @@ export class StudentService extends BaseDataService {
         const isCurrentTerm = activeTerm === this.getCurrentTermKey();
 
         return students.filter(s => {
-            const historyItem = s.academicHistory?.[activeTerm];
-            if (historyItem) {
-                if (historyItem.className) {
-                    return historyItem.className === className;
-                }
-                if (s.className && s.className !== 'Unknown') {
-                    return s.className === className;
-                }
-            }
+            // For historical terms: check if the student was in this class DURING that term.
+            // We intentionally do NOT use s.currentClass for historical terms — that would mix
+            // students who have since been promoted into a different class.
+            const historyClass = s.academicHistory?.[activeTerm]?.className;
 
-            if (isCurrentTerm) {
-                return s.currentClass === className || s.className === className;
-            } else {
-                const legacyTermMatches = (s as any).termKey === activeTerm || (!(s as any).termKey && activeTerm === '2025-2026-Odd');
-                if (legacyTermMatches) {
-                    return s.currentClass === className || s.className === className;
-                }
+            if (!isCurrentTerm) {
+                // 1. Prefer the explicit className stored in the history entry
+                if (historyClass) return historyClass === className;
+                // 2. Fall back to the processed className (processStudentRecord resolves it term-aware)
+                //    Avoid 'Unknown' — those students have no data for this term
+                if (s.className && s.className !== 'Unknown') return s.className === className;
+                // 3. For legacy students whose termKey matches this historical term
+                const isLegacy = (s as any).termKey === activeTerm || (!(s as any).termKey && activeTerm === '2025-2026-Odd');
+                if (isLegacy) return s.currentClass === className || s.className === className;
                 return false;
             }
+
+            // For the current term: also allow matching by currentClass
+            if (historyClass) return historyClass === className;
+            return s.currentClass === className || s.className === className;
         });
     }
 

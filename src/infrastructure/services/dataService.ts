@@ -140,6 +140,10 @@ export class DataService extends BaseDataService {
         return this.migrationService.initializeNewSemester(fromTermKey, toTermKey);
     }
 
+    async migrateLegacyStudentMarks(): Promise<{ migrated: number; skipped: number; errors: number; details: string[] }> {
+        return this.migrationService.migrateLegacyStudentMarks();
+    }
+
     // --- Academic Domain ---
     async getAllSubjects(termKey?: string): Promise<SubjectConfig[]> {
         return this.academicService.getAllSubjects(termKey);

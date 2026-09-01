@@ -27,6 +27,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     const [renameMode, setRenameMode] = useState<'global' | 'forward'>('forward');
     const [isOperating, setIsOperating] = useState(false);
     const [isReconciling, setIsReconciling] = useState(false);
+    const [isMigratingLegacy, setIsMigratingLegacy] = useState(false);
     const [discoveredClasses, setDiscoveredClasses] = useState<string[]>([]);
     const [historicalClassMap, setHistoricalClassMap] = useState<Record<string, string>>({});
 
@@ -234,6 +235,26 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
         }
     };
 
+    const handleMigrateLegacyMarks = async () => {
+        const confirmMsg = `⚠️ ONE-TIME LEGACY MARKS MIGRATION\n\nThis will scan all student records in Firestore and copy top-level legacy marks into academicHistory[term].\n\n- Historical classes before promotion (e.g. D2 vs D3) are preserved.\n- Empty history entries created during semester init are updated with actual marks.\n- No data will be deleted or overwritten.\n\nProceed with migration?`;
+
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            setIsMigratingLegacy(true);
+            const { dataService } = await import('../../../infrastructure/services/dataService');
+            const result = await dataService.migrateLegacyStudentMarks();
+
+            alert(`✅ Migration Completed!\n\nMigrated: ${result.migrated} students\nSkipped (already up to date): ${result.skipped} students\nErrors: ${result.errors}\n\nDetails:\n` + result.details.slice(0, 10).join('\n'));
+            onRefresh();
+        } catch (error) {
+            console.error('Migration error:', error);
+            alert('Failed to migrate legacy marks.');
+        } finally {
+            setIsMigratingLegacy(false);
+        }
+    };
+
     // Card rendering implementation
     const renderClassCard = (className: string, isActive: boolean) => {
         const histCls = historicalClassMap[className] || className;
@@ -413,6 +434,34 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
 
 
             {/* Maintenance & Tools Section */}
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 mt-8 space-y-4">
+                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <i className="fa-solid fa-wrench text-amber-500"></i>
+                    Data Maintenance & Audit Tools
+                </h3>
+                <p className="text-xs text-slate-500">
+                    Use these administrative tools to reconcile class identities or permanently migrate legacy student mark structures into academic history without affecting historical semester accuracy or student promotions.
+                </p>
+                <div className="flex flex-wrap gap-3 pt-2">
+                    <button
+                        onClick={handleReconcileClasses}
+                        disabled={isReconciling}
+                        className="px-4 py-2.5 bg-amber-500 text-white rounded-xl font-bold text-xs hover:bg-amber-600 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                    >
+                        <i className={`fa-solid ${isReconciling ? 'fa-spinner fa-spin' : 'fa-arrows-rotate'}`}></i>
+                        <span>{isReconciling ? 'Reconciling...' : 'Run Class Reconciliation Audit'}</span>
+                    </button>
+
+                    <button
+                        onClick={handleMigrateLegacyMarks}
+                        disabled={isMigratingLegacy}
+                        className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                    >
+                        <i className={`fa-solid ${isMigratingLegacy ? 'fa-spinner fa-spin' : 'fa-database'}`}></i>
+                        <span>{isMigratingLegacy ? 'Migrating Legacy Marks...' : 'Migrate Legacy Marks to Academic History'}</span>
+                    </button>
+                </div>
+            </div>
 
 
             {/* Modals ... */}
