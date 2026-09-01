@@ -139,103 +139,101 @@ export class SemesterMigrationService extends BaseDataService {
         try {
             const snapshot = await getDocs(collection(this.db, this.studentsCollection));
 
-            // Collect students that need migration
-            const toMigrate: Array<{ docRef: any; data: any; legacyTerm: string }> = [];
+            const toMigrate: Array<{ docRef: any; data: any; legacyTerm: string; updatedHistory: Record<string, any> }> = [];
 
             snapshot.docs.forEach(docSnap => {
                 const data = docSnap.data();
-
-                // Only process students with top-level marks (legacy format)
-                if (!data.marks || Object.keys(data.marks).length === 0) {
-                    result.skipped++;
-                    return;
-                }
-
-                // Determine which term this student's legacy marks belong to
+                let needsUpdate = false;
+                const academicHistory = { ...(data.academicHistory || {}) };
                 const legacyTerm: string = data.termKey || '2025-2026-Odd';
-                const existingHistory = data.academicHistory?.[legacyTerm];
-                const historyHasMarks = existingHistory?.marks && Object.keys(existingHistory.marks).length > 0;
 
-                if (historyHasMarks) {
-                    // Already migrated — history has real marks
-                    result.skipped++;
-                    return;
+                // 1. Permanently normalize classNames across ALL term entries in academicHistory (e.g. FS2 -> S1 in Odd terms)
+                Object.keys(academicHistory).forEach(termKey => {
+                    const entry = academicHistory[termKey];
+                    if (entry && entry.className) {
+                        const normalizedCls = this.getHistoricalClassName(termKey, entry.className);
+                        if (normalizedCls !== entry.className) {
+                            academicHistory[termKey] = { ...entry, className: normalizedCls };
+                            needsUpdate = true;
+                        }
+                    }
+                });
+
+                // 2. Populate legacy top-level marks into academicHistory[legacyTerm] if missing
+                if (data.marks && Object.keys(data.marks).length > 0) {
+                    const existingHistoryEntry = academicHistory[legacyTerm] || {};
+                    const historyHasMarks = existingHistoryEntry.marks && Object.keys(existingHistoryEntry.marks).length > 0;
+
+                    if (!historyHasMarks) {
+                        const semesterType = legacyTerm.endsWith('-Odd') ? 'Odd' : 'Even';
+                        const rawClassName = existingHistoryEntry.className || data.currentClass || data.className || 'Unknown';
+                        const resolvedClassName = this.getHistoricalClassName(legacyTerm, rawClassName);
+
+                        // Calculate totals from marks if grandTotal is 0
+                        const marks: Record<string, any> = data.marks || {};
+                        let calculatedTotal = data.grandTotal || 0;
+                        let calculatedAverage = data.average || 0;
+                        let failCount = 0;
+                        let validCount = 0;
+
+                        if (calculatedTotal === 0) {
+                            let sum = 0;
+                            Object.values(marks).forEach((m: any) => {
+                                const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
+                                sum += subTotal;
+                                if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validCount++;
+                                if (m.status === 'Failed') failCount++;
+                            });
+                            calculatedTotal = sum;
+                            calculatedAverage = validCount > 0 ? Math.round((sum / validCount) * 10) / 10 : 0;
+                        }
+
+                        const performanceLevel = data.performanceLevel ||
+                            (calculatedTotal > 0 ? (failCount > 0 ? 'Failed' : 'Passed') : 'Pending');
+
+                        academicHistory[legacyTerm] = {
+                            ...existingHistoryEntry,
+                            className: resolvedClassName,
+                            semester: existingHistoryEntry.semester || semesterType,
+                            marks,
+                            grandTotal: calculatedTotal,
+                            average: calculatedAverage,
+                            rank: existingHistoryEntry.rank || data.rank || 0,
+                            performanceLevel,
+                        };
+                        needsUpdate = true;
+                    }
                 }
 
-                toMigrate.push({ docRef: docSnap.ref, data, legacyTerm });
+                if (needsUpdate) {
+                    toMigrate.push({ docRef: docSnap.ref, data, legacyTerm, updatedHistory: academicHistory });
+                } else {
+                    result.skipped++;
+                }
             });
 
             if (toMigrate.length === 0) {
-                result.details.push('All students already have properly structured academic history. No migration needed.');
+                result.details.push('All student records already have clean, normalized academic history. No migration needed.');
                 return result;
             }
 
-            // Migrate in Firestore batches
+            // Execute batched updates in Firestore
             await this.runBatchedOperation(toMigrate, (batch, item) => {
                 try {
-                    const { docRef, data, legacyTerm } = item;
-                    const semesterType = legacyTerm.endsWith('-Odd') ? 'Odd' : 'Even';
-
-                    // CRITICAL: Prefer the className already stored in the history entry.
-                    // The auto-initialization wrote className = student.currentClass AT THE TIME of
-                    // initialization — which was the student's class DURING that term, before any promotion.
-                    // If we overwrite it with data.currentClass now, a promoted student (D2→D3) would
-                    // incorrectly get className:'D3' for their old 2025-2026-Odd entry.
-                    const existingHistoryEntry = data.academicHistory?.[legacyTerm] || {};
-                    const resolvedClassName = existingHistoryEntry.className
-                        || data.currentClass    // fallback: no history entry yet, use current (only safe for non-promoted)
-                        || data.className
-                        || 'Unknown';
-
-                    // Calculate totals from marks if grandTotal is 0
-                    const marks: Record<string, any> = data.marks || {};
-                    let calculatedTotal = data.grandTotal || 0;
-                    let calculatedAverage = data.average || 0;
-                    let failCount = 0;
-                    let validCount = 0;
-
-                    if (calculatedTotal === 0) {
-                        let sum = 0;
-                        Object.values(marks).forEach((m: any) => {
-                            const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
-                            sum += subTotal;
-                            if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validCount++;
-                            if (m.status === 'Failed') failCount++;
-                        });
-                        calculatedTotal = sum;
-                        calculatedAverage = validCount > 0 ? Math.round((sum / validCount) * 10) / 10 : 0;
-                    }
-
-                    const performanceLevel = data.performanceLevel ||
-                        (calculatedTotal > 0 ? (failCount > 0 ? 'Failed' : 'Passed') : 'Pending');
-
-                    // Build the updated academicHistory — preserve ALL existing fields in the entry,
-                    // only filling in the marks + recalculated totals.
-                    const academicHistory = { ...(data.academicHistory || {}) };
-                    academicHistory[legacyTerm] = {
-                        ...existingHistoryEntry,               // preserve rank, semester, className etc.
-                        className: resolvedClassName,          // safe: existing entry className wins
-                        semester: existingHistoryEntry.semester || semesterType,
-                        marks,                                 // ← The actual subject marks (the whole point)
-                        grandTotal: calculatedTotal,
-                        average: calculatedAverage,
-                        rank: existingHistoryEntry.rank || data.rank || 0,
-                        performanceLevel,
-                    };
-
-                    batch.update(docRef, { academicHistory });
+                    batch.update(item.docRef, { academicHistory: item.updatedHistory });
                     result.migrated++;
-                    result.details.push(`Migrated: ${data.adNo || data.id} (${resolvedClassName}) → ${legacyTerm}`);
-
+                    const adNo = item.data.adNo || item.data.id;
+                    const histCls = item.updatedHistory[item.legacyTerm]?.className || 'Updated';
+                    result.details.push(`Updated: ${adNo} (${histCls}) → ${item.legacyTerm}`);
                 } catch (err) {
                     result.errors++;
-                    result.details.push(`Error migrating student: ${item.data?.adNo || 'unknown'}`);
+                    result.details.push(`Error updating student ${item.data?.adNo || 'unknown'}`);
                 }
             });
 
-            result.details.unshift(`Migration complete: ${result.migrated} migrated, ${result.skipped} already clean, ${result.errors} errors.`);
+            result.details.unshift(`Migration complete: ${result.migrated} students updated in Firestore, ${result.skipped} already clean, ${result.errors} errors.`);
         } catch (error) {
-            console.error('Fatal error during legacy marks migration:', error);
+            console.error('Fatal error during legacy student migration:', error);
             result.errors++;
             result.details.push(`Fatal migration error: ${error}`);
         }
