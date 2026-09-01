@@ -260,9 +260,19 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                     );
                 });
             });
+
+            // Deduplicate subjects by normalized name (case-insensitive & trimmed)
+            const uniqueSubjectsMap = new Map<string, SubjectConfig>();
+            filteredSubjects.forEach(s => {
+                const normName = s.name.trim().toLowerCase();
+                if (!uniqueSubjectsMap.has(normName)) {
+                    uniqueSubjectsMap.set(normName, s);
+                }
+            });
+            const classSubjects = Array.from(uniqueSubjectsMap.values());
             
             // Sort subjects: lower failure rate first (passed subjects mostly)
-            filteredSubjects.sort((a, b) => {
+            classSubjects.sort((a, b) => {
                 let aFailCount = 0;
                 let bFailCount = 0;
                 classStudents.forEach(cs => {
@@ -276,7 +286,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 return a.name.localeCompare(b.name);
             });
             
-            setClassSubjects(filteredSubjects);
+            setClassSubjects(classSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);
         }
@@ -294,7 +304,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             student.adNo,
             student.name,
             ...classSubjects.map(subject => {
-                const marks = (student as any).displayMarks[subject.id];
+                const marks = getMarkForSubject((student as any).displayMarks, subject, (student as any).displayMarksMetadata);
                 return marks ? marks.total : '-';
             }),
             (student as any).displayTotal,
