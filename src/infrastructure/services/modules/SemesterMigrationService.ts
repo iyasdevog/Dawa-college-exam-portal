@@ -145,193 +145,138 @@ export class SemesterMigrationService extends BaseDataService {
         const result = { migrated: 0, skipped: 0, errors: 0, details: [] as string[] };
 
         try {
-            // A. Migrate & Normalize Students Collection
+            // A. Migrate, Deduplicate & Normalize Students Collection
             const snapshot = await getDocs(collection(this.db, this.studentsCollection));
-            const toMigrate: Array<{ docRef: any; data: any; legacyTerm: string; updatedHistory: Record<string, any>; extraUpdates?: Record<string, any> }> = [];
+            const toMigrate: Array<{ docRef: any; payload: Record<string, any> }> = [];
+            const toDelete: any[] = [];
 
+            // Group documents by admission number (adNo)
+            const adNoGroups = new Map<string, Array<{ docRef: any; id: string; data: any }>>();
             snapshot.docs.forEach(docSnap => {
                 const data = docSnap.data();
-                let needsUpdate = false;
-                const academicHistory = { ...(data.academicHistory || {}) };
-                const rawLegacyTerm: string = data.termKey || '2025-2026-Odd';
-                const legacyTerm = (!rawLegacyTerm || rawLegacyTerm === '2025-Odd' || rawLegacyTerm === '2025') 
-                    ? '2025-2026-Odd' 
-                    : (rawLegacyTerm === '2025-Even' ? '2025-2026-Even' : rawLegacyTerm);
-                const extraUpdates: Record<string, any> = {};
+                const adNo = (data.adNo || '').toString().trim();
+                if (!adNo) return;
+                if (!adNoGroups.has(adNo)) adNoGroups.set(adNo, []);
+                adNoGroups.get(adNo)!.push({ docRef: docSnap.ref, id: docSnap.id, data });
+            });
 
-                // Normalize top-level termKey if non-canonical
-                if (data.termKey && data.termKey !== legacyTerm) {
-                    extraUpdates.termKey = legacyTerm;
-                    needsUpdate = true;
-                }
+            adNoGroups.forEach((records) => {
+                // Find record with the richest academic history / marks
+                let bestRecord = records[0];
+                let maxMarks = 0;
 
-                // 1. Top-level currentClass & className normalization
-                const currentCls = data.currentClass || data.className || 'Unknown';
-                if (!data.currentClass || !data.className || data.currentClass !== currentCls || data.className !== currentCls) {
-                    extraUpdates.currentClass = currentCls;
-                    extraUpdates.className = currentCls;
-                    needsUpdate = true;
-                }
-
-                // Migrate non-canonical history keys (e.g. '2025-Odd' -> '2025-2026-Odd')
-                Object.keys(academicHistory).forEach(tk => {
-                    const canonicalKey = (!tk || tk === '2025-Odd' || tk === '2025') 
-                        ? '2025-2026-Odd' 
-                        : (tk === '2025-Even' ? '2025-2026-Even' : tk);
-
-                    if (canonicalKey !== tk) {
-                        academicHistory[canonicalKey] = {
-                            ...(academicHistory[canonicalKey] || {}),
-                            ...academicHistory[tk]
-                        };
-                        delete academicHistory[tk];
-                        needsUpdate = true;
+                records.forEach(r => {
+                    let mCount = Object.keys(r.data.marks || {}).length;
+                    if (r.data.academicHistory) {
+                        Object.values(r.data.academicHistory).forEach((h: any) => {
+                            mCount += Object.keys(h.marks || {}).length;
+                        });
+                    }
+                    if (mCount > maxMarks) {
+                        maxMarks = mCount;
+                        bestRecord = r;
                     }
                 });
 
-                // 2. Normalize classNames, recalculate totals, and trim subject keys across ALL academicHistory entries
-                Object.keys(academicHistory).forEach(termKey => {
-                    const entry = academicHistory[termKey];
-                    if (!entry) return;
+                // Merge all academicHistory and top-level marks across all duplicate records into bestRecord
+                const mergedHistory = { ...(bestRecord.data.academicHistory || {}) };
+                const mergedTopMarks = { ...(bestRecord.data.marks || {}) };
 
-                    let entryChanged = false;
-                    let updatedEntry = { ...entry };
+                records.forEach(r => {
+                    if (r.data.marks) Object.assign(mergedTopMarks, r.data.marks);
+                    if (r.data.academicHistory) {
+                        Object.entries(r.data.academicHistory).forEach(([tk, hEntry]: [string, any]) => {
+                            const canonicalKey = (!tk || tk === '2025-Odd' || tk === '2025') 
+                                ? '2025-2026-Odd' 
+                                : (tk === '2025-Even' ? '2025-2026-Even' : tk);
 
-                    // 2a. Normalize className (e.g. FS2 -> S1 for Odd terms)
-                    if (entry.className) {
-                        const normalizedCls = this.getHistoricalClassName(termKey, entry.className);
-                        if (normalizedCls !== entry.className) {
-                            updatedEntry.className = normalizedCls;
-                            entryChanged = true;
-                        }
-                    } else {
-                        updatedEntry.className = this.getHistoricalClassName(termKey, currentCls);
-                        entryChanged = true;
+                            const existing = mergedHistory[canonicalKey] || {};
+                            const historyMarks = { ...(existing.marks || {}), ...(hEntry.marks || {}) };
+
+                            let sum = 0, validCount = 0, failCount = 0;
+                            Object.values(historyMarks).forEach((m: any) => {
+                                const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
+                                sum += subTotal;
+                                if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validCount++;
+                                if (m.status === 'Failed') failCount++;
+                            });
+
+                            const rawCls = existing.className || hEntry.className || r.data.currentClass || r.data.className;
+                            const histCls = this.getHistoricalClassName(canonicalKey, rawCls);
+
+                            mergedHistory[canonicalKey] = {
+                                ...existing,
+                                ...hEntry,
+                                className: histCls,
+                                semester: canonicalKey.endsWith('-Odd') ? 'Odd' : 'Even',
+                                marks: historyMarks,
+                                grandTotal: sum > 0 ? sum : (existing.grandTotal || hEntry.grandTotal || 0),
+                                average: validCount > 0 ? Math.round((sum / validCount) * 10) / 10 : (existing.average || hEntry.average || 0),
+                                performanceLevel: sum > 0 ? (failCount > 0 ? 'Failed' : 'Passed') : (existing.performanceLevel || hEntry.performanceLevel || 'Pending')
+                            };
+                        });
                     }
+                });
 
-                    // 2b. Trim subject ID keys in marks map
-                    const marksMap = entry.marks || {};
-                    const cleanedMarks: Record<string, any> = {};
-                    let marksKeyChanged = false;
-
-                    Object.entries(marksMap).forEach(([subId, markData]: [string, any]) => {
-                        const trimmedId = subId.trim();
-                        cleanedMarks[trimmedId] = markData;
-                        if (trimmedId !== subId) marksKeyChanged = true;
-                    });
-
-                    if (marksKeyChanged) {
-                        updatedEntry.marks = cleanedMarks;
-                        entryChanged = true;
-                    }
-
-                    // 2c. Recalculate grandTotal, average, performanceLevel if total is 0 but marks exist
-                    const markValues = Object.values(updatedEntry.marks || {}) as any[];
-                    if (markValues.length > 0) {
-                        let sum = 0;
-                        let validCount = 0;
-                        let failCount = 0;
-
-                        markValues.forEach(m => {
+                // Move top-level legacy marks into academicHistory['2025-2026-Odd'] if missing
+                if (Object.keys(mergedTopMarks).length > 0) {
+                    const legacyTerm = '2025-2026-Odd';
+                    const existingHist = mergedHistory[legacyTerm] || {};
+                    if (!existingHist.marks || Object.keys(existingHist.marks).length === 0) {
+                        let sum = 0, validCount = 0, failCount = 0;
+                        Object.values(mergedTopMarks).forEach((m: any) => {
                             const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
                             sum += subTotal;
                             if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validCount++;
                             if (m.status === 'Failed') failCount++;
                         });
 
-                        if ((updatedEntry.grandTotal === undefined || updatedEntry.grandTotal === 0) && sum > 0) {
-                            updatedEntry.grandTotal = sum;
-                            entryChanged = true;
-                        }
-                        if ((updatedEntry.average === undefined || updatedEntry.average === 0) && validCount > 0 && sum > 0) {
-                            updatedEntry.average = Math.round((sum / validCount) * 10) / 10;
-                            entryChanged = true;
-                        }
-                        if ((!updatedEntry.performanceLevel || updatedEntry.performanceLevel === 'Pending' || updatedEntry.performanceLevel === 'Not Assessed') && sum > 0) {
-                            updatedEntry.performanceLevel = failCount > 0 ? 'Failed' : 'Passed';
-                            entryChanged = true;
-                        }
-                    }
+                        const rawCls = existingHist.className || bestRecord.data.currentClass || bestRecord.data.className;
+                        const histCls = this.getHistoricalClassName(legacyTerm, rawCls);
 
-                    if (entryChanged) {
-                        academicHistory[termKey] = updatedEntry;
-                        needsUpdate = true;
+                        mergedHistory[legacyTerm] = {
+                            ...existingHist,
+                            className: histCls,
+                            semester: 'Odd',
+                            marks: mergedTopMarks,
+                            grandTotal: sum > 0 ? sum : (bestRecord.data.grandTotal || 0),
+                            average: validCount > 0 ? Math.round((sum / validCount) * 10) / 10 : (bestRecord.data.average || 0),
+                            performanceLevel: sum > 0 ? (failCount > 0 ? 'Failed' : 'Passed') : 'Pending'
+                        };
+                    }
+                }
+
+                const currentCls = bestRecord.data.currentClass || bestRecord.data.className || 'Unknown';
+
+                toMigrate.push({
+                    docRef: bestRecord.docRef,
+                    payload: {
+                        isDeleted: false,
+                        currentClass: currentCls,
+                        className: currentCls,
+                        academicHistory: mergedHistory
                     }
                 });
 
-                // 3. Populate legacy top-level marks into academicHistory[legacyTerm] if missing
-                if (data.marks && Object.keys(data.marks).length > 0) {
-                    const existingHistoryEntry = academicHistory[legacyTerm] || {};
-                    const historyHasMarks = existingHistoryEntry.marks && Object.keys(existingHistoryEntry.marks).length > 0;
-
-                    if (!historyHasMarks) {
-                        const semesterType = legacyTerm.endsWith('-Odd') ? 'Odd' : 'Even';
-                        const rawClassName = existingHistoryEntry.className || currentCls;
-                        const resolvedClassName = this.getHistoricalClassName(legacyTerm, rawClassName);
-
-                        // Clean marks keys
-                        const cleanedTopMarks: Record<string, any> = {};
-                        Object.entries(data.marks).forEach(([k, v]: [string, any]) => {
-                            cleanedTopMarks[k.trim()] = v;
-                        });
-
-                        let calculatedTotal = data.grandTotal || 0;
-                        let calculatedAverage = data.average || 0;
-                        let failCount = 0;
-                        let validCount = 0;
-
-                        if (calculatedTotal === 0) {
-                            let sum = 0;
-                            Object.values(cleanedTopMarks).forEach((m: any) => {
-                                const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
-                                sum += subTotal;
-                                if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validCount++;
-                                if (m.status === 'Failed') failCount++;
-                            });
-                            calculatedTotal = sum;
-                            calculatedAverage = validCount > 0 ? Math.round((sum / validCount) * 10) / 10 : 0;
-                        }
-
-                        const performanceLevel = data.performanceLevel ||
-                            (calculatedTotal > 0 ? (failCount > 0 ? 'Failed' : 'Passed') : 'Pending');
-
-                        academicHistory[legacyTerm] = {
-                            ...existingHistoryEntry,
-                            className: resolvedClassName,
-                            semester: existingHistoryEntry.semester || semesterType,
-                            marks: cleanedTopMarks,
-                            grandTotal: calculatedTotal,
-                            average: calculatedAverage,
-                            rank: existingHistoryEntry.rank || data.rank || 0,
-                            performanceLevel,
-                        };
-                        needsUpdate = true;
+                records.forEach(r => {
+                    if (r.id !== bestRecord.id) {
+                        toDelete.push(r.docRef);
                     }
-                }
-
-                if (needsUpdate) {
-                    toMigrate.push({ docRef: docSnap.ref, data, legacyTerm, updatedHistory: academicHistory, extraUpdates });
-                } else {
-                    result.skipped++;
-                }
+                });
             });
 
-            // Execute batched updates for Students in Firestore
+            // Execute updates in Firestore
             if (toMigrate.length > 0) {
                 await this.runBatchedOperation(toMigrate, (batch, item) => {
-                    try {
-                        batch.update(item.docRef, {
-                            academicHistory: item.updatedHistory,
-                            ...item.extraUpdates
-                        });
-                        result.migrated++;
-                        const adNo = item.data.adNo || item.data.id;
-                        const histCls = item.updatedHistory[item.legacyTerm]?.className || 'Updated';
-                        result.details.push(`Updated Student: ${adNo} (${histCls}) → ${item.legacyTerm}`);
-                    } catch (err) {
-                        result.errors++;
-                        result.details.push(`Error updating student ${item.data?.adNo || 'unknown'}`);
-                    }
+                    batch.update(item.docRef, item.payload);
+                    result.migrated++;
+                });
+            }
+
+            // Execute deletes in Firestore
+            if (toDelete.length > 0) {
+                await this.runBatchedOperation(toDelete, (batch, docRef) => {
+                    batch.delete(docRef);
                 });
             }
 
