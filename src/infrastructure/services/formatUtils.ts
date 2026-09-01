@@ -42,7 +42,7 @@ export const shortenSubjectName = (name: string | null | undefined, shortName?: 
         'islamic history': 'Islamic Hist.',
         'communicative arabic': 'C.Arabic',
         'communicative malayalam': 'C.Malayalam',
-        'malayalam': 'Mal.',
+        'malayalam': 'Malayalam',
         'arabic': 'Arabic',
         'english': 'English',
         'eng': 'English',
