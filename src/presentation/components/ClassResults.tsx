@@ -604,9 +604,21 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                             <td className={`text-center font-black text-slate-900 border-b border-slate-100 ${isMobile ? 'px-1 py-1.5 text-sm' : 'px-2 py-2 text-lg'} print:px-1 print:py-0.5 print:text-[10px]`}>{(student as any).displayTotal}</td>
                                                             <td className={`text-center font-bold text-slate-700 border-b border-slate-100 ${isMobile ? 'px-1 py-1.5 text-xs' : 'px-2 py-2 text-sm'} print:px-1 print:py-0.5 print:text-[10px]`}>{typeof (student as any).displayAverage === 'number' ? (student as any).displayAverage.toFixed(1) : ((student as any).displayAverage || '0.0')}%</td>
                                                             <td className={`text-center border-b border-slate-100 ${isMobile ? 'px-1 py-1.5' : 'px-2 py-2'} print:px-1 print:py-0.5`}>
-                                                                <span className={`inline-block px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${isMobile ? 'text-[8px]' : 'text-[10px]'} print:text-[8px] print:px-0 ${(student as any).displayPerformance.includes('Outstanding') ? 'bg-purple-100 text-purple-700' : (student as any).displayPerformance.includes('Excellent') ? 'bg-emerald-100 text-emerald-700' : (student as any).displayPerformance.includes('Very Good') ? 'bg-blue-100 text-blue-700' : (student as any).displayPerformance.includes('Good') ? 'bg-teal-100 text-teal-700' : (student as any).displayPerformance.includes('Average') ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                                                                    {isMobile ? ((student as any).displayPerformance === 'Needs Improvement' ? 'N.I.' : (student as any).displayPerformance) : (student as any).displayPerformance}
-                                                                </span>
+                                                                {(() => {
+                                                                    const perf = (student as any).displayPerformance || '';
+                                                                    const isPassed = perf === 'PASSED' || perf.includes('Passed') || perf.includes('Outstanding') || perf.includes('Excellent') || perf.includes('Very Good') || perf.includes('Good');
+                                                                    const isNotAssessed = perf === 'NOT ASSESSED';
+                                                                    const badgeStyle = isNotAssessed 
+                                                                        ? 'bg-slate-100 text-slate-600 border border-slate-200' 
+                                                                        : isPassed 
+                                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-black' 
+                                                                            : 'bg-red-50 text-red-700 border border-red-200 font-bold';
+                                                                    return (
+                                                                        <span className={`inline-block px-2 py-0.5 rounded-full uppercase tracking-wider ${isMobile ? 'text-[8px]' : 'text-[10px]'} print:text-[8px] print:px-0 ${badgeStyle}`}>
+                                                                            {isMobile ? ((student as any).displayPerformance === 'Needs Improvement' ? 'N.I.' : (student as any).displayPerformance) : (student as any).displayPerformance}
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </td>
                                                         </tr>
                                                     );
