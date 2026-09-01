@@ -523,6 +523,18 @@ export class StudentService extends BaseDataService {
         const activeTerm = termKey || this.getCurrentTermKey();
         const isCurrentTerm = activeTerm === this.getCurrentTermKey();
 
+        const matchesTargetClass = (candidateClass: string | undefined): boolean => {
+            if (!candidateClass) return false;
+            if (candidateClass === className) return true;
+            // Map candidate class (e.g. 'FS2') to historical name ('S1') for activeTerm
+            const hist = this.getHistoricalClassName(activeTerm, candidateClass);
+            if (hist === className) return true;
+            // Map requested className ('S1') to database name ('FS2')
+            const dbCls = this.getDatabaseClassName(activeTerm, className);
+            if (candidateClass === dbCls) return true;
+            return false;
+        };
+
         return students.filter(s => {
             // For historical terms: check if the student was in this class DURING that term.
             // We intentionally do NOT use s.currentClass for historical terms — that would mix
@@ -531,19 +543,19 @@ export class StudentService extends BaseDataService {
 
             if (!isCurrentTerm) {
                 // 1. Prefer the explicit className stored in the history entry
-                if (historyClass) return historyClass === className;
+                if (historyClass) return matchesTargetClass(historyClass);
                 // 2. Fall back to the processed className (processStudentRecord resolves it term-aware)
                 //    Avoid 'Unknown' — those students have no data for this term
-                if (s.className && s.className !== 'Unknown') return s.className === className;
+                if (s.className && s.className !== 'Unknown') return matchesTargetClass(s.className);
                 // 3. For legacy students whose termKey matches this historical term
                 const isLegacy = (s as any).termKey === activeTerm || (!(s as any).termKey && activeTerm === '2025-2026-Odd');
-                if (isLegacy) return s.currentClass === className || s.className === className;
+                if (isLegacy) return matchesTargetClass(s.currentClass) || matchesTargetClass(s.className);
                 return false;
             }
 
             // For the current term: also allow matching by currentClass
-            if (historyClass) return historyClass === className;
-            return s.currentClass === className || s.className === className;
+            if (historyClass) return matchesTargetClass(historyClass);
+            return matchesTargetClass(s.currentClass) || matchesTargetClass(s.className);
         });
     }
 

@@ -234,15 +234,16 @@ export class AdministrativeService extends BaseDataService {
 
             const activeClassesSet = new Set<string>();
 
-            // 1. Baseline: Always seed with configured active classes (system + custom)
-            [...SYSTEM_CLASSES, ...custom]
+            // 1. Baseline: Seed with system classes (and all custom classes if termKey === 'All')
+            const baselineClasses = requestedTermKey === 'All' ? [...SYSTEM_CLASSES, ...custom] : SYSTEM_CLASSES;
+            baselineClasses
                 .filter(c => c && c !== '-' && !disabled.includes(c))
                 .forEach(c => {
                     const dbCls = this.getDatabaseClassName(requestedTermKey, c.trim());
                     activeClassesSet.add(dbCls);
                 });
 
-            // 3. Discover from Subject assignments
+            // 2. Discover custom classes for requested term from Subject assignments
             const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
             const parts = requestedTermKey.split('-');
             const targetSem = parts.pop();
@@ -252,10 +253,10 @@ export class AdministrativeService extends BaseDataService {
                 const s = doc.data() as SubjectConfig;
                 if (!s || !s.targetClasses) return;
                 const sYear = s.academicYear || '2025-2026';
-                const isYearMatch = targetYear && sYear === targetYear;
-                if (isYearMatch && (!s.activeSemester || s.activeSemester === targetSem || s.activeSemester === 'Both')) {
+                const isYearMatch = requestedTermKey === 'All' || (targetYear && sYear === targetYear);
+                if (isYearMatch && (requestedTermKey === 'All' || !s.activeSemester || s.activeSemester === targetSem || s.activeSemester === 'Both')) {
                     s.targetClasses.forEach(cls => { 
-                        if (cls) {
+                        if (cls && !disabled.includes(cls)) {
                             const dbCls = this.getDatabaseClassName(requestedTermKey, cls.trim());
                             activeClassesSet.add(dbCls);
                         } 
