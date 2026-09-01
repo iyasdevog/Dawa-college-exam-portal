@@ -626,7 +626,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                                 {viewMode === 'scorecard' ? (
                                     <Suspense fallback={<div className="p-12 text-center"><div className="loader-ring"></div></div>}>
                                         <div id="scorecard-container">
-                                            <PublicScorecard result={result} subjects={subjects} isResultsReleased={isResultsReleased} isSuppReleased={isSuppReleased} />
+                                            <PublicScorecard result={result} subjects={subjects} isResultsReleased={isResultsReleased} isSuppReleased={isSuppReleased} releaseSettings={releaseSettings} />
                                         </div>
                                     </Suspense>
                                 ) : isResultsReleased ? (

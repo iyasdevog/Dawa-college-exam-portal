@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StudentRecord, SubjectConfig, SubjectMarks } from '../../domain/entities/types';
+import { StudentRecord, SubjectConfig, SubjectMarks, ClassReleaseSettings } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import ClassResults from './ClassResults';
 import { dataService } from '../../infrastructure/services/dataService';
@@ -14,9 +14,16 @@ interface PublicScorecardProps {
     subjects: SubjectConfig[];
     isResultsReleased?: boolean;
     isSuppReleased?: boolean;
+    releaseSettings?: ClassReleaseSettings;
 }
 
-const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isResultsReleased = true, isSuppReleased = false }) => {
+const PublicScorecard: React.FC<PublicScorecardProps> = ({ 
+    result, 
+    subjects, 
+    isResultsReleased = true, 
+    isSuppReleased = false,
+    releaseSettings
+}) => {
     const { isMobile } = useMobile();
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
     const [showAggregatedView, setShowAggregatedView] = useState(false);
@@ -48,16 +55,16 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
         activeTermRecord = result.academicHistory[displayTerm];
     }
 
-    const displayMarks = activeTermRecord?.marks || {};
-    const displayRank = activeTermRecord?.rank || '-';
+    const displayMarks = activeTermRecord?.marks || result?.marks || {};
+    const displayRank = activeTermRecord?.rank || result?.rank || '-';
     // If only supp is released, totals/average might not make sense, maybe we should hide them or recalculate?
     // Let's just use the active term's totals for now or show N/A
     const isOnlySupp = !isResultsReleased && isSuppReleased;
-    const displayTotal = isOnlySupp ? '-' : (activeTermRecord?.grandTotal || 0);
-    const displayAverage = isOnlySupp ? '-' : (activeTermRecord?.average || 0);
-    const displayPerformance = isOnlySupp ? 'Supplementary Phase' : (activeTermRecord?.performanceLevel || 'Not Assessed');
-    const displayClass = activeTermRecord?.className || result?.currentClass || '';
-    const displaySemester = activeTermRecord?.semester || (displayTerm.endsWith('-Odd') ? 'Odd' : 'Even');
+    const displayTotal = isOnlySupp ? '-' : (activeTermRecord?.grandTotal ?? result?.grandTotal ?? 0);
+    const displayAverage = isOnlySupp ? '-' : (activeTermRecord?.average ?? result?.average ?? 0);
+    const displayPerformance = isOnlySupp ? 'Supplementary Phase' : (activeTermRecord?.performanceLevel || result?.performanceLevel || 'Not Assessed');
+    const displayClass = activeTermRecord?.className || result?.currentClass || result?.className || '';
+    const displaySemester = activeTermRecord?.semester || result?.semester || (displayTerm.endsWith('-Odd') ? 'Odd' : 'Even');
 
     // Merged marks mapping
     const suppExams = result?.supplementaryExams || [];
@@ -191,7 +198,15 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({ result, subjects, isR
     const hasSupplementary = Object.values(finalMarks).some(m => (m as any).isSupplementary);
 
     if (showAggregatedView) {
-        return <AggregatedScorecard student={result} allSubjects={subjects} onClose={() => setShowAggregatedView(false)} />;
+        return (
+            <AggregatedScorecard 
+                student={result} 
+                allSubjects={subjects} 
+                onClose={() => setShowAggregatedView(false)} 
+                isPublicView={true}
+                releaseSettings={releaseSettings}
+            />
+        );
     }
 
     return (

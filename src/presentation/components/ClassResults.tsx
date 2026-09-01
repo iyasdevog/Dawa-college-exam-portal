@@ -72,13 +72,55 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         }
     };
 
+    const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
+        const exact = student.academicHistory?.[targetTerm];
+        if (exact?.marks && Object.keys(exact.marks).length > 0) return exact;
+
+        if (student.academicHistory) {
+            const classMatchKey = Object.keys(student.academicHistory).find(k => {
+                const h = student.academicHistory![k];
+                return (h.className === targetClass || !targetClass) && h.marks && Object.keys(h.marks).length > 0;
+            });
+            if (classMatchKey) return student.academicHistory[classMatchKey];
+
+            const anyMatchKey = Object.keys(student.academicHistory).find(k => {
+                const h = student.academicHistory![k];
+                return h.marks && Object.keys(h.marks).length > 0;
+            });
+            if (anyMatchKey) return student.academicHistory[anyMatchKey];
+        }
+
+        if (student.marks && Object.keys(student.marks).length > 0) {
+            return {
+                className: student.currentClass || student.className || targetClass,
+                semester: student.semester || 'Odd',
+                marks: student.marks,
+                grandTotal: student.grandTotal || 0,
+                average: student.average || 0,
+                rank: student.rank || 0,
+                performanceLevel: student.performanceLevel || 'Not Assessed',
+                subjectMetadata: (student as any).subjectMetadata
+            };
+        }
+
+        return exact || {
+            className: student.currentClass || student.className || targetClass,
+            semester: 'Odd',
+            marks: {},
+            grandTotal: 0,
+            average: 0,
+            rank: 0,
+            performanceLevel: 'Not Assessed'
+        };
+    };
+
     const loadClassData = async () => {
         try {
             const classStudents = await dataService.getStudentsByClass(selectedClass, activeTerm);
 
             // Map students to their active term data for display and ranking
             const processedStudents = classStudents.map(student => {
-                const termData = student.academicHistory?.[activeTerm];
+                const termData = getStudentTermData(student, activeTerm, selectedClass);
                 
                 // Pre-process marks with metadata snapshot fallbacks
                 const displayMarksMetadata: Record<string, any> = {};
@@ -127,7 +169,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 if ((s.targetClasses || []).includes(selectedClass)) return true;
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
                 if (s.subjectType === 'elective' && classStudents.some(cs => {
-                    const termMarks = cs.academicHistory?.[activeTerm]?.marks || {};
+                    const termMarks = getStudentTermData(cs, activeTerm, selectedClass).marks || {};
                     const mark = termMarks[s.id];
                     return mark && (mark.total > 0 || mark.int !== undefined);
                 })) return true;
@@ -144,7 +186,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             if (potentialSubjects.length === 0) {
                 const snapshotMap = new Map<string, any>();
                 classStudents.forEach(cs => {
-                    const termData = cs.academicHistory?.[activeTerm];
+                    const termData = getStudentTermData(cs, activeTerm, selectedClass);
                     if (!termData?.marks) return;
                     // Use subjectMetadata first (richest), fall back to subject name from marks key
                     Object.keys(termData.marks).forEach(subId => {
@@ -173,7 +215,8 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             // Hide subjects that have no marks entered for ANY student in this view
             const filteredSubjects = potentialSubjects.filter(s => {
                 return classStudents.some(cs => {
-                    const m = cs.academicHistory?.[activeTerm]?.marks?.[s.id];
+                    const termData = getStudentTermData(cs, activeTerm, selectedClass);
+                    const m = termData?.marks?.[s.id];
                     if (!m) return false;
                     const hasValidMark = (val: any) => val !== undefined && val !== null && val !== '-' && val !== '';
                     return (
@@ -189,7 +232,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 let aFailCount = 0;
                 let bFailCount = 0;
                 classStudents.forEach(cs => {
-                    const termMarks = cs.academicHistory?.[activeTerm]?.marks || {};
+                    const termMarks = getStudentTermData(cs, activeTerm, selectedClass).marks || {};
                     if (termMarks[a.id]?.status === 'Failed') aFailCount++;
                     if (termMarks[b.id]?.status === 'Failed') bFailCount++;
                 });

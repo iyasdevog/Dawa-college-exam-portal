@@ -184,7 +184,15 @@ export abstract class BaseDataService {
         }
 
         // 2. Normalize and calculate data for the REQUESTED term
-        const termData = academicHistory[currentTermKey];
+        const termData = academicHistory[currentTermKey] || (data.marks && Object.keys(data.marks).length > 0 ? {
+            className: currentClass,
+            semester: data.semester || (currentTermKey.includes('Odd') ? 'Odd' : 'Even'),
+            marks: data.marks,
+            grandTotal: data.grandTotal || 0,
+            average: data.average || 0,
+            rank: data.rank || 0,
+            performanceLevel: data.performanceLevel || 'Pending'
+        } : undefined);
         const rawMarks = termData?.marks || {};
 
         const normalizedMarks: Record<string, SubjectMarks> = {};
@@ -200,7 +208,7 @@ export abstract class BaseDataService {
         });
 
         // 3. Populate derived top-level fields for compatibility with current views
-        const currentTotals = academicHistory[currentTermKey] || {
+        const currentTotals = termData || {
             grandTotal: 0,
             average: 0,
             rank: 0,

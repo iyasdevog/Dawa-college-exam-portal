@@ -1,16 +1,48 @@
-import React, { useMemo } from 'react';
-import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import { isSameSubject, getSubjectMaxMarks } from '../../domain/utils/subjectUtils';
+import { dataService } from '../../infrastructure/services/dataService';
 
 interface AggregatedScorecardProps {
     student: StudentRecord;
     allSubjects: SubjectConfig[];
     onClose?: () => void;
+    isPublicView?: boolean;
+    releaseSettings?: ClassReleaseSettings;
 }
 
-const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allSubjects, onClose }) => {
+const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ 
+    student, 
+    allSubjects, 
+    onClose,
+    isPublicView = false,
+    releaseSettings
+}) => {
     const { isMobile } = useMobile();
+    const [fetchedSettings, setFetchedSettings] = useState<ClassReleaseSettings | null>(null);
+
+    useEffect(() => {
+        if (isPublicView && !releaseSettings) {
+            dataService.getReleaseSettings().then(s => setFetchedSettings(s || {})).catch(() => {});
+        }
+    }, [isPublicView, releaseSettings]);
+
+    const effectiveSettings = releaseSettings || fetchedSettings || {};
+
+    const isTermReleased = (termKey: string, className?: string) => {
+        if (!isPublicView) return true; // Internal Admin/Teacher view shows all terms
+        const cls = className || student.academicHistory?.[termKey]?.className || student.currentClass || student.className;
+        if (!cls) return true;
+
+        const settings = effectiveSettings[cls];
+        if (!settings) return false;
+
+        const regReleased = settings.isReleased || (settings.releaseDate ? new Date(settings.releaseDate) <= new Date() : false);
+        const suppReleased = settings.isSupplementaryReleased || (settings.supplementaryReleaseDate ? new Date(settings.supplementaryReleaseDate) <= new Date() : false);
+
+        return regReleased || suppReleased;
+    };
 
     // Calculate aggregated statistics
     const aggregatedStats = useMemo(() => {
@@ -26,6 +58,12 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allS
 
         termKeys.forEach(termKey => {
             const termRecord = student.academicHistory![termKey];
+            
+            // Only aggregate if term results are released (or non-public view)
+            if (!isTermReleased(termKey, termRecord.className)) {
+                return;
+            }
+
             const marksEntries = Object.entries(termRecord.marks || {});
             
             marksEntries.forEach(([subjectId, marks]) => {
@@ -74,7 +112,7 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allS
             totalSubjectsCount,
             termKeys
         };
-    }, [student.academicHistory, allSubjects]);
+    }, [student.academicHistory, allSubjects, effectiveSettings, isPublicView]);
 
     if (!student.academicHistory || !aggregatedStats) {
         return (
@@ -152,6 +190,22 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({ student, allS
                     {/* Render historical terms */}
                     {aggregatedStats.termKeys.map(termKey => {
                         const termRecord = student.academicHistory![termKey];
+
+                        if (!isTermReleased(termKey, termRecord.className)) {
+                            return (
+                                <div key={termKey} className="border-2 border-amber-200/60 bg-amber-50/40 rounded-3xl p-6 text-center print:hidden">
+                                    <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-2 shadow-sm">
+                                        <i className="fa-solid fa-lock text-base"></i>
+                                    </div>
+                                    <h3 className="font-black text-slate-800 text-base">{termKey}</h3>
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Class: {termRecord.className}</p>
+                                    <p className="text-xs text-amber-700 font-medium bg-amber-100/60 py-1.5 px-4 rounded-full inline-block">
+                                        Official results for this semester have not been published yet.
+                                    </p>
+                                </div>
+                            );
+                        }
+
                         const termMarks = { ...(termRecord.marks || {}) };
                         
                         // Merge supplementary marks for this term if present
