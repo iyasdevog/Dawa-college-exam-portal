@@ -7,6 +7,7 @@ import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
 import { useTerm } from '../viewmodels/TermContext';
+import { getMarkForSubject } from '../../domain/utils/subjectUtils';
 
 interface ClassResultsProps {
     forcedClass?: string;

@@ -60,3 +60,40 @@ export const getSubjectMaxMarks = (subject: any, snap?: any) => {
     const maxEXT = configuredEXT;
     return { maxINT, maxEXT, maxTotal: maxINT + maxEXT };
 };
+
+export const getMarkForSubject = (marksObj: Record<string, any> | undefined, subject: any, metadataObj?: Record<string, any>) => {
+    if (!marksObj || !subject) return undefined;
+    
+    // 1. Direct ID lookup
+    if (marksObj[subject.id] !== undefined) return marksObj[subject.id];
+
+    // 2. Case-insensitive / trimmed ID lookup
+    const sId = (subject.id || '').toLowerCase().trim();
+    if (sId) {
+        const idKey = Object.keys(marksObj).find(k => k.toLowerCase().trim() === sId);
+        if (idKey) return marksObj[idKey];
+    }
+
+    // 3. Name or Arabic Name lookup
+    const sNameNorm = normalizeSubjectName(subject.name || '');
+    const sArabicNorm = normalizeSubjectName(subject.arabicName || '');
+
+    const foundKey = Object.keys(marksObj).find(k => {
+        const kNorm = normalizeSubjectName(k);
+        if (sNameNorm && kNorm === sNameNorm) return true;
+        if (sArabicNorm && kNorm === sArabicNorm) return true;
+
+        const snap = metadataObj?.[k];
+        if (snap) {
+            const snapNameNorm = normalizeSubjectName(snap.name || '');
+            const snapArabicNorm = normalizeSubjectName(snap.arabicName || '');
+            if (sNameNorm && snapNameNorm === sNameNorm) return true;
+            if (sArabicNorm && snapArabicNorm === sArabicNorm) return true;
+        }
+
+        return false;
+    });
+
+    if (foundKey) return marksObj[foundKey];
+    return undefined;
+};

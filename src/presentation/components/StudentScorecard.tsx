@@ -5,7 +5,7 @@ import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
-import { getSubjectMaxMarks } from '../../domain/utils/subjectUtils';
+import { getSubjectMaxMarks, getMarkForSubject } from '../../domain/utils/subjectUtils';
 import { useTerm } from '../viewmodels/TermContext';
 
 interface StudentScorecardProps {
@@ -237,12 +237,96 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
         return () => window.removeEventListener('afterprint', onAfterPrint);
     }, []);
 
+    const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
+        let termRec: any = null;
+
+        const exact = student.academicHistory?.[targetTerm];
+        if (exact?.marks && Object.keys(exact.marks).length > 0) {
+            termRec = exact;
+        } else if (student.academicHistory) {
+            const classMatchKey = Object.keys(student.academicHistory).find(k => {
+                const h = student.academicHistory![k];
+                return (h.className === targetClass || !targetClass) && h.marks && Object.keys(h.marks).length > 0;
+            });
+            if (classMatchKey) termRec = student.academicHistory[classMatchKey];
+            else {
+                const anyMatchKey = Object.keys(student.academicHistory).find(k => {
+                    const h = student.academicHistory![k];
+                    return h.marks && Object.keys(h.marks).length > 0;
+                });
+                if (anyMatchKey) termRec = student.academicHistory[anyMatchKey];
+            }
+        }
+
+        if (!termRec && student.marks && Object.keys(student.marks).length > 0) {
+            termRec = {
+                className: student.currentClass || student.className || targetClass,
+                semester: student.semester || 'Odd',
+                marks: student.marks,
+                grandTotal: student.grandTotal || 0,
+                average: student.average || 0,
+                rank: student.rank || 0,
+                performanceLevel: student.performanceLevel || 'Not Assessed',
+                subjectMetadata: (student as any).subjectMetadata
+            };
+        }
+
+        if (!termRec) {
+            termRec = exact || {
+                className: student.currentClass || student.className || targetClass,
+                semester: 'Odd',
+                marks: {},
+                grandTotal: 0,
+                average: 0,
+                rank: 0,
+                performanceLevel: 'Not Assessed'
+            };
+        }
+
+        const marksObj = termRec.marks || {};
+        const markEntries = Object.values(marksObj) as any[];
+        let totalSum = termRec.grandTotal || 0;
+        let avgVal = termRec.average || 0;
+        let perfLevel = termRec.performanceLevel || 'Not Assessed';
+
+        if (markEntries.length > 0) {
+            let calculatedSum = 0;
+            let failCount = 0;
+            let validSubjectCount = 0;
+
+            markEntries.forEach(m => {
+                const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
+                calculatedSum += subTotal;
+                if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validSubjectCount++;
+                if (m.status === 'Failed') failCount++;
+            });
+
+            if (totalSum === 0 && calculatedSum > 0) {
+                totalSum = calculatedSum;
+            }
+            if (avgVal === 0 && validSubjectCount > 0 && calculatedSum > 0) {
+                avgVal = Math.round((calculatedSum / validSubjectCount) * 10) / 10;
+            }
+            if ((perfLevel === 'Not Assessed' || perfLevel === 'Pending') && calculatedSum > 0) {
+                perfLevel = failCount > 0 ? 'Failed' : 'Passed';
+            }
+        }
+
+        return {
+            ...termRec,
+            grandTotal: totalSum,
+            average: avgVal,
+            performanceLevel: perfLevel
+        };
+    };
+
     // ── Derived state ─────────────────────────────────────────────────────────
     const selectedStudentData = classStudents.find(s => s.id === selectedStudent);
 
     const rankedStudentsList = useMemo(() => {
         const processed = classStudents.map(student => {
-            const total = student.academicHistory?.[activeTerm]?.grandTotal || 0;
+            const termRec = getStudentTermData(student, activeTerm, selectedClass);
+            const total = termRec?.grandTotal || 0;
             return { ...student, _total: total };
         }).sort((a, b) => b._total - a._total);
         let rank = 1;
@@ -251,15 +335,17 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             else rank = i + 1;
             return { ...item, calculatedRank: rank };
         });
-    }, [classStudents, activeTerm]);
+    }, [classStudents, activeTerm, selectedClass]);
 
-    const activeTermRecord = selectedStudentData?.academicHistory?.[activeTerm];
+    const activeTermRecord = selectedStudentData ? getStudentTermData(selectedStudentData, activeTerm, selectedClass) : null;
     const displayMarks = activeTermRecord?.marks || {};
     const displayRank = rankedStudentsList.find(s => s.id === selectedStudent)?.calculatedRank ?? activeTermRecord?.rank ?? '-';
     const displayTotal = activeTermRecord?.grandTotal || 0;
     const displayAverage = activeTermRecord?.average || 0;
     const displayPerformance = activeTermRecord?.performanceLevel || 'Not Assessed';
-    const displayClass = activeTermRecord?.className || selectedStudentData?.currentClass || '';
+    const displayClass = (activeTermRecord?.className && activeTermRecord.className !== 'Unknown')
+        ? activeTermRecord.className
+        : (selectedClass && selectedClass !== 'All' ? selectedClass : (selectedStudentData?.currentClass || ''));
 
     const studentStats = useMemo(() => {
         if (!selectedStudentData) return null;
@@ -445,12 +531,22 @@ interface ScorecardPrintableProps {
 const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
     student, activeTerm, classSubjects, branding, currentAcademicYear, currentSemester, calculatedRank, seed
 }) => {
-    const termRecord = student.academicHistory?.[activeTerm];
+    // Search history for matching term or legacy student marks
+    const termRecord = student.academicHistory?.[activeTerm] || (student.marks ? {
+        className: student.currentClass || student.className,
+        semester: student.semester || 'Odd',
+        marks: student.marks,
+        grandTotal: student.grandTotal || 0,
+        average: student.average || 0,
+        performanceLevel: student.performanceLevel || 'Not Assessed',
+        subjectMetadata: (student as any).subjectMetadata
+    } : undefined);
+
     const marks = termRecord?.marks || {};
     const total = termRecord?.grandTotal || 0;
     const average = termRecord?.average || 0;
     const performance = termRecord?.performanceLevel || 'Not Assessed';
-    const sClass = termRecord?.className || student.currentClass || '';
+    const sClass = (termRecord?.className && termRecord.className !== 'Unknown') ? termRecord.className : (student.currentClass || student.className || '');
 
     const markVals = Object.values(marks) as any[];
     const passedCount = markVals.filter(m => m.status === 'Passed').length;
@@ -468,15 +564,17 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
     // Only show subjects that have marks recorded (exclude un-assessed subjects)
     const sortedSubjects = useMemo(() => {
         return classSubjects
-            .filter(subj => marks[subj.id] != null)
+            .filter(subj => getMarkForSubject(marks, subj, termRecord?.subjectMetadata) != null)
             .sort((a, b) => {
-                const aFailed = marks[a.id]?.status === 'Failed';
-                const bFailed = marks[b.id]?.status === 'Failed';
+                const markA = getMarkForSubject(marks, a, termRecord?.subjectMetadata);
+                const markB = getMarkForSubject(marks, b, termRecord?.subjectMetadata);
+                const aFailed = markA?.status === 'Failed';
+                const bFailed = markB?.status === 'Failed';
                 if (aFailed && !bFailed) return 1;
                 if (!aFailed && bFailed) return -1;
                 return 0;
             });
-    }, [classSubjects, marks]);
+    }, [classSubjects, marks, termRecord]);
 
     // Computed max for percentage bar
     const totalMaxMarks = useMemo(() => {
@@ -614,7 +712,7 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
                                 </thead>
                                 <tbody className="divide-y divide-slate-50 print:divide-y print:divide-black">
                                     {sortedSubjects.map(subject => {
-                                        const subjectMark = marks[subject.id];
+                                        const subjectMark = getMarkForSubject(marks, subject, termRecord?.subjectMetadata);
                                         const snap = termRecord?.subjectMetadata?.[subject.id];
                                         const subName = snap?.name || subject.name;
                                         const arabicName = snap?.arabicName || subject.arabicName;
