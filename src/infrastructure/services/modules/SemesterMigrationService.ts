@@ -153,8 +153,17 @@ export class SemesterMigrationService extends BaseDataService {
                 const data = docSnap.data();
                 let needsUpdate = false;
                 const academicHistory = { ...(data.academicHistory || {}) };
-                const legacyTerm: string = data.termKey || '2025-2026-Odd';
+                const rawLegacyTerm: string = data.termKey || '2025-2026-Odd';
+                const legacyTerm = (!rawLegacyTerm || rawLegacyTerm === '2025-Odd' || rawLegacyTerm === '2025') 
+                    ? '2025-2026-Odd' 
+                    : (rawLegacyTerm === '2025-Even' ? '2025-2026-Even' : rawLegacyTerm);
                 const extraUpdates: Record<string, any> = {};
+
+                // Normalize top-level termKey if non-canonical
+                if (data.termKey && data.termKey !== legacyTerm) {
+                    extraUpdates.termKey = legacyTerm;
+                    needsUpdate = true;
+                }
 
                 // 1. Top-level currentClass & className normalization
                 const currentCls = data.currentClass || data.className || 'Unknown';
@@ -163,6 +172,22 @@ export class SemesterMigrationService extends BaseDataService {
                     extraUpdates.className = currentCls;
                     needsUpdate = true;
                 }
+
+                // Migrate non-canonical history keys (e.g. '2025-Odd' -> '2025-2026-Odd')
+                Object.keys(academicHistory).forEach(tk => {
+                    const canonicalKey = (!tk || tk === '2025-Odd' || tk === '2025') 
+                        ? '2025-2026-Odd' 
+                        : (tk === '2025-Even' ? '2025-2026-Even' : tk);
+
+                    if (canonicalKey !== tk) {
+                        academicHistory[canonicalKey] = {
+                            ...(academicHistory[canonicalKey] || {}),
+                            ...academicHistory[tk]
+                        };
+                        delete academicHistory[tk];
+                        needsUpdate = true;
+                    }
+                });
 
                 // 2. Normalize classNames, recalculate totals, and trim subject keys across ALL academicHistory entries
                 Object.keys(academicHistory).forEach(termKey => {

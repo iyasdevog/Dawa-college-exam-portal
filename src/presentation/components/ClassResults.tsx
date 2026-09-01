@@ -203,9 +203,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 if ((s.targetClasses || []).includes(selectedClass)) return true;
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
                 if (s.subjectType === 'elective' && classStudents.some(cs => {
-                    const termMarks = getStudentTermData(cs, activeTerm, selectedClass).marks || {};
-                    const mark = termMarks[s.id];
-                    return mark && (mark.total > 0 || mark.int !== undefined);
+                    const termData = getStudentTermData(cs, activeTerm, selectedClass);
+                    const mark = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
+                    return mark && ((typeof mark.total === 'number' && mark.total > 0) || mark.int !== undefined || mark.ext !== undefined);
                 })) return true;
                 return false;
             });
@@ -250,7 +250,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             const filteredSubjects = potentialSubjects.filter(s => {
                 return classStudents.some(cs => {
                     const termData = getStudentTermData(cs, activeTerm, selectedClass);
-                    const m = termData?.marks?.[s.id];
+                    const m = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
                     if (!m) return false;
                     const hasValidMark = (val: any) => val !== undefined && val !== null && val !== '-' && val !== '';
                     return (
@@ -266,9 +266,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 let aFailCount = 0;
                 let bFailCount = 0;
                 classStudents.forEach(cs => {
-                    const termMarks = getStudentTermData(cs, activeTerm, selectedClass).marks || {};
-                    if (termMarks[a.id]?.status === 'Failed') aFailCount++;
-                    if (termMarks[b.id]?.status === 'Failed') bFailCount++;
+                    const termData = getStudentTermData(cs, activeTerm, selectedClass);
+                    const markA = getMarkForSubject(termData?.marks, a, termData?.subjectMetadata);
+                    const markB = getMarkForSubject(termData?.marks, b, termData?.subjectMetadata);
+                    if (markA?.status === 'Failed') aFailCount++;
+                    if (markB?.status === 'Failed') bFailCount++;
                 });
                 if (aFailCount !== bFailCount) return aFailCount - bFailCount;
                 return a.name.localeCompare(b.name);
@@ -531,10 +533,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                 {students.map((student, index) => {
                                                     const electiveSubjects = classSubjects.filter(s => s.subjectType === 'elective');
                                                     const studentElective = electiveSubjects.find(s => {
-                                                        const m = (student as any).displayMarks[s.id];
+                                                        const m = getMarkForSubject((student as any).displayMarks, s, (student as any).displayMarksMetadata);
                                                         return m !== undefined && m !== null;
                                                     });
-                                                    const electiveMark = studentElective ? (student as any).displayMarks[studentElective.id] : null;
+                                                    const electiveMark = studentElective ? getMarkForSubject((student as any).displayMarks, studentElective, (student as any).displayMarksMetadata) : null;
                                                     const rowBgHex = index % 2 === 0 ? '#ffffff' : '#f8fafc';
 
                                                     return (
@@ -550,7 +552,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                             </td>
 
                                                             {!hideSelector && classSubjects.filter(s => s.subjectType !== 'elective').map(subject => {
-                                                                const marks = (student as any).displayMarks[subject.id];
+                                                                const marks = getMarkForSubject((student as any).displayMarks, subject, (student as any).displayMarksMetadata);
                                                                 return (
                                                                     <td key={subject.id} className={`text-center border-b border-slate-100 ${isMobile ? 'px-1 py-2' : 'px-2 py-2'} print:px-1 print:py-0.5 print:text-[10px]`}>
                                                                         {marks ? (

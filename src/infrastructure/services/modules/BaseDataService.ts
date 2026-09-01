@@ -149,6 +149,21 @@ export abstract class BaseDataService {
         return forwardMappings[historicalName] || historicalName;
     }
 
+    public isMatchingTerm(termKeyA: string | undefined, termKeyB: string | undefined): boolean {
+        if (!termKeyA || !termKeyB) return true;
+        if (termKeyA === termKeyB) return true;
+
+        const normA = termKeyA.replace(/^2025-/, '2025-2026-');
+        const normB = termKeyB.replace(/^2025-/, '2025-2026-');
+        if (normA === normB) return true;
+
+        const semA = termKeyA.endsWith('-Odd') ? 'Odd' : (termKeyA.endsWith('-Even') ? 'Even' : undefined);
+        const semB = termKeyB.endsWith('-Odd') ? 'Odd' : (termKeyB.endsWith('-Even') ? 'Even' : undefined);
+        if (semA && semB && semA === semB) return true;
+
+        return false;
+    }
+
     /**
      * Processes a raw student record document and expands it with derived fields for a specific term.
      * Centralized to ensure consistent nomenclature and metric resolution.
@@ -169,7 +184,7 @@ export abstract class BaseDataService {
 
         // 1. Legacy Migration: If top-level marks exist, ensure they are in history
         if (data.marks && Object.keys(data.marks).length > 0) {
-            const legacyTerm = data.termKey || '2025-2026-Odd';
+            const legacyTerm = data.termKey ? (data.termKey.replace(/^2025-/, '2025-2026-')) : '2025-2026-Odd';
             if (!academicHistory[legacyTerm]) {
                 academicHistory[legacyTerm] = {
                     className: currentClass,
@@ -184,11 +199,20 @@ export abstract class BaseDataService {
         }
 
         // 2. Normalize and calculate data for the REQUESTED term
-        const isLegacyTermMatch = (data.termKey === currentTermKey) || (!data.termKey && currentTermKey === '2025-2026-Odd');
+        const isLegacyTermMatch = this.isMatchingTerm(data.termKey, currentTermKey);
 
         // Only trust the history entry as the termData if it actually HAS marks.
-        // Auto-initialization writes empty { marks: {} } entries that must not shadow legacy marks.
-        const historyEntry = academicHistory[currentTermKey];
+        // Also check alias term keys (e.g. '2025-Odd' for '2025-2026-Odd').
+        let historyEntry = academicHistory[currentTermKey];
+        if (!historyEntry || !historyEntry.marks || Object.keys(historyEntry.marks).length === 0) {
+            const aliasKey = Object.keys(academicHistory).find(tk => 
+                this.isMatchingTerm(tk, currentTermKey) && academicHistory[tk]?.marks && Object.keys(academicHistory[tk].marks).length > 0
+            );
+            if (aliasKey) {
+                historyEntry = academicHistory[aliasKey];
+            }
+        }
+
         const historyEntryHasMarks = historyEntry?.marks && Object.keys(historyEntry.marks).length > 0;
 
         const termData = historyEntryHasMarks
