@@ -184,7 +184,9 @@ export abstract class BaseDataService {
         }
 
         // 2. Normalize and calculate data for the REQUESTED term
-        const termData = academicHistory[currentTermKey] || (data.marks && Object.keys(data.marks).length > 0 ? {
+        const isLegacyTermMatch = (data.termKey === currentTermKey) || (!data.termKey && currentTermKey === '2025-2026-Odd');
+
+        const termData = academicHistory[currentTermKey] || (isLegacyTermMatch && data.marks && Object.keys(data.marks).length > 0 ? {
             className: currentClass,
             semester: data.semester || (currentTermKey.includes('Odd') ? 'Odd' : 'Even'),
             marks: data.marks,

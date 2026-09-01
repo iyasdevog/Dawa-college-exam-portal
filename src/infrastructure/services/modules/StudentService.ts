@@ -524,12 +524,24 @@ export class StudentService extends BaseDataService {
         const isCurrentTerm = activeTerm === this.getCurrentTermKey();
 
         return students.filter(s => {
+            const historyItem = s.academicHistory?.[activeTerm];
+            if (historyItem) {
+                if (historyItem.className) {
+                    return historyItem.className === className;
+                }
+                if (s.className && s.className !== 'Unknown') {
+                    return s.className === className;
+                }
+            }
+
             if (isCurrentTerm) {
-                // Current semester: include if current or primary matches
                 return s.currentClass === className || s.className === className;
             } else {
-                const termClass = s.academicHistory?.[activeTerm]?.className;
-                return s.className === className || s.currentClass === className || termClass === className;
+                const legacyTermMatches = (s as any).termKey === activeTerm || (!(s as any).termKey && activeTerm === '2025-2026-Odd');
+                if (legacyTermMatches) {
+                    return s.currentClass === className || s.className === className;
+                }
+                return false;
             }
         });
     }

@@ -74,43 +74,29 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     };
 
     const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
-        let termRec: any = null;
+        let termRec: any = student.academicHistory?.[targetTerm];
 
-        const exact = student.academicHistory?.[targetTerm];
-        if (exact?.marks && Object.keys(exact.marks).length > 0) {
-            termRec = exact;
-        } else if (student.academicHistory) {
-            const classMatchKey = Object.keys(student.academicHistory).find(k => {
-                const h = student.academicHistory![k];
-                return (h.className === targetClass || !targetClass) && h.marks && Object.keys(h.marks).length > 0;
-            });
-            if (classMatchKey) termRec = student.academicHistory[classMatchKey];
-            else {
-                const anyMatchKey = Object.keys(student.academicHistory).find(k => {
-                    const h = student.academicHistory![k];
-                    return h.marks && Object.keys(h.marks).length > 0;
-                });
-                if (anyMatchKey) termRec = student.academicHistory[anyMatchKey];
+        // Fall back to top-level marks ONLY if this student's legacy term matches targetTerm
+        if (!termRec) {
+            const isLegacyTermMatch = (student as any).termKey === targetTerm || (!(student as any).termKey && targetTerm === '2025-2026-Odd');
+            if (isLegacyTermMatch && student.marks && Object.keys(student.marks).length > 0) {
+                termRec = {
+                    className: student.currentClass || student.className || targetClass,
+                    semester: student.semester || (targetTerm.includes('Odd') ? 'Odd' : 'Even'),
+                    marks: student.marks,
+                    grandTotal: student.grandTotal || 0,
+                    average: student.average || 0,
+                    rank: student.rank || 0,
+                    performanceLevel: student.performanceLevel || 'Not Assessed',
+                    subjectMetadata: (student as any).subjectMetadata
+                };
             }
         }
 
-        if (!termRec && student.marks && Object.keys(student.marks).length > 0) {
-            termRec = {
-                className: student.currentClass || student.className || targetClass,
-                semester: student.semester || 'Odd',
-                marks: student.marks,
-                grandTotal: student.grandTotal || 0,
-                average: student.average || 0,
-                rank: student.rank || 0,
-                performanceLevel: student.performanceLevel || 'Not Assessed',
-                subjectMetadata: (student as any).subjectMetadata
-            };
-        }
-
         if (!termRec) {
-            termRec = exact || {
-                className: student.currentClass || student.className || targetClass,
-                semester: 'Odd',
+            termRec = {
+                className: targetClass || student.currentClass || student.className || '',
+                semester: targetTerm.includes('Odd') ? 'Odd' : 'Even',
                 marks: {},
                 grandTotal: 0,
                 average: 0,
