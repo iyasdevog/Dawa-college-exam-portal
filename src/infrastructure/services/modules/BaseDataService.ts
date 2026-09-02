@@ -136,13 +136,7 @@ export abstract class BaseDataService {
 
         const normA = termKeyA.replace(/^2025-/, '2025-2026-');
         const normB = termKeyB.replace(/^2025-/, '2025-2026-');
-        if (normA === normB) return true;
-
-        const semA = termKeyA.endsWith('-Odd') ? 'Odd' : (termKeyA.endsWith('-Even') ? 'Even' : undefined);
-        const semB = termKeyB.endsWith('-Odd') ? 'Odd' : (termKeyB.endsWith('-Even') ? 'Even' : undefined);
-        if (semA && semB && semA === semB) return true;
-
-        return false;
+        return normA === normB;
     }
 
     /**
@@ -152,14 +146,6 @@ export abstract class BaseDataService {
     public processStudentRecord(data: any, id: string, termKey?: string): StudentRecord {
         const currentTermKey = termKey || this.getCurrentTermKey();
         
-        // Resolve className for the specific term if provided
-        let rawClassName = data.currentClass || data.className || 'Unknown';
-        if (termKey && data.academicHistory?.[termKey]) {
-            rawClassName = data.academicHistory[termKey].className || rawClassName;
-        }
-        
-        const classAlias = termKey ? this.getHistoricalClassName(termKey, rawClassName) : rawClassName;
-
         let academicHistory = { ...(data.academicHistory || {}) };
         const currentClass = data.currentClass || data.className || '';
 
@@ -180,38 +166,23 @@ export abstract class BaseDataService {
         }
 
         // 2. Normalize and calculate data for the REQUESTED term
-        const isLegacyTermMatch = this.isMatchingTerm(data.termKey, currentTermKey);
-
-        // Only trust the history entry as the termData if it actually HAS marks.
-        // Also check alias term keys (e.g. '2025-Odd' for '2025-2026-Odd').
-        let historyEntry = academicHistory[currentTermKey];
-        if (!historyEntry || !historyEntry.marks || Object.keys(historyEntry.marks).length === 0) {
-            const aliasKey = Object.keys(academicHistory).find(tk => 
-                this.isMatchingTerm(tk, currentTermKey) && academicHistory[tk]?.marks && Object.keys(academicHistory[tk].marks).length > 0
-            );
-            if (aliasKey) {
-                historyEntry = academicHistory[aliasKey];
-            }
+        let explicitTermEntry = academicHistory[currentTermKey];
+        if (!explicitTermEntry) {
+            const aliasKey = Object.keys(academicHistory).find(tk => this.isMatchingTerm(tk, currentTermKey));
+            if (aliasKey) explicitTermEntry = academicHistory[aliasKey];
         }
 
-        const historyEntryHasMarks = historyEntry?.marks && Object.keys(historyEntry.marks).length > 0;
+        const termData = explicitTermEntry || {
+            className: currentClass,
+            semester: (currentTermKey.includes('Odd') ? 'Odd' : 'Even'),
+            marks: {},
+            grandTotal: 0,
+            average: 0,
+            rank: 0,
+            performanceLevel: 'Pending'
+        };
 
-        const termData = historyEntryHasMarks
-            ? historyEntry
-            : (isLegacyTermMatch && data.marks && Object.keys(data.marks).length > 0
-                ? {
-                    // Preserve className/rank from the empty history entry if available
-                    className: historyEntry?.className || currentClass,
-                    semester: historyEntry?.semester || data.semester || (currentTermKey.includes('Odd') ? 'Odd' : 'Even'),
-                    marks: data.marks,
-                    grandTotal: data.grandTotal || 0,
-                    average: data.average || 0,
-                    rank: historyEntry?.rank || data.rank || 0,
-                    performanceLevel: data.performanceLevel || 'Pending'
-                }
-                : historyEntry  // Fall back to the entry itself (may be empty, for metadata like className)
-            );
-        const rawMarks = termData?.marks || {};
+        const rawMarks = termData.marks || {};
 
         const normalizedMarks: Record<string, SubjectMarks> = {};
         Object.entries(rawMarks).forEach(([subjectId, marks]: [string, any]) => {
