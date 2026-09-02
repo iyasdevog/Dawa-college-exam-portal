@@ -183,9 +183,19 @@ export class StudentService extends BaseDataService {
                 
                 // Only clone active students who don't already have this term
                 if (student.isActive !== false && (!student.academicHistory || !student.academicHistory[targetTermKey])) {
+                    const PROMOTION_MAP: Record<string, string> = {
+                        'FS1': 'FS2', 'FS2': 'FS3', 'FS3': 'HS1',
+                        'HS1': 'HS2', 'HS2': 'HS3', 'HS3': 'D1',
+                        'D1':  'D2',  'D2':  'D3',  'D3':  'PG1',
+                        'PG1': 'PG-F', 'PG-F': 'PG-F', 'UG-F': 'UG-F', 'Hifz': 'Hifz'
+                    };
+
+                    const currentCls = student.currentClass || student.className || 'Unknown';
+                    const targetCls  = semesterType === 'Odd' ? (PROMOTION_MAP[currentCls] || currentCls) : currentCls;
+
                     const newHistory = student.academicHistory ? { ...student.academicHistory } : {};
                     newHistory[targetTermKey] = {
-                        className: student.currentClass || student.className || 'Unknown',
+                        className: targetCls,
                         semester: semesterType,
                         marks: {},
                         grandTotal: 0,
@@ -195,7 +205,7 @@ export class StudentService extends BaseDataService {
                     };
                     
                     batch.update(docSnap.ref, {
-                        semester: semesterType,
+                        currentClass: targetCls,
                         academicHistory: newHistory
                     });
                     
@@ -470,14 +480,19 @@ export class StudentService extends BaseDataService {
      */
     public async promoteClass(fromClass: string, toClass: string, termKey: string): Promise<void> {
         try {
-            const students = await this.getStudentsByClass(fromClass);
-            if (students.length === 0) return;
+            const allStudents = await this.getAllStudents(termKey);
+            const matchingStudents = allStudents.filter(s => {
+                const termCls = s.academicHistory?.[termKey]?.className || s.currentClass || s.className;
+                return termCls === fromClass || this.getHistoricalClassName(termKey, fromClass) === termCls;
+            });
+
+            if (matchingStudents.length === 0) return;
 
             const parts = termKey.split('-');
             const semester = parts.pop() as 'Odd' | 'Even';
             const year = parts.join('-');
             
-            const studentIds = students.map(s => s.id);
+            const studentIds = matchingStudents.map(s => s.id);
             await this.promoteStudents(studentIds, toClass, year, semester);
         } catch (error) {
             console.error('Error promoting class:', error);

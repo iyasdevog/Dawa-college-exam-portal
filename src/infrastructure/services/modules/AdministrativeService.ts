@@ -270,9 +270,9 @@ export class AdministrativeService extends BaseDataService {
                     .filter(c => {
                         if (!c || c === '-' || disabled.includes(c)) return false;
 
-                        // Specific Fix: HS1 and FS1 just joined in 2025-2026-Even.
-                        // They must not appear in historical Odd semester filters/reports.
-                        if (requestedTermKey.endsWith('-Odd') && (c === 'HS1' || c === 'FS1')) {
+                        // Specific Fix: HS1 and FS1 joined in 2025-2026-Even.
+                        // They must not appear in historical 2025-2026-Odd semester filters/reports.
+                        if (requestedTermKey === '2025-2026-Odd' && (c === 'HS1' || c === 'FS1')) {
                             return false;
                         }
 
