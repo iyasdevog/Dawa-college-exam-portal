@@ -160,19 +160,18 @@ export class AcademicService extends BaseDataService {
                 return subject.activeSemester === targetSem;
             };
 
-            // Primary filter: subjects whose academicYear matches targetYear,
-            // OR subjects with no academicYear that belong to the default/legacy year (when it equals targetYear).
+            // Filter: subjects matching targetSemester, whose academicYear is 'All', empty, or matches targetYear
             let result = allSubjects.filter(subject => {
-                const subjectYear = subject.academicYear || defaultYear;
-                if (targetYear && subjectYear !== targetYear) return false;
+                const subjectYear = subject.academicYear;
+                if (subjectYear && subjectYear !== 'All' && targetYear && subjectYear !== targetYear) {
+                    return false;
+                }
                 return semOk(subject);
             });
 
-            // Safety net: if the strict filter returns nothing, try subjects with blank/missing
-            // academicYear regardless of year — this recovers from orphaned subjects after
-            // a test academic year is created and then deleted.
-            if (result.length === 0 && targetYear) {
-                result = allSubjects.filter(s => (!s.academicYear || s.academicYear === '') && semOk(s));
+            // Safety net: if no subjects match for targetYear specifically, include all matching semester subjects
+            if (result.length === 0 && targetSem) {
+                result = allSubjects.filter(s => semOk(s));
             }
 
             const mapped = result.map(subject => ({
