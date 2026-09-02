@@ -1,7 +1,7 @@
 
 import { StudentRecord } from './types';
 
-export const SYSTEM_CLASSES = ['D1', 'D2', 'D3', 'FS1', 'FS2', 'FS3', 'HS1', 'HS2', 'HS3', 'PG1', 'PG2'];
+export const SYSTEM_CLASSES = ['FS1', 'FS2', 'FS3', 'HS1', 'HS2', 'HS3', 'D1', 'D2', 'D3', 'PG-F', 'UG-F', 'Hifz'];
 
 // System starts completely empty - no pre-seeded data
 export const INITIAL_STUDENTS: StudentRecord[] = [];
