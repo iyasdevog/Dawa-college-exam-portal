@@ -113,26 +113,7 @@ export abstract class BaseDataService {
      */
     public getHistoricalClassName(termKey: string | undefined, className: string): string {
         if (!className) return className;
-
-        // First normalize any alias to DB canonical name
-        const dbClass = this.getDatabaseClassName(termKey, className);
-
-        // Robust check for Odd terms (2025-2026-Odd, 2025-Odd, or any term ending in -Odd)
-        const isOddTerm = !termKey || termKey.endsWith('-Odd') || termKey.includes('-Odd') || termKey === '2025-Odd';
-
-        if (isOddTerm) {
-            const reverseMappings: Record<string, string> = {
-                'FS2': 'S1',
-                'FS3': 'S2',
-                'HS2': 'P1',
-                'HS3': 'P2',
-                'FS1': 'FS1', 
-                'HS1': 'HS1'
-            };
-            return reverseMappings[dbClass] || dbClass;
-        }
-
-        return dbClass;
+        return this.getDatabaseClassName(termKey, className);
     }
 
     public getDatabaseClassName(_termKey: string | undefined, historicalName: string): string {
