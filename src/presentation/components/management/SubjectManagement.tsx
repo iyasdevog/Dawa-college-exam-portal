@@ -611,9 +611,10 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                         };
                     }
                 } else {
-                    // Intra-class elective: Treat like general subject (separate entry per class)
-                    if (subject.targetClasses && subject.targetClasses.length > 0) {
-                        subject.targetClasses.forEach(cls => {
+                    // Intra-class elective: Treat like general subject (separate entry per unique class)
+                    const uniqueClasses = Array.from(new Set(subject.targetClasses || []));
+                    if (uniqueClasses.length > 0) {
+                        uniqueClasses.forEach(cls => {
                             flattened.push({ ...subject, specificClass: cls });
                         });
                     } else {
@@ -621,8 +622,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                     }
                 }
             } else {
-                if (subject.targetClasses && subject.targetClasses.length > 0) {
-                    subject.targetClasses.forEach(cls => {
+                const uniqueClasses = Array.from(new Set(subject.targetClasses || []));
+                if (uniqueClasses.length > 0) {
+                    uniqueClasses.forEach(cls => {
                         flattened.push({ ...subject, specificClass: cls });
                     });
                 } else {
