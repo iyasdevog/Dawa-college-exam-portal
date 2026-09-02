@@ -280,15 +280,39 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 });
             });
 
-            // Deduplicate subjects by type + normalized name (case-insensitive & trimmed)
-            const uniqueSubjectsMap = new Map<string, SubjectConfig>();
+            // Deduplicate subjects: first by ID (prefer entry with a real name), then by normalized name
+            const uniqueSubjectsById = new Map<string, SubjectConfig>();
+            const uniqueSubjectsByName = new Map<string, SubjectConfig>();
+            const classSubjectsList: SubjectConfig[] = [];
+
             filteredSubjects.forEach(s => {
-                const key = `${s.subjectType || 'general'}_${s.name.trim().toLowerCase()}`;
-                if (!uniqueSubjectsMap.has(key)) {
-                    uniqueSubjectsMap.set(key, s);
+                // Prefer live catalog entries (those already have a proper name from subjects array)
+                const isLiveCatalogEntry = subjects.some(ls => ls.id === s.id);
+
+                // Deduplicate by ID
+                if (!uniqueSubjectsById.has(s.id)) {
+                    uniqueSubjectsById.set(s.id, s);
+                } else if (isLiveCatalogEntry) {
+                    // A live catalog version is always preferred over snapshot recovery
+                    uniqueSubjectsById.set(s.id, s);
                 }
             });
-            const classSubjects = Array.from(uniqueSubjectsMap.values());
+
+            // Second pass: deduplicate by normalized name to collapse aliases
+            uniqueSubjectsById.forEach(s => {
+                const normalizedName = s.name.trim().toLowerCase();
+                const key = `${s.subjectType || 'general'}_${normalizedName}`;
+                // Prefer entries that have a real name (not a raw subId fallback)
+                const isRawId = /^[a-z0-9]{15,}$/i.test(normalizedName.replace(/\s/g, ''));
+                if (!uniqueSubjectsByName.has(key)) {
+                    uniqueSubjectsByName.set(key, s);
+                } else if (!isRawId) {
+                    // Replace with properly-named entry
+                    uniqueSubjectsByName.set(key, s);
+                }
+            });
+
+            const classSubjects = Array.from(uniqueSubjectsByName.values());
             
             // Sort subjects: lower failure rate first (passed subjects mostly)
             classSubjects.sort((a, b) => {
