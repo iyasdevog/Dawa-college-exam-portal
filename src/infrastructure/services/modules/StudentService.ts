@@ -186,8 +186,8 @@ export class StudentService extends BaseDataService {
                     const PROMOTION_MAP: Record<string, string> = {
                         'FS1': 'FS2', 'FS2': 'FS3', 'FS3': 'HS1',
                         'HS1': 'HS2', 'HS2': 'HS3', 'HS3': 'D1',
-                        'D1':  'D2',  'D2':  'D3',  'D3':  'PG1',
-                        'PG1': 'PG-F', 'PG-F': 'PG-F', 'UG-F': 'UG-F', 'Hifz': 'Hifz'
+                        'D1':  'D2',  'D2':  'D3',  'D3':  'PG-F',
+                        'PG1': 'PG1', 'PG-F': 'PG1', 'UG-F': 'UG-F', 'Hifz': 'Hifz'
                     };
 
                     const currentCls = student.currentClass || student.className || 'Unknown';

@@ -235,9 +235,8 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
         const histCls = historicalClassMap[className] || className;
         
         const classStudents = students.filter(s => {
-            const sClass = s.className;
-            const sCurrent = s.currentClass;
-            return sClass === className || sClass === histCls || sCurrent === className || sCurrent === histCls;
+            const sClass = s.className || s.currentClass;
+            return sClass === className;
         });
 
         const classStudentIds = new Set(classStudents.map(s => s.id));
