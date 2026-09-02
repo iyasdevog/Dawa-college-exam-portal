@@ -184,10 +184,19 @@ export class StudentService extends BaseDataService {
                 // Only clone active students who don't already have this term
                 if (student.isActive !== false && (!student.academicHistory || !student.academicHistory[targetTermKey])) {
                     const PROMOTION_MAP: Record<string, string> = {
-                        'FS1': 'FS2', 'FS2': 'FS3', 'FS3': 'HS1',
-                        'HS1': 'HS2', 'HS2': 'HS3', 'HS3': 'D1',
-                        'D1':  'D2',  'D2':  'D3',  'D3':  'PG-F',
-                        'PG1': 'PG1', 'PG-F': 'PG1', 'UG-F': 'UG-F', 'Hifz': 'Hifz'
+                        'FS1': 'FS1',
+                        'FS2': 'FS2',
+                        'FS3': 'FS3',
+                        'HS1': 'HS1',
+                        'HS2': 'HS2',
+                        'HS3': 'UG-F',
+                        'D1':  'D2',
+                        'D2':  'D3',
+                        'D3':  'PG-F',
+                        'PG1': 'PG1',
+                        'PG-F': 'PG-F',
+                        'UG-F': 'UG-F',
+                        'Hifz': 'Hifz'
                     };
 
                     const currentCls = student.currentClass || student.className || 'Unknown';
