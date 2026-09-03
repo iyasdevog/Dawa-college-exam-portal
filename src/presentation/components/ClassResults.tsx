@@ -316,13 +316,26 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             uniqueSubjectsById.forEach(s => {
                 const normalizedName = s.name.trim().toLowerCase();
                 const key = `${s.subjectType || 'general'}_${normalizedName}`;
-                // Prefer entries that have a real name (not a raw subId fallback)
                 const isRawId = /^[a-z0-9]{15,}$/i.test(normalizedName.replace(/\s/g, ''));
+
                 if (!uniqueSubjectsByName.has(key)) {
                     uniqueSubjectsByName.set(key, s);
-                } else if (!isRawId) {
-                    // Replace with properly-named entry
-                    uniqueSubjectsByName.set(key, s);
+                } else {
+                    const existing = uniqueSubjectsByName.get(key)!;
+                    let existingMarkCount = 0;
+                    let candidateMarkCount = 0;
+
+                    classStudents.forEach(cs => {
+                        const termData = getStudentTermData(cs, activeTerm, selectedClass);
+                        const mExist = getMarkForSubject(termData?.marks, existing, termData?.subjectMetadata);
+                        const mCand = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
+                        if (mExist && !mExist.isSupplementary && ((typeof mExist.total === 'number' && mExist.total > 0) || mExist.int !== undefined || mExist.ext !== undefined)) existingMarkCount++;
+                        if (mCand && !mCand.isSupplementary && ((typeof mCand.total === 'number' && mCand.total > 0) || mCand.int !== undefined || mCand.ext !== undefined)) candidateMarkCount++;
+                    });
+
+                    if (candidateMarkCount > existingMarkCount || (candidateMarkCount === existingMarkCount && !isRawId)) {
+                        uniqueSubjectsByName.set(key, s);
+                    }
                 }
             });
 
