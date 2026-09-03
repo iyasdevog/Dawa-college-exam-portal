@@ -82,9 +82,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             student.academicHistory![tk]?.marks && Object.keys(student.academicHistory![tk].marks).length > 0
         );
         
-        const historyEntry = matchingKey ? student.academicHistory?.[matchingKey] : student.academicHistory?.[targetTerm];
-        const historyHasMarks = historyEntry?.marks && Object.keys(historyEntry.marks).length > 0;
-        let termRec: any = historyHasMarks ? historyEntry : null;
+        const historyEntry = matchingKey ? student.academicHistory?.[matchingKey] : (
+            student.academicHistory?.[targetTerm] || 
+            (student.academicHistory ? Object.values(student.academicHistory).find(h => (h as any).termKey === targetTerm) : undefined)
+        );
+        let termRec: any = historyEntry || null;
 
         // Fall back to top-level marks when the history entry is empty/missing.
         // For legacy students: marks live at the top-level with an optional termKey.
