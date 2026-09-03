@@ -319,10 +319,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 }
             });
 
-            // Second pass: deduplicate by normalized name to collapse duplicate columns with same name
+            // Second pass: deduplicate by subjectType + normalized name to keep general and elective subjects separate
             uniqueSubjectsById.forEach(s => {
                 const normalizedName = s.name.trim().toLowerCase();
-                const key = normalizedName;
+                const key = `${s.subjectType || 'general'}_${normalizedName}`;
 
                 if (!uniqueSubjectsByName.has(key)) {
                     uniqueSubjectsByName.set(key, s);
