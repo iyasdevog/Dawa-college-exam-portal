@@ -220,6 +220,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             const isEvenTerm = activeTerm.endsWith('-Even');
 
             let potentialSubjects = subjects.filter(s => {
+                if (s.subjectType === 'supplementary') return false;
                 if (isOddTerm && s.activeSemester === 'Even') return false;
                 if (isEvenTerm && s.activeSemester === 'Odd') return false;
 
@@ -228,7 +229,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 if (classStudents.some(cs => {
                     const termData = getStudentTermData(cs, activeTerm, selectedClass);
                     const mark = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
-                    return mark !== undefined && ((typeof mark.total === 'number' && mark.total > 0) || mark.int !== undefined || mark.ext !== undefined);
+                    return mark !== undefined && !mark.isSupplementary && ((typeof mark.total === 'number' && mark.total > 0) || mark.int !== undefined || mark.ext !== undefined);
                 })) return true;
                 return false;
             });
@@ -236,6 +237,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
             // ──────────────────────────────────────────────────────────────────────
             // Include snapshot subjects for any subject with marks in activeTerm (Unbreakable Rule)
+            // EXCLUDING supplementary exam marks (which are shown on individual student scorecards only)
             // ──────────────────────────────────────────────────────────────────────
             classStudents.forEach(cs => {
                 const termData = getStudentTermData(cs, activeTerm, selectedClass);
@@ -243,6 +245,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 Object.keys(termData.marks).forEach(subId => {
                     const liveSub = subjects.find(s => s.id === subId);
                     const snapshot = termData.subjectMetadata?.[subId];
+                    const m = termData.marks[subId];
+
+                    // Exclude supplementary exam marks
+                    if (m?.isSupplementary || snapshot?.subjectType === 'supplementary' || liveSub?.subjectType === 'supplementary' || snapshot?.name === 'Supplementary Exam') {
+                        return;
+                    }
 
                     const subName = snapshot?.name || liveSub?.name;
                     const alreadyIncluded = potentialSubjects.some(ps => 
@@ -272,10 +280,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
             // Hide subjects that have no marks entered for ANY student in this view
             const filteredSubjects = potentialSubjects.filter(s => {
+                if (s.subjectType === 'supplementary') return false;
                 return classStudents.some(cs => {
                     const termData = getStudentTermData(cs, activeTerm, selectedClass);
                     const m = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
-                    if (!m) return false;
+                    if (!m || m.isSupplementary) return false;
                     const hasValidMark = (val: any) => val !== undefined && val !== null && val !== '-' && val !== '';
                     return (
                         (typeof m.total === 'number' && m.total > 0) || 
