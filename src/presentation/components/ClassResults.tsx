@@ -237,7 +237,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
             // ──────────────────────────────────────────────────────────────────────
             // Include snapshot subjects for any subject with marks in activeTerm (Unbreakable Rule)
-            // EXCLUDING supplementary exam marks (which are shown on individual student scorecards only)
+            // EXCLUDING supplementary exam marks and raw unmapped document IDs
             // ──────────────────────────────────────────────────────────────────────
             classStudents.forEach(cs => {
                 const termData = getStudentTermData(cs, activeTerm, selectedClass);
@@ -253,6 +253,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                     }
 
                     const subName = snapshot?.name || liveSub?.name;
+                    const isRawId = /^[a-z0-9]{15,}$/i.test(subId);
+                    // CRITICAL GUARD: Never create a column for raw unmapped Firestore IDs
+                    if (!liveSub && (!subName || isRawId || subName === subId)) {
+                        return;
+                    }
+
                     const alreadyIncluded = potentialSubjects.some(ps => 
                         ps.id === subId || (subName && ps.name.trim().toLowerCase() === subName.trim().toLowerCase())
                     );
@@ -297,7 +303,6 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             // Deduplicate subjects: first by ID (prefer entry with a real name), then by normalized name
             const uniqueSubjectsById = new Map<string, SubjectConfig>();
             const uniqueSubjectsByName = new Map<string, SubjectConfig>();
-            const classSubjectsList: SubjectConfig[] = [];
 
             filteredSubjects.forEach(s => {
                 // Prefer live catalog entries (those already have a proper name from subjects array)
@@ -316,7 +321,6 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             uniqueSubjectsById.forEach(s => {
                 const normalizedName = s.name.trim().toLowerCase();
                 const key = normalizedName;
-                const isRawId = /^[a-z0-9]{15,}$/i.test(normalizedName.replace(/\s/g, ''));
 
                 if (!uniqueSubjectsByName.has(key)) {
                     uniqueSubjectsByName.set(key, s);
@@ -333,7 +337,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                         if (mCand && !mCand.isSupplementary && ((typeof mCand.total === 'number' && mCand.total > 0) || mCand.int !== undefined || mCand.ext !== undefined)) candidateMarkCount++;
                     });
 
-                    if (candidateMarkCount > existingMarkCount || (candidateMarkCount === existingMarkCount && !isRawId)) {
+                    // Prefer candidate if it has more student marks, or if equal, prefer one whose targetClasses includes selectedClass
+                    const candidateTargetsClass = (s.targetClasses || []).includes(selectedClass);
+                    const existingTargetsClass = (existing.targetClasses || []).includes(selectedClass);
+
+                    if (candidateMarkCount > existingMarkCount || (candidateMarkCount === existingMarkCount && candidateTargetsClass && !existingTargetsClass)) {
                         uniqueSubjectsByName.set(key, s);
                     }
                 }
