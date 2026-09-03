@@ -547,14 +547,20 @@ export class StudentService extends BaseDataService {
         }
     }
 
+    private studentsCache: Map<string, StudentRecord[]> = new Map();
+
+    public override invalidateCache(): void {
+        super.invalidateCache();
+        this.studentsCache.clear();
+    }
+
     public async getStudentsByClass(className: string, termKey?: string): Promise<StudentRecord[]> {
         const students = await this.getAllStudents(termKey);
         const activeTerm = termKey || this.getCurrentTermKey();
-        const isCurrentTerm = activeTerm === this.getCurrentTermKey();
 
         const matchesTargetClass = (candidateClass: string | undefined): boolean => {
             if (!candidateClass) return false;
-            return candidateClass.trim() === className.trim();
+            return candidateClass.trim().toLowerCase() === className.trim().toLowerCase();
         };
 
         return students.filter(s => {
