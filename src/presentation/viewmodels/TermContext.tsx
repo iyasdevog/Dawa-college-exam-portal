@@ -67,16 +67,7 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             
             BaseDataService.updateStaticSettings(settings);
-
-            const availableYears = settings.availableYears || [];
-            const uniqueYears = Array.from(new Set(availableYears.map(tk => {
-                const lastHyphenIndex = tk.lastIndexOf('-');
-                if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
-                    return tk.substring(0, lastHyphenIndex);
-                }
-                return tk;
-            }))).sort().reverse();
-            setTermOptions(uniqueYears);
+            refreshTerms();
             setIsLoading(false);
         });
 

@@ -73,27 +73,34 @@ export class SettingsService extends BaseDataService {
 
     public async getAvailableTerms(): Promise<string[]> {
         try {
-            const students = await this.studentService.getAllStudents();
-            const terms = new Set<string>();
             const settings = await this.getGlobalSettings();
-            
-            // Re-sync the static settings to ensure getCurrentTermKey uses the latest data
             BaseDataService.updateStaticSettings(settings);
+
+            const terms = new Set<string>();
             
-            terms.add(this.getCurrentTermKey());
+            // Standard years: always include 2025-2026 and 2026-2027 by default
+            terms.add('2025-2026');
+            terms.add('2026-2027');
+            
+            if (settings.currentAcademicYear) {
+                terms.add(settings.currentAcademicYear);
+            }
+            if (settings.availableYears) {
+                settings.availableYears.forEach(y => terms.add(y));
+            }
 
-            const allowedYears = new Set(settings.availableYears || [settings.currentAcademicYear]);
-
+            // Discover from student academic history
+            const students = await this.studentService.getAllStudents('All');
             students.forEach(s => {
                 if (s.academicHistory) {
                     Object.keys(s.academicHistory).forEach(tk => {
                         const lastHyphenIndex = tk.lastIndexOf('-');
-                        if (tk.endsWith('-Odd') || tk.endsWith('-Even')) {
+                        if (tk.endsWith('-Odd') || tk.endsWith('-Even') || tk.endsWith('-Bridge')) {
                             const year = tk.substring(0, lastHyphenIndex);
-                            if (allowedYears.has(year)) {
+                            if (year.match(/^\d{4}(?:-\d{4})?$/)) {
                                 terms.add(year);
                             }
-                        } else if (allowedYears.has(tk)) {
+                        } else if (tk.match(/^\d{4}(?:-\d{4})?$/)) {
                             terms.add(tk);
                         }
                     });
@@ -103,7 +110,7 @@ export class SettingsService extends BaseDataService {
             return Array.from(terms).sort((a, b) => b.localeCompare(a));
         } catch (error) {
             console.error('Error getting available terms:', error);
-            return [];
+            return ['2026-2027', '2025-2026'];
         }
     }
 

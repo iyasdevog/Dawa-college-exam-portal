@@ -11,6 +11,7 @@ import UploadTrackerTab from './faculty/UploadTrackerTab';
 import ReleaseSettingsTab from './faculty/ReleaseSettingsTab';
 import MarksEntryTab from './faculty/MarksEntryTab';
 import { useFacultyEntry } from '../hooks/useFacultyEntry';
+import { TermSelector } from './TermSelector';
 
 interface FacultyEntryProps {
     currentUser: User | null;
@@ -43,7 +44,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     const [supplementaryExams, setSupplementaryExams] = useState<SupplementaryExam[]>([]);
 
     const studentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
-    const loadedSubjectIdRef = useRef<string>('');
+    const loadedSubjectIdRef = useRef<string | null>(null);
 
     const { isOnline } = useOfflineCapability();
 
@@ -200,7 +201,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         selectedSubject,
         selectedClass,
         activeTerm,
-        isOnline,
+        isOnline: true,
         loadStudentsByClass
     });
 
@@ -213,7 +214,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
             <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 shadow-sm">
-                <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+                <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
                     <div className="flex items-center gap-3 sm:gap-4">
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-600 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 shrink-0">
                             <i className="fa-solid fa-graduation-cap text-lg sm:text-xl"></i>
@@ -222,6 +223,9 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight">Academic Portal</h1>
                             <p className="text-slate-500 font-bold text-[10px] sm:text-xs uppercase tracking-widest">Faculty Management</p>
                         </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <TermSelector />
                     </div>
                 </div>
             </header>
