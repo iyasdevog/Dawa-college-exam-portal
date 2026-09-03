@@ -312,10 +312,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 }
             });
 
-            // Second pass: deduplicate by normalized name to collapse aliases
+            // Second pass: deduplicate by normalized name to collapse duplicate columns with same name
             uniqueSubjectsById.forEach(s => {
                 const normalizedName = s.name.trim().toLowerCase();
-                const key = `${s.subjectType || 'general'}_${normalizedName}`;
+                const key = normalizedName;
                 const isRawId = /^[a-z0-9]{15,}$/i.test(normalizedName.replace(/\s/g, ''));
 
                 if (!uniqueSubjectsByName.has(key)) {
