@@ -111,6 +111,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
                 setMobileAdminState(prev => ({
                     ...prev,
                     ...savedMobileState,
+                    filterBy: '',
                     isSelectionMode: false,
                     selectedItems: []
                 }));
@@ -435,18 +436,22 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
 
     // Filtered students logic — Memoized
     const filteredStudents = useMemo(() => {
-        return students.filter(student =>
-            !mobileAdminState.filterBy ||
-            student.name.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
-            student.adNo.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase()) ||
-            student.className.toLowerCase().includes(mobileAdminState.filterBy.toLowerCase())
-        ).sort((a, b) => {
+        const queryStr = (mobileAdminState.filterBy || '').toLowerCase().trim();
+        if (!queryStr) return students;
+
+        return students.filter(student => {
+            const nameMatch = (student.name || '').toLowerCase().includes(queryStr);
+            const adNoMatch = (student.adNo || '').toLowerCase().includes(queryStr);
+            const classMatch = (student.className || '').toLowerCase().includes(queryStr) ||
+                               (student.currentClass || '').toLowerCase().includes(queryStr);
+            return nameMatch || adNoMatch || classMatch;
+        }).sort((a, b) => {
             const { sortBy, sortOrder } = mobileAdminState;
             let comparison = 0;
             switch (sortBy) {
-                case 'name': comparison = a.name.localeCompare(b.name); break;
-                case 'class': comparison = a.className.localeCompare(b.className); break;
-                default: comparison = a.name.localeCompare(b.name);
+                case 'name': comparison = (a.name || '').localeCompare(b.name || ''); break;
+                case 'class': comparison = (a.className || '').localeCompare(b.className || ''); break;
+                default: comparison = (a.name || '').localeCompare(b.name || '');
             }
             return sortOrder === 'asc' ? comparison : -comparison;
         });

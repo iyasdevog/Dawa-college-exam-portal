@@ -287,20 +287,12 @@ export class StudentService extends BaseDataService {
                 if (activeTerm === 'All') {
                     return true; // Return everyone for raw data gathering
                 }
-                if (isCurrentTerm) {
-                    // Current term: show all active students
-                    return student.isActive !== false;
-                } else {
-                    // Historical term: ONLY show students who have explicit history for this term.
-                    // Including all active students here causes 2026-2027 students to appear in
-                    // 2025-2026-Odd views, corrupting class-based filtering.
-                    if (!student.academicHistory) return false;
-                    const hasTermHistory = Object.keys(student.academicHistory).some(tk =>
-                        tk === activeTerm ||
-                        tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')
-                    );
-                    return hasTermHistory;
-                }
+                // Always return active students so Student Management & Class Management can list all students across terms
+                const hasTermHistory = !!(student.academicHistory && Object.keys(student.academicHistory).some(tk =>
+                    tk === activeTerm ||
+                    tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')
+                ));
+                return hasTermHistory || student.isActive !== false;
             });
 
             this.studentsCache.set(activeTerm, filteredStudents);
