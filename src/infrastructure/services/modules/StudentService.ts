@@ -213,10 +213,11 @@ export class StudentService extends BaseDataService {
                         performanceLevel: 'Needs Improvement'
                     };
                     
-                    batch.update(docSnap.ref, {
-                        currentClass: targetCls,
-                        academicHistory: newHistory
-                    });
+                    const isCurrent = targetTermKey === this.getCurrentTermKey();
+                    const updates: any = { academicHistory: newHistory };
+                    if (isCurrent) updates.currentClass = targetCls;
+
+                    batch.update(docSnap.ref, updates);
                     
                     clonedCount++;
                 }
@@ -473,8 +474,11 @@ export class StudentService extends BaseDataService {
             }
 
             // Phase 2: Batched writes (safe 450-op chunks)
+            const isCurrentTerm = termKey === this.getCurrentTermKey();
             await this.runBatchedOperation(resolvedOps, (batch, op) => {
-                batch.update(op.ref, { currentClass: targetClass, academicHistory: op.history });
+                const updates: any = { academicHistory: op.history };
+                if (isCurrentTerm) updates.currentClass = targetClass;
+                batch.update(op.ref, updates);
             });
 
             this.invalidateCache();
@@ -549,14 +553,7 @@ export class StudentService extends BaseDataService {
 
         const matchesTargetClass = (candidateClass: string | undefined): boolean => {
             if (!candidateClass) return false;
-            if (candidateClass === className) return true;
-            // Map candidate class (e.g. 'FS2') to historical name ('S1') for activeTerm
-            const hist = this.getHistoricalClassName(activeTerm, candidateClass);
-            if (hist === className) return true;
-            // Map requested className ('S1') to database name ('FS2')
-            const dbCls = this.getDatabaseClassName(activeTerm, className);
-            if (candidateClass === dbCls) return true;
-            return false;
+            return candidateClass.trim() === className.trim();
         };
 
         return students.filter(s => {

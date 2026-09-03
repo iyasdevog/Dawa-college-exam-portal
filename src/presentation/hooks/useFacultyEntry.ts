@@ -52,14 +52,15 @@ export const useFacultyEntry = ({
         
         const initialMarks: Record<string, { int: string; ext: string }> = {};
         students.forEach(student => {
-            const m = student.marks?.[selectedSubject];
+            const termRecord = student.academicHistory?.[activeTerm];
+            const m = termRecord?.marks?.[selectedSubject] || student.marks?.[selectedSubject];
             initialMarks[student.id] = {
                 int: m?.int === 'A' ? 'A' : (m?.int !== undefined && m?.int !== null && m?.int !== 0 ? String(m.int) : (m?.int === 0 ? '0' : '')),
                 ext: m?.ext === 'A' ? 'A' : (m?.ext !== undefined && m?.ext !== null && m?.ext !== 0 ? String(m.ext) : (m?.ext === 0 ? '0' : ''))
             };
         });
         setMarksData(initialMarks);
-    }, [students, selectedSubject]);
+    }, [students, selectedSubject, activeTerm]);
 
     // Filtering logic
     const filteredStudents = useMemo(() => {

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { TimetableEntry, ExamTimetableEntry, SpecialDay, SubjectConfig, HallTicketSettings } from '../../domain/entities/types';
 import { SYSTEM_CLASSES, DAYS } from '../../domain/entities/constants';
+import { useTerm } from '../viewmodels/TermContext';
 
 const TimetableManager: React.FC = () => {
+    const { activeTerm } = useTerm();
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedSemester, setSelectedSemester] = useState<'Odd' | 'Even'>('Odd');
     const [activeSubTab, setActiveSubTab] = useState<'general' | 'exam' | 'special'>('general');
@@ -23,13 +25,15 @@ const TimetableManager: React.FC = () => {
 
     useEffect(() => {
         const init = async () => {
-            const settings = await dataService.getGlobalSettings();
-            const active = await dataService.getActiveClasses(settings);
+            const termClasses = await dataService.getClassesByTerm(activeTerm);
+            const active = termClasses.length > 0 ? termClasses : SYSTEM_CLASSES;
             setActiveClasses(active);
-            if (active.length > 0) setSelectedClass(active[0]);
+            if (active.length > 0 && (!selectedClass || !active.includes(selectedClass))) {
+                setSelectedClass(active[0]);
+            }
         };
         init();
-    }, []);
+    }, [activeTerm]);
 
     useEffect(() => {
         if (selectedClass) {
@@ -41,18 +45,17 @@ const TimetableManager: React.FC = () => {
         if (!selectedClass) return;
         setIsLoading(true);
         try {
-            const termKey = dataService.getCurrentTermKey();
             const [tt, et, sd, allSubjects] = await Promise.all([
-                dataService.getTimetableByClass(selectedClass),
+                dataService.getTimetableByClass(selectedClass, activeTerm),
                 dataService.getExamTimetable(selectedClass, selectedSemester),
-                dataService.getSpecialDays(termKey),
-                dataService.getAllSubjects()
+                dataService.getSpecialDays(activeTerm),
+                dataService.getAllSubjects(activeTerm)
             ]);
             setTimetable(tt);
             setExamTimetable(et);
             
             // Hall Ticket release is now per term, not just class/sem
-            const releaseStatus = await dataService.getHallTicketReleaseStatus(termKey);
+            const releaseStatus = await dataService.getHallTicketReleaseStatus(activeTerm);
             setIsHallTicketReleased(releaseStatus);
             
             setSpecialDays(sd);

@@ -345,7 +345,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             if (editingSubject) {
                 await dataService.updateSubject(editingSubject.id, subjectData);
             } else {
-                await dataService.addSubject(subjectData);
+                await dataService.addSubject(subjectData, activeTerm);
             }
             
             try {

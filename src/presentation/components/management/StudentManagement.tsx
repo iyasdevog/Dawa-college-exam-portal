@@ -174,8 +174,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
         setStudentForm({
             adNo: '',
             name: '',
-            className: 'S1',
-            semester: 'Odd'
+            className: availableClasses[0] || 'S1',
+            semester: activeTerm.endsWith('-Even') ? 'Even' : 'Odd'
         });
         setShowStudentForm(true);
     };
@@ -203,7 +203,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
                     name: studentForm.name.trim(),
                     className: studentForm.className,
                     semester: studentForm.semester
-                });
+                }, activeTerm);
             } else {
                 const newStudent: Omit<StudentRecord, 'id'> = {
                     adNo: studentForm.adNo.trim(),

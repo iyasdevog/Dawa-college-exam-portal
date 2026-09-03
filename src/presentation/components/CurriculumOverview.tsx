@@ -16,7 +16,7 @@ export const CurriculumOverview: React.FC = () => {
         const fetchInitialData = async () => {
             try {
                 const [data, settings] = await Promise.all([
-                    dataService.getAllCurriculum(),
+                    dataService.getAllCurriculum('All'),
                     dataService.getGlobalSettings()
                 ]);
                 setCurriculum(data);

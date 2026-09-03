@@ -99,8 +99,8 @@ export class DataService extends BaseDataService {
         return this.studentService.getStudentsByClass(className, termKey);
     }
 
-    async updateStudent(id: string, updates: Partial<StudentRecord>): Promise<void> {
-        return this.studentService.updateStudent(id, updates);
+    async updateStudent(id: string, updates: Partial<StudentRecord>, termKey?: string): Promise<void> {
+        return this.studentService.updateStudent(id, updates, termKey);
     }
 
     async addStudent(studentData: Omit<StudentRecord, 'id'>): Promise<string> {
@@ -144,6 +144,10 @@ export class DataService extends BaseDataService {
         return this.migrationService.migrateLegacyStudentMarks();
     }
 
+    async repairHistoricalClassNames(): Promise<number> {
+        return this.migrationService.repairHistoricalClassNames();
+    }
+
     // --- Academic Domain ---
     async getAllSubjects(termKey?: string): Promise<SubjectConfig[]> {
         return this.academicService.getAllSubjects(termKey);
@@ -157,8 +161,8 @@ export class DataService extends BaseDataService {
         return this.academicService.getSubjectsByClass(className, termKey);
     }
 
-    async addSubject(subjectData: Omit<SubjectConfig, 'id'>): Promise<string> {
-        return this.academicService.addSubject(subjectData);
+    async addSubject(subjectData: Omit<SubjectConfig, 'id'>, termKey?: string): Promise<string> {
+        return this.academicService.addSubject(subjectData, termKey);
     }
 
     async standardizeSubjectNames(): Promise<number> {
@@ -228,6 +232,14 @@ export class DataService extends BaseDataService {
 
     async updateGlobalSettings(updates: Partial<GlobalSettings>): Promise<void> {
         return this.settingsService.updateGlobalSettings(updates);
+    }
+
+    async getReleaseSettings(termKey?: string): Promise<ClassReleaseSettings> {
+        return this.settingsService.getReleaseSettings(termKey);
+    }
+
+    async updateReleaseSettings(settings: ClassReleaseSettings, termKey?: string): Promise<void> {
+        return this.settingsService.updateReleaseSettings(settings, termKey);
     }
 
     async getAvailableTerms(): Promise<string[]> {
@@ -560,14 +572,6 @@ export class DataService extends BaseDataService {
         this.attendanceService.invalidateCache();
         this.administrativeService.invalidateCache();
         this.curriculumService.invalidateCache();
-    }
-
-    async getReleaseSettings(): Promise<ClassReleaseSettings> {
-        return this.settingsService.getReleaseSettings();
-    }
-
-    async updateReleaseSettings(settings: ClassReleaseSettings): Promise<void> {
-        return this.settingsService.updateReleaseSettings(settings);
     }
 
     async getEnrolledStudentsForSubject(subjectId: string, termKey?: string): Promise<StudentRecord[]> {

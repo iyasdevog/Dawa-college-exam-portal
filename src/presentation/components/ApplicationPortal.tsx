@@ -34,7 +34,7 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
 
     // Load release settings once to check application window
     useEffect(() => {
-        dataService.getReleaseSettings().then(s => setReleaseSettings(s || {})).catch(() => {});
+        dataService.getReleaseSettings(activeTerm).then(s => setReleaseSettings(s || {})).catch(() => {});
     }, [activeTerm]);
 
     // Compute application window status for the selected class

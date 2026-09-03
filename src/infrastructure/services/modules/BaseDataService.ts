@@ -108,26 +108,14 @@ export abstract class BaseDataService {
     }
 
     /**
-     * Maps a class name back to its historical alias for a specific term if needed.
-     * Use this for presentation and reports in historical views.
+     * Returns the exact class name for a term without global alias mutations.
      */
-    public getHistoricalClassName(termKey: string | undefined, className: string): string {
-        if (!className) return className;
-        return this.getDatabaseClassName(termKey, className);
+    public getHistoricalClassName(_termKey: string | undefined, className: string): string {
+        return className || '';
     }
 
     public getDatabaseClassName(_termKey: string | undefined, historicalName: string): string {
-        if (!historicalName) return historicalName;
-
-        const forwardMappings: Record<string, string> = {
-            'S1': 'FS2',
-            'S2': 'FS3',
-            'P1': 'HS2',
-            'P2': 'HS3',
-            'Bridge': 'FS1',
-            'Prep': 'HS1'
-        };
-        return forwardMappings[historicalName] || historicalName;
+        return historicalName || '';
     }
 
     public isMatchingTerm(termKeyA: string | undefined, termKeyB: string | undefined): boolean {
@@ -239,15 +227,13 @@ export abstract class BaseDataService {
         if (!displayClassName) {
             displayClassName = currentClass || 'Unknown';
         }
-        
-        const normalizedClassName = this.getHistoricalClassName(currentTermKey, displayClassName);
 
         return {
             ...data,
             id,
             currentClass,
             academicHistory,
-            className: normalizedClassName,
+            className: displayClassName,
             marks: normalizedMarks,
             semester: this.getLogicalSemester(normalizedClassName, (currentTermKey.split('-').length === 3 
                 ? currentTermKey.split('-')[2] as 'Odd' | 'Even' | 'Bridge'

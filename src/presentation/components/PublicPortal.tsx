@@ -98,7 +98,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 await dataService.initializeDatabase();
                 const [allSubjects, settings, globalBranding, termClasses] = await Promise.all([
                     dataService.getAllSubjects(activeTerm),
-                    dataService.getReleaseSettings(),
+                    dataService.getReleaseSettings(activeTerm),
                     dataService.getGlobalSettings(),
                     dataService.getClassesByTerm(activeTerm)
                 ]);

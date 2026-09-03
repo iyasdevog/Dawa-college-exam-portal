@@ -3,6 +3,7 @@ import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain
 import { useMobile } from '../hooks/useMobile';
 import { isSameSubject, getSubjectMaxMarks } from '../../domain/utils/subjectUtils';
 import { dataService } from '../../infrastructure/services/dataService';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface AggregatedScorecardProps {
     student: StudentRecord;
@@ -19,14 +20,15 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({
     isPublicView = false,
     releaseSettings
 }) => {
+    const { activeTerm } = useTerm();
     const { isMobile } = useMobile();
     const [fetchedSettings, setFetchedSettings] = useState<ClassReleaseSettings | null>(null);
 
     useEffect(() => {
         if (isPublicView && !releaseSettings) {
-            dataService.getReleaseSettings().then(s => setFetchedSettings(s || {})).catch(() => {});
+            dataService.getReleaseSettings(activeTerm).then(s => setFetchedSettings(s || {})).catch(() => {});
         }
-    }, [isPublicView, releaseSettings]);
+    }, [isPublicView, releaseSettings, activeTerm]);
 
     const effectiveSettings = releaseSettings || fetchedSettings || {};
 

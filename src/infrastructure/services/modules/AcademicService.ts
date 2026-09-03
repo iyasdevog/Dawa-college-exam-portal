@@ -176,7 +176,7 @@ export class AcademicService extends BaseDataService {
 
             const mapped = result.map(subject => ({
                 ...subject,
-                targetClasses: (subject.targetClasses || []).map(c => this.getHistoricalClassName(activeTerm, this.getDatabaseClassName(activeTerm, c)))
+                targetClasses: (subject.targetClasses || []).map(c => c ? c.trim() : c)
             }));
 
             // Only cache full-term queries (not className-specific ones)
@@ -218,9 +218,10 @@ export class AcademicService extends BaseDataService {
         }
     }
 
-    public async addSubject(subject: Omit<SubjectConfig, 'id'>): Promise<string> {
+    public async addSubject(subject: Omit<SubjectConfig, 'id'>, termKey?: string): Promise<string> {
         try {
-            const activeTerm = this.getCurrentTermKey();
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const defaultYear = activeTerm.split('-').slice(0, 2).join('-');
             const normalizedSubject = {
                 name: subject.name || '',
                 arabicName: subject.arabicName || '',
@@ -228,7 +229,7 @@ export class AcademicService extends BaseDataService {
                 maxEXT: Number(subject.maxEXT) || 0,
                 passingTotal: Number(subject.passingTotal) || 0,
                 facultyName: subject.facultyName ? normalizeName(subject.facultyName) : '',
-                // Use the current activeTerm for class name normalization, not a hardcoded term
+                // Use the current activeTerm for class name normalization
                 targetClasses: (subject.targetClasses || []).map(c => this.getDatabaseClassName(activeTerm, c)),
                 subjectType: subject.subjectType || 'general',
                 // Only set electiveType for elective/school_subject types; null for general
@@ -237,7 +238,7 @@ export class AcademicService extends BaseDataService {
                     : null,
                 enrolledStudents: subject.enrolledStudents || [],
                 activeSemester: subject.activeSemester || 'Both',
-                academicYear: subject.academicYear || ''
+                academicYear: subject.academicYear || defaultYear
             };
             // Remove null values that crash Firestore
             const cleaned = JSON.parse(JSON.stringify(normalizedSubject));

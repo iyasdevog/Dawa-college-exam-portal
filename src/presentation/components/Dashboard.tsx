@@ -226,7 +226,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
             const settings = await dataService.getGlobalSettings();
             setBranding(settings);
 
-            const activeClassesData = settings ? await dataService.getActiveClasses(settings) : SYSTEM_CLASSES;
+            const termClassesList = await dataService.getClassesByTerm(activeTerm);
+            const activeClassesData = termClassesList.length > 0 ? termClassesList : SYSTEM_CLASSES;
             setActiveClasses(activeClassesData);
 
             // Complete loading immediately — no artificial delays

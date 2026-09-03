@@ -280,7 +280,7 @@ export class SemesterMigrationService extends BaseDataService {
                 });
             }
 
-            // B. Normalize Subjects Collection (Ensure targetClasses contain both historical & database aliases)
+            // B. Normalize Subjects Collection (Clean up invalid targetClasses)
             const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
             const subjectUpdates: Array<{ docRef: any; targetClasses: string[]; id: string }> = [];
 
@@ -288,29 +288,13 @@ export class SemesterMigrationService extends BaseDataService {
                 const sub = subDoc.data() as SubjectConfig;
                 if (!sub || !sub.targetClasses || sub.targetClasses.length === 0) return;
 
-                const expandedSet = new Set<string>();
-                let changed = false;
+                const cleanClasses = sub.targetClasses.map(tc => tc ? tc.trim() : tc).filter(Boolean);
+                const uniqueClasses = Array.from(new Set(cleanClasses));
 
-                sub.targetClasses.forEach(tc => {
-                    if (!tc) return;
-                    expandedSet.add(tc);
-                    // Add historical alias if applicable (e.g. FS2 <-> S1)
-                    const hist = this.getHistoricalClassName('2025-2026-Odd', tc);
-                    const dbCls = this.getDatabaseClassName('2025-2026-Odd', tc);
-                    if (hist && hist !== tc && !sub.targetClasses.includes(hist)) {
-                        expandedSet.add(hist);
-                        changed = true;
-                    }
-                    if (dbCls && dbCls !== tc && !sub.targetClasses.includes(dbCls)) {
-                        expandedSet.add(dbCls);
-                        changed = true;
-                    }
-                });
-
-                if (changed) {
+                if (uniqueClasses.length !== sub.targetClasses.length) {
                     subjectUpdates.push({
                         docRef: subDoc.ref,
-                        targetClasses: Array.from(expandedSet),
+                        targetClasses: uniqueClasses,
                         id: subDoc.id
                     });
                 }
@@ -367,5 +351,54 @@ export class SemesterMigrationService extends BaseDataService {
         });
 
         return count;
+    }
+
+    /**
+     * Repairs historical student records for 2025-2026-Odd where legacy code forced
+     * class names S1, S2, P1, P2, Bridge, Prep to FS2, FS3, HS2, HS3, FS1, HS1.
+     */
+    public async repairHistoricalClassNames(): Promise<number> {
+        try {
+            const snapshot = await getDocs(collection(this.db, this.studentsCollection));
+            const REVERSE_MAP: Record<string, string> = {
+                'FS2': 'S1',
+                'FS3': 'S2',
+                'HS2': 'P1',
+                'HS3': 'P2',
+                'FS1': 'Bridge',
+                'HS1': 'Prep'
+            };
+
+            const updates: Array<{ ref: any; academicHistory: any }> = [];
+
+            snapshot.docs.forEach(docSnap => {
+                const s = docSnap.data() as any;
+                if (!s || !s.academicHistory) return;
+
+                const oddHistory = s.academicHistory['2025-2026-Odd'];
+                if (oddHistory && oddHistory.className && REVERSE_MAP[oddHistory.className]) {
+                    const updatedHistory = {
+                        ...s.academicHistory,
+                        '2025-2026-Odd': {
+                            ...oddHistory,
+                            className: REVERSE_MAP[oddHistory.className]
+                        }
+                    };
+                    updates.push({ ref: docSnap.ref, academicHistory: updatedHistory });
+                }
+            });
+
+            if (updates.length > 0) {
+                await this.runBatchedOperation(updates, (batch, item) => {
+                    batch.update(item.ref, { academicHistory: item.academicHistory });
+                });
+            }
+
+            this.invalidateCache();
+            return updates.length;
+        } catch (error) {
+            console.error('Error repairing historical class names:', error);
+            return 0;
+        }
     }
 }

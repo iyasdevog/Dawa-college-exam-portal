@@ -53,11 +53,13 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
     }, [students, activeTerm]);
 
     const getAllClasses = () => {
+        if (discoveredClasses && discoveredClasses.length > 0) {
+            return Array.from(new Set(discoveredClasses.filter(c => c && !disabledClasses.includes(c))));
+        }
         const standardClasses = CLASSES.filter(c => !disabledClasses.includes(c));
         const cleanCustomClasses = customClasses.filter(c => 
             c && 
             !CLASSES.includes(c) && 
-            !['S1', 'S2', 'P1', 'P2', 'Bridge', 'Prep'].includes(c) &&
             !disabledClasses.includes(c)
         );
         return Array.from(new Set([...standardClasses, ...cleanCustomClasses]));

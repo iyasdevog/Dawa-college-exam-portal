@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SubjectConfig, StudentRecord, ExamTimetableEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
+import { useTerm } from '../../viewmodels/TermContext';
 
 interface ExamTimetableProps {
     subjects: SubjectConfig[];
@@ -8,6 +9,7 @@ interface ExamTimetableProps {
 }
 
 const ExamTimetable: React.FC<ExamTimetableProps> = ({ subjects, students }) => {
+    const { activeTerm } = useTerm();
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedSemester, setSelectedSemester] = useState<'Odd' | 'Even'>('Odd');
     const [entries, setEntries] = useState<Omit<ExamTimetableEntry, 'id'>[]>([]);
@@ -22,14 +24,14 @@ const ExamTimetable: React.FC<ExamTimetableProps> = ({ subjects, students }) => 
         if (selectedClass) {
             loadExamTimetable();
         }
-    }, [selectedClass, selectedSemester]);
+    }, [selectedClass, selectedSemester, activeTerm]);
 
     const loadExamTimetable = async () => {
         setIsLoading(true);
         try {
             const [timetableData, releaseStatus] = await Promise.all([
                 dataService.getExamTimetable(selectedClass, selectedSemester),
-                dataService.getHallTicketReleaseStatus(selectedClass, selectedSemester)
+                dataService.getHallTicketReleaseStatus(activeTerm)
             ]);
             setEntries(timetableData.map(({ id, ...rest }) => rest));
             setIsReleased(releaseStatus);
@@ -52,7 +54,7 @@ const ExamTimetable: React.FC<ExamTimetableProps> = ({ subjects, students }) => 
 
         setIsSaving(true);
         try {
-            await dataService.setHallTicketReleaseStatus(selectedClass, selectedSemester, newStatus);
+            await dataService.setHallTicketReleaseStatus(newStatus, activeTerm);
             setIsReleased(newStatus);
             alert(`Hall Tickets ${newStatus ? 'released' : 'hidden'} successfully.`);
         } catch (error) {

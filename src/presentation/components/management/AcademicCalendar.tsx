@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AcademicCalendarEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
-import { SYSTEM_CLASSES as CLASSES } from '../../../domain/entities/constants';
+import { useTerm } from '../../viewmodels/TermContext';
 
 const AcademicCalendar: React.FC = () => {
+    const { activeTerm } = useTerm();
     const [entries, setEntries] = useState<AcademicCalendarEntry[]>([]);
+    const [termClasses, setTermClasses] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
     const [newEntry, setNewEntry] = useState<Omit<AcademicCalendarEntry, 'id'>>({
@@ -17,13 +19,13 @@ const AcademicCalendar: React.FC = () => {
 
     useEffect(() => {
         loadEntries();
-    }, []);
+        dataService.getClassesByTerm(activeTerm).then(cls => setTermClasses(cls)).catch(() => {});
+    }, [activeTerm]);
 
     const loadEntries = async () => {
         setIsLoading(true);
         try {
-            const termKey = dataService.getCurrentTermKey();
-            const data = await dataService.getAcademicCalendar(termKey);
+            const data = await dataService.getAcademicCalendar(activeTerm);
             setEntries(data.sort((a, b) => a.startDate.localeCompare(b.startDate)));
         } catch (error) {
             console.error('Error loading academic calendar:', error);
@@ -182,7 +184,7 @@ const AcademicCalendar: React.FC = () => {
                                     >
                                         All Classes
                                     </button>
-                                    {CLASSES.map((c) => (
+                                    {termClasses.map((c) => (
                                         <button
                                             key={c}
                                             onClick={() => {

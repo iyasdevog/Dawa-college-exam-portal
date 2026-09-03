@@ -56,7 +56,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                     dataService.getAllSubjects(activeTerm),
                     dataService.getAllStudents(activeTerm),
                     dataService.getClassesByTerm(activeTerm),
-                    dataService.getReleaseSettings()
+                    dataService.getReleaseSettings(activeTerm)
                 ]);
                 setSubjects(allSubjects);
                 setAllStudents(allStudentsData);
@@ -85,7 +85,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             const loadSettings = async () => {
                 try {
                     const [settings, supps] = await Promise.all([
-                        dataService.getReleaseSettings(),
+                        dataService.getReleaseSettings(activeTerm),
                         dataService.getAllSupplementaryExams(activeTerm)
                     ]);
                     setReleaseSettings(settings || {});
@@ -99,8 +99,25 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     useEffect(() => {
         if (allowedClasses.length > 0 && (!selectedClass || !allowedClasses.includes(selectedClass))) {
             setSelectedClass(allowedClasses[0]);
+            setSelectedSubject('');
         }
     }, [allowedClasses, selectedClass]);
+
+    useEffect(() => {
+        if (selectedSubject) {
+            loadStudentsByClass();
+        }
+    }, [selectedSubject, loadStudentsByClass]);
+
+    // Cascading Reset: When class or type changes, clear selected subject if it doesn't match
+    useEffect(() => {
+        if (selectedSubject && classSubjects.length > 0) {
+            const isValid = classSubjects.some(s => s.id === selectedSubject);
+            if (!isValid) setSelectedSubject('');
+        } else if (classSubjects.length === 0) {
+            setSelectedSubject('');
+        }
+    }, [selectedClass, subjects, subjectType]);
 
     // Update class subjects when class or subject type changes
     useEffect(() => {
@@ -113,36 +130,23 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
             const isForClass = (s.targetClasses || []).includes(selectedClass);
             
             if (subjectType === 'elective') {
-                // Show electives belonging to this class (intra) OR cross-class ones that include this class
                 return s.subjectType === 'elective' && isForClass;
             }
 
-            // 'general' tab: includes both general AND school_subject types for this class
             return isForClass && (s.subjectType === 'general' || s.subjectType === 'school_subject' || !s.subjectType);
         });
 
         setClassSubjects(filtered);
-        if (filtered.length > 0) {
-            if (!selectedSubject || !filtered.find(s => s.id === selectedSubject)) {
-                setSelectedSubject(filtered[0].id);
-            }
-        } else {
-            setSelectedSubject('');
-        }
     }, [selectedClass, subjects, subjectType]);
 
     const loadStudentsByClass = useCallback(async () => {
         if (!selectedSubject) return;
-        let mounted = true;
         try {
             setIsLoadingStudents(true);
             const studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject, activeTerm);
-            if (!mounted) return;
             const currentSub = subjects.find(s => s.id === selectedSubject);
             const isCrossClass = currentSub?.subjectType === 'elective' && currentSub?.electiveType === 'cross-class';
 
-            // For intra-class electives and general/school subjects, match student class (with alias fallbacks)
-            // For cross-class electives, show all enrolled regardless of class
             const filteredByClass = (subjectType === 'elective' && isCrossClass)
                 ? studentsToShow
                 : studentsToShow.filter(s => {
@@ -154,28 +158,25 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                     return sClass === selectedClass || histClass === selHist || dbClass === selDb || sClass === selDb || dbClass === selectedClass;
                 });
             
-            if (!mounted) return;
             setStudents(filteredByClass);
             loadedSubjectIdRef.current = selectedSubject;
 
-            // Parallelize attendance stat loading instead of sequential for-loop
             const attResults = await Promise.all(
                 filteredByClass.map(async (s) => {
                     const percentage = await dataService.calculateAttendancePercentage(s.id, selectedSubject, activeTerm);
                     return [s.id, { present: 0, total: 0, percentage }] as [string, { present: number; total: number; percentage: number }];
                 })
             );
-            if (mounted) setAttendanceStats(Object.fromEntries(attResults));
+            setAttendanceStats(Object.fromEntries(attResults));
         } catch (error) {
             console.error('Error loading students:', error);
         } finally {
-            if (mounted) setIsLoadingStudents(false);
+            setIsLoadingStudents(false);
         }
-        return () => { mounted = false; };
     }, [selectedSubject, activeTerm, subjects, subjectType, selectedClass]);
 
-    // Load students when context changes
     useEffect(() => {
+        loadedSubjectIdRef.current = null;
         loadStudentsByClass();
     }, [loadStudentsByClass]);
 
@@ -187,7 +188,7 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 [className]: { ...currentSetting, [field]: value }
             };
             setReleaseSettings(updated);
-            await dataService.updateReleaseSettings(updated);
+            await dataService.updateReleaseSettings(updated, activeTerm);
         } catch (error) {
             console.error('Error updating release setting:', error);
         }

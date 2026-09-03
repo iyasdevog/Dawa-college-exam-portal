@@ -175,21 +175,34 @@ export class SettingsService extends BaseDataService {
             throw error;
         }
     }
-    public async getReleaseSettings(): Promise<ClassReleaseSettings> {
+    public async getReleaseSettings(termKey?: string): Promise<ClassReleaseSettings> {
         try {
-            const docRef = doc(this.db, this.settingsCollection, 'release_settings');
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const docRef = doc(this.db, this.settingsCollection, `release_settings_${activeTerm}`);
             const docSnap = await getDoc(docRef);
-            return docSnap.exists() ? docSnap.data() as ClassReleaseSettings : {};
+            if (docSnap.exists()) return docSnap.data() as ClassReleaseSettings;
+
+            // Fallback to legacy single document release_settings if term-specific document doesn't exist yet
+            const legacyRef = doc(this.db, this.settingsCollection, 'release_settings');
+            const legacySnap = await getDoc(legacyRef);
+            return legacySnap.exists() ? legacySnap.data() as ClassReleaseSettings : {};
         } catch (error) {
             console.error('Error fetching release settings:', error);
             return {};
         }
     }
 
-    public async updateReleaseSettings(settings: ClassReleaseSettings): Promise<void> {
+    public async updateReleaseSettings(settings: ClassReleaseSettings, termKey?: string): Promise<void> {
         try {
-            const docRef = doc(this.db, this.settingsCollection, 'release_settings');
+            const activeTerm = termKey || this.getCurrentTermKey();
+            const docRef = doc(this.db, this.settingsCollection, `release_settings_${activeTerm}`);
             await setDoc(docRef, settings, { merge: true });
+
+            // Also keep legacy updated if active term for fallback compatibility
+            if (activeTerm === this.getCurrentTermKey()) {
+                const legacyRef = doc(this.db, this.settingsCollection, 'release_settings');
+                await setDoc(legacyRef, settings, { merge: true });
+            }
         } catch (error) {
             console.error('Error updating release settings:', error);
             throw error;
