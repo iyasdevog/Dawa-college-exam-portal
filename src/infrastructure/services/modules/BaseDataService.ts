@@ -255,7 +255,7 @@ export abstract class BaseDataService {
             academicHistory,
             className: displayClassName,
             marks: normalizedMarks,
-            semester: this.getLogicalSemester(normalizedClassName, (currentTermKey.split('-').length === 3 
+            semester: this.getLogicalSemester(displayClassName, (currentTermKey.split('-').length === 3 
                 ? currentTermKey.split('-')[2] as 'Odd' | 'Even' | 'Bridge'
                 : currentTermKey.split('-')[1] as 'Odd' | 'Even' | 'Bridge')),
             grandTotal,

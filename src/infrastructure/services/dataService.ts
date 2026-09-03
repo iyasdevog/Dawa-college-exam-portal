@@ -45,6 +45,24 @@ export class DataService extends BaseDataService {
         this.migrationService = new SemesterMigrationService();
     }
 
+    /**
+     * Override invalidateCache to cascade to ALL child services.
+     * This is the critical fix: TermContext calls dataService.invalidateCache()
+     * on term switch, but without this override only the base DataService cache
+     * is cleared — the child service caches (studentService, academicService, etc.)
+     * remain stale, causing stale/empty data to appear in the UI.
+     */
+    public override invalidateCache(): void {
+        super.invalidateCache();
+        this.studentService.invalidateCache();
+        this.academicService.invalidateCache();
+        this.supplementaryService.invalidateCache();
+        this.settingsService.invalidateCache();
+        this.attendanceService.invalidateCache();
+        this.administrativeService.invalidateCache();
+        this.curriculumService.invalidateCache();
+    }
+
     // --- Curriculum Domain ---
     async getAllCurriculum(termKey?: string): Promise<CurriculumEntry[]> {
         return this.curriculumService.getAllCurriculum(termKey);
@@ -560,18 +578,6 @@ export class DataService extends BaseDataService {
 
     async getActiveClasses(settings: GlobalSettings): Promise<string[]> {
         return this.administrativeService.getClassesByTerm();
-    }
-
-    // Re-expose Base utilities for compatibility
-    invalidateCache(): void {
-        super.invalidateCache();
-        this.studentService.invalidateCache();
-        this.academicService.invalidateCache();
-        this.supplementaryService.invalidateCache();
-        this.settingsService.invalidateCache();
-        this.attendanceService.invalidateCache();
-        this.administrativeService.invalidateCache();
-        this.curriculumService.invalidateCache();
     }
 
     async getEnrolledStudentsForSubject(subjectId: string, termKey?: string): Promise<StudentRecord[]> {
