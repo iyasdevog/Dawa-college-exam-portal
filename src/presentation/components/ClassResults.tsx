@@ -421,6 +421,37 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         ? Math.round((classStats.passedStudents / classStats.totalStudents) * 100)
         : 0;
 
+    const hasAnyElectiveMarksInClass = students.some(st => {
+        const m = (st as any).displayMarks || {};
+        const meta = (st as any).displayMarksMetadata || {};
+        return Object.keys(m).some(k => {
+            const liveSub = subjects.find(s => s.id === k);
+            const snapshot = meta[k];
+            const type = liveSub?.subjectType || snapshot?.subjectType;
+            const markObj = m[k];
+            return type === 'elective' && !markObj?.isSupplementary && (markObj?.total > 0 || markObj?.int !== undefined || markObj?.ext !== undefined);
+        });
+    });
+
+    const getStudentElectiveInfo = (student: any) => {
+        const displayMarks = (student as any).displayMarks || {};
+        const displayMeta = (student as any).displayMarksMetadata || {};
+
+        for (const [subId, m] of Object.entries(displayMarks)) {
+            if ((m as any)?.isSupplementary) continue;
+
+            const liveSub = subjects.find(s => s.id === subId);
+            const meta = displayMeta[subId];
+
+            const isElective = (liveSub?.subjectType === 'elective') || (meta?.subjectType === 'elective');
+            if (isElective) {
+                const name = meta?.displayName || meta?.name || liveSub?.name || 'Elective';
+                return { mark: m, name };
+            }
+        }
+        return null;
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -520,106 +551,72 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                     {/* Results Content */}
                     {students.length > 0 ? (
                         <>
-                            {/* Mobile Card View */}
-                            {isMobile && viewMode === 'cards' ? (
-                                <div className="space-y-4 px-1">
-                                    {students.map((student) => {
-                                        const generalSubjects = classSubjects.filter(s => s.subjectType !== 'elective');
-                                        const electiveSubjects = classSubjects.filter(s => s.subjectType === 'elective');
-                                        // Robust elective resolution: check classSubjects first, then fall back to known elective IDs
-                                        let studentElective: any = null;
-                                        let electiveMark: any = null;
-                                        let electiveName = '';
-
-                                        for (const sub of electiveSubjects) {
-                                            const m = getMarkForSubject((student as any).displayMarks, sub, (student as any).displayMarksMetadata);
-                                            if (m !== undefined && m !== null) {
-                                                studentElective = sub;
-                                                electiveMark = m;
-                                                electiveName = (student as any).displayMarksMetadata?.[sub.id]?.displayName || (student as any).displayMarksMetadata?.[sub.id]?.name || sub.name;
-                                                break;
-                                            }
-                                        }
-
-                                        // Fallback: scan marks directly for known elective IDs
-                                        if (!electiveMark) {
-                                            const marksObj = (student as any).displayMarks || {};
-                                            for (const subId of Object.keys(marksObj)) {
-                                                const m = marksObj[subId];
-                                                if (!m) continue;
-                                                const isElective = ['ZT9XwBTEeSP7rOe2x8ik','t34laHHb8z8OsOGje6fl'].includes(subId) || subjects.find(s => s.id === subId)?.subjectType === 'elective';
-                                                if (isElective) {
-                                                    electiveMark = m;
-                                                    electiveName = (student as any).displayMarksMetadata?.[subId]?.displayName || (student as any).displayMarksMetadata?.[subId]?.name || subjects.find(s => s.id === subId)?.name || 'Elective';
-                                                    studentElective = { id: subId, name: electiveName };
-                                                    break;
-                                                }
-                                            }
-                                        }
+                            {viewMode === 'cards' && isMobile ? (
+                                /* Mobile Card View */
+                                <div className="grid grid-cols-1 gap-4 print:hidden">
+                                    {students.map(student => {
+                                        const electiveInfo = getStudentElectiveInfo(student);
+                                        const electiveMark = electiveInfo?.mark;
+                                        const electiveName = electiveInfo?.name || '';
+                                        const displayPerf = (student as any).displayPerformance || '';
+                                        const isPassed = displayPerf === 'PASSED' || displayPerf.includes('Passed') || displayPerf.includes('Outstanding') || displayPerf.includes('Excellent') || displayPerf.includes('Very Good') || displayPerf.includes('Good');
 
                                         return (
-                                            <div key={student.id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                                                <div className="flex items-center justify-between mb-4">
+                                            <div key={student.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 space-y-3">
+                                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-sm ${student.rank === 1 ? 'bg-yellow-500' :
-                                                            student.rank === 2 ? 'bg-slate-400' :
-                                                                student.rank === 3 ? 'bg-amber-600' :
-                                                                    'bg-slate-300'
-                                                            }`}>
+                                                        <div className={`w-8 h-8 rounded-full text-white font-black flex items-center justify-center text-xs ${student.rank === 1 ? 'bg-yellow-500' : student.rank === 2 ? 'bg-slate-400' : student.rank === 3 ? 'bg-amber-600' : 'bg-slate-300'}`}>
                                                             {student.rank}
                                                         </div>
                                                         <div>
-                                                            <h3 className="font-bold text-slate-900">{student.name}</h3>
-                                                            <p className="text-sm text-slate-600">Adm: {student.adNo}</p>
+                                                            <h3 className="font-bold text-slate-900 text-sm">{student.name}</h3>
+                                                            <p className="text-xs text-slate-500">Adm: {student.adNo}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="text-2xl font-black text-slate-900">{(student as any).displayTotal}</p>
-                                                        <p className="text-sm text-slate-600">{typeof (student as any).displayAverage === 'number' ? (student as any).displayAverage.toFixed(1) : ((student as any).displayAverage || '0.0')}%</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="mb-4">
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${(student as any).displayPerformance.includes('Outstanding') ? 'bg-purple-100 text-purple-700' :
-                                                        (student as any).displayPerformance.includes('Excellent') ? 'bg-emerald-100 text-emerald-700' :
-                                                            (student as any).displayPerformance.includes('Very Good') ? 'bg-blue-100 text-blue-700' :
-                                                                (student as any).displayPerformance.includes('Good') ? 'bg-teal-100 text-teal-700' :
-                                                                    (student as any).displayPerformance.includes('Average') ? 'bg-amber-100 text-amber-700' :
-                                                                        'bg-red-100 text-red-700'
-                                                        }`}>
-                                                        {(student as any).displayPerformance}
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {displayPerf}
                                                     </span>
                                                 </div>
 
-                                                {!hideSelector && (
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        {generalSubjects.map(subject => {
-                                                            const marks = (student as any).displayMarks[subject.id];
+                                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                                    <div className="bg-slate-50 p-2 rounded-lg">
+                                                        <span className="text-slate-500 block text-[10px] uppercase font-bold">Total Marks</span>
+                                                        <span className="font-black text-slate-900 text-base">{(student as any).displayTotal}</span>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-2 rounded-lg">
+                                                        <span className="text-slate-500 block text-[10px] uppercase font-bold">Percentage</span>
+                                                        <span className="font-black text-slate-900 text-base">{typeof (student as any).displayAverage === 'number' ? (student as any).displayAverage.toFixed(1) : ((student as any).displayAverage || '0.0')}%</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Subject Marks Grid */}
+                                                <div className="border-t border-slate-100 pt-3">
+                                                    <p className="text-xs font-bold text-slate-700 uppercase mb-2">Subject Breakdown</p>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {classSubjects.filter(s => s.subjectType !== 'elective').map(subject => {
+                                                            const mark = getMarkForSubject((student as any).displayMarks, subject, (student as any).displayMarksMetadata);
                                                             return (
-                                                                <div key={subject.id} className="bg-slate-50 rounded-lg p-3">
-                                                                    <p className="text-xs font-bold text-slate-600 uppercase mb-1">{shortenSubjectName(subject.name)}</p>
-                                                                    {marks ? (
-                                                                        <div>
-                                                                            <p className={`text-lg font-bold ${marks.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{marks.total}</p>
-                                                                            <p className="text-xs text-slate-500">{subject.maxEXT === 0 ? 'N/A' : marks.ext}+{marks.int}</p>
-                                                                        </div>
-                                                                    ) : <span className="text-slate-400">-</span>}
+                                                                <div key={subject.id} className="bg-slate-50 rounded-lg p-2 flex justify-between items-center">
+                                                                    <span className="text-xs font-medium text-slate-700 truncate max-w-[100px]">{shortenSubjectName(subject.name)}</span>
+                                                                    {mark ? (
+                                                                        <span className={`text-xs font-bold ${mark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{mark.total}</span>
+                                                                    ) : <span className="text-xs text-slate-400">-</span>}
                                                                 </div>
                                                             );
                                                         })}
-                                                        {studentElective && (
-                                                            <div className="bg-slate-50 rounded-lg p-3 border border-indigo-100">
-                                                                <p className="text-xs font-bold text-indigo-600 uppercase mb-1">Elective ({shortenSubjectName(electiveName)})</p>
+                                                        {hasAnyElectiveMarksInClass && (
+                                                            <div className="bg-indigo-50/50 rounded-lg p-2 flex justify-between items-center col-span-2 border border-indigo-100">
+                                                                <div>
+                                                                    <span className="text-xs font-bold text-indigo-700 block">{shortenSubjectName(electiveName || 'Elective')}</span>
+                                                                    <span className="text-[10px] text-indigo-500 uppercase font-bold">Elective</span>
+                                                                </div>
                                                                 {electiveMark ? (
-                                                                    <div>
-                                                                        <p className={`text-lg font-bold ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{electiveMark.total}</p>
-                                                                        <p className="text-xs text-slate-500">{electiveMark.ext}+{electiveMark.int}</p>
-                                                                    </div>
-                                                                ) : <span className="text-slate-400">-</span>}
+                                                                    <span className={`text-sm font-black ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-indigo-900'}`}>{electiveMark.total}</span>
+                                                                ) : <span className="text-xs text-slate-400">-</span>}
                                                             </div>
                                                         )}
                                                     </div>
-                                                )}
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -640,10 +637,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                         </th>
                                                     ))}
 
-                                                    {!hideSelector && (classSubjects.some(s => s.subjectType === 'elective') || students.some(st => {
-                                                        const m = (st as any).displayMarks || {};
-                                                        return ['ZT9XwBTEeSP7rOe2x8ik','t34laHHb8z8OsOGje6fl'].some(k => m[k] !== undefined);
-                                                    })) && (
+                                                    {!hideSelector && hasAnyElectiveMarksInClass && (
                                                         <th className={`text-center font-bold text-indigo-600 border-b-2 border-slate-300 bg-indigo-50 uppercase tracking-wider sticky top-0 z-[110] ${isMobile ? 'px-1 py-1.5 text-[10px]' : 'px-2 py-3 text-xs'} print:px-1 print:py-1 print:text-[9px]`} role="columnheader" scope="col">Elective</th>
                                                     )}
 
@@ -654,39 +648,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                             </thead>
                                             <tbody>
                                                 {students.map((student, index) => {
-                                                    const electiveSubjects = classSubjects.filter(s => s.subjectType === 'elective');
-                                                    
-                                                    // Robust elective mark resolution
-                                                    const getStudentElectiveInfo = () => {
-                                                        const marksObj = (student as any).displayMarks || {};
-                                                        const metaMap = (student as any).displayMarksMetadata || {};
-
-                                                        for (const sub of electiveSubjects) {
-                                                            const m = getMarkForSubject(marksObj, sub, metaMap);
-                                                            if (m !== undefined && m !== null) {
-                                                                const meta = metaMap[sub.id];
-                                                                const name = meta?.displayName || meta?.name || sub.name;
-                                                                return { mark: m, name };
-                                                            }
-                                                        }
-
-                                                        for (const subId of Object.keys(marksObj)) {
-                                                            const m = marksObj[subId];
-                                                            if (!m) continue;
-                                                            const liveSub = subjects.find(s => s.id === subId);
-                                                            const meta = metaMap[subId];
-                                                            const isElective = (liveSub?.subjectType === 'elective') || (meta?.subjectType === 'elective') || (subId === 'ZT9XwBTEeSP7rOe2x8ik') || (subId === 't34laHHb8z8OsOGje6fl') || (subId === '6gZ0p8rH9re48nlfDaWr') || (subId === 'ZJ10NiJMiV8nGZ4qx0g4');
-
-                                                            if (isElective) {
-                                                                const name = meta?.displayName || meta?.name || liveSub?.name || 'Elective';
-                                                                return { mark: m, name };
-                                                            }
-                                                        }
-
-                                                        return null;
-                                                    };
-
-                                                    const electiveInfo = getStudentElectiveInfo();
+                                                    const electiveInfo = getStudentElectiveInfo(student);
                                                     const electiveMark = electiveInfo?.mark;
                                                     const electiveName = electiveInfo?.name || '';
                                                     const rowBgHex = index % 2 === 0 ? '#ffffff' : '#f8fafc';
@@ -717,7 +679,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                 );
                                                             })}
 
-                                                            {!hideSelector && (classSubjects.some(s => s.subjectType === 'elective') || students.some(st => (st as any).displayMarks && Object.keys((st as any).displayMarks).some(k => k === 'ZT9XwBTEeSP7rOe2x8ik' || k === 't34laHHb8z8OsOGje6fl'))) && (
+                                                            {!hideSelector && hasAnyElectiveMarksInClass && (
                                                                 <td className={`text-center border-b border-slate-100 bg-indigo-50/20 ${isMobile ? 'px-1 py-2' : 'px-2 py-2'} print:px-1 print:py-0.5 print:text-[10px]`}>
                                                                     {electiveMark ? (
                                                                         <div>
