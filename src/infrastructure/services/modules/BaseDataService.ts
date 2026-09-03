@@ -119,7 +119,7 @@ export abstract class BaseDataService {
     }
 
     public isMatchingTerm(termKeyA: string | undefined, termKeyB: string | undefined): boolean {
-        if (!termKeyA || !termKeyB) return true;
+        if (!termKeyA || !termKeyB) return false;
         if (termKeyA === termKeyB) return true;
 
         const normA = termKeyA.replace(/^2025-/, '2025-2026-');
@@ -140,9 +140,9 @@ export abstract class BaseDataService {
         // 1. Legacy Migration: If top-level marks exist, ensure they are in history
         if (data.marks && Object.keys(data.marks).length > 0) {
             const legacyTerm = data.termKey ? (data.termKey.replace(/^2025-/, '2025-2026-')) : '2025-2026-Odd';
-            if (!academicHistory[legacyTerm]) {
+            if (!academicHistory[legacyTerm] || !academicHistory[legacyTerm].marks || Object.keys(academicHistory[legacyTerm].marks).length === 0) {
                 academicHistory[legacyTerm] = {
-                    className: currentClass,
+                    className: academicHistory[legacyTerm]?.className || currentClass,
                     semester: data.semester || (legacyTerm.includes('Odd') ? 'Odd' : 'Even'),
                     marks: data.marks,
                     grandTotal: data.grandTotal || 0,
@@ -155,9 +155,29 @@ export abstract class BaseDataService {
 
         // 2. Normalize and calculate data for the REQUESTED term
         let explicitTermEntry = academicHistory[currentTermKey];
-        if (!explicitTermEntry) {
-            const aliasKey = Object.keys(academicHistory).find(tk => this.isMatchingTerm(tk, currentTermKey));
-            if (aliasKey) explicitTermEntry = academicHistory[aliasKey];
+        // If history entry for this term has no marks, check matching term keys or top-level marks that HAVE marks
+        if (!explicitTermEntry || !explicitTermEntry.marks || Object.keys(explicitTermEntry.marks).length === 0) {
+            const keyWithMarks = Object.keys(academicHistory).find(tk => 
+                this.isMatchingTerm(tk, currentTermKey) && 
+                academicHistory[tk]?.marks && 
+                Object.keys(academicHistory[tk].marks).length > 0
+            );
+            if (keyWithMarks) {
+                explicitTermEntry = {
+                    ...academicHistory[keyWithMarks],
+                    className: explicitTermEntry?.className || academicHistory[keyWithMarks].className
+                };
+            } else if (data.marks && Object.keys(data.marks).length > 0 && this.isMatchingTerm(data.termKey || '2025-2026-Odd', currentTermKey)) {
+                explicitTermEntry = {
+                    className: explicitTermEntry?.className || currentClass,
+                    semester: data.semester || (currentTermKey.includes('Odd') ? 'Odd' : 'Even'),
+                    marks: data.marks,
+                    grandTotal: data.grandTotal || 0,
+                    average: data.average || 0,
+                    rank: data.rank || 0,
+                    performanceLevel: data.performanceLevel || 'Pending'
+                };
+            }
         }
 
         const termData = explicitTermEntry || {

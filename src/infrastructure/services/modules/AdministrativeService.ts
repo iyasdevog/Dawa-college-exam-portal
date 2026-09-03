@@ -267,8 +267,8 @@ export class AdministrativeService extends BaseDataService {
             subjectsSnap.docs.forEach(docSnap => {
                 const s = docSnap.data() as SubjectConfig;
                 if (!s || s.isDeleted || !s.targetClasses) return;
-                const sYear = s.academicYear || '2025-2026';
-                const isYearMatch = requestedTermKey === 'All' || !targetYear || sYear === 'All' || sYear === targetYear;
+                const sYear = s.academicYear || '';
+                const isYearMatch = requestedTermKey === 'All' || !targetYear || !sYear || sYear === 'All' || sYear === targetYear;
                 const isSemMatch = requestedTermKey === 'All' || !s.activeSemester || s.activeSemester === 'Both' || s.activeSemester === targetSem;
                 
                 if (isYearMatch && isSemMatch) {
@@ -280,9 +280,8 @@ export class AdministrativeService extends BaseDataService {
                 }
             });
 
-            // 3. Seed baseline system/custom classes for current active term or empty term
-            const isCurrentOrNew = requestedTermKey === currentTermKey || activeClassesSet.size === 0;
-            if (isCurrentOrNew) {
+            // 3. Seed baseline system/custom classes ONLY if no classes were discovered for this term
+            if (activeClassesSet.size === 0) {
                 SYSTEM_CLASSES.forEach(c => {
                     if (!disabled.includes(c)) activeClassesSet.add(c);
                 });

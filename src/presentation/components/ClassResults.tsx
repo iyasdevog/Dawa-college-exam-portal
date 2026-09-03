@@ -74,16 +74,23 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     };
 
     const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
-        // Only use the history entry if it ACTUALLY has marks.
-        // Auto-initialization creates empty { marks: {} } entries which must NOT block legacy fallback.
-        const historyEntry = student.academicHistory?.[targetTerm];
+        // Find any matching term key in history that ACTUALLY has marks
+        const historyKeys = student.academicHistory ? Object.keys(student.academicHistory) : [];
+        const matchingKey = historyKeys.find(tk => 
+            (tk === targetTerm || tk.replace(/^2025-/, '2025-2026-') === targetTerm.replace(/^2025-/, '2025-2026-')) &&
+            student.academicHistory![tk]?.marks && Object.keys(student.academicHistory![tk].marks).length > 0
+        );
+        
+        const historyEntry = matchingKey ? student.academicHistory?.[matchingKey] : student.academicHistory?.[targetTerm];
         const historyHasMarks = historyEntry?.marks && Object.keys(historyEntry.marks).length > 0;
         let termRec: any = historyHasMarks ? historyEntry : null;
 
         // Fall back to top-level marks when the history entry is empty/missing.
         // For legacy students: marks live at the top-level with an optional termKey.
         if (!termRec) {
-            const isLegacyTermMatch = (student as any).termKey === targetTerm || (!(student as any).termKey && targetTerm === '2025-2026-Odd');
+            const isLegacyTermMatch = (student as any).termKey === targetTerm || 
+                                      (!(student as any).termKey && targetTerm.startsWith('2025-')) ||
+                                      (student.academicHistory?.[targetTerm] !== undefined);
             if (isLegacyTermMatch && student.marks && Object.keys(student.marks).length > 0) {
                 termRec = {
                     // Prefer the stored className from history (even if empty marks), then currentClass

@@ -557,26 +557,19 @@ export class StudentService extends BaseDataService {
         };
 
         return students.filter(s => {
-            // For historical terms: check if the student was in this class DURING that term.
-            // We intentionally do NOT use s.currentClass for historical terms — that would mix
-            // students who have since been promoted into a different class.
-            const historyClass = s.academicHistory?.[activeTerm]?.className;
+            const matchingHistoryKey = s.academicHistory 
+                ? Object.keys(s.academicHistory).find(tk => this.isMatchingTerm(tk, activeTerm))
+                : undefined;
+            const historyClass = matchingHistoryKey ? s.academicHistory?.[matchingHistoryKey]?.className : undefined;
 
-            if (!isCurrentTerm) {
-                // 1. Prefer the explicit className stored in the history entry
-                if (historyClass) return matchesTargetClass(historyClass);
-                // 2. Fall back to the processed className (processStudentRecord resolves it term-aware)
-                //    Avoid 'Unknown' — those students have no data for this term
-                if (s.className && s.className !== 'Unknown') return matchesTargetClass(s.className);
-                // 3. For legacy students whose termKey matches this historical term
-                const isLegacy = (s as any).termKey === activeTerm || (!(s as any).termKey && activeTerm === '2025-2026-Odd');
-                if (isLegacy) return matchesTargetClass(s.currentClass) || matchesTargetClass(s.className);
-                return false;
-            }
-
-            // For the current term: also allow matching by currentClass
             if (historyClass) return matchesTargetClass(historyClass);
-            return matchesTargetClass(s.currentClass) || matchesTargetClass(s.className);
+            if (s.className && s.className !== 'Unknown') return matchesTargetClass(s.className);
+            
+            const isLegacy = (s as any).termKey === activeTerm || 
+                             this.isMatchingTerm((s as any).termKey, activeTerm) ||
+                             (!(s as any).termKey && this.isMatchingTerm(activeTerm, '2025-2026-Odd'));
+            if (isLegacy) return matchesTargetClass(s.currentClass) || matchesTargetClass(s.className);
+            return false;
         });
     }
 
