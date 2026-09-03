@@ -26,7 +26,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         return availableClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
     }, [currentUser, availableClasses]);
 
-    const [selectedClass, setSelectedClass] = useState(forcedClass || 'S1');
+    const [selectedClass, setSelectedClass] = useState(forcedClass || '');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
@@ -41,13 +41,14 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
     useEffect(() => {
         loadData();
+        if (!forcedClass) setSelectedClass(''); // Reset class on term switch
     }, [activeTerm]);
 
     useEffect(() => {
         if (allowedClasses.length > 0 && (!selectedClass || !allowedClasses.includes(selectedClass)) && !forcedClass) {
             setSelectedClass(allowedClasses[0]);
         }
-    }, [allowedClasses, forcedClass, selectedClass]);
+    }, [allowedClasses, forcedClass]);
 
     useEffect(() => {
         if (selectedClass) {
@@ -205,18 +206,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
             setStudents(rankedStudents);
 
-            // Filter subjects for this class - include electives by enrollment OR by marks presence
-            const matchClassAlias = (clsList: string[], cls: string) => {
+            // Filter subjects for this class.
+            // NOTE: s.targetClasses are already translated to active-term class names by AcademicService.getAllSubjects,
+            // so a direct include check is correct. No hardcoded alias map needed.
+            const matchesClass = (clsList: string[], cls: string) => {
                 if (!clsList || !cls) return false;
-                if (clsList.includes(cls)) return true;
-                const aliases: Record<string, string[]> = {
-                    'S1': ['FS2'], 'FS2': ['S1'],
-                    'S2': ['FS3'], 'FS3': ['S2'],
-                    'P1': ['HS2'], 'HS2': ['P1'],
-                    'P2': ['HS3'], 'HS3': ['P2']
-                };
-                const equivalent = aliases[cls] || [];
-                return equivalent.some(alias => clsList.includes(alias));
+                return clsList.includes(cls);
             };
 
             const isOddTerm = activeTerm.endsWith('-Odd');
@@ -226,7 +221,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 if (isOddTerm && s.activeSemester === 'Even') return false;
                 if (isEvenTerm && s.activeSemester === 'Odd') return false;
 
-                if (matchClassAlias(s.targetClasses || [], selectedClass)) return true;
+                if (matchesClass(s.targetClasses || [], selectedClass)) return true;
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
                 if (s.subjectType === 'elective' && classStudents.some(cs => {
                     const termData = getStudentTermData(cs, activeTerm, selectedClass);
@@ -235,6 +230,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 })) return true;
                 return false;
             });
+
 
             // ──────────────────────────────────────────────────────────────────────
             // Include snapshot subjects for any subject with marks in activeTerm (Unbreakable Rule)

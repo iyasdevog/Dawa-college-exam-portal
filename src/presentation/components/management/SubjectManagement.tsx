@@ -516,9 +516,10 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                 // Split general subjects by class
                 if (subject.targetClasses && subject.targetClasses.length > 0) {
                     subject.targetClasses.forEach(cls => {
+                        const historicalClass = dataService.getHistoricalClassName(activeTerm, cls);
                         grouped[faculty].push({
                             ...subject,
-                            specificClass: cls
+                            specificClass: historicalClass
                         });
                     });
                 } else {
@@ -532,7 +533,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
 
         // Sort faculties alphabetically
         return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
-    }, [subjects]);
+    }, [subjects, activeTerm]);
 
     // Parse the current semester from activeTerm to use as initial default
     const initialSemester = React.useMemo(() => {
@@ -593,8 +594,9 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                         const existing = electiveGroups[key];
                         if (subject.targetClasses) {
                             subject.targetClasses.forEach(c => {
-                                if (!existing.specificClass.includes(c)) {
-                                    existing.specificClass.push(c);
+                                const historicalC = dataService.getHistoricalClassName(activeTerm, c);
+                                if (!existing.specificClass.includes(historicalC)) {
+                                    existing.specificClass.push(historicalC);
                                 }
                             });
                         }
@@ -606,13 +608,13 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                     } else {
                         electiveGroups[key] = {
                             ...subject,
-                            specificClass: [...(subject.targetClasses || [])],
+                            specificClass: (subject.targetClasses || []).map(c => dataService.getHistoricalClassName(activeTerm, c)),
                             relatedIds: [subject.id]
                         };
                     }
                 } else {
                     // Intra-class elective: Treat like general subject (separate entry per unique class)
-                    const uniqueClasses = Array.from(new Set(subject.targetClasses || []));
+                    const uniqueClasses = Array.from(new Set((subject.targetClasses || []).map(c => dataService.getHistoricalClassName(activeTerm, c))));
                     if (uniqueClasses.length > 0) {
                         uniqueClasses.forEach(cls => {
                             flattened.push({ ...subject, specificClass: cls });
@@ -622,7 +624,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                     }
                 }
             } else {
-                const uniqueClasses = Array.from(new Set(subject.targetClasses || []));
+                const uniqueClasses = Array.from(new Set((subject.targetClasses || []).map(c => dataService.getHistoricalClassName(activeTerm, c))));
                 if (uniqueClasses.length > 0) {
                     uniqueClasses.forEach(cls => {
                         flattened.push({ ...subject, specificClass: cls });

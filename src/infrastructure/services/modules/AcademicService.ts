@@ -161,7 +161,8 @@ export class AcademicService extends BaseDataService {
             };
 
             // Filter: subjects matching targetSemester, whose academicYear is 'All', empty, or matches targetYear
-            let result = allSubjects.filter(subject => {
+            // IMPORTANT: No safety-net fallback — returning cross-year subjects causes data leakage between terms.
+            const result = allSubjects.filter(subject => {
                 const subjectYear = subject.academicYear;
                 if (subjectYear && subjectYear !== 'All' && targetYear && subjectYear !== targetYear) {
                     return false;
@@ -169,14 +170,11 @@ export class AcademicService extends BaseDataService {
                 return semOk(subject);
             });
 
-            // Safety net: if no subjects match for targetYear specifically, include all matching semester subjects
-            if (result.length === 0 && targetSem) {
-                result = allSubjects.filter(s => semOk(s));
-            }
-
             const mapped = result.map(subject => ({
                 ...subject,
-                targetClasses: (subject.targetClasses || []).map(c => c ? c.trim() : c)
+                targetClasses: (subject.targetClasses || []).map(c =>
+                    c ? this.getHistoricalClassName(activeTerm, c.trim()) : c
+                )
             }));
 
             // Only cache full-term queries (not className-specific ones)
