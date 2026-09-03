@@ -225,10 +225,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
                 if (matchesClass(s.targetClasses || [], selectedClass)) return true;
                 if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
-                if (s.subjectType === 'elective' && classStudents.some(cs => {
+                if (classStudents.some(cs => {
                     const termData = getStudentTermData(cs, activeTerm, selectedClass);
                     const mark = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
-                    return mark && ((typeof mark.total === 'number' && mark.total > 0) || mark.int !== undefined || mark.ext !== undefined);
+                    return mark !== undefined && ((typeof mark.total === 'number' && mark.total > 0) || mark.int !== undefined || mark.ext !== undefined);
                 })) return true;
                 return false;
             });

@@ -200,7 +200,11 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             if (selectedStudent && !enriched.find(s => s.id === selectedStudent)) setSelectedStudent('');
             const filteredSubjects = subjects.filter(s =>
                 s.targetClasses.includes(selectedClass) ||
-                (s.subjectType === 'elective' && s.enrolledStudents?.some(id => enriched.some(c => c.id === id)))
+                (s.subjectType === 'elective' && s.enrolledStudents?.some(id => enriched.some(c => c.id === id))) ||
+                enriched.some(cs => {
+                    const termData = cs.academicHistory?.[activeTerm];
+                    return getMarkForSubject(termData?.marks, s, termData?.subjectMetadata) !== undefined;
+                })
             );
             setClassSubjects(filteredSubjects);
         } catch (error) {
