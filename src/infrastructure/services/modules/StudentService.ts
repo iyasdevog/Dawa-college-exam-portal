@@ -291,14 +291,15 @@ export class StudentService extends BaseDataService {
                     // Current term: show all active students
                     return student.isActive !== false;
                 } else {
-                    // Historical term: show students who either:
-                    // 1. Have explicit history for this term (they were enrolled then), OR
-                    // 2. Are active students (they exist in the system and should be manageable)
-                    // This prevents the management view from showing empty student lists
-                    // when switching to a historical semester
-                    const hasTermHistory = !!(student.academicHistory && student.academicHistory[activeTerm]);
-                    const isActive = student.isActive !== false;
-                    return hasTermHistory || isActive;
+                    // Historical term: ONLY show students who have explicit history for this term.
+                    // Including all active students here causes 2026-2027 students to appear in
+                    // 2025-2026-Odd views, corrupting class-based filtering.
+                    if (!student.academicHistory) return false;
+                    const hasTermHistory = Object.keys(student.academicHistory).some(tk =>
+                        tk === activeTerm ||
+                        tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')
+                    );
+                    return hasTermHistory;
                 }
             });
 
