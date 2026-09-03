@@ -245,8 +245,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 const termData = getStudentTermData(cs, activeTerm, selectedClass);
                 if (!termData?.marks) return;
                 Object.keys(termData.marks).forEach(subId => {
-                    const liveSub = subjects.find(s => s.id === subId);
                     const snapshot = termData.subjectMetadata?.[subId];
+                    const subName = snapshot?.name;
+                    const liveSub = subjects.find(s => s.id === subId) || (subName ? subjects.find(s => s.name.trim().toLowerCase() === subName.trim().toLowerCase()) : undefined);
                     const m = termData.marks[subId];
 
                     // Exclude supplementary exam marks
@@ -254,15 +255,15 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                         return;
                     }
 
-                    const subName = snapshot?.name || liveSub?.name;
+                    const resolvedName = snapshot?.name || liveSub?.name;
                     const isRawId = /^[a-z0-9]{15,}$/i.test(subId);
                     // CRITICAL GUARD: Never create a column for raw unmapped Firestore IDs
-                    if (!liveSub && (!subName || isRawId || subName === subId)) {
+                    if (!liveSub && (!resolvedName || isRawId || resolvedName === subId)) {
                         return;
                     }
 
                     const alreadyIncluded = potentialSubjects.some(ps => 
-                        ps.id === subId || (subName && ps.name.trim().toLowerCase() === subName.trim().toLowerCase())
+                        ps.id === subId || (resolvedName && ps.name.trim().toLowerCase() === resolvedName.trim().toLowerCase())
                     );
 
                     if (!alreadyIncluded) {
