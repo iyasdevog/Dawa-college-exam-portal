@@ -287,12 +287,13 @@ export class StudentService extends BaseDataService {
                 if (activeTerm === 'All') {
                     return true; // Return everyone for raw data gathering
                 }
-                // Always return active students so Student Management & Class Management can list all students across terms
-                const hasTermHistory = !!(student.academicHistory && Object.keys(student.academicHistory).some(tk =>
+                // Strict Semester Isolation: Return ONLY students with an explicit history entry for activeTerm
+                if (!student.academicHistory) return false;
+                const hasTermHistory = Object.keys(student.academicHistory).some(tk =>
                     tk === activeTerm ||
                     tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')
-                ));
-                return hasTermHistory || student.isActive !== false;
+                );
+                return hasTermHistory;
             });
 
             this.studentsCache.set(activeTerm, filteredStudents);
