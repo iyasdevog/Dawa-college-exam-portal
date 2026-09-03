@@ -40,6 +40,8 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
 
     useEffect(() => {
+        setStudents([]);
+        setClassSubjects([]);
         loadData();
         if (!forcedClass) setSelectedClass(''); // Reset class on term switch
     }, [activeTerm]);
@@ -51,10 +53,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     }, [allowedClasses, forcedClass]);
 
     useEffect(() => {
-        if (selectedClass) {
+        if (selectedClass && subjects.length > 0) {
             loadClassData();
         }
-    }, [selectedClass, subjects]);
+    }, [selectedClass, subjects, activeTerm]);
 
     const loadData = async () => {
         try {
@@ -482,7 +484,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                 <label className="text-sm font-bold text-slate-700 whitespace-nowrap">Select Class</label>
                                 <select
                                     value={selectedClass}
-                                    onChange={(e) => setSelectedClass(e.target.value)}
+                                    onChange={(e) => {
+                                        setStudents([]);
+                                        setClassSubjects([]);
+                                        setSelectedClass(e.target.value);
+                                    }}
                                     className="flex-1 p-2 md:p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium print:hidden text-sm"
                                     style={{ minHeight: '40px' }}
                                     aria-label="Select class to view results"
