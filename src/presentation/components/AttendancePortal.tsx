@@ -57,12 +57,12 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
         loadData();
     }, [activeTerm]);
 
-    // When switching to a historical term, gracefully move away from marking tab
+    // When switching to a term where attendance entry is disallowed, gracefully move away from marking tab
     useEffect(() => {
-        if (isHistoricalTerm && activeTab === 'marking') {
+        if (!isAttendanceEntryAllowed && activeTab === 'marking') {
             setActiveTab('monitor');
         }
-    }, [isHistoricalTerm, activeTab]);
+    }, [isAttendanceEntryAllowed, activeTab]);
 
     if (isLoading) {
         return (
@@ -93,7 +93,25 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                         <p className="text-amber-700 text-xs mt-1">
                             You are currently viewing <span className="font-semibold">{activeTerm}</span>. 
                             Attendance marking is disabled for past semesters to protect historical records. 
-                            Switch to <span className="font-semibold">{systemTerm}</span> to mark attendance.
+                            Active term for attendance entry is <span className="font-semibold">{activeAttendanceTerm}</span>.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Upcoming / Inactive Term Banner */}
+            {!isHistoricalTerm && !isAttendanceEntryAllowed && (
+                <div className="flex items-start gap-4 bg-blue-50 border border-blue-300 rounded-2xl px-5 py-4 shadow-sm">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mt-0.5">
+                        <i className="fa-solid fa-calendar-minus text-blue-600 text-lg"></i>
+                    </div>
+                    <div>
+                        <p className="font-bold text-blue-900 text-sm">
+                            {isUpcomingTerm ? 'Upcoming Semester — Entry Closed' : 'Not Active Semester — Entry Closed'}
+                        </p>
+                        <p className="text-blue-800 text-xs mt-1">
+                            You are currently viewing <span className="font-semibold">{activeTerm}</span>. 
+                            Attendance entry for this semester is not open yet. Active term for attendance entry is <span className="font-semibold">{activeAttendanceTerm}</span>.
                         </p>
                     </div>
                 </div>
@@ -104,13 +122,13 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                 <div className="border-b border-slate-200">
                     <nav className="flex overflow-x-auto no-scrollbar">
                         {tabs.map((tab) => {
-                            const isDisabled = isHistoricalTerm && tab.id === 'marking';
+                            const isDisabled = !isAttendanceEntryAllowed && tab.id === 'marking';
                             return (
                                 <button
                                     key={tab.id}
                                     onClick={() => !isDisabled && setActiveTab(tab.id)}
                                     disabled={isDisabled}
-                                    title={isDisabled ? 'Attendance marking is disabled for historical semesters' : undefined}
+                                    title={isDisabled ? `Attendance marking is closed for ${activeTerm}` : undefined}
                                     className={`flex items-center gap-3 px-6 py-4 font-bold whitespace-nowrap transition-all
                                         ${isDisabled
                                             ? 'text-slate-300 cursor-not-allowed bg-slate-50'
@@ -129,7 +147,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                 </div>
 
                 <div className="p-6">
-                    {activeTab === 'marking' && !isHistoricalTerm && (
+                    {activeTab === 'marking' && isAttendanceEntryAllowed && (
                         <AttendanceManagement
                             students={students}
                             subjects={subjects}

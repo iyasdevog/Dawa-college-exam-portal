@@ -64,7 +64,7 @@ const EMPTY_MARKS = { int: '', ext: '' };
 const StudentRow = React.memo(({
     student, index, marks, validationHelpers, handleMarksChange, handleKeyDown,
     handleSaveEXTMarks, handleSaveINTMarks, handleClearStudentMarks,
-    isSaving, att, selectedSubjectData, isCondoned
+    isSaving, att, selectedSubjectData, isCondoned, isMarksEntryAllowed
 }: {
     student: StudentRecord;
     index: number;
@@ -79,6 +79,7 @@ const StudentRow = React.memo(({
     att: number;
     selectedSubjectData: SubjectConfig | undefined;
     isCondoned: boolean;
+    isMarksEntryAllowed: boolean;
 }) => {
     const total = validationHelpers?.calculateTotal(marks.int, marks.ext) || 0;
     const status = validationHelpers?.getStatus(marks.int, marks.ext) || 'Pending';
@@ -87,6 +88,7 @@ const StudentRow = React.memo(({
     const isEligible = isCondoned || att >= 75;
     // INT field is disabled only when maxINT is 0 (no internal component), not when maxEXT === 100 (since Doura can have 70 EXT + 30 INT)
     const noInternal = (selectedSubjectData?.maxINT ?? 1) === 0;
+    const isEntryDisabled = !isEligible || isSaving || !isMarksEntryAllowed;
 
     return (
         <tr className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
@@ -110,10 +112,10 @@ const StudentRow = React.memo(({
                     data-student={student.id}
                     data-field="ext"
                     className={`w-20 p-2 border-2 rounded-xl text-center ${
-                        !isEligible ? 'bg-red-50 opacity-60' :
+                        isEntryDisabled ? 'bg-slate-100 opacity-60' :
                         isCondoned ? 'border-indigo-300' : ''
                     }`}
-                    disabled={!isEligible || isSaving}
+                    disabled={isEntryDisabled}
                 />
             </td>
             <td className="p-4 text-center">
@@ -125,10 +127,10 @@ const StudentRow = React.memo(({
                     data-student={student.id}
                     data-field="int"
                     className={`w-20 p-2 border-2 rounded-xl text-center ${
-                        noInternal || !isEligible ? 'bg-slate-100 opacity-60' :
+                        noInternal || isEntryDisabled ? 'bg-slate-100 opacity-60' :
                         isCondoned ? 'border-indigo-300' : ''
                     }`}
-                    disabled={noInternal || !isEligible || isSaving}
+                    disabled={noInternal || isEntryDisabled}
                 />
             </td>
             <td className="p-4 text-center font-bold">{marks.int && marks.ext ? total : '-'}</td>
@@ -140,10 +142,10 @@ const StudentRow = React.memo(({
             <td className="p-4 text-center">
                 <div className="flex flex-col gap-1">
                     <div className="flex gap-1">
-                        <button onClick={() => handleSaveEXTMarks(student.id)} className="flex-1 bg-sky-50 text-sky-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.ext}>Save EXT</button>
-                        <button onClick={() => handleSaveINTMarks(student.id)} className="flex-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs" disabled={isSaving || !marks.int}>Save INT</button>
+                        <button onClick={() => handleSaveEXTMarks(student.id)} className="flex-1 bg-sky-50 text-sky-700 px-2 py-1 rounded text-xs" disabled={isEntryDisabled || !marks.ext}>Save EXT</button>
+                        <button onClick={() => handleSaveINTMarks(student.id)} className="flex-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs" disabled={isEntryDisabled || !marks.int}>Save INT</button>
                     </div>
-                    <button onClick={() => handleClearStudentMarks(student.id, student.name)} className="bg-red-50 text-red-600 rounded text-xs p-1" disabled={isSaving || (!marks.int && !marks.ext)}>Clear ALL</button>
+                    <button onClick={() => handleClearStudentMarks(student.id, student.name)} className="bg-red-50 text-red-600 rounded text-xs p-1" disabled={isEntryDisabled || (!marks.int && !marks.ext)}>Clear ALL</button>
                 </div>
             </td>
         </tr>
@@ -179,7 +181,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
     showScrollToTop, scrollToTop, isScrolling, getTouchProps,
     studentRefs, handleKeyDown
 }) => {
-    const { activeTerm } = useTerm();
+    const { activeTerm, isHistoricalTerm, isUpcomingTerm, isMarksEntryAllowed, activeMarksTerm } = useTerm();
 
     const handleDownloadTemplate = () => {
         if (!students || students.length === 0) return;
@@ -242,6 +244,37 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 
     return (
         <>
+            {/* Historical Term Banner */}
+            {isHistoricalTerm && (
+                <div className="flex items-start gap-4 bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mt-0.5">
+                        <i className="fa-solid fa-clock-rotate-left text-amber-600 text-lg"></i>
+                    </div>
+                    <div>
+                        <p className="font-bold text-amber-800 text-sm">Viewing Historical Semester — Read-Only Mode</p>
+                        <p className="text-amber-700 text-xs mt-1">
+                            You are currently viewing <span className="font-semibold">{activeTerm}</span>. Marks entry is disabled for past semesters to protect historical records. Active term for marks entry is <span className="font-semibold">{activeMarksTerm}</span>.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Upcoming / Inactive Term Banner */}
+            {!isHistoricalTerm && !isMarksEntryAllowed && (
+                <div className="flex items-start gap-4 bg-blue-50 border border-blue-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mt-0.5">
+                        <i className="fa-solid fa-calendar-minus text-blue-600 text-lg"></i>
+                    </div>
+                    <div>
+                        <p className="font-bold text-blue-900 text-sm">
+                            {isUpcomingTerm ? 'Upcoming Semester — Entry Closed' : 'Not Active Semester — Entry Closed'}
+                        </p>
+                        <p className="text-blue-800 text-xs mt-1">
+                            You are currently viewing <span className="font-semibold">{activeTerm}</span>. Marks entry for this semester is not open yet. Active term for marks entry is <span className="font-semibold">{activeMarksTerm}</span>.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-xl border-2 border-slate-200 mx-6 md:mx-0 print:hidden" style={{
                 background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
@@ -547,6 +580,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                             att={attendanceStats[student.id]?.percentage || 0}
                                             selectedSubjectData={selectedSubjectData}
                                             isCondoned={student.condonedTerms?.[activeTerm] === true}
+                                            isMarksEntryAllowed={isMarksEntryAllowed}
                                         />
                                     ))}
                                 </tbody>
@@ -555,12 +589,12 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                         <div className="p-6 border-t flex justify-between items-center">
                             <div className="text-sm text-slate-600">{completionStats.completed} / {completionStats.total} completed</div>
                             <div className="flex gap-2">
-                                <button onClick={() => handleSaveEXTMarks()} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold" disabled={isSaving}>Save EXT</button>
-                                <button onClick={() => handleSaveINTMarks()} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold" disabled={isSaving}>Save INT</button>
-                                <button onClick={handleClearINTMarks} className="px-4 py-2 border-2 border-orange-200 text-orange-700 rounded-xl font-bold" disabled={isSaving}>Clear INT</button>
-                                <button onClick={handleClearEXTMarks} className="px-4 py-2 border-2 border-red-200 text-red-700 rounded-xl font-bold" disabled={isSaving}>Clear EXT</button>
-                                <button onClick={handleClearAll} className="px-4 py-2 border border-slate-300 rounded-xl font-bold" disabled={isSaving}>Clear All</button>
-                                <button onClick={handleSaveMarks} className={`px-6 py-2 rounded-xl font-bold text-white ${invalidMarksInfo.hasInvalid ? 'bg-slate-400' : 'bg-emerald-600'}`} disabled={isSaving || invalidMarksInfo.hasInvalid}>Save All Marks</button>
+                                <button onClick={() => handleSaveEXTMarks()} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold" disabled={isSaving || !isMarksEntryAllowed}>Save EXT</button>
+                                <button onClick={() => handleSaveINTMarks()} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold" disabled={isSaving || !isMarksEntryAllowed}>Save INT</button>
+                                <button onClick={handleClearINTMarks} className="px-4 py-2 border-2 border-orange-200 text-orange-700 rounded-xl font-bold" disabled={isSaving || !isMarksEntryAllowed}>Clear INT</button>
+                                <button onClick={handleClearEXTMarks} className="px-4 py-2 border-2 border-red-200 text-red-700 rounded-xl font-bold" disabled={isSaving || !isMarksEntryAllowed}>Clear EXT</button>
+                                <button onClick={handleClearAll} className="px-4 py-2 border border-slate-300 rounded-xl font-bold" disabled={isSaving || !isMarksEntryAllowed}>Clear All</button>
+                                <button onClick={handleSaveMarks} className={`px-6 py-2 rounded-xl font-bold text-white ${invalidMarksInfo.hasInvalid || !isMarksEntryAllowed ? 'bg-slate-400' : 'bg-emerald-600'}`} disabled={isSaving || invalidMarksInfo.hasInvalid || !isMarksEntryAllowed}>Save All Marks</button>
                             </div>
                         </div>
                     </div>

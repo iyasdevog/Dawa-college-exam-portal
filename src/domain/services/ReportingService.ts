@@ -49,8 +49,8 @@ export interface StudentScorecard {
     subjectMarks: Array<{
         subjectName: string;
         arabicName?: string;
-        ta: number;
-        ce: number;
+        int: number;
+        ext: number;
         total: number;
         maxTotal: number;
         percentage: number;
@@ -147,11 +147,14 @@ export class ReportingService {
             else if (percentage >= 40) grade = 'C';
             else grade = 'F';
 
+            const intVal = typeof marks?.int === 'number' ? marks.int : (typeof marks?.ce === 'number' ? marks.ce : 0);
+            const extVal = typeof marks?.ext === 'number' ? marks.ext : (typeof marks?.ta === 'number' ? marks.ta : 0);
+
             return {
                 subjectName: subject.name,
                 arabicName: subject.arabicName,
-                ta: marks?.ta || 0,
-                ce: marks?.ce || 0,
+                int: intVal,
+                ext: extVal,
                 total: marks?.total || 0,
                 maxTotal,
                 percentage,

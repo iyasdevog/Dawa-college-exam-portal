@@ -127,6 +127,10 @@ export interface GlobalSettings {
   contactPhone?: string; // e.g. "+91-483-2734567"
   systemAlias?: string; // e.g. "AIC_Dawa_Portal"
   classSemesters?: Record<string, 'Odd' | 'Even' | 'Bridge'>; // Added: Per-class semester mapping
+  activeAttendanceTerm?: string; // Active term key allowed for attendance entry (e.g. "2026-2027-Odd")
+  allowedAttendanceTerms?: string[]; // Allowed term keys for attendance entry
+  activeMarksTerm?: string; // Active term key allowed for marks entry (e.g. "2026-2027-Odd")
+  allowedMarksTerms?: string[]; // Allowed term keys for marks entry
 }
 
 export interface CourseOutcome {

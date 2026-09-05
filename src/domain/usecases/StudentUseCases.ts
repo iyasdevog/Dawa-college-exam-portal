@@ -47,8 +47,8 @@ export class StudentUseCases {
     async updateStudentMarks(
         studentId: string,
         subjectId: string,
-        ta: number,
-        ce: number
+        int: number,
+        ext: number
     ): Promise<void> {
         const student = await this.studentRepository.findById(studentId);
         if (!student) {
@@ -61,16 +61,18 @@ export class StudentUseCases {
         }
 
         // Validate marks against subject limits
-        if (ta > subject.maxINT || ce > subject.maxEXT) {
-            throw new Error(`Marks exceed maximum allowed (TA: ${subject.maxINT}, CE: ${subject.maxEXT})`);
+        if (int > subject.maxINT || ext > subject.maxEXT) {
+            throw new Error(`Marks exceed maximum allowed (INT: ${subject.maxINT}, EXT: ${subject.maxEXT})`);
         }
 
-        const total = ta + ce;
-        const status = subject.isPassingScore(ta, ce) ? 'Passed' : 'Failed';
+        const total = int + ext;
+        const status = subject.isPassingScore(int, ext) ? 'Passed' : 'Failed';
 
         const marks: SubjectMarks = {
-            ta,
-            ce,
+            int,
+            ext,
+            ta: ext,
+            ce: int,
             total,
             status
         };

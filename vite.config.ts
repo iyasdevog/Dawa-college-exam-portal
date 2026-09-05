@@ -65,33 +65,24 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           // Manual chunk splitting for better caching
-          manualChunks: {
-            // Vendor chunks for better caching
-            'react-vendor': ['react', 'react-dom'],
-            'firebase-vendor': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
-            'charts-vendor': ['recharts'],
-            'excel-vendor': ['xlsx'],
-            'ai-vendor': ['@google/genai'],
-
-            // Feature-based chunks
-            'dashboard-features': [
-              './src/presentation/components/Dashboard.tsx',
-              './src/domain/services/ReportingService.ts'
-            ],
-            'faculty-features': [
-              './src/presentation/components/FacultyEntry.tsx',
-              './src/presentation/components/Management.tsx'
-            ],
-            'public-features': [
-              './src/presentation/components/PublicPortal.tsx',
-              './src/presentation/components/ClassResults.tsx',
-              './src/presentation/components/StudentScorecard.tsx'
-            ],
-            'infrastructure-services': [
-              './src/infrastructure/services/dataService.ts',
-              './src/infrastructure/services/EnhancedDataService.ts',
-              './src/infrastructure/services/AIService.ts'
-            ]
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react/') || id.includes('react-dom/')) {
+                return 'react-vendor';
+              }
+              if (id.includes('firebase')) {
+                return 'firebase-vendor';
+              }
+              if (id.includes('recharts')) {
+                return 'charts-vendor';
+              }
+              if (id.includes('xlsx')) {
+                return 'excel-vendor';
+              }
+              if (id.includes('@google/genai')) {
+                return 'ai-vendor';
+              }
+            }
           },
           // Optimize chunk file names for caching
           chunkFileNames: (chunkInfo) => {

@@ -39,13 +39,15 @@ export class GradingService {
         return 'C (Average)';
     }
 
-    calculateSubjectMarks(ta: number, ce: number, subject: Subject): SubjectMarks {
-        const total = ta + ce;
-        const status = subject.isPassingScore(ta, ce) ? 'Passed' : 'Failed';
+    calculateSubjectMarks(int: number, ext: number, subject: Subject): SubjectMarks {
+        const total = int + ext;
+        const status = subject.isPassingScore(int, ext) ? 'Passed' : 'Failed';
 
         return {
-            ta,
-            ce,
+            int,
+            ext,
+            ta: ext,
+            ce: int,
             total,
             status
         };
@@ -93,10 +95,10 @@ export class GradingService {
         return rankedStudents;
     }
 
-    getPassingGrade(subject: Subject): { minTA: number; minCE: number; minTotal: number } {
+    getPassingGrade(subject: Subject): { minINT: number; minEXT: number; minTotal: number } {
         return {
-            minTA: subject.getMinimumINTRequired(),
-            minCE: subject.getMinimumEXTRequired(),
+            minINT: subject.getMinimumINTRequired(),
+            minEXT: subject.getMinimumEXTRequired(),
             minTotal: subject.passingTotal
         };
     }
@@ -207,8 +209,8 @@ export class GradingService {
         subjectWiseMarks: Array<{
             subjectId: string;
             subjectName: string;
-            ta: number;
-            ce: number;
+            int: number;
+            ext: number;
             total: number;
             status: string;
             maxMarks: number;
@@ -227,12 +229,14 @@ export class GradingService {
             .map(subject => {
                 const marks = student.marks[subject.id];
                 const maxMarks = subject.getMaxTotal();
+                const intVal = typeof marks?.int === 'number' ? marks.int : (typeof marks?.ce === 'number' ? marks.ce : 0);
+                const extVal = typeof marks?.ext === 'number' ? marks.ext : (typeof marks?.ta === 'number' ? marks.ta : 0);
 
                 return {
                     subjectId: subject.id,
                     subjectName: subject.name,
-                    ta: marks?.ta || 0,
-                    ce: marks?.ce || 0,
+                    int: intVal,
+                    ext: extVal,
                     total: marks?.total || 0,
                     status: marks?.status || 'Pending',
                     maxMarks,

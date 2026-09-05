@@ -2,10 +2,12 @@ import { SubjectConfig } from './Subject';
 export type PerformanceLevel = 'O (Outstanding)' | 'A+ (Excellent)' | 'A (Very Good)' | 'B+ (Good)' | 'B (Good)' | 'C (Average)' | 'F (Failed)';
 
 export interface SubjectMarks {
-    ta: number;
-    ce: number;
+    int: number | 'A';
+    ext: number | 'A';
+    ta?: number | 'A';
+    ce?: number | 'A';
     total: number;
-    status: 'Passed' | 'Failed';
+    status: 'Passed' | 'Failed' | 'Pending';
     isSupplementary?: boolean;
     supplementaryYear?: number;
 }

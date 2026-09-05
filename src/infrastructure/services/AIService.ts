@@ -13,8 +13,8 @@ export interface StudentPerformanceData {
     className: string;
     subjects: Array<{
         name: string;
-        ta: number;
-        ce: number;
+        int: number;
+        ext: number;
         total: number;
         maxTotal: number;
         status: string;

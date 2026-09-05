@@ -10,8 +10,8 @@ import MobileButton from './MobileButton';
 interface MobileMarksEntryFormProps {
     student: StudentRecord;
     subject: SubjectConfig;
-    initialMarks?: { ta: string; ce: string };
-    onSave: (studentId: string, marks: { ta: number; ce: number }) => Promise<void>;
+    initialMarks?: { int?: string; ext?: string; ta?: string; ce?: string };
+    onSave: (studentId: string, marks: { int: number; ext: number; ta?: number; ce?: number }) => Promise<void>;
     onCancel?: () => void;
     onNext?: () => void;
     onPrevious?: () => void;
@@ -29,7 +29,7 @@ interface MobileMarksEntryFormProps {
 export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     student,
     subject,
-    initialMarks = { ta: '', ce: '' },
+    initialMarks = { int: '', ext: '', ta: '', ce: '' },
     onSave,
     onCancel,
     onNext,
@@ -40,28 +40,31 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     totalStudents = 1
 }) => {
     const { isMobile, orientation } = useMobile();
-    const [marks, setMarks] = useState(initialMarks);
+    const [marks, setMarks] = useState({
+        int: initialMarks.int || initialMarks.ce || '',
+        ext: initialMarks.ext || initialMarks.ta || ''
+    });
     const [isSaving, setIsSaving] = useState(false);
-    const [validationErrors, setValidationErrors] = useState<{ ta?: string; ce?: string }>({});
+    const [validationErrors, setValidationErrors] = useState<{ int?: string; ext?: string }>({});
     const [showValidation, setShowValidation] = useState(false);
 
     const { maxINT, maxEXT, maxTotal } = getSubjectMaxMarks(subject);
 
     // Create validation configuration
     const validationConfig: FormValidationConfig = {
-        ta: {
+        int: {
             rules: [
-                validationPresets.required('EXT marks are required'),
-                validationPresets.marks(maxEXT, `EXT marks must be between 0 and ${maxEXT}`)
+                validationPresets.required('INT marks are required'),
+                validationPresets.marks(maxINT, `INT marks must be between 0 and ${maxINT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
             debounceMs: 500
         },
-        ce: {
+        ext: {
             rules: [
-                validationPresets.required('INT marks are required'),
-                validationPresets.marks(maxINT, `INT marks must be between 0 and ${maxINT}`)
+                validationPresets.required('EXT marks are required'),
+                validationPresets.marks(maxEXT, `EXT marks must be between 0 and ${maxEXT}`)
             ],
             validateOnChange: true,
             validateOnBlur: true,
@@ -73,26 +76,29 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
 
     // Update marks when props change
     useEffect(() => {
-        setMarks(initialMarks);
+        setMarks({
+            int: initialMarks.int || initialMarks.ce || '',
+            ext: initialMarks.ext || initialMarks.ta || ''
+        });
         setValidationErrors({});
         setShowValidation(false);
     }, [initialMarks, student.id]);
 
     // Calculate totals and status
-    const taValue = parseInt(marks.ta) || 0;
-    const ceValue = parseInt(marks.ce) || 0;
-    const total = taValue + ceValue;
+    const intValue = parseInt(marks.int) || 0;
+    const extValue = parseInt(marks.ext) || 0;
+    const total = intValue + extValue;
     const percentage = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
 
     // Determine pass/fail status
-    const minTA = Math.ceil(maxINT * 0.5);
-    const minCE = Math.ceil(maxEXT * 0.4);
-    const passedTA = taValue >= minTA;
-    const passedCE = ceValue >= minCE;
-    const overallStatus = passedTA && passedCE ? 'Passed' : 'Failed';
+    const minINT = Math.ceil(maxINT * 0.5);
+    const minEXT = Math.ceil(maxEXT * 0.4);
+    const passedINT = intValue >= minINT;
+    const passedEXT = extValue >= minEXT;
+    const overallStatus = passedINT && passedEXT ? 'Passed' : 'Failed';
 
     // Handle field change with validation
-    const handleFieldChange = useCallback((field: 'ta' | 'ce', value: string) => {
+    const handleFieldChange = useCallback((field: 'int' | 'ext', value: string) => {
         // Only allow numeric input
         if (value && !/^\d*$/.test(value)) {
             return;
@@ -110,7 +116,7 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
     }, [validator]);
 
     // Handle field blur
-    const handleFieldBlur = useCallback((field: 'ta' | 'ce', value: string) => {
+    const handleFieldBlur = useCallback((field: 'int' | 'ext', value: string) => {
         setShowValidation(true);
 
         validator.handleFieldBlur(field, value, (result) => {
@@ -129,9 +135,9 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
         const { isValid, errors } = validator.validateForm(marks);
 
         if (!isValid) {
-            const newErrors: { ta?: string; ce?: string } = {};
-            if (errors.ta) newErrors.ta = errors.ta[0];
-            if (errors.ce) newErrors.ce = errors.ce[0];
+            const newErrors: { int?: string; ext?: string } = {};
+            if (errors.int) newErrors.int = errors.int[0];
+            if (errors.ext) newErrors.ext = errors.ext[0];
             setValidationErrors(newErrors);
 
             screenReaderAnnouncer.announceError('Please correct the validation errors before saving');
@@ -140,9 +146,13 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
 
         setIsSaving(true);
         try {
+            const parsedInt = parseInt(marks.int) || 0;
+            const parsedExt = parseInt(marks.ext) || 0;
             await onSave(student.id, {
-                ta: parseInt(marks.ta),
-                ce: parseInt(marks.ce)
+                int: parsedInt,
+                ext: parsedExt,
+                ta: parsedExt,
+                ce: parsedInt
             });
 
             screenReaderAnnouncer.announceSuccess(`Marks saved for ${student.name}`);
@@ -154,19 +164,13 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
                 }, 500);
             }
         } catch (error) {
-            console.error('Error saving marks:', error);
+            console.error('Failed to save marks:', error);
             screenReaderAnnouncer.announceError('Failed to save marks. Please try again.');
         } finally {
             setIsSaving(false);
         }
     };
 
-    // Handle keyboard navigation
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        if (e.ctrlKey || e.metaKey) {
-            switch (e.key) {
-                case 's':
-                    e.preventDefault();
                     handleSave();
                     break;
                 case 'ArrowLeft':

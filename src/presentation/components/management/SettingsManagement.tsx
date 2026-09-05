@@ -86,7 +86,72 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         skipped: number 
     } | null>(null);
 
-    const [inconsistentTerms, setInconsistentTerms] = useState<string[]>([]);
+    const [activeAttendanceTerm, setActiveAttendanceTerm] = useState<string>('');
+    const [activeMarksTerm, setActiveMarksTerm] = useState<string>('');
+    const [allowedAttendanceTerms, setAllowedAttendanceTerms] = useState<string[]>([]);
+    const [allowedMarksTerms, setAllowedMarksTerms] = useState<string[]>([]);
+    const [customUpcomingTermInput, setCustomUpcomingTermInput] = useState<string>('');
+
+    const termList = React.useMemo(() => {
+        const years = availableYears.length > 0 ? availableYears : [editableYear || '2026-2027'];
+        const terms: string[] = [];
+        years.forEach(y => {
+            terms.push(`${y}-Odd`);
+            terms.push(`${y}-Even`);
+        });
+        if (editableYear) {
+            terms.push(`${editableYear}-Odd`);
+            terms.push(`${editableYear}-Even`);
+        }
+        allowedAttendanceTerms.forEach(t => terms.push(t));
+        allowedMarksTerms.forEach(t => terms.push(t));
+
+        return Array.from(new Set(terms)).sort((a, b) => {
+            const getScore = (tk: string) => {
+                const parts = tk.split('-');
+                const y = parseInt(parts[0], 10) || 0;
+                const sem = parts[parts.length - 1];
+                return y + (sem === 'Even' ? 0.2 : sem === 'Bridge' ? 0.15 : 0.1);
+            };
+            return getScore(b) - getScore(a);
+        });
+    }, [availableYears, editableYear, allowedAttendanceTerms, allowedMarksTerms]);
+
+    const toggleAttendanceTerm = (term: string) => {
+        setAllowedAttendanceTerms(prev => {
+            if (prev.includes(term)) {
+                const next = prev.filter(t => t !== term);
+                return next.length > 0 ? next : [term];
+            } else {
+                return [...prev, term];
+            }
+        });
+    };
+
+    const toggleMarksTerm = (term: string) => {
+        setAllowedMarksTerms(prev => {
+            if (prev.includes(term)) {
+                const next = prev.filter(t => t !== term);
+                return next.length > 0 ? next : [term];
+            } else {
+                return [...prev, term];
+            }
+        });
+    };
+
+    const handleAddCustomTerm = () => {
+        const term = customUpcomingTermInput.trim();
+        if (!term) return;
+        if (!term.includes('-') || (!term.endsWith('-Odd') && !term.endsWith('-Even') && !term.endsWith('-Bridge'))) {
+            alert('Term key must be formatted as YEAR-Semester (e.g. 2027-2028-Odd or 2027-2028-Even)');
+            return;
+        }
+        const yearPart = term.substring(0, term.lastIndexOf('-'));
+        setAvailableYears(prev => Array.from(new Set([...prev, yearPart])));
+        setAllowedAttendanceTerms(prev => Array.from(new Set([...prev, term])));
+        setAllowedMarksTerms(prev => Array.from(new Set([...prev, term])));
+        setCustomUpcomingTermInput('');
+    };
 
     React.useEffect(() => {
         const loadSettings = async () => {
@@ -108,6 +173,21 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             setContactEmail(settings.contactEmail || 'examinations@aicdawacollege.edu.in');
             setContactPhone(settings.contactPhone || '+91-483-2734567');
             setSystemAlias(settings.systemAlias || 'AIC_Dawa_Portal');
+
+            const defaultTerm = `${settings.currentAcademicYear || '2025-2026'}-${settings.currentSemester || 'Odd'}`;
+            const attTerm = settings.activeAttendanceTerm || defaultTerm;
+            const marksTerm = settings.activeMarksTerm || defaultTerm;
+
+            setActiveAttendanceTerm(attTerm);
+            setActiveMarksTerm(marksTerm);
+
+            setAllowedAttendanceTerms(settings.allowedAttendanceTerms && settings.allowedAttendanceTerms.length > 0 
+                ? settings.allowedAttendanceTerms 
+                : [attTerm]);
+
+            setAllowedMarksTerms(settings.allowedMarksTerms && settings.allowedMarksTerms.length > 0 
+                ? settings.allowedMarksTerms 
+                : [marksTerm]);
         };
 
         const loadSummaries = async () => {
@@ -187,6 +267,10 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                 contactEmail,
                 contactPhone,
                 systemAlias,
+                activeAttendanceTerm: activeAttendanceTerm || allowedAttendanceTerms[0] || `${editableYear}-${currentSemester}`,
+                activeMarksTerm: activeMarksTerm || allowedMarksTerms[0] || `${editableYear}-${currentSemester}`,
+                allowedAttendanceTerms: allowedAttendanceTerms.length > 0 ? allowedAttendanceTerms : [activeAttendanceTerm || `${editableYear}-${currentSemester}`],
+                allowedMarksTerms: allowedMarksTerms.length > 0 ? allowedMarksTerms : [activeMarksTerm || `${editableYear}-${currentSemester}`],
                 // Ensure years are synced
                 availableYears: Array.from(new Set([...(currentSettings.availableYears || []), editableYear])).filter(Boolean)
             };
@@ -835,6 +919,162 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                                 <div className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-bold border-2 border-emerald-100 flex items-center gap-2">
                                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                                     Framework: {editableYear}-{currentSemester}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div>
+                                    <h5 className="font-black text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                                        <i className="fa-solid fa-sliders text-emerald-600"></i>
+                                        Faculty Term Entry Restrictions &amp; Permissions
+                                    </h5>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Manually open or lock Attendance Entry &amp; Marks Entry for any semester (Historical, Current, or Upcoming).
+                                    </p>
+                                </div>
+
+                                {/* Quick Add Custom/Upcoming Term */}
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. 2027-2028-Even"
+                                        value={customUpcomingTermInput}
+                                        onChange={(e) => setCustomUpcomingTermInput(e.target.value)}
+                                        className="px-3 py-1.5 text-xs font-mono font-bold border-2 border-slate-300 rounded-xl bg-white focus:border-emerald-500 outline-none w-44"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddCustomTerm}
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                                        title="Add upcoming term to controls"
+                                    >
+                                        <i className="fa-solid fa-plus text-xs"></i>
+                                        <span>Add Term</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Primary Term Selectors */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-200">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">Primary Active Attendance Term</label>
+                                    <select
+                                        value={activeAttendanceTerm}
+                                        onChange={(e) => {
+                                            const newTerm = e.target.value;
+                                            setActiveAttendanceTerm(newTerm);
+                                            if (!allowedAttendanceTerms.includes(newTerm)) {
+                                                setAllowedAttendanceTerms(prev => [...prev, newTerm]);
+                                            }
+                                        }}
+                                        className="w-full px-3 py-2 border-2 border-slate-200 rounded-xl font-bold text-slate-900 bg-white text-xs"
+                                    >
+                                        {termList.map(term => (
+                                            <option key={`att-sel-${term}`} value={term}>{term}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">Primary Active Marks Term</label>
+                                    <select
+                                        value={activeMarksTerm}
+                                        onChange={(e) => {
+                                            const newTerm = e.target.value;
+                                            setActiveMarksTerm(newTerm);
+                                            if (!allowedMarksTerms.includes(newTerm)) {
+                                                setAllowedMarksTerms(prev => [...prev, newTerm]);
+                                            }
+                                        }}
+                                        className="w-full px-3 py-2 border-2 border-slate-200 rounded-xl font-bold text-slate-900 bg-white text-xs"
+                                    >
+                                        {termList.map(term => (
+                                            <option key={`marks-sel-${term}`} value={term}>{term}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Granular Permission Matrix Table */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                                    Granular Semester Entry Matrix
+                                </label>
+                                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-slate-100 text-slate-600 uppercase font-black tracking-wider text-[10px]">
+                                            <tr>
+                                                <th className="p-3">Semester / Term Key</th>
+                                                <th className="p-3 text-center">Attendance Entry</th>
+                                                <th className="p-3 text-center">Marks Entry</th>
+                                                <th className="p-3 text-right">Access State</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {termList.map(term => {
+                                                const isAttAllowed = allowedAttendanceTerms.includes(term);
+                                                const isMarksAllowed = allowedMarksTerms.includes(term);
+                                                const isCurrent = term === `${editableYear}-${currentSemester}`;
+                                                
+                                                return (
+                                                    <tr key={`matrix-${term}`} className={isCurrent ? 'bg-emerald-50/40 font-bold' : 'hover:bg-slate-50'}>
+                                                        <td className="p-3 font-mono font-bold text-slate-900 flex items-center gap-2">
+                                                            <span>{term}</span>
+                                                            {isCurrent && (
+                                                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black rounded-full uppercase">
+                                                                    System Active
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        
+                                                        <td className="p-3 text-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleAttendanceTerm(term)}
+                                                                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 mx-auto ${
+                                                                    isAttAllowed
+                                                                        ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
+                                                                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                                                }`}
+                                                            >
+                                                                <i className={`fa-solid ${isAttAllowed ? 'fa-lock-open' : 'fa-lock'}`}></i>
+                                                                <span>{isAttAllowed ? 'OPEN' : 'LOCKED'}</span>
+                                                            </button>
+                                                        </td>
+
+                                                        <td className="p-3 text-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleMarksTerm(term)}
+                                                                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 mx-auto ${
+                                                                    isMarksAllowed
+                                                                        ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+                                                                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                                                }`}
+                                                            >
+                                                                <i className={`fa-solid ${isMarksAllowed ? 'fa-lock-open' : 'fa-lock'}`}></i>
+                                                                <span>{isMarksAllowed ? 'OPEN' : 'LOCKED'}</span>
+                                                            </button>
+                                                        </td>
+
+                                                        <td className="p-3 text-right text-[11px]">
+                                                            {isAttAllowed && isMarksAllowed ? (
+                                                                <span className="text-emerald-700 font-bold">Fully Open</span>
+                                                            ) : isAttAllowed ? (
+                                                                <span className="text-emerald-600 font-semibold">Attendance Only</span>
+                                                            ) : isMarksAllowed ? (
+                                                                <span className="text-blue-600 font-semibold">Marks Only</span>
+                                                            ) : (
+                                                                <span className="text-slate-400">Locked</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
