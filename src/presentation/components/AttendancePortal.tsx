@@ -18,7 +18,7 @@ interface AttendancePortalProps {
 
 const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
     const { isMobile } = useMobile();
-    const { activeTerm, systemTerm, isHistoricalTerm } = useTerm();
+    const { activeTerm, systemTerm, isHistoricalTerm, isUpcomingTerm, isAttendanceEntryAllowed, activeAttendanceTerm } = useTerm();
     const [activeTab, setActiveTab] = useState('marking');
     const [students, setStudents] = useState<StudentRecord[]>([]);
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
