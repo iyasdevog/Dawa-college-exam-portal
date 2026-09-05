@@ -82,8 +82,8 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                 <p className={`text-slate-600 mt-2 ${isMobile ? 'text-sm' : ''}`}>Manage academic calendar, generate timetables, and track attendance</p>
             </div>
 
-            {/* Historical Semester Banner */}
-            {isHistoricalTerm && (
+            {/* Historical Semester Banner - Read Only */}
+            {isHistoricalTerm && !isAttendanceEntryAllowed && (
                 <div className="flex items-start gap-4 bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 shadow-sm">
                     <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mt-0.5">
                         <i className="fa-solid fa-clock-rotate-left text-amber-600 text-lg"></i>
@@ -94,6 +94,22 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({ currentUser }) => {
                             You are currently viewing <span className="font-semibold">{activeTerm}</span>. 
                             Attendance marking is disabled for past semesters to protect historical records. 
                             Active term for attendance entry is <span className="font-semibold">{activeAttendanceTerm}</span>.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Historical Semester Banner - Unlocked */}
+            {isHistoricalTerm && isAttendanceEntryAllowed && (
+                <div className="flex items-start gap-4 bg-emerald-50 border border-emerald-300 rounded-2xl px-5 py-4 shadow-sm">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center mt-0.5">
+                        <i className="fa-solid fa-lock-open text-emerald-600 text-lg"></i>
+                    </div>
+                    <div>
+                        <p className="font-bold text-emerald-900 text-sm">Historical Semester — Attendance Marking Unlocked</p>
+                        <p className="text-emerald-800 text-xs mt-1">
+                            You are currently viewing <span className="font-semibold">{activeTerm}</span>. 
+                            Attendance marking for this semester is <span className="font-bold text-emerald-900 uppercase">UNLOCKED</span> and active.
                         </p>
                     </div>
                 </div>

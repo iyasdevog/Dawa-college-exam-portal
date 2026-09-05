@@ -244,8 +244,8 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 
     return (
         <>
-            {/* Historical Term Banner */}
-            {isHistoricalTerm && (
+            {/* Historical Term Banner - Locked */}
+            {isHistoricalTerm && !isMarksEntryAllowed && (
                 <div className="flex items-start gap-4 bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0">
                     <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mt-0.5">
                         <i className="fa-solid fa-clock-rotate-left text-amber-600 text-lg"></i>
@@ -253,7 +253,22 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                     <div>
                         <p className="font-bold text-amber-800 text-sm">Viewing Historical Semester — Read-Only Mode</p>
                         <p className="text-amber-700 text-xs mt-1">
-                            You are currently viewing <span className="font-semibold">{activeTerm}</span>. Marks entry is disabled for past semesters to protect historical records. Active term for marks entry is <span className="font-semibold">{activeMarksTerm}</span>.
+                            You are currently viewing <span className="font-semibold">{activeTerm}</span>. Marks entry is locked for past semesters. Primary active term for marks entry is <span className="font-semibold">{activeMarksTerm}</span>.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Historical Term Banner - Unlocked */}
+            {isHistoricalTerm && isMarksEntryAllowed && (
+                <div className="flex items-start gap-4 bg-emerald-50 border border-emerald-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center mt-0.5">
+                        <i className="fa-solid fa-lock-open text-emerald-600 text-lg"></i>
+                    </div>
+                    <div>
+                        <p className="font-bold text-emerald-900 text-sm">Historical Semester — Marks Entry Unlocked</p>
+                        <p className="text-emerald-800 text-xs mt-1">
+                            You are currently viewing <span className="font-semibold">{activeTerm}</span>. Marks entry for this semester is <span className="font-bold text-emerald-900 uppercase">UNLOCKED</span> and active.
                         </p>
                     </div>
                 </div>

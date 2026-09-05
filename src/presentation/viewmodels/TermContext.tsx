@@ -112,6 +112,11 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 currentAcademicYear: year,
                 currentSemester: semester
             });
+            setCurrentAcademicYear(year);
+            setCurrentSemester(semester);
+            setSystemAcademicYear(year);
+            setSystemSemester(semester);
+            setHasManuallySwitched(false);
             dataService.invalidateCache();
         } catch (error) {
             console.error('Error updating system term:', error);
@@ -140,8 +145,8 @@ export const TermProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? globalSettings.allowedMarksTerms
         : [configuredMarksTerm];
 
-    const isAttendanceEntryAllowed = allowedAttendanceTerms.includes(activeTerm);
-    const isMarksEntryAllowed = allowedMarksTerms.includes(activeTerm);
+    const isAttendanceEntryAllowed = allowedAttendanceTerms.includes(activeTerm) || activeTerm === configuredAttendanceTerm;
+    const isMarksEntryAllowed = allowedMarksTerms.includes(activeTerm) || activeTerm === configuredMarksTerm;
 
     const contextValue = useMemo(() => ({
         currentAcademicYear,
