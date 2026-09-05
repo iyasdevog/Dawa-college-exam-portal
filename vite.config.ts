@@ -61,65 +61,13 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      // Enable code splitting and chunk optimization
-      rollupOptions: {
-        output: {
-          // Manual chunk splitting for better caching
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('firebase')) {
-                return 'firebase-vendor';
-              }
-              if (id.includes('recharts') || id.includes('d3-')) {
-                return 'charts-vendor';
-              }
-              if (id.includes('xlsx')) {
-                return 'excel-vendor';
-              }
-              if (id.includes('@google/genai')) {
-                return 'ai-vendor';
-              }
-              return 'vendor';
-            }
-          },
-          // Optimize chunk file names for caching
-          chunkFileNames: (chunkInfo) => {
-            const facadeModuleId = chunkInfo.facadeModuleId
-              ? chunkInfo.facadeModuleId.split('/').pop()?.replace('.tsx', '').replace('.ts', '')
-              : 'chunk';
-            return `assets/js/[name]-[hash].js`;
-          },
-          entryFileNames: 'assets/js/[name]-[hash].js',
-          assetFileNames: (assetInfo) => {
-            const info = assetInfo.name?.split('.') || [];
-            const ext = info[info.length - 1];
-            if (/\.(css)$/.test(assetInfo.name || '')) {
-              return 'assets/css/[name]-[hash].[ext]';
-            }
-            if (/\.(png|jpe?g|svg|gif|tiff|bmp|ico)$/i.test(assetInfo.name || '')) {
-              return 'assets/images/[name]-[hash].[ext]';
-            }
-            if (/\.(woff2?|eot|ttf|otf)$/i.test(assetInfo.name || '')) {
-              return 'assets/fonts/[name]-[hash].[ext]';
-            }
-            return 'assets/[name]-[hash].[ext]';
-          }
-        },
-        treeshake: {
-          moduleSideEffects: (id) => {
-            if (id.includes('firebase')) return true;
-            if (id.includes('node_modules')) return false;
-            return true; // preserve app code side effects
-          }
-        }
-      },
       // Optimize bundle size
       target: 'es2020',
       minify: isProduction ? 'esbuild' : false,
       // Secure source map handling
       sourcemap: isProduction ? 'hidden' : true,
       // Optimize chunk size warnings
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1500,
       // Enable CSS code splitting
       cssCodeSplit: true,
       // Optimize asset inlining
@@ -129,10 +77,9 @@ export default defineConfig(({ mode }) => {
       // Production-specific optimizations
       ...(isProduction && {
         reportCompressedSize: true,
-        // esbuild-native console/debugger removal (terserOptions was ignored under esbuild)
+        // esbuild-native console/debugger removal
         esbuild: {
           drop: ['console', 'debugger'],
-          // Keep error/warn for production debugging
           pure: ['console.log', 'console.info', 'console.debug']
         }
       })
