@@ -665,16 +665,40 @@ export class AcademicService extends BaseDataService {
 
     /**
      * Internal raw fetch for ALL subjects (including deleted), bypassing term filters.
-     * Results are NOT cached to ensure callers get the full picture for recalculation.
+     * Uses memory & storage caching + in-flight request deduplication to save Firestore read quota.
      */
     public async getRawAllSubjects(): Promise<SubjectConfig[]> {
-        try {
-            const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
-            return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SubjectConfig));
-        } catch (error) {
-            console.error('Error fetching raw subjects:', error);
-            return [];
+        if (this.subjectsCache && this.subjectsCache.length > 0) {
+            return this.subjectsCache;
         }
+
+        const cached = this.getStorageCachedData<SubjectConfig[]>('raw_subjects');
+        if (cached && cached.length > 0) {
+            this.subjectsCache = cached;
+            return cached;
+        }
+
+        if (BaseDataService.inFlightRequests.has('raw_subjects')) {
+            return BaseDataService.inFlightRequests.get('raw_subjects')!;
+        }
+
+        const fetchPromise = (async () => {
+            try {
+                const snapshot = await getDocs(collection(this.db, this.subjectsCollection));
+                const subjects = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SubjectConfig));
+                this.subjectsCache = subjects;
+                this.setStorageCachedData('raw_subjects', subjects);
+                return subjects;
+            } catch (error) {
+                console.error('Error fetching raw subjects:', error);
+                return [];
+            } finally {
+                BaseDataService.inFlightRequests.delete('raw_subjects');
+            }
+        })();
+
+        BaseDataService.inFlightRequests.set('raw_subjects', fetchPromise);
+        return fetchPromise;
     }
 
     /**

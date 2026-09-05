@@ -58,10 +58,65 @@ export abstract class BaseDataService {
     protected supplementaryCache = new Map<string, SupplementaryExam[]>();
     protected cacheTimestamp: number = 0;
     protected static currentGlobalSettings: GlobalSettings | null = null;
+    protected static inFlightRequests = new Map<string, Promise<any>>();
     
     protected readonly DEFAULT_ACADEMIC_YEAR = "2025-2026";
     protected readonly DEFAULT_SEMESTER = "Odd";
-    protected readonly CACHE_DURATION = 300000; // 5 minutes
+    protected readonly CACHE_DURATION = 600000; // 10 minutes (increased to save Firestore read quota)
+
+    /**
+     * Retrieves cached data from localStorage or in-memory fallback.
+     */
+    protected getStorageCachedData<T>(key: string, ttlMs: number = 600000): T | null {
+        try {
+            if (typeof window === 'undefined') return null;
+            const item = localStorage.getItem(`dawa_app_cache_${key}`);
+            if (!item) return null;
+            const parsed = JSON.parse(item);
+            if (Date.now() - (parsed.timestamp || 0) < ttlMs) {
+                return parsed.data as T;
+            }
+        } catch (e) {
+            // Storage access restricted or quota exceeded
+        }
+        return null;
+    }
+
+    /**
+     * Stores data in localStorage cache with timestamp.
+     */
+    protected setStorageCachedData<T>(key: string, data: T): void {
+        try {
+            if (typeof window === 'undefined') return;
+            localStorage.setItem(`dawa_app_cache_${key}`, JSON.stringify({
+                timestamp: Date.now(),
+                data
+            }));
+        } catch (e) {
+            // Ignore quota errors silently
+        }
+    }
+
+    /**
+     * Removes items matching a prefix from localStorage.
+     */
+    protected clearStorageCache(prefix?: string): void {
+        try {
+            if (typeof window === 'undefined') return;
+            const keysToRemove: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('dawa_app_cache_')) {
+                    if (!prefix || k.includes(prefix)) {
+                        keysToRemove.push(k);
+                    }
+                }
+            }
+            keysToRemove.forEach(k => localStorage.removeItem(k));
+        } catch (e) {
+            // Ignore storage errors
+        }
+    }
 
     /**
      * Updates the shared global settings. 
@@ -274,6 +329,8 @@ export abstract class BaseDataService {
         this.subjectsCache = null;
         this.supplementaryCache.clear();
         this.cacheTimestamp = 0;
+        this.clearStorageCache();
+        BaseDataService.inFlightRequests.clear();
         // NOTE: Do NOT null out currentGlobalSettings here; that causes a full reload
         // on every cache invalidation. Settings are only refreshed on explicit user action.
     }

@@ -24,46 +24,70 @@ export class SettingsService extends BaseDataService {
     }
 
     public async getGlobalSettings(): Promise<GlobalSettings> {
-        try {
-            const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data() as any;
-                const rawCustom: string[] = data.customClasses || [];
-                const cleanCustom = rawCustom.filter(c => c && !SYSTEM_AND_HISTORICAL.includes(c));
-
-                BaseDataService.currentGlobalSettings = {
-                    ...data,
-                    currentAcademicYear: data.currentAcademicYear || '2025-2026',
-                    currentSemester: data.currentSemester || 'Odd',
-                    availableYears: data.availableYears || ['2023-2024', '2024-2025', '2025-2026'],
-                    attendanceStartDate: data.attendanceStartDate || '2026-04-01',
-                    attendanceEndDate: data.attendanceEndDate || '2026-08-31',
-                    minAttendancePercentage: data.minAttendancePercentage || 75,
-                    semesters: data.semesters || [],
-                    customClasses: cleanCustom,
-                    disabledClasses: data.disabledClasses || [],
-                    institutionName: data.institutionName || 'Islamic Dawa Academy',
-                    contactEmail: data.contactEmail || 'examinations@aicdawacollege.edu.in',
-                    contactPhone: data.contactPhone || '+91-483-2734567',
-                    systemAlias: data.systemAlias || 'AIC_Dawa_Portal',
-                    classSemesters: data.classSemesters || {},
-                    activeAttendanceTerm: data.activeAttendanceTerm,
-                    allowedAttendanceTerms: data.allowedAttendanceTerms,
-                    activeMarksTerm: data.activeMarksTerm,
-                    allowedMarksTerms: data.allowedMarksTerms
-                };
-                return BaseDataService.currentGlobalSettings;
-            }
-            return {
-                currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR,
-                currentSemester: this.DEFAULT_SEMESTER,
-                availableYears: ['2025-2026']
-            };
-        } catch (error) {
-            console.error('Error getting global settings:', error);
-            return { currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR, currentSemester: this.DEFAULT_SEMESTER };
+        if (BaseDataService.currentGlobalSettings) {
+            return BaseDataService.currentGlobalSettings;
         }
+
+        const cached = this.getStorageCachedData<GlobalSettings>('global_settings');
+        if (cached) {
+            BaseDataService.currentGlobalSettings = cached;
+            return cached;
+        }
+
+        if (BaseDataService.inFlightRequests.has('global_settings')) {
+            return BaseDataService.inFlightRequests.get('global_settings')!;
+        }
+
+        const fetchPromise = (async () => {
+            try {
+                const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data() as any;
+                    const rawCustom: string[] = data.customClasses || [];
+                    const cleanCustom = rawCustom.filter(c => c && !SYSTEM_AND_HISTORICAL.includes(c));
+
+                    BaseDataService.currentGlobalSettings = {
+                        ...data,
+                        currentAcademicYear: data.currentAcademicYear || '2025-2026',
+                        currentSemester: data.currentSemester || 'Odd',
+                        availableYears: data.availableYears || ['2023-2024', '2024-2025', '2025-2026'],
+                        attendanceStartDate: data.attendanceStartDate || '2026-04-01',
+                        attendanceEndDate: data.attendanceEndDate || '2026-08-31',
+                        minAttendancePercentage: data.minAttendancePercentage || 75,
+                        semesters: data.semesters || [],
+                        customClasses: cleanCustom,
+                        disabledClasses: data.disabledClasses || [],
+                        institutionName: data.institutionName || 'Islamic Dawa Academy',
+                        contactEmail: data.contactEmail || 'examinations@aicdawacollege.edu.in',
+                        contactPhone: data.contactPhone || '+91-483-2734567',
+                        systemAlias: data.systemAlias || 'AIC_Dawa_Portal',
+                        classSemesters: data.classSemesters || {},
+                        activeAttendanceTerm: data.activeAttendanceTerm,
+                        allowedAttendanceTerms: data.allowedAttendanceTerms,
+                        activeMarksTerm: data.activeMarksTerm,
+                        allowedMarksTerms: data.allowedMarksTerms
+                    };
+                    this.setStorageCachedData('global_settings', BaseDataService.currentGlobalSettings);
+                    return BaseDataService.currentGlobalSettings;
+                }
+                const defaultSettings: GlobalSettings = {
+                    currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR,
+                    currentSemester: this.DEFAULT_SEMESTER,
+                    availableYears: ['2025-2026']
+                };
+                BaseDataService.currentGlobalSettings = defaultSettings;
+                return defaultSettings;
+            } catch (error) {
+                console.error('Error getting global settings:', error);
+                return { currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR, currentSemester: this.DEFAULT_SEMESTER };
+            } finally {
+                BaseDataService.inFlightRequests.delete('global_settings');
+            }
+        })();
+
+        BaseDataService.inFlightRequests.set('global_settings', fetchPromise);
+        return fetchPromise;
     }
 
     public async updateGlobalSettings(updates: Partial<GlobalSettings>): Promise<void> {
@@ -71,6 +95,7 @@ export class SettingsService extends BaseDataService {
             const docRef = doc(this.db, this.settingsCollection, 'global_admin_settings');
             await setDoc(docRef, updates, { merge: true });
             BaseDataService.currentGlobalSettings = null; // Invalidate local settings cache
+            this.clearStorageCache('global_settings');
         } catch (error) {
             console.error('Error updating global settings:', error);
             throw error;

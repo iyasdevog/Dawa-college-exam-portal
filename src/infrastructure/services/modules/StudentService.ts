@@ -257,53 +257,66 @@ export class StudentService extends BaseDataService {
 
     public async getAllStudents(termKey?: string): Promise<StudentRecord[]> {
         const activeTerm = termKey || this.getCurrentTermKey();
+        const requestKey = `students_${activeTerm}`;
 
-        if (this.isCacheValid() && this.studentsCache.has(activeTerm)) {
+        if (this.studentsCache.has(activeTerm)) {
             return this.studentsCache.get(activeTerm)!;
         }
 
-        try {
-            const querySnapshot = await getDocs(collection(this.db, this.studentsCollection));
-            const students = querySnapshot.docs
-                .map(doc => this.processStudentRecord(doc.data(), doc.id, activeTerm))
-                .filter(student => !student.isDeleted);
-            
-            // Further filter since we might be looking at historical data where class matches
-            // but the query wasn't strictly on the current active term
-            students.sort((a, b) => {
-                if (a.importRowNumber !== undefined && b.importRowNumber !== undefined) {
-                    return a.importRowNumber - b.importRowNumber;
-                }
-                if (a.importRowNumber !== undefined) return -1;
-                if (b.importRowNumber !== undefined) return 1;
-                return (a.rank || 0) - (b.rank || 0);
-            });
-
-            const currentGlobalTerm = this.getCurrentTermKey();
-            const isCurrentTerm = activeTerm === currentGlobalTerm;
-
-            const filteredStudents = students.filter(student => {
-                if (student.isDeleted) return false;
-                if (activeTerm === 'All') {
-                    return true; // Return everyone for raw data gathering
-                }
-                // Strict Semester Isolation: Return ONLY students with an explicit history entry for activeTerm
-                if (!student.academicHistory) return false;
-                const hasTermHistory = Object.keys(student.academicHistory).some(tk =>
-                    tk === activeTerm ||
-                    tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')
-                );
-                return hasTermHistory;
-            });
-
-            this.studentsCache.set(activeTerm, filteredStudents);
-            this.cacheTimestamp = Date.now();
-
-            return filteredStudents;
-        } catch (error) {
-            console.error('Error fetching students:', error);
-            return [];
+        const cached = this.getStorageCachedData<StudentRecord[]>(requestKey);
+        if (cached && cached.length > 0) {
+            this.studentsCache.set(activeTerm, cached);
+            return cached;
         }
+
+        if (BaseDataService.inFlightRequests.has(requestKey)) {
+            return BaseDataService.inFlightRequests.get(requestKey)!;
+        }
+
+        const fetchPromise = (async () => {
+            try {
+                const querySnapshot = await getDocs(collection(this.db, this.studentsCollection));
+                const students = querySnapshot.docs
+                    .map(doc => this.processStudentRecord(doc.data(), doc.id, activeTerm))
+                    .filter(student => !student.isDeleted);
+                
+                students.sort((a, b) => {
+                    if (a.importRowNumber !== undefined && b.importRowNumber !== undefined) {
+                        return a.importRowNumber - b.importRowNumber;
+                    }
+                    if (a.importRowNumber !== undefined) return -1;
+                    if (b.importRowNumber !== undefined) return 1;
+                    return (a.rank || 0) - (b.rank || 0);
+                });
+
+                const filteredStudents = students.filter(student => {
+                    if (student.isDeleted) return false;
+                    if (activeTerm === 'All') {
+                        return true;
+                    }
+                    if (!student.academicHistory) return false;
+                    const hasTermHistory = Object.keys(student.academicHistory).some(tk =>
+                        tk === activeTerm ||
+                        tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')
+                    );
+                    return hasTermHistory;
+                });
+
+                this.studentsCache.set(activeTerm, filteredStudents);
+                this.setStorageCachedData(requestKey, filteredStudents);
+                this.cacheTimestamp = Date.now();
+
+                return filteredStudents;
+            } catch (error) {
+                console.error('Error fetching students:', error);
+                return [];
+            } finally {
+                BaseDataService.inFlightRequests.delete(requestKey);
+            }
+        })();
+
+        BaseDataService.inFlightRequests.set(requestKey, fetchPromise);
+        return fetchPromise;
     }
 
     public async getStudentById(id: string, termKey?: string): Promise<StudentRecord | null> {
