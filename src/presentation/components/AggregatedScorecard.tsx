@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
+import type { StudentRecord, SubjectConfig, ClassReleaseSettings } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import { isSameSubject, getSubjectMaxMarks } from '../../domain/utils/subjectUtils';
 import { dataService } from '../../infrastructure/services/dataService';

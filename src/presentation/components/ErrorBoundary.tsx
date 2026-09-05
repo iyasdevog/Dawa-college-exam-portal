@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { IErrorReporter } from '../../domain/interfaces/IErrorReporter';
+import type { IErrorReporter } from '../../domain/interfaces/IErrorReporter';
 import { versionService } from '../../infrastructure/services/versionService';
 
 interface Props {

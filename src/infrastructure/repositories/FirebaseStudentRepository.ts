@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
 import { Student, SubjectMarks } from '../../domain/entities/Student';
-import { IStudentRepository } from '../../domain/interfaces/IStudentRepository';
+import type { IStudentRepository } from '../../domain/interfaces/IStudentRepository';
 
 export class FirebaseStudentRepository implements IStudentRepository {
     private readonly collectionName = 'students';

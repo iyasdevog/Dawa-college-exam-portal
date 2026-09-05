@@ -10,7 +10,7 @@ import {
     DocumentData
 } from 'firebase/firestore';
 import { getDb } from '../../config/firebaseConfig';
-import { 
+import type { 
     GlobalSettings, 
     StudentRecord, 
     SubjectConfig, 

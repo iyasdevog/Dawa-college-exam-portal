@@ -14,7 +14,7 @@ import {
     deleteField
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
-import { 
+import type { 
     StudentApplication, 
     ApplicationStatus,
     StudentRecord,
@@ -27,7 +27,7 @@ import {
 import { SupplementaryService } from './SupplementaryService';
 import { StudentService } from './StudentService';
 import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
-import { GlobalSettings } from '../../../domain/entities/types';
+import type { GlobalSettings } from '../../../domain/entities/types';
 
 export class AdministrativeService extends BaseDataService {
     constructor(

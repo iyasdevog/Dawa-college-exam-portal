@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { BaseDataService } from '../../infrastructure/services/modules/BaseDataService';
-import { GlobalSettings } from '../../domain/entities/types';
+import type { GlobalSettings } from '../../domain/entities/types';
 
 interface TermContextType {
     currentAcademicYear: string; // Viewing Year

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
-import { TimetableEntry, ExamTimetableEntry, SpecialDay, SubjectConfig, HallTicketSettings } from '../../domain/entities/types';
+import type { TimetableEntry, ExamTimetableEntry, SpecialDay, SubjectConfig, HallTicketSettings } from '../../domain/entities/types';
 import { SYSTEM_CLASSES, DAYS } from '../../domain/entities/constants';
 import { useTerm } from '../viewmodels/TermContext';
 

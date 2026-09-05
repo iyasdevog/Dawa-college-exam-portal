@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
 import { StudentService } from './StudentService';
-import { 
+import type { 
     SubjectConfig, 
     SubjectMarks, 
     PerformanceLevel,

@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
-import { CurriculumEntry } from '../../../domain/entities/types';
+import type { CurriculumEntry } from '../../../domain/entities/types';
 
 export class CurriculumService extends BaseDataService {
     public async getAllCurriculum(termKey?: string): Promise<CurriculumEntry[]> {

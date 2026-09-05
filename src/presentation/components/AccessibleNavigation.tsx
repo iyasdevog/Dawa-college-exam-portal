@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ViewType } from '../../domain/entities/types';
+import type { ViewType } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import { keyboardNavigation, screenReaderAnnouncer, ariaHelpers } from '../utils/accessibility';
 import MobileButton from './MobileButton';

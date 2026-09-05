@@ -6,7 +6,7 @@ import {
     doc 
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
-import { 
+import type { 
     SubjectConfig, 
     CurriculumEntry, 
     GlobalSettings 

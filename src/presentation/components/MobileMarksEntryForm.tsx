@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
+import type { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import { FormValidator, FormValidationConfig, validationPresets } from '../utils/formValidation';
 import { screenReaderAnnouncer } from '../utils/accessibility';

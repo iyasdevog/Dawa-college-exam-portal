@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from '../config/firebaseConfig';
 import { Subject } from '../../domain/entities/Subject';
-import { ISubjectRepository } from '../../domain/interfaces/ISubjectRepository';
+import type { ISubjectRepository } from '../../domain/interfaces/ISubjectRepository';
 
 export class FirebaseSubjectRepository implements ISubjectRepository {
     private readonly collectionName = 'subjects';

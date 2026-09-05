@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewType } from '../../domain/entities/types';
+import type { ViewType } from '../../domain/entities/types';
 import type { User } from '../../domain/entities/User';
 import { useMobileNavigation, useTouchInteraction } from '../hooks/useMobile';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StudentRecord, SubjectConfig, SubjectMarks, ClassReleaseSettings } from '../../domain/entities/types';
+import type { StudentRecord, SubjectConfig, SubjectMarks, ClassReleaseSettings } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import ClassResults from './ClassResults';
 import { dataService } from '../../infrastructure/services/dataService';

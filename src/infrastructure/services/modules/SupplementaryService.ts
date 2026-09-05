@@ -13,7 +13,7 @@ import {
 import { BaseDataService } from './BaseDataService';
 import { StudentService } from './StudentService';
 import { AcademicService } from './AcademicService';
-import { 
+import type { 
     SupplementaryExam, 
     StudentRecord, 
     StudentApplication,

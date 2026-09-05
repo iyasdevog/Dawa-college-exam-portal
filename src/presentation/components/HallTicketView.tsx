@@ -1,5 +1,5 @@
 import React from 'react';
-import { StudentRecord, ExamTimetableEntry } from '../../domain/entities/types';
+import type { StudentRecord, ExamTimetableEntry } from '../../domain/entities/types';
 
 interface HallTicketViewProps {
     student: StudentRecord;

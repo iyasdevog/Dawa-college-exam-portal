@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
-import { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord, ClassReleaseSettings } from '../../domain/entities/types';
+import type { StudentApplication, ApplicationType, ApplicationStatus, SubjectConfig, StudentRecord, ClassReleaseSettings } from '../../domain/entities/types';
 import { useMobile } from '../hooks/useMobile';
 import { useTerm } from '../viewmodels/TermContext';
 

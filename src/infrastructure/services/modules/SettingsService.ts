@@ -8,7 +8,7 @@ import {
     onSnapshot
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
-import { 
+import type { 
     GlobalSettings, 
     StudentRecord,
     ClassReleaseSettings

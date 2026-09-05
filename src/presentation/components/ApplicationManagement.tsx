@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
-import { StudentApplication, ApplicationStatus, ApplicationType } from '../../domain/entities/types';
+import type { StudentApplication, ApplicationStatus, ApplicationType } from '../../domain/entities/types';
 import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { useTerm } from '../viewmodels/TermContext';
 

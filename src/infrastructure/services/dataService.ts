@@ -8,7 +8,7 @@ import { AdministrativeService } from './modules/AdministrativeService';
 import { CurriculumService } from './modules/CurriculumService';
 import { SemesterMigrationService } from './modules/SemesterMigrationService';
 
-import { 
+import type { 
     StudentRecord, 
     SubjectConfig, 
     GlobalSettings, 

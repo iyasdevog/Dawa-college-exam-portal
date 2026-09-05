@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ViewType } from '../../domain/entities/types';
+import type { ViewType } from '../../domain/entities/types';
 import type { User } from '../../domain/entities/User';
 import { useMobileNavigation, useTouchInteraction } from '../hooks/useMobile';
 import { keyboardNavigation, screenReaderAnnouncer, ariaHelpers } from '../utils/accessibility';

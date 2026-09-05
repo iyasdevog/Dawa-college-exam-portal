@@ -11,7 +11,7 @@ import {
     where
 } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
-import { 
+import type { 
     StudentRecord, 
     SubjectMarks, 
     PerformanceLevel,

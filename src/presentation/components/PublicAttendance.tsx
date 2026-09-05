@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
-import { SubjectConfig, TimetableEntry, AttendanceRecord, SpecialDay } from '../../domain/entities/types';
+import type { SubjectConfig, TimetableEntry, AttendanceRecord, SpecialDay } from '../../domain/entities/types';
 import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { useTerm } from '../viewmodels/TermContext';
 import { MobileFacultyEntrySkeleton } from './SkeletonLoaders';

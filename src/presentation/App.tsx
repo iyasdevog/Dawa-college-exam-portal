@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ApplicationErrorBoundary, FeatureErrorBoundary } from './components/ErrorBoundary';
 import { MobileProvider } from './viewmodels/MobileContext';
 import { TermProvider } from './viewmodels/TermContext';
-import { ViewType, StudentRecord } from '../domain/entities/types';
+import type { ViewType, StudentRecord } from '../domain/entities/types';
 import { User } from '../domain/entities/User';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
 import { versionService } from '../infrastructure/services/versionService';

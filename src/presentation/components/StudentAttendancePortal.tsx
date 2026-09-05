@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
-import { StudentRecord, SubjectConfig, LeavePermission } from '../../domain/entities/types';
+import type { StudentRecord, SubjectConfig, LeavePermission } from '../../domain/entities/types';
 import { MobileFacultyEntrySkeleton } from './SkeletonLoaders';
 import { useTerm } from '../viewmodels/TermContext';
 import { TermSelector } from './TermSelector';
