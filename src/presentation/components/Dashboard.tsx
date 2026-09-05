@@ -155,69 +155,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     const cardContainerRef = useRef<HTMLDivElement>(null);
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         try {
-            // Stage 1: Initializing
             setLoadingState({
                 isLoading: true,
                 stage: 'initializing',
-                progress: 0,
-                message: 'Setting up dashboard components...'
-            });
-
-            // Stage 2: Loading students
-            setLoadingState({
-                isLoading: true,
-                stage: 'students',
                 progress: 25,
-                message: 'Fetching student records...'
+                message: 'Fetching dashboard data...'
             });
-            const studentsData = await dataService.getAllStudents(activeTerm);
 
-            // Stage 3: Loading subjects
-            setLoadingState({
-                isLoading: true,
-                stage: 'subjects',
-                progress: 50,
-                message: 'Loading subject configurations...'
-            });
-            const subjectsData = await dataService.getAllSubjects(activeTerm);
-
-            // Stage 4: Processing stats
-            setLoadingState({
-                isLoading: true,
-                stage: 'stats',
-                progress: 75,
-                message: 'Calculating academic analytics...'
-            });
+            // Parallel fetch all dashboard dependencies concurrently
+            const [studentsData, subjectsData, settings, termClassesList] = await Promise.all([
+                dataService.getAllStudents(activeTerm),
+                dataService.getAllSubjects(activeTerm),
+                dataService.getGlobalSettings(),
+                dataService.getClassesByTerm(activeTerm)
+            ]);
 
             setStudents(studentsData);
             setSubjects(subjectsData);
-
-            const settings = await dataService.getGlobalSettings();
             setBranding(settings);
 
-            const termClassesList = await dataService.getClassesByTerm(activeTerm);
             const activeClassesData = termClassesList.length > 0 ? termClassesList : SYSTEM_CLASSES;
             setActiveClasses(activeClassesData);
 
-            // Complete loading immediately — no artificial delays
-            setLoadingState(prev => ({
-                ...prev,
-                progress: 100,
+            setLoadingState({
                 isLoading: false,
+                stage: 'preparing-charts',
+                progress: 100,
                 message: 'Dashboard ready!'
-            }));
-
+            });
         } catch (error) {
             console.error('Error loading dashboard data:', error);
-            setLoadingState(prev => ({
-                ...prev,
+            setLoadingState({
                 isLoading: false,
+                stage: 'initializing',
+                progress: 0,
                 message: 'Error loading dashboard data'
-            }));
+            });
         }
-    };
+    }, [activeTerm]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     // Filter students by selected class — memoized to avoid recomputation
     const filteredStudents = useMemo(() =>
@@ -569,37 +550,52 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
         });
     };
 
-    // Grade distribution — memoized to avoid filtering on every render
-    const gradeStats = useMemo(() => ({
-        'O (Outstanding)': students.filter(s => s.performanceLevel === 'O (Outstanding)').length,
-        'A+ (Excellent)': students.filter(s => s.performanceLevel === 'A+ (Excellent)').length,
-        'A (Very Good)': students.filter(s => s.performanceLevel === 'A (Very Good)').length,
-        'B+ (Good)': students.filter(s => s.performanceLevel === 'B+ (Good)').length,
-        'B (Good)': students.filter(s => s.performanceLevel === 'B (Good)').length,
-        'C (Average)': students.filter(s => s.performanceLevel === 'C (Average)').length,
-        'F (Failed)': students.filter(s => s.performanceLevel === 'F (Failed)').length,
-    }), [students]);
+    // Grade distribution — single-pass optimization
+    const gradeStats = useMemo(() => {
+        const counts: Record<string, number> = {
+            'O (Outstanding)': 0,
+            'A+ (Excellent)': 0,
+            'A (Very Good)': 0,
+            'B+ (Good)': 0,
+            'B (Good)': 0,
+            'C (Average)': 0,
+            'F (Failed)': 0,
+        };
+        students.forEach(s => {
+            if (s.performanceLevel && counts[s.performanceLevel] !== undefined) {
+                counts[s.performanceLevel]++;
+            }
+        });
+        return counts;
+    }, [students]);
 
-    // Class-wise statistics — memoized
+    // Class-wise statistics — Map-optimized single-pass grouping
     const classStats = useMemo(() => {
+        const studentsByClass = new Map<string, StudentRecord[]>();
+        students.forEach(s => {
+            const cls = s.className || 'Unknown';
+            if (!studentsByClass.has(cls)) studentsByClass.set(cls, []);
+            studentsByClass.get(cls)!.push(s);
+        });
+
         return activeClasses.map(className => {
-            const classStudents = students.filter(s => s.className === className);
+            const classStudents = studentsByClass.get(className) || [];
             const classAverage = classStudents.length > 0
-                ? Math.round(classStudents.reduce((sum, s) => sum + s.average, 0) / classStudents.length)
+                ? Math.round(classStudents.reduce((sum, s) => sum + (s.average || 0), 0) / classStudents.length)
                 : 0;
 
             return {
                 className,
                 studentCount: classStudents.length,
                 average: classAverage,
-                topStudent: classStudents.find(s => s.rank === 1)
+                topStudent: classStudents.find(s => s.rank === 1) || classStudents[0]
             };
         });
-    }, [students, branding]);
+    }, [students, activeClasses]);
 
-    // Top performers — memoized
+    // Top performers — memoized with null safety
     const topPerformers = useMemo(() => [...students]
-        .sort((a, b) => b.grandTotal - a.grandTotal)
+        .sort((a, b) => (b.grandTotal || 0) - (a.grandTotal || 0))
         .slice(0, 5), [students]);
 
     if (loadingState.isLoading) {
