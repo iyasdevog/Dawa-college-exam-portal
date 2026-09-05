@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { StudentRecord, SubjectConfig, SubjectMarks } from '../../domain/entities/types';
+import type { StudentRecord, SubjectConfig, SubjectMarks } from '../../domain/entities/types';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useOfflineCapability } from './useOfflineCapability';
 import { useDebounce } from './useDebounce';

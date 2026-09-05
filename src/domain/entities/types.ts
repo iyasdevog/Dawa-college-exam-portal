@@ -1,4 +1,18 @@
 
+export type UserRole = 'admin' | 'teacher' | 'faculty' | 'student' | 'public';
+
+export interface User {
+  id: string;
+  username: string;
+  role: UserRole;
+  name: string;
+  email?: string;
+  isActive?: boolean;
+  lastLogin?: Date;
+  permissions?: string[];
+  assignedClasses?: string[];
+}
+
 export type PerformanceLevel =
   | 'O (Outstanding)'
   | 'A+ (Excellent)'

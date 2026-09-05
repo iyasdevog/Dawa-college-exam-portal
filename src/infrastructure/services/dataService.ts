@@ -760,4 +760,23 @@ export class DataService extends BaseDataService {
     }
 }
 
-export const dataService = new DataService();
+// Lazy singleton: only instantiated on first access, preventing TDZ (Temporal Dead Zone)
+// errors caused by circular/out-of-order module evaluation during bundling.
+let _dataServiceInstance: DataService | null = null;
+
+export const dataService = new Proxy({} as DataService, {
+    get(_target, prop: string | symbol) {
+        if (!_dataServiceInstance) {
+            _dataServiceInstance = new DataService();
+        }
+        const value = (_dataServiceInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_dataServiceInstance) : value;
+    },
+    set(_target, prop: string | symbol, value) {
+        if (!_dataServiceInstance) {
+            _dataServiceInstance = new DataService();
+        }
+        (_dataServiceInstance as any)[prop] = value;
+        return true;
+    }
+});

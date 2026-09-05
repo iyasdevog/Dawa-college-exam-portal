@@ -44,4 +44,13 @@ export class EnhancedDataService {
     }
 }
 
-export const enhancedDataService = new EnhancedDataService();
+let _enhancedDataServiceInstance: EnhancedDataService | null = null;
+export const enhancedDataService = new Proxy({} as EnhancedDataService, {
+    get(_target, prop: string | symbol) {
+        if (!_enhancedDataServiceInstance) {
+            _enhancedDataServiceInstance = new EnhancedDataService();
+        }
+        const value = (_enhancedDataServiceInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_enhancedDataServiceInstance) : value;
+    }
+});

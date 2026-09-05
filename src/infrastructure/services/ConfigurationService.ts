@@ -225,5 +225,18 @@ export class ConfigurationService {
     }
 }
 
-// Export singleton instance
-export const configurationService = new ConfigurationService();
+// Lazy singleton: only instantiated on first access.
+let _configServiceInstance: ConfigurationService | null = null;
+export function getConfigurationService(): ConfigurationService {
+    if (!_configServiceInstance) {
+        _configServiceInstance = new ConfigurationService();
+    }
+    return _configServiceInstance;
+}
+
+// Backwards-compatible named export via Proxy to avoid TDZ during bundling
+export const configurationService = new Proxy({} as ConfigurationService, {
+    get(_target, prop: string | symbol) {
+        return (getConfigurationService() as any)[prop];
+    }
+});

@@ -60,6 +60,15 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       }
     },
+    // Keep original identifiers to prevent TDZ collisions from minifier renaming.
+    // Applied globally (dev + prod) to ensure consistent behavior.
+    esbuild: {
+      keepNames: true,
+      ...(isProduction && {
+        drop: ['console', 'debugger'],
+        pure: ['console.log', 'console.info', 'console.debug']
+      })
+    },
     build: {
       // Optimize bundle size
       target: 'es2020',
@@ -77,12 +86,6 @@ export default defineConfig(({ mode }) => {
       // Production-specific optimizations
       ...(isProduction && {
         reportCompressedSize: true,
-        // esbuild-native configuration with name preservation to prevent identifier collisions
-        esbuild: {
-          keepNames: true,
-          drop: ['console', 'debugger'],
-          pure: ['console.log', 'console.info', 'console.debug']
-        }
       })
     },
     // Optimize dependencies
