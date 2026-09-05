@@ -1,5 +1,5 @@
-import { Exam, SupplementaryExam } from '../entities/Exam';
-import { SubjectMarks } from '../entities/Student';
+import type { Exam } from '../entities/Exam';
+import type { SupplementaryExam, SubjectMarks } from '../entities/types';
 
 export interface IExamRepository {
     // Basic CRUD operations

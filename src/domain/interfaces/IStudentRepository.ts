@@ -1,5 +1,5 @@
-import { Student } from '../entities/Student';
-import { SubjectMarks } from '../entities/Student';
+import type { Student } from '../entities/Student';
+import type { SubjectMarks } from '../entities/types';
 
 export interface IStudentRepository {
     // Basic CRUD operations

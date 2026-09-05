@@ -1,4 +1,4 @@
-import { User, LoginCredentials } from '../entities/User';
+import type { User, LoginCredentials } from '../entities/User';
 
 export interface IUserRepository {
     // Basic CRUD operations

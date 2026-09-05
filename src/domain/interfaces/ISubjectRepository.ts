@@ -1,4 +1,4 @@
-import { Subject } from '../entities/Subject';
+import type { Subject } from '../entities/Subject';
 
 export interface ISubjectRepository {
     // Basic CRUD operations

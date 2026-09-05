@@ -1,4 +1,4 @@
-import { User, LoginCredentials, AuthResult, SessionValidation, TokenRefresh } from '../../domain/entities/User';
+import { User, type LoginCredentials, type AuthResult, type SessionValidation, type TokenRefresh } from '../../domain/entities/User';
 import { IUserRepository } from '../../domain/interfaces/IUserRepository';
 import { configurationService } from '../services/ConfigurationService';
 
