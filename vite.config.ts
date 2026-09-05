@@ -107,16 +107,12 @@ export default defineConfig(({ mode }) => {
             return 'assets/[name]-[hash].[ext]';
           }
         },
-        // Advanced tree shaking configuration
         treeshake: {
-          // Preserve module side effects for Firebase (it relies on them for initialization)
           moduleSideEffects: (id) => {
             if (id.includes('firebase')) return true;
             if (id.includes('node_modules')) return false;
             return true; // preserve app code side effects
-          },
-          propertyReadSideEffects: false,
-          unknownGlobalSideEffects: false
+          }
         }
       },
       // Optimize bundle size
