@@ -1,4 +1,4 @@
-import { SubjectConfig } from './Subject';
+import type { SubjectConfig } from './types';
 export type PerformanceLevel = 'O (Outstanding)' | 'A+ (Excellent)' | 'A (Very Good)' | 'B+ (Good)' | 'B (Good)' | 'C (Average)' | 'F (Failed)';
 
 export interface SubjectMarks {

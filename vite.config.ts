@@ -67,13 +67,10 @@ export default defineConfig(({ mode }) => {
           // Manual chunk splitting for better caching
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              if (id.includes('react/') || id.includes('react-dom/')) {
-                return 'react-vendor';
-              }
               if (id.includes('firebase')) {
                 return 'firebase-vendor';
               }
-              if (id.includes('recharts')) {
+              if (id.includes('recharts') || id.includes('d3-')) {
                 return 'charts-vendor';
               }
               if (id.includes('xlsx')) {
@@ -82,6 +79,7 @@ export default defineConfig(({ mode }) => {
               if (id.includes('@google/genai')) {
                 return 'ai-vendor';
               }
+              return 'vendor';
             }
           },
           // Optimize chunk file names for caching

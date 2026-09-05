@@ -1,4 +1,4 @@
-import { SubjectMarks } from './Student';
+import type { SubjectMarks } from './types';
 
 export class Exam {
     constructor(
