@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { SubjectConfig, StudentRecord, CurriculumEntry, SupplementaryExam } from '../../../domain/entities/types';
+import type { SubjectConfig, StudentRecord, CurriculumEntry, SupplementaryExam } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 
 const RecycleBinManagement: React.FC = () => {

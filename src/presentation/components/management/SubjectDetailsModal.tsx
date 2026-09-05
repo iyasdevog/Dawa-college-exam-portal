@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SubjectConfig, SubjectDetails, CIAComponent, CourseContentUnit, CourseOutcome } from '../../../domain/entities/types';
+import type { SubjectConfig, SubjectDetails, CIAComponent, CourseContentUnit, CourseOutcome } from '../../../domain/entities/types';
 import { v4 as uuidv4 } from 'uuid'; // Fallback to simple random id if not found, but standard is using a library or simple Math.random. Let's use simple Math.random for standalone.
 
 interface SubjectDetailsModalProps {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { SYSTEM_CLASSES as CLASSES } from '../../../domain/entities/constants';
-import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
+import type { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { useTerm } from '../../viewmodels/TermContext';
 
 interface ClassManagementProps {

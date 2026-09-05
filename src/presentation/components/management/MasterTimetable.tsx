@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { TimetableEntry, SubjectConfig, StudentRecord } from '../../../domain/entities/types';
+import type { TimetableEntry, SubjectConfig, StudentRecord } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { DAYS } from '../../../domain/entities/constants';
 

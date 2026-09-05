@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StudentRecord, SubjectConfig, AttendanceRecord } from '../../../domain/entities/types';
+import type { StudentRecord, SubjectConfig, AttendanceRecord } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useTerm } from '../../viewmodels/TermContext';
 

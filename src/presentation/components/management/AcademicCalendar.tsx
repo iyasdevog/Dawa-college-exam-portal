@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AcademicCalendarEntry } from '../../../domain/entities/types';
+import type { AcademicCalendarEntry } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useTerm } from '../../viewmodels/TermContext';
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
-import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
+import type { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { useTerm } from '../../viewmodels/TermContext';
 
 interface SettingsManagementProps {

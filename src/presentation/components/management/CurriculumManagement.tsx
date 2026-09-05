@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CurriculumEntry, CurriculumStage } from '../../../domain/entities/types';
+import type { CurriculumEntry, CurriculumStage } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 

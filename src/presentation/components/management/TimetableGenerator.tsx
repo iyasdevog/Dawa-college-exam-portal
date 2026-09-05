@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SubjectConfig, TimetableGeneratorConfig, TimetableEntry, StudentRecord, TimetableRule } from '../../../domain/entities/types';
+import type { SubjectConfig, TimetableGeneratorConfig, TimetableEntry, StudentRecord, TimetableRule } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { aiService } from '../../../infrastructure/services/AIService';
 import { useTerm } from '../../../presentation/viewmodels/TermContext';

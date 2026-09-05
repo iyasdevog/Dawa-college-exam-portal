@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { SubjectConfig, StudentRecord, CurriculumEntry } from '../../../domain/entities/types';
+import type { SubjectConfig, StudentRecord, CurriculumEntry, SubjectDetails } from '../../../domain/entities/types';
 import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
