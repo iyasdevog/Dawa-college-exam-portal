@@ -563,5 +563,14 @@ class ServiceWorkerService {
     }
 }
 
-// Export singleton instance
-export const serviceWorkerService = new ServiceWorkerService();
+// Lazy singleton instance to prevent module evaluation side-effects and TDZ
+let _serviceWorkerServiceInstance: ServiceWorkerService | null = null;
+export const serviceWorkerService = new Proxy({} as ServiceWorkerService, {
+    get(_target, prop: string | symbol) {
+        if (!_serviceWorkerServiceInstance) {
+            _serviceWorkerServiceInstance = new ServiceWorkerService();
+        }
+        const value = (_serviceWorkerServiceInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_serviceWorkerServiceInstance) : value;
+    }
+});

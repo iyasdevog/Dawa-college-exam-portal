@@ -483,5 +483,14 @@ export class ProgressiveEnhancementService {
     }
 }
 
-// Export singleton instance
-export const progressiveEnhancement = new ProgressiveEnhancementService();
+// Lazy singleton instance to prevent module evaluation side-effects and TDZ
+let _progressiveEnhancementInstance: ProgressiveEnhancementService | null = null;
+export const progressiveEnhancement = new Proxy({} as ProgressiveEnhancementService, {
+    get(_target, prop: string | symbol) {
+        if (!_progressiveEnhancementInstance) {
+            _progressiveEnhancementInstance = new ProgressiveEnhancementService();
+        }
+        const value = (_progressiveEnhancementInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_progressiveEnhancementInstance) : value;
+    }
+});

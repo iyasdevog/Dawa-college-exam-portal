@@ -91,20 +91,20 @@ export default defineConfig(({ mode }) => {
           // (e.g. dataService) before its dependency chunk (firebaseConfig) has 
           // finished executing, causing "Cannot access 'X' before initialization".
           manualChunks(id) {
-            // All infrastructure services → one chunk (avoids cross-chunk TDZ)
+            // All domain entities/utils & infrastructure services → single unified chunk
+            // (eliminates cross-chunk Temporal Dead Zone evaluation order issues)
             if (
-              id.includes('/infrastructure/services/') ||
-              id.includes('/infrastructure/config/') ||
-              id.includes('/infrastructure/utils/')
+              id.includes('/src/infrastructure/') ||
+              id.includes('/src/domain/')
             ) {
               return 'infrastructure';
             }
             // Firebase SDK → its own chunk (stable, no circular deps)
-            if (id.includes('firebase/')) {
+            if (id.includes('node_modules/firebase/') || id.includes('/firebase/')) {
               return 'firebase';
             }
             // React core
-            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
               return 'react-vendor';
             }
           }

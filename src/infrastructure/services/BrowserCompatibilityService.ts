@@ -718,5 +718,14 @@ export class BrowserCompatibilityService {
     }
 }
 
-// Export singleton instance
-export const browserCompatibility = new BrowserCompatibilityService();
+// Lazy singleton instance to prevent module evaluation side-effects and TDZ
+let _browserCompatibilityInstance: BrowserCompatibilityService | null = null;
+export const browserCompatibility = new Proxy({} as BrowserCompatibilityService, {
+    get(_target, prop: string | symbol) {
+        if (!_browserCompatibilityInstance) {
+            _browserCompatibilityInstance = new BrowserCompatibilityService();
+        }
+        const value = (_browserCompatibilityInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_browserCompatibilityInstance) : value;
+    }
+});

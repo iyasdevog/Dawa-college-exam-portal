@@ -126,8 +126,17 @@ class ScreenReaderAnnouncer {
     }
 }
 
-// Global announcer instance
-export const screenReaderAnnouncer = new ScreenReaderAnnouncer();
+// Lazy global announcer instance to prevent module evaluation side-effects and TDZ
+let _screenReaderAnnouncerInstance: ScreenReaderAnnouncer | null = null;
+export const screenReaderAnnouncer = new Proxy({} as ScreenReaderAnnouncer, {
+    get(_target, prop: string | symbol) {
+        if (!_screenReaderAnnouncerInstance) {
+            _screenReaderAnnouncerInstance = new ScreenReaderAnnouncer();
+        }
+        const value = (_screenReaderAnnouncerInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_screenReaderAnnouncerInstance) : value;
+    }
+});
 
 /**
  * Keyboard Navigation Manager
@@ -247,8 +256,17 @@ export class KeyboardNavigationManager {
     }
 }
 
-// Global keyboard navigation manager
-export const keyboardNavigation = new KeyboardNavigationManager();
+// Lazy global keyboard navigation manager instance
+let _keyboardNavigationInstance: KeyboardNavigationManager | null = null;
+export const keyboardNavigation = new Proxy({} as KeyboardNavigationManager, {
+    get(_target, prop: string | symbol) {
+        if (!_keyboardNavigationInstance) {
+            _keyboardNavigationInstance = new KeyboardNavigationManager();
+        }
+        const value = (_keyboardNavigationInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_keyboardNavigationInstance) : value;
+    }
+});
 
 /**
  * Color Contrast Utilities
