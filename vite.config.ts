@@ -76,13 +76,40 @@ export default defineConfig(({ mode }) => {
       // Secure source map handling
       sourcemap: isProduction ? 'hidden' : true,
       // Optimize chunk size warnings
-      chunkSizeWarningLimit: 1500,
+      chunkSizeWarningLimit: 2000,
       // Enable CSS code splitting
       cssCodeSplit: true,
       // Optimize asset inlining
       assetsInlineLimit: 4096,
       // Remove unused CSS
       cssMinify: isProduction,
+      rollupOptions: {
+        output: {
+          // Co-locate all infrastructure services in a single chunk to prevent
+          // cross-chunk TDZ (Temporal Dead Zone) evaluation order errors.
+          // When services are split across chunks, Rollup may evaluate one chunk
+          // (e.g. dataService) before its dependency chunk (firebaseConfig) has 
+          // finished executing, causing "Cannot access 'X' before initialization".
+          manualChunks(id) {
+            // All infrastructure services → one chunk (avoids cross-chunk TDZ)
+            if (
+              id.includes('/infrastructure/services/') ||
+              id.includes('/infrastructure/config/') ||
+              id.includes('/infrastructure/utils/')
+            ) {
+              return 'infrastructure';
+            }
+            // Firebase SDK → its own chunk (stable, no circular deps)
+            if (id.includes('firebase/')) {
+              return 'firebase';
+            }
+            // React core
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+              return 'react-vendor';
+            }
+          }
+        }
+      },
       // Production-specific optimizations
       ...(isProduction && {
         reportCompressedSize: true,
