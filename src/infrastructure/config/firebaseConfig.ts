@@ -74,6 +74,5 @@ export const getDb = (): Firestore => {
   return dbInstance;
 };
 
-// Default export for convenience
-export const db = getDb();
+
 
