@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { StudentRecord, SubjectConfig, ClassReleaseSettings, SupplementaryExam } from '../../domain/entities/types';
-import { User } from '../../domain/entities/User';
+import type { User } from '../../domain/entities/User';
 import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
 import { ProgressiveLoadingSkeleton } from './SkeletonLoaders';

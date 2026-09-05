@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StudentRecord, SubjectConfig } from '../../domain/entities/types';
-import { User } from '../../domain/entities/User';
+import type { User } from '../../domain/entities/User';
 import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';

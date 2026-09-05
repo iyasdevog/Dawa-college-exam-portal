@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewType } from '../../domain/entities/types';
-import { User } from '../../domain/entities/User';
+import type { User } from '../../domain/entities/User';
 import { useMobileNavigation, useTouchInteraction } from '../hooks/useMobile';
 
 interface BottomNavigationBarProps {
