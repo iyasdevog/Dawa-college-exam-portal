@@ -162,6 +162,8 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
 
 
 
+    const [isClassLoading, setIsClassLoading] = useState(false);
+
     const loadData = async () => {
         try {
             setIsLoading(true);
@@ -176,8 +178,11 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             const allowed = (!currentUser || currentUser.role === 'admin' || currentUser.role === 'teacher')
                 ? termClasses
                 : termClasses.filter(cls => currentUser.assignedClasses?.includes(cls));
-            if (allowed.length > 0 && (!selectedClass || !allowed.includes(selectedClass))) {
-                setSelectedClass(allowed[0]);
+            
+            const targetCls = allowed.length > 0 ? ((selectedClass && allowed.includes(selectedClass)) ? selectedClass : allowed[0]) : '';
+            if (targetCls) {
+                if (targetCls !== selectedClass) setSelectedClass(targetCls);
+                await loadClassData(targetCls, allSubjects);
             }
         } catch (error) {
             console.error('Error loading data:', error);
@@ -186,31 +191,42 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
         }
     };
 
-    const loadClassData = async () => {
+    const loadClassData = async (clsToLoad?: string, currentSubjects?: SubjectConfig[]) => {
+        const cls = clsToLoad || selectedClass;
+        if (!cls) return;
         try {
+            setIsClassLoading(true);
+            const subsToUse = (currentSubjects && currentSubjects.length > 0) ? currentSubjects : subjects;
             const [cs, supps] = await Promise.all([
-                dataService.getStudentsByClass(selectedClass, activeTerm),
-                dataService.getAllSupplementaryExams('All')
+                dataService.getStudentsByClass(cls, activeTerm),
+                dataService.getAllSupplementaryExams(activeTerm)
             ]);
             const enriched = enrichStudentsWithSupps(cs, supps, activeTerm);
             setClassStudents(enriched);
             if (selectedStudent && !enriched.find(s => s.id === selectedStudent)) setSelectedStudent('');
-            const filteredSubjects = subjects.filter(s =>
-                s.targetClasses.includes(selectedClass) ||
+            const filteredSubjects = subsToUse.filter(s =>
+                s.targetClasses.includes(cls) ||
                 (s.subjectType === 'elective' && s.enrolledStudents?.some(id => enriched.some(c => c.id === id))) ||
-                enriched.some(cs => {
-                    const termData = cs.academicHistory?.[activeTerm];
+                enriched.some(csItem => {
+                    const termData = csItem.academicHistory?.[activeTerm];
                     return getMarkForSubject(termData?.marks, s, termData?.subjectMetadata) !== undefined;
                 })
             );
             setClassSubjects(filteredSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);
+        } finally {
+            setIsClassLoading(false);
         }
     };
 
     useEffect(() => { loadData(); }, [activeTerm, currentUser]);
-    useEffect(() => { if (selectedClass) loadClassData(); }, [selectedClass, subjects]);
+    
+    // When selectedClass changes manually via dropdown
+    const handleClassChange = (newClass: string) => {
+        setSelectedClass(newClass);
+        loadClassData(newClass);
+    };
 
     const handlePrint = () => window.print();
 
@@ -422,7 +438,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                             <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
                             <select
                                 value={selectedClass}
-                                onChange={e => setSelectedClass(e.target.value)}
+                                onChange={e => handleClassChange(e.target.value)}
                                 className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 font-medium text-slate-800"
                                 aria-label="Select class"
                             >
@@ -436,6 +452,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                                 onChange={e => setSelectedStudent(e.target.value)}
                                 className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 font-medium text-slate-800"
                                 aria-label="Select student"
+                                disabled={isClassLoading}
                             >
                                 <option value="">Choose a student</option>
                                 {classStudents.map(s => (
@@ -444,7 +461,12 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                             </select>
                         </div>
                     </div>
-                    {classStudents.length === 0 && (
+                    {isClassLoading ? (
+                        <div className="mt-4 p-4 text-center">
+                            <div className="loader-ring mx-auto mb-2"></div>
+                            <p className="text-xs text-slate-500">Loading {selectedClass} students...</p>
+                        </div>
+                    ) : classStudents.length === 0 && (
                         <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700">
                             <i className="fa-solid fa-triangle-exclamation"></i>
                             <span className="font-medium">No students found in class {selectedClass}</span>
@@ -453,7 +475,12 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                 </div>
 
                 {/* Scorecard or placeholder */}
-                {selectedStudentData ? (
+                {isClassLoading ? (
+                    <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
+                        <div className="loader-ring mx-auto mb-3"></div>
+                        <p className="text-slate-600 font-medium">Loading {selectedClass} scorecard data...</p>
+                    </div>
+                ) : selectedStudentData ? (
                     <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 print:animate-none">
                         <ScorecardPrintable
                             student={selectedStudentData}

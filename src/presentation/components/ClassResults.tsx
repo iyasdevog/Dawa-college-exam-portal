@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import type { User } from '../../domain/entities/User';
 import { SYSTEM_CLASSES } from '../../domain/entities/constants';
-import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { useMobile } from '../hooks/useMobile';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
@@ -31,6 +30,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isClassLoading, setIsClassLoading] = useState(false);
     const [viewMode, setViewMode] = useState<'table' | 'cards'>(hideSelector ? 'cards' : 'table');
 
     // Mobile detection
@@ -38,25 +38,175 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
 
-    const loadData = async () => {
+    // Stable ref to avoid stale closure in effects
+    const activeTermRef = useRef(activeTerm);
+    activeTermRef.current = activeTerm;
+
+    // O(1) subject lookup map — rebuilt only when subjects list changes
+    const subjectById = useMemo(() => new Map(subjects.map(s => [s.id, s])), [subjects]);
+
+    // ── Unified data loader: fetches subjects + settings + class students in ONE round-trip set ──
+    const loadAllData = useCallback(async (cls: string, term: string) => {
+        if (!cls) {
+            setIsLoading(false);
+            return;
+        }
         try {
             setIsLoading(true);
-            const [allSubjects, settings, termClasses] = await Promise.all([
-                dataService.getAllSubjects(activeTerm),
+            // All three requests fire in parallel — no waterfall
+            const [allSubjects, settings, termClasses, classStudents] = await Promise.all([
+                dataService.getAllSubjects(term),
                 dataService.getGlobalSettings(),
-                dataService.getClassesByTerm(activeTerm)
+                dataService.getClassesByTerm(term),
+                dataService.getStudentsByClass(cls, term)
             ]);
-            setSubjects(allSubjects);
             setBranding(settings);
             setAvailableClasses(termClasses);
+            setSubjects(allSubjects);
+
+            // Build subject lookup map immediately from fresh data (not from state)
+            const subjectMap = new Map(allSubjects.map((s: SubjectConfig) => [s.id, s]));
+
+            // Pre-compute term data for each student ONCE (avoids O(n²) re-computation)
+            const termDataMap = new Map<string, ReturnType<typeof computeTermData>>();
+            classStudents.forEach((student: StudentRecord) => {
+                termDataMap.set(student.id, computeTermData(student, term, cls));
+            });
+
+            // Process and rank students
+            const processedStudents = classStudents.map((student: StudentRecord) => {
+                const termData = termDataMap.get(student.id)!;
+                const displayMarksMetadata: Record<string, any> = {};
+                if (termData?.marks) {
+                    Object.keys(termData.marks).forEach(subId => {
+                        const m = termData.marks[subId];
+                        const snapshot = termData.subjectMetadata?.[subId];
+                        const liveSub = subjectMap.get(subId);
+                        displayMarksMetadata[subId] = {
+                            ...m,
+                            displayName: snapshot?.name || liveSub?.name || subId,
+                            displayArabic: snapshot?.arabicName || liveSub?.arabicName
+                        };
+                    });
+                }
+                return {
+                    ...student,
+                    displayMarks: termData?.marks || {},
+                    displayMarksMetadata,
+                    displayTotal: termData?.grandTotal || 0,
+                    displayAverage: termData?.average || 0,
+                    displayPerformance: termData?.performanceLevel || 'Not Assessed',
+                    displayRank: termData?.rank || 0,
+                    displayClass: termData?.className || student.currentClass || cls
+                };
+            });
+
+            const sortedStudents = [...processedStudents].sort((a, b) => b.displayTotal - a.displayTotal);
+            let currentRank = 1;
+            const rankedStudents = sortedStudents.map((student, index) => {
+                if (index > 0 && student.displayTotal === sortedStudents[index - 1].displayTotal) {
+                    // same rank
+                } else {
+                    currentRank = index + 1;
+                }
+                return { ...student, rank: currentRank };
+            });
+            setStudents(rankedStudents);
+
+            // Build class subjects from pre-computed term data map
+            const classSubjectsResult = buildClassSubjects(
+                classStudents, rankedStudents, allSubjects, subjectMap, termDataMap, term, cls
+            );
+            setClassSubjects(classSubjectsResult);
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error loading class results:', error);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
-    const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
+    // Wire up data loading on mount and when term/class changes
+    useEffect(() => {
+        const cls = forcedClass || selectedClass;
+        if (cls) {
+            loadAllData(cls, activeTerm);
+        } else {
+            // No class selected yet — still need subjects + settings
+            setIsLoading(true);
+            Promise.all([
+                dataService.getAllSubjects(activeTerm),
+                dataService.getGlobalSettings(),
+                dataService.getClassesByTerm(activeTerm)
+            ]).then(([allSubjects, settings, termClasses]) => {
+                setSubjects(allSubjects);
+                setBranding(settings);
+                setAvailableClasses(termClasses);
+                // Auto-select first allowed class
+                const allowed = (!currentUser || currentUser.role === 'admin' || currentUser.role === 'teacher')
+                    ? termClasses
+                    : termClasses.filter((c: string) => currentUser.assignedClasses?.includes(c));
+                if (allowed.length > 0) setSelectedClass(allowed[0]);
+            }).catch(console.error).finally(() => setIsLoading(false));
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTerm, currentUser]);
+
+    // Re-load class data when selected class changes (without re-fetching subjects)
+    useEffect(() => {
+        if (!selectedClass || isLoading) return;
+        setStudents([]);
+        setClassSubjects([]);
+        setIsClassLoading(true);
+        dataService.getStudentsByClass(selectedClass, activeTerm).then(classStudents => {
+            const subjectMap = new Map(subjects.map(s => [s.id, s]));
+            const termDataMap = new Map<string, ReturnType<typeof computeTermData>>();
+            classStudents.forEach((student: StudentRecord) => {
+                termDataMap.set(student.id, computeTermData(student, activeTerm, selectedClass));
+            });
+            const processedStudents = classStudents.map((student: StudentRecord) => {
+                const termData = termDataMap.get(student.id)!;
+                const displayMarksMetadata: Record<string, any> = {};
+                if (termData?.marks) {
+                    Object.keys(termData.marks).forEach(subId => {
+                        const m = termData.marks[subId];
+                        const snapshot = termData.subjectMetadata?.[subId];
+                        const liveSub = subjectMap.get(subId);
+                        displayMarksMetadata[subId] = {
+                            ...m,
+                            displayName: snapshot?.name || liveSub?.name || subId,
+                            displayArabic: snapshot?.arabicName || liveSub?.arabicName
+                        };
+                    });
+                }
+                return {
+                    ...student,
+                    displayMarks: termData?.marks || {},
+                    displayMarksMetadata,
+                    displayTotal: termData?.grandTotal || 0,
+                    displayAverage: termData?.average || 0,
+                    displayPerformance: termData?.performanceLevel || 'Not Assessed',
+                    displayRank: termData?.rank || 0,
+                    displayClass: termData?.className || student.currentClass || selectedClass
+                };
+            });
+            const sortedStudents = [...processedStudents].sort((a, b) => b.displayTotal - a.displayTotal);
+            let currentRank = 1;
+            const rankedStudents = sortedStudents.map((student, index) => {
+                if (index > 0 && student.displayTotal === sortedStudents[index - 1].displayTotal) {
+                    // same rank
+                } else {
+                    currentRank = index + 1;
+                }
+                return { ...student, rank: currentRank };
+            });
+            setStudents(rankedStudents);
+            setClassSubjects(buildClassSubjects(classStudents, rankedStudents, subjects, subjectMap, termDataMap, activeTerm, selectedClass));
+        }).catch(console.error).finally(() => setIsClassLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedClass]);
+
+    // ── Pure helper: compute term data for a single student (extracted for reuse in both effects) ──
+    const computeTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
         // Find any matching term key in history that ACTUALLY has marks
         const historyKeys = student.academicHistory ? Object.keys(student.academicHistory) : [];
         const matchingKey = historyKeys.find(tk => 
@@ -140,217 +290,121 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         };
     };
 
-    const loadClassData = async () => {
-        try {
-            const classStudents = await dataService.getStudentsByClass(selectedClass, activeTerm);
+    // ── Build class subjects list using pre-computed termDataMap (no repeated getStudentTermData calls) ──
+    const buildClassSubjects = (
+        classStudents: StudentRecord[],
+        rankedStudents: any[],
+        allSubjects: SubjectConfig[],
+        subjectMap: Map<string, SubjectConfig>,
+        termDataMap: Map<string, any>,
+        term: string,
+        cls: string
+    ): SubjectConfig[] => {
+        const matchesClass = (clsList: string[], c: string) => (clsList || []).includes(c);
+        const isOddTerm = term.endsWith('-Odd');
+        const isEvenTerm = term.endsWith('-Even');
 
-            // Map students to their active term data for display and ranking
-            const processedStudents = classStudents.map(student => {
-                const termData = getStudentTermData(student, activeTerm, selectedClass);
-                
-                // Pre-process marks with metadata snapshot fallbacks
-                const displayMarksMetadata: Record<string, any> = {};
-                if (termData?.marks) {
-                    Object.keys(termData.marks).forEach(subId => {
-                        const m = termData.marks[subId];
-                        const snapshot = termData.subjectMetadata?.[subId];
-                        displayMarksMetadata[subId] = {
-                            ...m,
-                            displayName: snapshot?.name || (subjects.find(s => s.id === subId)?.name) || subId,
-                            displayArabic: snapshot?.arabicName || (subjects.find(s => s.id === subId)?.arabicName)
-                        };
-                    });
-                }
+        let potentialSubjects: SubjectConfig[] = allSubjects.filter(s => {
+            if (s.subjectType === 'supplementary') return false;
+            if (isOddTerm && s.activeSemester === 'Even') return false;
+            if (isEvenTerm && s.activeSemester === 'Odd') return false;
+            if (matchesClass(s.targetClasses || [], cls)) return true;
+            if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
+            if (classStudents.some(cs => {
+                const termData = termDataMap.get(cs.id);
+                const mark = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
+                return mark !== undefined && !mark.isSupplementary && ((typeof mark.total === 'number' && mark.total > 0) || mark.int !== undefined || mark.ext !== undefined);
+            })) return true;
+            return false;
+        });
 
-                return {
-                    ...student,
-                    displayMarks: termData?.marks || {},
-                    displayMarksMetadata,
-                    displayTotal: termData?.grandTotal || 0,
-                    displayAverage: termData?.average || 0,
-                    displayPerformance: termData?.performanceLevel || 'Not Assessed',
-                    displayRank: termData?.rank || 0,
-                    displayClass: termData?.className || student.currentClass || selectedClass
-                };
-            });
-
-            // Sort by grand total descending and calculate ranks client-side
-            const sortedStudents = [...processedStudents].sort((a, b) => b.displayTotal - a.displayTotal);
-
-            let currentRank = 1;
-            const rankedStudents = sortedStudents.map((student, index) => {
-                if (index > 0 && student.displayTotal === sortedStudents[index - 1].displayTotal) {
-                    // Same total, same rank
-                } else {
-                    // Different total, rank is position + 1
-                    currentRank = index + 1;
-                }
-                return { ...student, rank: currentRank };
-            });
-
-            setStudents(rankedStudents);
-
-            // Filter subjects for this class.
-            // NOTE: s.targetClasses are already translated to active-term class names by AcademicService.getAllSubjects,
-            // so a direct include check is correct. No hardcoded alias map needed.
-            const matchesClass = (clsList: string[], cls: string) => {
-                if (!clsList || !cls) return false;
-                return clsList.includes(cls);
-            };
-
-            const isOddTerm = activeTerm.endsWith('-Odd');
-            const isEvenTerm = activeTerm.endsWith('-Even');
-
-            let potentialSubjects = subjects.filter(s => {
-                if (s.subjectType === 'supplementary') return false;
-                if (isOddTerm && s.activeSemester === 'Even') return false;
-                if (isEvenTerm && s.activeSemester === 'Odd') return false;
-
-                if (matchesClass(s.targetClasses || [], selectedClass)) return true;
-                if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
-                if (classStudents.some(cs => {
-                    const termData = getStudentTermData(cs, activeTerm, selectedClass);
-                    const mark = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
-                    return mark !== undefined && !mark.isSupplementary && ((typeof mark.total === 'number' && mark.total > 0) || mark.int !== undefined || mark.ext !== undefined);
-                })) return true;
-                return false;
-            });
-
-
-            // ──────────────────────────────────────────────────────────────────────
-            // Include snapshot subjects for any subject with marks in activeTerm (Unbreakable Rule)
-            // EXCLUDING supplementary exam marks and raw unmapped document IDs
-            // ──────────────────────────────────────────────────────────────────────
-            classStudents.forEach(cs => {
-                const termData = getStudentTermData(cs, activeTerm, selectedClass);
-                if (!termData?.marks) return;
-                Object.keys(termData.marks).forEach(subId => {
-                    const snapshot = termData.subjectMetadata?.[subId];
-                    const subName = snapshot?.name;
-                    const liveSub = subjects.find(s => s.id === subId) || (subName ? subjects.find(s => s.name.trim().toLowerCase() === subName.trim().toLowerCase()) : undefined);
-                    const m = termData.marks[subId];
-
-                    // Exclude supplementary exam marks
-                    if (m?.isSupplementary || snapshot?.subjectType === 'supplementary' || liveSub?.subjectType === 'supplementary' || snapshot?.name === 'Supplementary Exam') {
-                        return;
-                    }
-
-                    const resolvedName = snapshot?.name || liveSub?.name;
-                    const isRawId = /^[a-z0-9]{15,}$/i.test(subId);
-                    // CRITICAL GUARD: Never create a column for raw unmapped Firestore IDs
-                    if (!liveSub && (!resolvedName || isRawId || resolvedName === subId)) {
-                        return;
-                    }
-
-                    const alreadyIncluded = potentialSubjects.some(ps => 
-                        ps.id === subId || (resolvedName && ps.name.trim().toLowerCase() === resolvedName.trim().toLowerCase())
-                    );
-
-                    if (!alreadyIncluded) {
-                        // Always use live catalog subjectType first — critical for elective classification
-                        const resolvedSubjectType = liveSub?.subjectType || snapshot?.subjectType || 'general';
-                        potentialSubjects.push({
-                            id: subId,
-                            name: snapshot?.name || liveSub?.name || subId,
-                            arabicName: snapshot?.arabicName || liveSub?.arabicName || '',
-                            maxINT: snapshot?.maxINT ?? liveSub?.maxINT ?? 30,
-                            maxEXT: snapshot?.maxEXT ?? liveSub?.maxEXT ?? 70,
-                            passingTotal: snapshot?.passingTotal ?? liveSub?.passingTotal ?? 40,
-                            facultyName: snapshot?.facultyName || liveSub?.facultyName || '',
-                            subjectType: resolvedSubjectType,
-                            targetClasses: [selectedClass],
-                            activeSemester: activeTerm.endsWith('-Even') ? 'Even' : 'Odd',
-                            enrolledStudents: [],
-                            academicYear: ''
-                        } as SubjectConfig);
-                    }
-                });
-            });
-
-            // Hide subjects that have no marks entered for ANY student in this view
-            const filteredSubjects = potentialSubjects.filter(s => {
-                if (s.subjectType === 'supplementary') return false;
-                return classStudents.some(cs => {
-                    const termData = getStudentTermData(cs, activeTerm, selectedClass);
-                    const m = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
-                    if (!m || m.isSupplementary) return false;
-                    const hasValidMark = (val: any) => val !== undefined && val !== null && val !== '-' && val !== '';
-                    return (
-                        (typeof m.total === 'number' && m.total > 0) || 
-                        hasValidMark(m.int) ||
-                        hasValidMark(m.ext)
-                    );
-                });
-            });
-
-            // Deduplicate subjects: first by ID (prefer entry with a real name), then by normalized name
-            const uniqueSubjectsById = new Map<string, SubjectConfig>();
-            const uniqueSubjectsByName = new Map<string, SubjectConfig>();
-
-            filteredSubjects.forEach(s => {
-                // Prefer live catalog entries (those already have a proper name from subjects array)
-                const isLiveCatalogEntry = subjects.some(ls => ls.id === s.id);
-
-                // Deduplicate by ID
-                if (!uniqueSubjectsById.has(s.id)) {
-                    uniqueSubjectsById.set(s.id, s);
-                } else if (isLiveCatalogEntry) {
-                    // A live catalog version is always preferred over snapshot recovery
-                    uniqueSubjectsById.set(s.id, s);
+        // Include snapshot subjects for any subject with marks (Unbreakable Rule)
+        classStudents.forEach(cs => {
+            const termData = termDataMap.get(cs.id);
+            if (!termData?.marks) return;
+            Object.keys(termData.marks).forEach(subId => {
+                const snapshot = termData.subjectMetadata?.[subId];
+                const subName = snapshot?.name;
+                const liveSub = subjectMap.get(subId) || (subName ? allSubjects.find(s => s.name.trim().toLowerCase() === subName.trim().toLowerCase()) : undefined);
+                const m = termData.marks[subId];
+                if (m?.isSupplementary || snapshot?.subjectType === 'supplementary' || liveSub?.subjectType === 'supplementary' || snapshot?.name === 'Supplementary Exam') return;
+                const resolvedName = snapshot?.name || liveSub?.name;
+                const isRawId = /^[a-z0-9]{15,}$/i.test(subId);
+                if (!liveSub && (!resolvedName || isRawId || resolvedName === subId)) return;
+                const alreadyIncluded = potentialSubjects.some(ps => ps.id === subId || (resolvedName && ps.name.trim().toLowerCase() === resolvedName.trim().toLowerCase()));
+                if (!alreadyIncluded) {
+                    const resolvedSubjectType = liveSub?.subjectType || snapshot?.subjectType || 'general';
+                    potentialSubjects.push({
+                        id: subId,
+                        name: snapshot?.name || liveSub?.name || subId,
+                        arabicName: snapshot?.arabicName || liveSub?.arabicName || '',
+                        maxINT: snapshot?.maxINT ?? liveSub?.maxINT ?? 30,
+                        maxEXT: snapshot?.maxEXT ?? liveSub?.maxEXT ?? 70,
+                        passingTotal: snapshot?.passingTotal ?? liveSub?.passingTotal ?? 40,
+                        facultyName: snapshot?.facultyName || liveSub?.facultyName || '',
+                        subjectType: resolvedSubjectType,
+                        targetClasses: [cls],
+                        activeSemester: term.endsWith('-Even') ? 'Even' : 'Odd',
+                        enrolledStudents: [],
+                        academicYear: ''
+                    } as SubjectConfig);
                 }
             });
+        });
 
-            // Second pass: deduplicate by subjectType + normalized name to keep general and elective subjects separate
-            uniqueSubjectsById.forEach(s => {
-                const normalizedName = s.name.trim().toLowerCase();
-                const key = `${s.subjectType || 'general'}_${normalizedName}`;
-
-                if (!uniqueSubjectsByName.has(key)) {
-                    uniqueSubjectsByName.set(key, s);
-                } else {
-                    const existing = uniqueSubjectsByName.get(key)!;
-                    let existingMarkCount = 0;
-                    let candidateMarkCount = 0;
-
-                    classStudents.forEach(cs => {
-                        const termData = getStudentTermData(cs, activeTerm, selectedClass);
-                        const mExist = getMarkForSubject(termData?.marks, existing, termData?.subjectMetadata);
-                        const mCand = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
-                        if (mExist && !mExist.isSupplementary && ((typeof mExist.total === 'number' && mExist.total > 0) || mExist.int !== undefined || mExist.ext !== undefined)) existingMarkCount++;
-                        if (mCand && !mCand.isSupplementary && ((typeof mCand.total === 'number' && mCand.total > 0) || mCand.int !== undefined || mCand.ext !== undefined)) candidateMarkCount++;
-                    });
-
-                    // Prefer candidate if it has more student marks, or if equal, prefer one whose targetClasses includes selectedClass
-                    const candidateTargetsClass = (s.targetClasses || []).includes(selectedClass);
-                    const existingTargetsClass = (existing.targetClasses || []).includes(selectedClass);
-
-                    if (candidateMarkCount > existingMarkCount || (candidateMarkCount === existingMarkCount && candidateTargetsClass && !existingTargetsClass)) {
-                        uniqueSubjectsByName.set(key, s);
-                    }
-                }
+        // Filter out subjects with no real marks
+        const filteredSubjects = potentialSubjects.filter(s => {
+            if (s.subjectType === 'supplementary') return false;
+            return classStudents.some(cs => {
+                const termData = termDataMap.get(cs.id);
+                const m = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
+                if (!m || m.isSupplementary) return false;
+                const hasValidMark = (val: any) => val !== undefined && val !== null && val !== '-' && val !== '';
+                return (typeof m.total === 'number' && m.total > 0) || hasValidMark(m.int) || hasValidMark(m.ext);
             });
+        });
 
-            const classSubjects = Array.from(uniqueSubjectsByName.values());
-            
-            // Sort subjects: lower failure rate first (passed subjects mostly)
-            classSubjects.sort((a, b) => {
-                let aFailCount = 0;
-                let bFailCount = 0;
+        // Deduplicate by ID then by normalized name
+        const uniqueById = new Map<string, SubjectConfig>();
+        const uniqueByName = new Map<string, SubjectConfig>();
+        filteredSubjects.forEach(s => {
+            const isLive = subjectMap.has(s.id);
+            if (!uniqueById.has(s.id) || isLive) uniqueById.set(s.id, s);
+        });
+        uniqueById.forEach(s => {
+            const key = `${s.subjectType || 'general'}_${s.name.trim().toLowerCase()}`;
+            if (!uniqueByName.has(key)) {
+                uniqueByName.set(key, s);
+            } else {
+                const existing = uniqueByName.get(key)!;
+                let existingCount = 0, candidateCount = 0;
                 classStudents.forEach(cs => {
-                    const termData = getStudentTermData(cs, activeTerm, selectedClass);
-                    const markA = getMarkForSubject(termData?.marks, a, termData?.subjectMetadata);
-                    const markB = getMarkForSubject(termData?.marks, b, termData?.subjectMetadata);
-                    if (markA?.status === 'Failed') aFailCount++;
-                    if (markB?.status === 'Failed') bFailCount++;
+                    const td = termDataMap.get(cs.id);
+                    const mE = getMarkForSubject(td?.marks, existing, td?.subjectMetadata);
+                    const mC = getMarkForSubject(td?.marks, s, td?.subjectMetadata);
+                    if (mE && !mE.isSupplementary && ((typeof mE.total === 'number' && mE.total > 0) || mE.int !== undefined || mE.ext !== undefined)) existingCount++;
+                    if (mC && !mC.isSupplementary && ((typeof mC.total === 'number' && mC.total > 0) || mC.int !== undefined || mC.ext !== undefined)) candidateCount++;
                 });
-                if (aFailCount !== bFailCount) return aFailCount - bFailCount;
-                return a.name.localeCompare(b.name);
+                const cTargets = (s.targetClasses || []).includes(cls);
+                const eTargets = (existing.targetClasses || []).includes(cls);
+                if (candidateCount > existingCount || (candidateCount === existingCount && cTargets && !eTargets)) {
+                    uniqueByName.set(key, s);
+                }
+            }
+        });
+
+        const result = Array.from(uniqueByName.values());
+        result.sort((a, b) => {
+            let aFail = 0, bFail = 0;
+            classStudents.forEach(cs => {
+                const td = termDataMap.get(cs.id);
+                if (getMarkForSubject(td?.marks, a, td?.subjectMetadata)?.status === 'Failed') aFail++;
+                if (getMarkForSubject(td?.marks, b, td?.subjectMetadata)?.status === 'Failed') bFail++;
             });
-            
-            setClassSubjects(classSubjects);
-        } catch (error) {
-            console.error('Error loading class data:', error);
-        }
+            if (aFail !== bFail) return aFail - bFail;
+            return a.name.localeCompare(b.name);
+        });
+        return result;
     };
 
     const handlePrint = () => {
@@ -405,7 +459,8 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         const m = (st as any).displayMarks || {};
         const meta = (st as any).displayMarksMetadata || {};
         return Object.keys(m).some(k => {
-            const liveSub = subjects.find(s => s.id === k);
+            // O(1) lookup via memoized map instead of O(n) find
+            const liveSub = subjectById.get(k);
             const snapshot = meta[k];
             const type = liveSub?.subjectType || snapshot?.subjectType;
             const markObj = m[k];
@@ -419,10 +474,9 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
         for (const [subId, m] of Object.entries(displayMarks)) {
             if ((m as any)?.isSupplementary) continue;
-
-            const liveSub = subjects.find(s => s.id === subId);
+            // O(1) lookup via memoized map
+            const liveSub = subjectById.get(subId);
             const meta = displayMeta[subId];
-
             const isElective = (liveSub?.subjectType === 'elective') || (meta?.subjectType === 'elective');
             if (isElective) {
                 const name = meta?.displayName || meta?.name || liveSub?.name || 'Elective';
@@ -442,6 +496,16 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             </div>
         );
     }
+
+    // Class-level skeleton: show while second-phase class data loads without blocking the header
+    const classLoadingOverlay = isClassLoading && (
+        <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+                <div className="loader-ring mb-3"></div>
+                <p className="text-slate-500 text-sm">Loading {selectedClass} data...</p>
+            </div>
+        </div>
+    );
 
 
 
@@ -529,7 +593,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                     )}
 
                     {/* Results Content */}
-                    {students.length > 0 ? (
+                    {isClassLoading ? classLoadingOverlay : students.length > 0 ? (
                         <>
                             {viewMode === 'cards' && isMobile ? (
                                 /* Mobile Card View */

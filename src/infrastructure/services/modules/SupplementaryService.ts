@@ -29,54 +29,78 @@ export class SupplementaryService extends BaseDataService {
     }
 
     public async getAllSupplementaryExams(termKey?: string): Promise<(SupplementaryExam & { studentName?: string; studentAdNo?: string; subjectName?: string, studentClass?: string })[]> {
-        try {
-            let q = query(collection(this.db, this.supplementaryExamsCollection));
-            
-            if (termKey && termKey !== 'All') {
-                q = query(q, where('examTerm', '==', termKey));
-            }
-            const snapshot = await getDocs(q);
-            const exams = snapshot.docs
-                .map(d => ({ id: d.id, ...d.data() } as SupplementaryExam))
-                .filter(exam => !exam.isDeleted);
-
-            // Enrich with student and subject details
-            const [allStudents, allSubjects] = await Promise.all([
-                this.studentService.getAllStudents('All'),
-                this.academicService.getRawAllSubjects()
-            ]);
-            
-            const studentMap = new Map(allStudents.map(s => [s.id, s]));
-            const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
-
-            return exams.map(exam => {
-                const student = studentMap.get(exam.studentId);
-                const subject = subjectMap.get(exam.subjectId);
-                
-                // Prioritize resolving class from the term being viewed or recorded
-                const resolutionTerm = (termKey && termKey !== 'All') ? termKey : (exam.examTerm || exam.originalTerm);
-                let historicalClass = (resolutionTerm && student?.academicHistory?.[resolutionTerm]?.className) || 
-                                      (exam.originalTerm && student?.academicHistory?.[exam.originalTerm]?.className) ||
-                                      student?.currentClass || 
-                                      student?.className || 
-                                      'Unknown';
-
-                // Restore historical nomenclature using centralized helper
-                historicalClass = this.getHistoricalClassName(resolutionTerm, historicalClass);
-
-                return {
-                    ...exam,
-                    studentName: student?.name || (exam as any).studentName || (exam as any).studentId || 'Not Registered',
-                    studentAdNo: student?.adNo || (exam as any).studentAdNo || (exam as any).studentAdNo || (exam as any).studentId,
-                    subjectName: subject?.name || (exam as any).subjectName || 'Unknown Subject',
-                    studentClass: historicalClass
-                };
-            });
-            // Removed filtering of Unknown Subject to prevent data loss
-        } catch (error) {
-            console.error('Error fetching all supplementary exams:', error);
-            return [];
+        const cacheKey = `supps_${termKey || 'All'}`;
+        if (this.supplementaryCache.has(cacheKey)) {
+            return this.supplementaryCache.get(cacheKey)! as any;
         }
+
+        const cached = this.getStorageCachedData<any[]>(cacheKey);
+        if (cached && cached.length > 0) {
+            this.supplementaryCache.set(cacheKey, cached);
+            return cached;
+        }
+
+        if (BaseDataService.inFlightRequests.has(cacheKey)) {
+            return BaseDataService.inFlightRequests.get(cacheKey)!;
+        }
+
+        const fetchPromise = (async () => {
+            try {
+                let q = query(collection(this.db, this.supplementaryExamsCollection));
+                if (termKey && termKey !== 'All') {
+                    q = query(q, where('examTerm', '==', termKey));
+                }
+                const snapshot = await getDocs(q);
+                const exams = snapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() } as SupplementaryExam))
+                    .filter(exam => !exam.isDeleted);
+
+                // Enrich with student and subject details
+                const [allStudents, allSubjects] = await Promise.all([
+                    this.studentService.getAllStudents('All'),
+                    this.academicService.getRawAllSubjects()
+                ]);
+                
+                const studentMap = new Map(allStudents.map(s => [s.id, s]));
+                const subjectMap = new Map(allSubjects.map(s => [s.id, s]));
+
+                const enriched = exams.map(exam => {
+                    const student = studentMap.get(exam.studentId);
+                    const subject = subjectMap.get(exam.subjectId);
+                    
+                    // Prioritize resolving class from the term being viewed or recorded
+                    const resolutionTerm = (termKey && termKey !== 'All') ? termKey : (exam.examTerm || exam.originalTerm);
+                    let historicalClass = (resolutionTerm && student?.academicHistory?.[resolutionTerm]?.className) || 
+                                          (exam.originalTerm && student?.academicHistory?.[exam.originalTerm]?.className) ||
+                                          student?.currentClass || 
+                                          student?.className || 
+                                          'Unknown';
+
+                    // Restore historical nomenclature using centralized helper
+                    historicalClass = this.getHistoricalClassName(resolutionTerm, historicalClass);
+
+                    return {
+                        ...exam,
+                        studentName: student?.name || (exam as any).studentName || (exam as any).studentId || 'Not Registered',
+                        studentAdNo: student?.adNo || (exam as any).studentAdNo || (exam as any).studentAdNo || (exam as any).studentId,
+                        subjectName: subject?.name || (exam as any).subjectName || (exam as any).subjectId || 'Deleted Subject',
+                        studentClass: historicalClass
+                    };
+                });
+
+                this.supplementaryCache.set(cacheKey, enriched);
+                this.setStorageCachedData(cacheKey, enriched);
+                return enriched;
+            } catch (error) {
+                console.error('Error fetching supplementary exams:', error);
+                return [];
+            } finally {
+                BaseDataService.inFlightRequests.delete(cacheKey);
+            }
+        })();
+
+        BaseDataService.inFlightRequests.set(cacheKey, fetchPromise);
+        return fetchPromise;
     }
 
     public async syncApplicationToSupplementary(
