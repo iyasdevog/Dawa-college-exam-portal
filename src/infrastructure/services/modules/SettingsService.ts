@@ -33,6 +33,7 @@ export class SettingsService extends BaseDataService {
                 const cleanCustom = rawCustom.filter(c => c && !SYSTEM_AND_HISTORICAL.includes(c));
 
                 BaseDataService.currentGlobalSettings = {
+                    ...data,
                     currentAcademicYear: data.currentAcademicYear || '2025-2026',
                     currentSemester: data.currentSemester || 'Odd',
                     availableYears: data.availableYears || ['2023-2024', '2024-2025', '2025-2026'],
@@ -45,7 +46,12 @@ export class SettingsService extends BaseDataService {
                     institutionName: data.institutionName || 'Islamic Dawa Academy',
                     contactEmail: data.contactEmail || 'examinations@aicdawacollege.edu.in',
                     contactPhone: data.contactPhone || '+91-483-2734567',
-                    systemAlias: data.systemAlias || 'AIC_Dawa_Portal'
+                    systemAlias: data.systemAlias || 'AIC_Dawa_Portal',
+                    classSemesters: data.classSemesters || {},
+                    activeAttendanceTerm: data.activeAttendanceTerm,
+                    allowedAttendanceTerms: data.allowedAttendanceTerms,
+                    activeMarksTerm: data.activeMarksTerm,
+                    allowedMarksTerms: data.allowedMarksTerms
                 };
                 return BaseDataService.currentGlobalSettings;
             }

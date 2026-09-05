@@ -276,6 +276,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             };
 
             await dataService.updateGlobalSettings(updatedSettings);
+            setCurrentSettings(updatedSettings);
             await updateSystemTerm(editableYear, currentSemester);
             // Also update local viewing context so Admin sees the new active term immediately
             setTerm(editableYear, currentSemester);
