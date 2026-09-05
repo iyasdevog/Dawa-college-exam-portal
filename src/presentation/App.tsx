@@ -4,7 +4,7 @@ import { ApplicationErrorBoundary, FeatureErrorBoundary } from './components/Err
 import { MobileProvider } from './viewmodels/MobileContext';
 import { TermProvider } from './viewmodels/TermContext';
 import { ViewType, StudentRecord } from '../domain/entities/types';
-import { User } from '../domain/entities/User';
+import type { User } from '../domain/entities/User';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
 import { versionService } from '../infrastructure/services/versionService';
 

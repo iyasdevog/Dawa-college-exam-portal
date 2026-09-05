@@ -468,5 +468,14 @@ Keep the analysis professional and actionable.`;
     }
 }
 
-// Export singleton instance
-export const aiService = new AIService();
+// Lazy singleton to avoid TDZ errors from module evaluation order
+let _aiServiceInstance: AIService | null = null;
+export const aiService = new Proxy({} as AIService, {
+    get(_target, prop: string | symbol) {
+        if (!_aiServiceInstance) {
+            _aiServiceInstance = new AIService();
+        }
+        const value = (_aiServiceInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_aiServiceInstance) : value;
+    }
+});

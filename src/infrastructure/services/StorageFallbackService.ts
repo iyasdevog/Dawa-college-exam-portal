@@ -85,4 +85,13 @@ export class StorageFallbackService {
     }
 }
 
-export const storageFallback = new StorageFallbackService();
+let _storageFallbackInstance: StorageFallbackService | null = null;
+export const storageFallback = new Proxy({} as StorageFallbackService, {
+    get(_target, prop: string | symbol) {
+        if (!_storageFallbackInstance) {
+            _storageFallbackInstance = new StorageFallbackService();
+        }
+        const value = (_storageFallbackInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_storageFallbackInstance) : value;
+    }
+});

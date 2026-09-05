@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClassReleaseSettings, SubjectConfig } from '../../../domain/entities/types';
+import type { ClassReleaseSettings, SubjectConfig } from '../../../domain/entities/types';
 
 interface ReleaseSettingsTabProps {
     allowedClasses: string[];

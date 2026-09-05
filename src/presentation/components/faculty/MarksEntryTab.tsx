@@ -1,5 +1,5 @@
 import React from 'react';
-import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
+import type { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import OfflineStatusIndicator from '../OfflineStatusIndicator';
 import { shortenSubjectName } from '../../../infrastructure/services/formatUtils';
 import { useTerm } from '../../viewmodels/TermContext';

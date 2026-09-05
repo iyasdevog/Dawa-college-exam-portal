@@ -102,4 +102,13 @@ export class VersionService {
     }
 }
 
-export const versionService = new VersionService();
+let _versionServiceInstance: VersionService | null = null;
+export const versionService = new Proxy({} as VersionService, {
+    get(_target, prop: string | symbol) {
+        if (!_versionServiceInstance) {
+            _versionServiceInstance = new VersionService();
+        }
+        const value = (_versionServiceInstance as any)[prop];
+        return typeof value === 'function' ? value.bind(_versionServiceInstance) : value;
+    }
+});

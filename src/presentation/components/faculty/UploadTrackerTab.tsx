@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
+import type { StudentRecord, SubjectConfig } from '../../../domain/entities/types';
 import { normalizeName } from '../../../infrastructure/services/formatUtils';
 
 interface UploadTrackerTabProps {

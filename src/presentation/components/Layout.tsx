@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewType, GlobalSettings } from '../../domain/entities/types';
+import type { ViewType, GlobalSettings } from '../../domain/entities/types';
 import { dataService } from '../../infrastructure/services/dataService';
 import HamburgerMenu from './HamburgerMenu';
 import type { User } from '../../domain/entities/User';
