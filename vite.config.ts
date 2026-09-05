@@ -77,8 +77,9 @@ export default defineConfig(({ mode }) => {
       // Production-specific optimizations
       ...(isProduction && {
         reportCompressedSize: true,
-        // esbuild-native console/debugger removal
+        // esbuild-native configuration with name preservation to prevent identifier collisions
         esbuild: {
+          keepNames: true,
           drop: ['console', 'debugger'],
           pure: ['console.log', 'console.info', 'console.debug']
         }
