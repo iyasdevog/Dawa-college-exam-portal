@@ -97,6 +97,42 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
         }
     }, [activeTab, activeTerm]);
 
+    const loadStudentsByClass = useCallback(async () => {
+        if (!selectedSubject) return;
+        try {
+            setIsLoadingStudents(true);
+            const studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject, activeTerm);
+            const currentSub = subjects.find(s => s.id === selectedSubject);
+            const isCrossClass = currentSub?.subjectType === 'elective' && currentSub?.electiveType === 'cross-class';
+
+            const filteredByClass = (subjectType === 'elective' && isCrossClass)
+                ? studentsToShow
+                : studentsToShow.filter(s => {
+                    const sClass = s.className || s.currentClass || '';
+                    const histClass = dataService.getHistoricalClassName(activeTerm, sClass);
+                    const dbClass = dataService.getDatabaseClassName(activeTerm, sClass);
+                    const selHist = dataService.getHistoricalClassName(activeTerm, selectedClass);
+                    const selDb = dataService.getDatabaseClassName(activeTerm, selectedClass);
+                    return sClass === selectedClass || histClass === selHist || dbClass === selDb || sClass === selDb || dbClass === selectedClass;
+                });
+            
+            setStudents(filteredByClass);
+            loadedSubjectIdRef.current = selectedSubject;
+
+            const attResults = await Promise.all(
+                filteredByClass.map(async (s) => {
+                    const percentage = await dataService.calculateAttendancePercentage(s.id, selectedSubject, activeTerm);
+                    return [s.id, { present: 0, total: 0, percentage }] as [string, { present: number; total: number; percentage: number }];
+                })
+            );
+            setAttendanceStats(Object.fromEntries(attResults));
+        } catch (error) {
+            console.error('Error loading students:', error);
+        } finally {
+            setIsLoadingStudents(false);
+        }
+    }, [selectedSubject, activeTerm, subjects, subjectType, selectedClass]);
+
     useEffect(() => {
         if (allowedClasses.length > 0 && (!selectedClass || !allowedClasses.includes(selectedClass))) {
             setSelectedClass(allowedClasses[0]);
@@ -139,42 +175,6 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
 
         setClassSubjects(filtered);
     }, [selectedClass, subjects, subjectType]);
-
-    const loadStudentsByClass = useCallback(async () => {
-        if (!selectedSubject) return;
-        try {
-            setIsLoadingStudents(true);
-            const studentsToShow = await dataService.getEnrolledStudentsForSubject(selectedSubject, activeTerm);
-            const currentSub = subjects.find(s => s.id === selectedSubject);
-            const isCrossClass = currentSub?.subjectType === 'elective' && currentSub?.electiveType === 'cross-class';
-
-            const filteredByClass = (subjectType === 'elective' && isCrossClass)
-                ? studentsToShow
-                : studentsToShow.filter(s => {
-                    const sClass = s.className || s.currentClass || '';
-                    const histClass = dataService.getHistoricalClassName(activeTerm, sClass);
-                    const dbClass = dataService.getDatabaseClassName(activeTerm, sClass);
-                    const selHist = dataService.getHistoricalClassName(activeTerm, selectedClass);
-                    const selDb = dataService.getDatabaseClassName(activeTerm, selectedClass);
-                    return sClass === selectedClass || histClass === selHist || dbClass === selDb || sClass === selDb || dbClass === selectedClass;
-                });
-            
-            setStudents(filteredByClass);
-            loadedSubjectIdRef.current = selectedSubject;
-
-            const attResults = await Promise.all(
-                filteredByClass.map(async (s) => {
-                    const percentage = await dataService.calculateAttendancePercentage(s.id, selectedSubject, activeTerm);
-                    return [s.id, { present: 0, total: 0, percentage }] as [string, { present: number; total: number; percentage: number }];
-                })
-            );
-            setAttendanceStats(Object.fromEntries(attResults));
-        } catch (error) {
-            console.error('Error loading students:', error);
-        } finally {
-            setIsLoadingStudents(false);
-        }
-    }, [selectedSubject, activeTerm, subjects, subjectType, selectedClass]);
 
     useEffect(() => {
         loadedSubjectIdRef.current = null;

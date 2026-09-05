@@ -38,26 +38,6 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
 
-
-    useEffect(() => {
-        setStudents([]);
-        setClassSubjects([]);
-        loadData();
-        if (!forcedClass) setSelectedClass(''); // Reset class on term switch
-    }, [activeTerm]);
-
-    useEffect(() => {
-        if (allowedClasses.length > 0 && (!selectedClass || !allowedClasses.includes(selectedClass)) && !forcedClass) {
-            setSelectedClass(allowedClasses[0]);
-        }
-    }, [allowedClasses, forcedClass]);
-
-    useEffect(() => {
-        if (selectedClass && subjects.length > 0) {
-            loadClassData();
-        }
-    }, [selectedClass, subjects, activeTerm]);
-
     const loadData = async () => {
         try {
             setIsLoading(true);

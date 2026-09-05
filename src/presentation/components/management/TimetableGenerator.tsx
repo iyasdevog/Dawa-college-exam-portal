@@ -52,73 +52,10 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
     const classes = [...new Set(students.map(s => s.className))];
     const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
 
-    // Sync selectedSemester when system term changes (if not manually changed by user yet)
-    useEffect(() => {
-        if (!selectedClass) {
-            setSelectedSemester((systemSemester === 'Odd' || systemSemester === 'Even') ? systemSemester : 'Odd');
-        }
-    }, [systemSemester]);
-
-    useEffect(() => {
-        if (selectedClass && selectedSemester) {
-            loadConfig();
-            loadGlobalTimetables();
-        }
-    }, [selectedClass, selectedSemester]);
-
     const loadGlobalTimetables = async () => {
         const termKey = `${systemYear}-${selectedSemester}`;
         const allSystemTimetables = await dataService.getAllTimetables(termKey);
         setOtherTimetables(allSystemTimetables.filter(t => t.className !== selectedClass && t.semester === selectedSemester));
-    };
-
-    const handleLoadAppliedTimetable = async () => {
-        if (!selectedClass) return;
-        setIsLoadingApplied(true);
-        try {
-            const termKey = `${systemYear}-${selectedSemester}`;
-            const applied = await dataService.getTimetableByClass(selectedClass, termKey);
-            if (applied.length === 0) {
-                alert(`No applied timetable found for ${selectedClass} in ${termKey}`);
-            } else {
-                setGeneratedTimetable(applied);
-                alert(`Loaded ${applied.length} existing entries for ${selectedClass}`);
-            }
-        } catch (error) {
-            console.error('Failed to load applied timetable:', error);
-            alert('Error loading existing timetable');
-        } finally {
-            setIsLoadingApplied(false);
-        }
-    };
-
-    const isFacultyBusy = (facultyName: string | undefined, day: string, startTime: string, endTime: string) => {
-        if (!facultyName || day === 'All') return false;
-        return otherTimetables.some(t => {
-            const sub = subjects.find(s => s.id === t.subjectId);
-            if (sub?.facultyName !== facultyName) return false;
-            if (t.day !== day) return false;
-            if (!t.startTime || !startTime) return false;
-            return (startTime < t.endTime && endTime > t.startTime);
-        });
-    };
-
-    const getFacultyDailyCount = (facultyName: string | undefined, day: string, currentGrid?: Record<string, Record<number, TimetableEntry | null>>) => {
-        if (!facultyName || day === 'All') return 0;
-        let count = otherTimetables.filter(t => {
-            if (t.day !== day) return false;
-            const sub = subjects.find(s => s.id === t.subjectId);
-            return sub?.facultyName === facultyName;
-        }).length;
-        if (currentGrid && currentGrid[day]) {
-            Object.values(currentGrid[day]).forEach(entry => {
-                if (entry) {
-                    const sub = subjects.find(s => s.id === entry.subjectId);
-                    if (sub?.facultyName === facultyName) count++;
-                }
-            });
-        }
-        return count;
     };
 
     const loadConfig = async () => {
@@ -171,6 +108,71 @@ const TimetableGenerator: React.FC<TimetableGeneratorProps> = ({ subjects, stude
             setConfig(defaultConfig);
         }
     };
+
+    // Sync selectedSemester when system term changes (if not manually changed by user yet)
+    useEffect(() => {
+        if (!selectedClass) {
+            setSelectedSemester((systemSemester === 'Odd' || systemSemester === 'Even') ? systemSemester : 'Odd');
+        }
+    }, [systemSemester]);
+
+    useEffect(() => {
+        if (selectedClass && selectedSemester) {
+            loadConfig();
+            loadGlobalTimetables();
+        }
+    }, [selectedClass, selectedSemester]);
+
+    const handleLoadAppliedTimetable = async () => {
+        if (!selectedClass) return;
+        setIsLoadingApplied(true);
+        try {
+            const termKey = `${systemYear}-${selectedSemester}`;
+            const applied = await dataService.getTimetableByClass(selectedClass, termKey);
+            if (applied.length === 0) {
+                alert(`No applied timetable found for ${selectedClass} in ${termKey}`);
+            } else {
+                setGeneratedTimetable(applied);
+                alert(`Loaded ${applied.length} existing entries for ${selectedClass}`);
+            }
+        } catch (error) {
+            console.error('Failed to load applied timetable:', error);
+            alert('Error loading existing timetable');
+        } finally {
+            setIsLoadingApplied(false);
+        }
+    };
+
+    const isFacultyBusy = (facultyName: string | undefined, day: string, startTime: string, endTime: string) => {
+        if (!facultyName || day === 'All') return false;
+        return otherTimetables.some(t => {
+            const sub = subjects.find(s => s.id === t.subjectId);
+            if (sub?.facultyName !== facultyName) return false;
+            if (t.day !== day) return false;
+            if (!t.startTime || !startTime) return false;
+            return (startTime < t.endTime && endTime > t.startTime);
+        });
+    };
+
+    const getFacultyDailyCount = (facultyName: string | undefined, day: string, currentGrid?: Record<string, Record<number, TimetableEntry | null>>) => {
+        if (!facultyName || day === 'All') return 0;
+        let count = otherTimetables.filter(t => {
+            if (t.day !== day) return false;
+            const sub = subjects.find(s => s.id === t.subjectId);
+            return sub?.facultyName === facultyName;
+        }).length;
+        if (currentGrid && currentGrid[day]) {
+            Object.values(currentGrid[day]).forEach(entry => {
+                if (entry) {
+                    const sub = subjects.find(s => s.id === entry.subjectId);
+                    if (sub?.facultyName === facultyName) count++;
+                }
+            });
+        }
+        return count;
+    };
+
+
 
     const handleSaveConfig = async () => {
         await dataService.saveGeneratorConfig(config);

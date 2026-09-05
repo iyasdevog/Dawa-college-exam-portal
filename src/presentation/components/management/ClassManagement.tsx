@@ -84,6 +84,31 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
         alert(`Class "${newClassName.trim()}" added successfully!`);
     };
 
+    const handleToggleClassVisibility = async (className: string, action: 'hide' | 'unhide') => {
+        try {
+            setIsOperating(true);
+            const { dataService } = await import('../../../infrastructure/services/dataService');
+            
+            let updatedDisabledClasses = [...disabledClasses];
+            if (action === 'hide') {
+                if (!updatedDisabledClasses.includes(className)) {
+                    updatedDisabledClasses.push(className);
+                }
+            } else {
+                updatedDisabledClasses = updatedDisabledClasses.filter(c => c !== className);
+            }
+            
+            await dataService.updateGlobalSettings({ disabledClasses: updatedDisabledClasses });
+            alert(`Class "${className}" has been ${action === 'hide' ? 'hidden' : 'unhidden'} successfully.`);
+            onRefresh();
+        } catch (error) {
+            console.error('Error toggling class visibility:', error);
+            alert('Failed to update class visibility.');
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
     const handleDeleteClass = (className: string) => {
         if (CLASSES.includes(className)) {
             if (confirm(`"${className}" is a default academic class and cannot be permanently deleted. Would you like to HIDE it instead?`)) {
@@ -186,30 +211,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
 
 
 
-    const handleToggleClassVisibility = async (className: string, action: 'hide' | 'unhide') => {
-        try {
-            setIsOperating(true);
-            const { dataService } = await import('../../../infrastructure/services/dataService');
-            
-            let updatedDisabledClasses = [...disabledClasses];
-            if (action === 'hide') {
-                if (!updatedDisabledClasses.includes(className)) {
-                    updatedDisabledClasses.push(className);
-                }
-            } else {
-                updatedDisabledClasses = updatedDisabledClasses.filter(c => c !== className);
-            }
-            
-            await dataService.updateGlobalSettings({ disabledClasses: updatedDisabledClasses });
-            dataService.invalidateCache();
-            if (onRefresh) await onRefresh();
-        } catch (error) {
-            console.error(`Error trying to ${action} class:`, error);
-            alert(`Failed to ${action} class`);
-        } finally {
-            setIsOperating(false);
-        }
-    };
+
 
 
     const handleMigrateLegacyMarks = async () => {

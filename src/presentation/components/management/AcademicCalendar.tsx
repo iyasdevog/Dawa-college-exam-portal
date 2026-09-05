@@ -17,11 +17,6 @@ const AcademicCalendar: React.FC = () => {
         appliesToClasses: []
     });
 
-    useEffect(() => {
-        loadEntries();
-        dataService.getClassesByTerm(activeTerm).then(cls => setTermClasses(cls)).catch(() => {});
-    }, [activeTerm]);
-
     const loadEntries = async () => {
         setIsLoading(true);
         try {
@@ -33,6 +28,11 @@ const AcademicCalendar: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        loadEntries();
+        dataService.getClassesByTerm(activeTerm).then(cls => setTermClasses(cls)).catch(() => {});
+    }, [activeTerm]);
 
     const handleAddEntry = async () => {
         if (!newEntry.name) return;

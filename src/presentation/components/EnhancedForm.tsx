@@ -201,15 +201,6 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
         }
     };
 
-    // Handle form reset
-    const handleReset = () => {
-        setValues(initialValues);
-        setFieldStates({});
-        setSubmitAttempted(false);
-        validatorRef.current.reset();
-        screenReaderAnnouncer.announce('Form has been reset', 'polite');
-    };
-
     // Get form summary for progress indication
     const formSummary = validatorRef.current.getFormSummary();
 

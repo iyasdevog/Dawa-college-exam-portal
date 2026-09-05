@@ -172,6 +172,20 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
         );
     };
 
+    const handleSearch = async (overrideAdNo?: string | React.MouseEvent) => {
+        const query = typeof overrideAdNo === 'string' ? overrideAdNo : searchAdNo;
+        if (!query) return;
+        setIsSearching(true);
+        try {
+            const apps = await dataService.getApplicationsByAdNo(query);
+            setMyApplications(apps);
+        } catch (error) {
+            console.error('Search error:', error);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
     const handleApply = async (e: React.FormEvent) => {
         e.preventDefault();
         if (selectedSubjects.length === 0) {
@@ -262,20 +276,6 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
             setMessage({ type: 'error', text: 'Failed to submit one or more applications. Please try again.' });
         } finally {
             setIsSubmitting(false);
-        }
-    };
-
-    const handleSearch = async (overrideAdNo?: string | React.MouseEvent) => {
-        const query = typeof overrideAdNo === 'string' ? overrideAdNo : searchAdNo;
-        if (!query) return;
-        setIsSearching(true);
-        try {
-            const apps = await dataService.getApplicationsByAdNo(query);
-            setMyApplications(apps);
-        } catch (error) {
-            console.error('Search error:', error);
-        } finally {
-            setIsSearching(false);
         }
     };
 

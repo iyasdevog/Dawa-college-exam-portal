@@ -17,10 +17,6 @@ const MasterTimetable: React.FC<MasterTimetableProps> = ({ subjects, students })
     const classes = useMemo(() => [...new Set(students.map(s => s.className))], [students]);
     const faculties = useMemo(() => [...new Set(subjects.map(s => s.facultyName).filter(Boolean))], [subjects]);
 
-    useEffect(() => {
-        loadData();
-    }, []);
-
     const loadData = async () => {
         setIsLoading(true);
         try {
@@ -32,6 +28,10 @@ const MasterTimetable: React.FC<MasterTimetableProps> = ({ subjects, students })
             setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        loadData();
+    }, []);
 
     const groupedData = useMemo(() => {
         if (viewType === 'class') {

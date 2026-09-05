@@ -155,30 +155,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
     const cardContainerRef = useRef<HTMLDivElement>(null);
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-    useEffect(() => {
-        loadData();
-
-        // Load mobile preferences from storage
-        if (isMobile) {
-            const savedLayout = mobileStorage.get<'cards' | 'list' | 'grid'>('dashboard-layout-preference');
-            const savedViewPreferences = mobileStorage.get<MobileLayoutState['viewPreferences']>('dashboard-view-preferences');
-
-            if (savedLayout) {
-                setMobileLayout(prev => ({
-                    ...prev,
-                    currentLayout: savedLayout
-                }));
-            }
-
-            if (savedViewPreferences) {
-                setMobileLayout(prev => ({
-                    ...prev,
-                    viewPreferences: savedViewPreferences
-                }));
-            }
-        }
-    }, [isMobile, activeTerm]);
-
     const loadData = async () => {
         try {
             // Stage 1: Initializing
@@ -189,36 +165,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToManagement }) => {
                 message: 'Setting up dashboard components...'
             });
 
-            // Database is auto-initialized on import, but we keep this for compatibility
-            // await dataService.initializeDatabase();
-
             // Stage 2: Loading students
-            setLoadingState(prev => ({
-                ...prev,
-                stage: 'loading-students',
+            setLoadingState({
+                isLoading: true,
+                stage: 'students',
                 progress: 25,
-                message: 'Fetching student records from database...'
-            }));
-
+                message: 'Fetching student records...'
+            });
             const studentsData = await dataService.getAllStudents(activeTerm);
 
             // Stage 3: Loading subjects
-            setLoadingState(prev => ({
-                ...prev,
-                stage: 'loading-subjects',
+            setLoadingState({
+                isLoading: true,
+                stage: 'subjects',
                 progress: 50,
-                message: 'Retrieving subject configurations...'
-            }));
-
+                message: 'Loading subject configurations...'
+            });
             const subjectsData = await dataService.getAllSubjects(activeTerm);
 
-            // Stage 4: Calculating statistics
-            setLoadingState(prev => ({
-                ...prev,
-                stage: 'calculating-stats',
+            // Stage 4: Processing stats
+            setLoadingState({
+                isLoading: true,
+                stage: 'stats',
                 progress: 75,
-                message: 'Computing performance metrics and rankings...'
-            }));
+                message: 'Calculating academic analytics...'
+            });
 
             setStudents(studentsData);
             setSubjects(subjectsData);

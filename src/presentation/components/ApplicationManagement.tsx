@@ -18,11 +18,6 @@ const ApplicationManagement: React.FC = () => {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    useEffect(() => {
-        loadApplications();
-        loadClasses();
-    }, [activeTerm]);
-
     const loadClasses = async () => {
         const classes = await dataService.getClassesByTerm(activeTerm);
         setAvailableClasses(classes.length > 0 ? classes : CLASSES);
@@ -43,6 +38,11 @@ const ApplicationManagement: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        loadApplications();
+        loadClasses();
+    }, [activeTerm]);
 
     const handleUpdateStatus = async (appId: string, status: ApplicationStatus) => {
         let comment = '';

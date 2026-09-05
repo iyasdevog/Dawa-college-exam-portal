@@ -20,12 +20,6 @@ const ExamTimetable: React.FC<ExamTimetableProps> = ({ subjects, students }) => 
     const classes = [...new Set(students.map(s => s.className))];
     const filteredSubjects = subjects.filter(s => s.targetClasses.includes(selectedClass));
 
-    useEffect(() => {
-        if (selectedClass) {
-            loadExamTimetable();
-        }
-    }, [selectedClass, selectedSemester, activeTerm]);
-
     const loadExamTimetable = async () => {
         setIsLoading(true);
         try {
@@ -41,6 +35,12 @@ const ExamTimetable: React.FC<ExamTimetableProps> = ({ subjects, students }) => 
             setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (selectedClass) {
+            loadExamTimetable();
+        }
+    }, [selectedClass, selectedSemester, activeTerm]);
 
     const handleToggleRelease = async () => {
         if (!selectedClass) return;

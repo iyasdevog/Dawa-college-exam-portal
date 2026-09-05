@@ -23,24 +23,6 @@ const TimetableManager: React.FC = () => {
     const [isExtracting, setIsExtracting] = useState(false);
     const [activeClasses, setActiveClasses] = useState<string[]>(SYSTEM_CLASSES);
 
-    useEffect(() => {
-        const init = async () => {
-            const termClasses = await dataService.getClassesByTerm(activeTerm);
-            const active = termClasses.length > 0 ? termClasses : SYSTEM_CLASSES;
-            setActiveClasses(active);
-            if (active.length > 0 && (!selectedClass || !active.includes(selectedClass))) {
-                setSelectedClass(active[0]);
-            }
-        };
-        init();
-    }, [activeTerm]);
-
-    useEffect(() => {
-        if (selectedClass) {
-            loadData();
-        }
-    }, [selectedClass, selectedSemester]);
-
     const loadData = async () => {
         if (!selectedClass) return;
         setIsLoading(true);
@@ -66,6 +48,24 @@ const TimetableManager: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        const init = async () => {
+            const termClasses = await dataService.getClassesByTerm(activeTerm);
+            const active = termClasses.length > 0 ? termClasses : SYSTEM_CLASSES;
+            setActiveClasses(active);
+            if (active.length > 0 && (!selectedClass || !active.includes(selectedClass))) {
+                setSelectedClass(active[0]);
+            }
+        };
+        init();
+    }, [activeTerm]);
+
+    useEffect(() => {
+        if (selectedClass) {
+            loadData();
+        }
+    }, [selectedClass, selectedSemester]);
 
     const handleAIExtract = async () => {
         if (!aiInput.trim()) return;

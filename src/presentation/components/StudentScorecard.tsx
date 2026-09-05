@@ -162,9 +162,6 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
 
 
 
-    useEffect(() => { loadData(); }, [activeTerm, currentUser]);
-    useEffect(() => { if (selectedClass) loadClassData(); }, [selectedClass, subjects]);
-
     const loadData = async () => {
         try {
             setIsLoading(true);
@@ -211,6 +208,9 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             console.error('Error loading class data:', error);
         }
     };
+
+    useEffect(() => { loadData(); }, [activeTerm, currentUser]);
+    useEffect(() => { if (selectedClass) loadClassData(); }, [selectedClass, subjects]);
 
     const handlePrint = () => window.print();
 

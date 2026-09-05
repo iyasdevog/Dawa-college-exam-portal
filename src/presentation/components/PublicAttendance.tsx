@@ -112,11 +112,6 @@ const PublicAttendance: React.FC = () => {
         fetchClasses();
     }, [activeTerm]);
 
-    // Load schedule and attendance whenever selectedClass, selectedDate, or activeTerm changes
-    useEffect(() => {
-        loadData();
-    }, [selectedClass, selectedDate, dayOfWeek, activeTerm]);
-
     const loadData = async () => {
         setIsLoading(true);
         try {
@@ -139,6 +134,11 @@ const PublicAttendance: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    // Load schedule and attendance whenever selectedClass, selectedDate, or activeTerm changes
+    useEffect(() => {
+        loadData();
+    }, [selectedClass, selectedDate, dayOfWeek, activeTerm]);
 
     // Format time from 24h to 12h format (e.g. "09:00" -> "9:00 AM")
     const formatTime = (timeStr: string) => {

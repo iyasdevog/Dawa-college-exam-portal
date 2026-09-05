@@ -51,6 +51,12 @@ export const AccessibleNavigation: React.FC<AccessibleNavigationProps> = ({
         }
     }, [activeItem, items]);
 
+    // Handle item selection
+    const handleItemSelect = useCallback((item: NavigationItem) => {
+        onItemSelect(item.id);
+        screenReaderAnnouncer.announceNavigation(item.label, item.description);
+    }, [onItemSelect]);
+
     // Handle keyboard navigation
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
         const { key } = e;
@@ -95,11 +101,7 @@ export const AccessibleNavigation: React.FC<AccessibleNavigationProps> = ({
         itemRefs.current[newIndex]?.focus();
     }, [focusedIndex, items, orientation]);
 
-    // Handle item selection
-    const handleItemSelect = useCallback((item: NavigationItem) => {
-        onItemSelect(item.id);
-        screenReaderAnnouncer.announceNavigation(item.label, item.description);
-    }, [onItemSelect]);
+
 
     // Handle item focus
     const handleItemFocus = useCallback((index: number) => {
