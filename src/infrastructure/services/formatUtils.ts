@@ -29,6 +29,10 @@ export const shortenSubjectName = (name: string | null | undefined, shortName?: 
 
     // Mapping of long names to short versions
     const mapping: { [key: string]: string } = {
+        'communicative english': 'Communicative English',
+        'basic english': 'Basic English',
+        'communicative arabic': 'Communicative Arabic',
+        'communicative malayalam': 'Communicative Malayalam',
         'information and communication technology': 'ICT',
         'information and communication technology excel': 'ICT (Excel)',
         'information and communication technology theory': 'ICT (Theory)',
@@ -40,8 +44,6 @@ export const shortenSubjectName = (name: string | null | undefined, shortName?: 
         'ict': 'ICT',
         'it': 'ICT',
         'islamic history': 'Islamic Hist.',
-        'communicative arabic': 'C.Arabic',
-        'communicative malayalam': 'C.Malayalam',
         'malayalam': 'Malayalam',
         'arabic': 'Arabic',
         'english': 'English',
@@ -74,9 +76,14 @@ export const shortenSubjectName = (name: string | null | undefined, shortName?: 
         'pedagogy of physical science': 'Ped. Phys. Sci.'
     };
 
-    // Check exact match first, then partial match for long keys
+    // Check exact match first
+    if (mapping[lowerName]) {
+        return mapping[lowerName];
+    }
+
+    // Check partial match ONLY for multi-word phrase keys (keys containing a space)
     for (const key in mapping) {
-        if (lowerName === key || (key.length > 5 && lowerName.includes(key))) {
+        if (key.includes(' ') && lowerName.includes(key)) {
             return mapping[key];
         }
     }

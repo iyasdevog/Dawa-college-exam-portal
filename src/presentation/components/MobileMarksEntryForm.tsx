@@ -171,6 +171,10 @@ export const MobileMarksEntryForm: React.FC<MobileMarksEntryFormProps> = ({
         }
     };
 
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            switch (e.key) {
+                case 'Enter':
                     handleSave();
                     break;
                 case 'ArrowLeft':

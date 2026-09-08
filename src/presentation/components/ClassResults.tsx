@@ -305,11 +305,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         const isEvenTerm = term.endsWith('-Even');
 
         let potentialSubjects: SubjectConfig[] = allSubjects.filter(s => {
-            if (s.subjectType === 'supplementary') return false;
+            if (s.subjectType === 'supplementary' || s.subjectType === 'elective') return false;
             if (isOddTerm && s.activeSemester === 'Even') return false;
             if (isEvenTerm && s.activeSemester === 'Odd') return false;
             if (matchesClass(s.targetClasses || [], cls)) return true;
-            if (s.subjectType === 'elective' && s.enrolledStudents?.some(id => classStudents.some(cs => cs.id === id))) return true;
             if (classStudents.some(cs => {
                 const termData = termDataMap.get(cs.id);
                 const mark = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
@@ -327,13 +326,15 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                 const subName = snapshot?.name;
                 const liveSub = subjectMap.get(subId) || (subName ? allSubjects.find(s => s.name.trim().toLowerCase() === subName.trim().toLowerCase()) : undefined);
                 const m = termData.marks[subId];
-                if (m?.isSupplementary || snapshot?.subjectType === 'supplementary' || liveSub?.subjectType === 'supplementary' || snapshot?.name === 'Supplementary Exam') return;
+                const resolvedSubjectType = liveSub?.subjectType || snapshot?.subjectType || 'general';
+
+                if (m?.isSupplementary || snapshot?.subjectType === 'supplementary' || liveSub?.subjectType === 'supplementary' || snapshot?.name === 'Supplementary Exam' || resolvedSubjectType === 'elective') return;
+
                 const resolvedName = snapshot?.name || liveSub?.name;
                 const isRawId = /^[a-z0-9]{15,}$/i.test(subId);
                 if (!liveSub && (!resolvedName || isRawId || resolvedName === subId)) return;
                 const alreadyIncluded = potentialSubjects.some(ps => ps.id === subId || (resolvedName && ps.name.trim().toLowerCase() === resolvedName.trim().toLowerCase()));
                 if (!alreadyIncluded) {
-                    const resolvedSubjectType = liveSub?.subjectType || snapshot?.subjectType || 'general';
                     potentialSubjects.push({
                         id: subId,
                         name: snapshot?.name || liveSub?.name || subId,
@@ -352,13 +353,23 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             });
         });
 
-        // Filter out subjects with no real marks
+        // Filter out subjects with no real marks (and ignore elective marks from matching general subject columns)
         const filteredSubjects = potentialSubjects.filter(s => {
-            if (s.subjectType === 'supplementary') return false;
+            if (s.subjectType === 'supplementary' || s.subjectType === 'elective') return false;
             return classStudents.some(cs => {
                 const termData = termDataMap.get(cs.id);
                 const m = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);
                 if (!m || m.isSupplementary) return false;
+
+                const markSubId = Object.keys(termData?.marks || {}).find(k => termData?.marks[k] === m);
+                if (markSubId) {
+                    const snap = termData?.subjectMetadata?.[markSubId];
+                    const live = subjectMap.get(markSubId);
+                    if (snap?.subjectType === 'elective' || live?.subjectType === 'elective') {
+                        return false;
+                    }
+                }
+
                 const hasValidMark = (val: any) => val !== undefined && val !== null && val !== '-' && val !== '';
                 return (typeof m.total === 'number' && m.total > 0) || hasValidMark(m.int) || hasValidMark(m.ext);
             });
@@ -728,7 +739,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                     {electiveMark ? (
                                                                         <div>
                                                                             <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-[10px] ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{electiveMark.total}</div>
-                                                                            <div className="text-[10px] text-indigo-500 font-medium truncate max-w-[80px] mx-auto">
+                                                                            <div className="text-[10px] text-indigo-600 font-bold truncate max-w-[120px] mx-auto" title={electiveName}>
                                                                                 {shortenSubjectName(electiveName)}
                                                                             </div>
                                                                         </div>
