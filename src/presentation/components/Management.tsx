@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import type { StudentRecord, SubjectConfig } from '../../domain/entities/types';
 import { SYSTEM_CLASSES as CLASSES } from '../../domain/entities/constants';
 import { dataService } from '../../infrastructure/services/dataService';
@@ -11,8 +11,9 @@ import SettingsManagement from './management/SettingsManagement';
 import AttendanceManagement from './management/AttendanceManagement';
 import CurriculumManagement from './management/CurriculumManagement';
 import RecycleBinManagement from './management/RecycleBinManagement';
-import AdminFeedbackManagement from './management/AdminFeedbackManagement';
 import { useTerm } from '../viewmodels/TermContext';
+
+const AdminFeedbackManagement = lazy(() => import('./management/AdminFeedbackManagement'));
 
 const Management: React.FC = () => {
   const { isMobile } = useMobile();
@@ -233,7 +234,9 @@ const Management: React.FC = () => {
           )}
 
           {activeTab === 'student-feedback' && (
-            <AdminFeedbackManagement />
+            <Suspense fallback={<div className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading Feedback Management...</div>}>
+              <AdminFeedbackManagement />
+            </Suspense>
           )}
 
           {activeTab === 'recycle-bin' && (

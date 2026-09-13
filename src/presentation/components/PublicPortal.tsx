@@ -11,11 +11,10 @@ import ClassResults from './ClassResults';
 import ApplicationPortal from './ApplicationPortal';
 import { TermSelector } from './TermSelector';
 import CurriculumOverview from './CurriculumOverview';
-import StudentFeedbackTab from './StudentFeedbackTab';
 import { useTerm } from '../viewmodels/TermContext';
-
 import { versionService } from '../../infrastructure/services/versionService';
 
+const StudentFeedbackTab = React.lazy(() => import('./StudentFeedbackTab'));
 const PublicScorecard = React.lazy(() => import('./PublicScorecard'));
 
 interface PublicPortalProps {
@@ -316,7 +315,11 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     ))}
                 </div>
 
-                {subView === 'feedback' && <StudentFeedbackTab availableSubjects={subjects} activeClasses={activeClasses} />}
+                {subView === 'feedback' && (
+                    <Suspense fallback={<div className="p-8 text-center text-slate-300 font-bold animate-pulse">Loading Feedback System...</div>}>
+                        <StudentFeedbackTab availableSubjects={subjects} activeClasses={activeClasses} />
+                    </Suspense>
+                )}
                 {subView === 'live' && <PublicAttendance />}
                 {subView === 'attendance' && <StudentAttendancePortal />}
                 {subView === 'curriculum' && <CurriculumOverview />}

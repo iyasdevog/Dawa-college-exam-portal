@@ -10,6 +10,17 @@ export class FeedbackService extends BaseDataService {
     private readonly LOCAL_FEEDBACK_KEY = 'dawa_app_student_feedback_data';
     private readonly LOCAL_TEACHERS_KEY = 'dawa_app_teacher_accounts_data';
 
+    // In-memory caching for ultra-fast response & reduced database read quota
+    private cachedFeedbackMap = new Map<string, { timestamp: number; data: StudentFeedback[] }>();
+    private cachedTeachers: { timestamp: number; data: TeacherAccount[] } | null = null;
+    private readonly FEEDBACK_CACHE_TTL = 300000; // 5 minutes
+
+    public override invalidateCache(): void {
+        super.invalidateCache();
+        this.cachedFeedbackMap.clear();
+        this.cachedTeachers = null;
+    }
+
     // --- Student Feedback ---
 
     public async submitFeedback(feedbackData: Omit<StudentFeedback, 'id' | 'createdAt'>): Promise<string> {
@@ -19,23 +30,31 @@ export class FeedbackService extends BaseDataService {
             createdAt: timestamp
         };
 
+        let createdId: string;
         try {
             const docRef = await addDoc(collection(this.db, this.studentFeedbackCollection), payload);
-            const feedbackWithId: StudentFeedback = { id: docRef.id, ...payload };
-            
-            // Sync to local storage fallback
-            this.saveFeedbackToLocalStorage(feedbackWithId);
-            return docRef.id;
+            createdId = docRef.id;
         } catch (error) {
             console.warn('Firestore write failed for student feedback, saving locally:', error);
-            const localId = `feedback_${timestamp}_${Math.random().toString(36).substr(2, 6)}`;
-            const feedbackWithId: StudentFeedback = { id: localId, ...payload };
-            this.saveFeedbackToLocalStorage(feedbackWithId);
-            return localId;
+            createdId = `feedback_${timestamp}_${Math.random().toString(36).substr(2, 6)}`;
         }
+
+        const feedbackWithId: StudentFeedback = { id: createdId, ...payload };
+        
+        // Sync to local storage & update in-memory cache immediately
+        this.saveFeedbackToLocalStorage(feedbackWithId);
+        this.invalidateCache();
+
+        return createdId;
     }
 
     public async getAllFeedback(semester?: string): Promise<StudentFeedback[]> {
+        const cacheKey = semester || 'All';
+        const cached = this.cachedFeedbackMap.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < this.FEEDBACK_CACHE_TTL)) {
+            return cached.data;
+        }
+
         let items: StudentFeedback[] = [];
         try {
             let snapshot;
@@ -69,7 +88,9 @@ export class FeedbackService extends BaseDataService {
             }
         }
 
-        return items.sort((a, b) => b.createdAt - a.createdAt);
+        const sorted = items.sort((a, b) => b.createdAt - a.createdAt);
+        this.cachedFeedbackMap.set(cacheKey, { timestamp: Date.now(), data: sorted });
+        return sorted;
     }
 
     public async getTeacherFeedback(teacherNameOrId: string, semester?: string): Promise<StudentFeedback[]> {
@@ -94,6 +115,10 @@ export class FeedbackService extends BaseDataService {
     // --- Teacher Accounts ---
 
     public async getAllTeacherAccounts(): Promise<TeacherAccount[]> {
+        if (this.cachedTeachers && (Date.now() - this.cachedTeachers.timestamp < this.FEEDBACK_CACHE_TTL)) {
+            return this.cachedTeachers.data;
+        }
+
         let teachers: TeacherAccount[] = [];
         try {
             const snapshot = await getDocs(collection(this.db, this.teacherAccountsCollection));
@@ -112,11 +137,15 @@ export class FeedbackService extends BaseDataService {
             }
         }
 
-        return teachers.sort((a, b) => a.name.localeCompare(b.name));
+        const sorted = teachers.sort((a, b) => a.name.localeCompare(b.name));
+        this.cachedTeachers = { timestamp: Date.now(), data: sorted };
+        return sorted;
     }
 
     public async saveTeacherAccount(account: Omit<TeacherAccount, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<string> {
         const now = Date.now();
+        let resultId: string;
+
         if (account.id) {
             const updates = {
                 ...account,
@@ -129,7 +158,7 @@ export class FeedbackService extends BaseDataService {
                 console.warn('Firestore update failed for teacher account, saving locally:', e);
             }
             this.updateTeacherInLocalStorage(account.id, updates as Partial<TeacherAccount>);
-            return account.id;
+            resultId = account.id;
         } else {
             const newId = `teacher_${now}_${Math.random().toString(36).substr(2, 5)}`;
             const payload: TeacherAccount = {
@@ -150,8 +179,11 @@ export class FeedbackService extends BaseDataService {
                 console.warn('Firestore set failed for teacher account, saving locally:', e);
             }
             this.saveTeacherToLocalStorage(payload);
-            return newId;
+            resultId = newId;
         }
+
+        this.cachedTeachers = null;
+        return resultId;
     }
 
     public async updateTeacherAccount(id: string, updates: Partial<TeacherAccount>): Promise<void> {
@@ -163,6 +195,7 @@ export class FeedbackService extends BaseDataService {
             console.warn('Firestore update error for teacher, local sync:', e);
         }
         this.updateTeacherInLocalStorage(id, payload);
+        this.cachedTeachers = null;
     }
 
     public async deleteTeacherAccount(id: string): Promise<void> {
@@ -173,6 +206,7 @@ export class FeedbackService extends BaseDataService {
             console.warn('Firestore delete error for teacher:', e);
         }
         this.deleteTeacherFromLocalStorage(id);
+        this.cachedTeachers = null;
     }
 
     public async authenticateTeacher(loginInput: string, passwordInput: string): Promise<TeacherAccount | null> {
