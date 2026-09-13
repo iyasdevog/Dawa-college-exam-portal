@@ -32,14 +32,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   }, []);
 
   const isAdmin = currentUser?.role === 'admin';
+  const isTeacher = currentUser?.role === 'teacher' || currentUser?.role === 'faculty';
 
   const navItems = [
     { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
+    ...(isTeacher ? [{ id: 'teacher-feedback', icon: 'fa-comments', label: 'My Feedback' }] : []),
     { id: 'attendance', icon: 'fa-clipboard-user', label: 'Attendance' },
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
     ...(isAdmin ? [
+      { id: 'teacher-feedback', icon: 'fa-comments', label: 'Feedback Review' },
       { id: 'applications', icon: 'fa-file-signature', label: 'Applications' },
       { id: 'management', icon: 'fa-sliders', label: 'Management' }
     ] : []),
@@ -48,6 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   const getViewTitle = (view: ViewType): string => {
     const titles: Record<ViewType, string> = {
       'dashboard': 'Dashboard',
+      'teacher-feedback': 'Faculty Feedback Portal',
       'attendance': 'Attendance Hub',
       'entry': 'Marks Entry',
       'class-report': 'Class Report',

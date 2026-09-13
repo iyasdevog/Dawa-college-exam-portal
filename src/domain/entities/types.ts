@@ -212,7 +212,7 @@ export interface SubjectConfig {
   deletedAt?: number;
 }
 
-export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public' | 'attendance' | 'attendance-public' | 'student-attendance-portal';
+export type ViewType = 'dashboard' | 'entry' | 'class-report' | 'student-card' | 'applications' | 'management' | 'public' | 'attendance' | 'attendance-public' | 'student-attendance-portal' | 'teacher-feedback';
 
 export interface ReleaseSettings {
   isReleased: boolean;
@@ -366,19 +366,52 @@ export interface TimetableGeneratorConfig {
 
 export type CurriculumStage = 'Foundational' | 'Undergraduate' | 'Post Graduate';
 
-export interface CurriculumEntry {
+export interface TeacherAccount {
   id: string;
-  stage: CurriculumStage;
-  stream: '3-Year' | '5-Year' | 'None';
-  semester: number; // e.g., 1 to 10
-  subjectCode?: string; // Optional for backward compatibility
-  subjectName: string;
-  subjectType?: 'general' | 'elective' | string;
-  learningPeriod: string; // e.g., "60 hours" or "Jan - Jun"
-  portions: string; // e.g., "Unit 1-4"
-  academicYear?: string; // Added for historical tracking
-  termKey?: string; // Added for historical tracking
-  isDeleted?: boolean; // For soft-deletes (Recycle Bin)
-  deletedAt?: number;
+  name: string;             // Faculty / Teacher full name (e.g. "Dr. Ahmad Usthad")
+  username: string;         // Username for login
+  mobileNumber: string;     // Mobile number for login
+  password: string;         // Editable password / PIN
+  assignedClasses?: string[]; // e.g. ["1st Deg", "2nd Deg"]
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
 }
+
+export interface FeedbackCategoryResponses {
+  teachingLearning?: string;
+  spiritualMoral?: string;
+  residentialCommunity?: string;
+  communication?: string;
+  studentDevelopment?: string;
+  professionalConduct?: string;
+  overallImpact?: string;
+  strengths?: string;
+  continueDoing?: string;
+  improvements?: string;
+  positiveExperience?: string;
+  bridgingDisconnection?: string;
+}
+
+export interface StudentFeedback {
+  id: string;
+  semester: string;          // e.g., "2025-2026 Even", "2025-2026 Odd"
+  teacherName: string;       // Faculty name being evaluated
+  teacherId?: string;        // Matching teacher account ID if available
+  className: string;         // e.g. "1st Deg", "2nd Deg", "3rd Deg", "4th Deg", "1st PG", "2nd PG"
+  
+  // Student Confidentiality & Identity
+  isAnonymous: boolean;
+  studentName?: string;
+  studentAdNo?: string;
+
+  // Overall Score (1 to 5 Stars)
+  overallRating: number;
+
+  // Open-ended Reflection & Suggestion Responses with Clue Guidance
+  responses: FeedbackCategoryResponses;
+
+  createdAt: number;
+}
+
 

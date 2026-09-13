@@ -11,6 +11,7 @@ import SettingsManagement from './management/SettingsManagement';
 import AttendanceManagement from './management/AttendanceManagement';
 import CurriculumManagement from './management/CurriculumManagement';
 import RecycleBinManagement from './management/RecycleBinManagement';
+import AdminFeedbackManagement from './management/AdminFeedbackManagement';
 import { useTerm } from '../viewmodels/TermContext';
 
 const Management: React.FC = () => {
@@ -34,6 +35,7 @@ const Management: React.FC = () => {
     { id: 'students', label: 'Students', icon: 'fa-users' },
     { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
     { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' },
+    { id: 'student-feedback', label: 'Student Feedback', icon: 'fa-comments' },
     { id: 'supplementary', label: 'Supplementary', icon: 'fa-redo' },
     { id: 'classes', label: 'Classes', icon: 'fa-chalkboard' },
     { id: 'settings', label: 'Settings', icon: 'fa-cog' },
@@ -228,6 +230,10 @@ const Management: React.FC = () => {
               onRefresh={handleRefresh}
               onNavigate={setActiveTab}
             />
+          )}
+
+          {activeTab === 'student-feedback' && (
+            <AdminFeedbackManagement />
           )}
 
           {activeTab === 'recycle-bin' && (

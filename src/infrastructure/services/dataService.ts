@@ -7,6 +7,7 @@ import { AttendanceService } from './modules/AttendanceService';
 import { AdministrativeService } from './modules/AdministrativeService';
 import { CurriculumService } from './modules/CurriculumService';
 import { SemesterMigrationService } from './modules/SemesterMigrationService';
+import { FeedbackService } from './modules/FeedbackService';
 
 import type { 
     StudentRecord, 
@@ -20,7 +21,9 @@ import type {
     PerformanceLevel,
     SubjectMarks,
     ClassReleaseSettings,
-    CurriculumEntry
+    CurriculumEntry,
+    StudentFeedback,
+    TeacherAccount
 } from '../../domain/entities/types';
 
 export class DataService extends BaseDataService {
@@ -32,6 +35,7 @@ export class DataService extends BaseDataService {
     private administrativeService: AdministrativeService;
     private curriculumService: CurriculumService;
     private migrationService: SemesterMigrationService;
+    private feedbackService: FeedbackService;
 
     constructor() {
         super();
@@ -43,6 +47,7 @@ export class DataService extends BaseDataService {
         this.administrativeService = new AdministrativeService(this.supplementaryService, this.studentService);
         this.curriculumService = new CurriculumService();
         this.migrationService = new SemesterMigrationService();
+        this.feedbackService = new FeedbackService();
     }
 
     /**
@@ -757,6 +762,43 @@ export class DataService extends BaseDataService {
 
     subscribeToGlobalSettings(callback: (settings: GlobalSettings) => void): () => void {
         return this.settingsService.subscribeToGlobalSettings(callback);
+    }
+
+    // --- Student Feedback & Teacher Account Methods ---
+    async submitFeedback(feedbackData: Omit<StudentFeedback, 'id' | 'createdAt'>): Promise<string> {
+        return this.feedbackService.submitFeedback(feedbackData);
+    }
+
+    async getAllFeedback(semester?: string): Promise<StudentFeedback[]> {
+        return this.feedbackService.getAllFeedback(semester);
+    }
+
+    async getTeacherFeedback(teacherNameOrId: string, semester?: string): Promise<StudentFeedback[]> {
+        return this.feedbackService.getTeacherFeedback(teacherNameOrId, semester);
+    }
+
+    async getClassFeedbackCounts(semester?: string): Promise<Record<string, number>> {
+        return this.feedbackService.getClassFeedbackCounts(semester);
+    }
+
+    async getAllTeacherAccounts(): Promise<TeacherAccount[]> {
+        return this.feedbackService.getAllTeacherAccounts();
+    }
+
+    async saveTeacherAccount(account: Omit<TeacherAccount, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<string> {
+        return this.feedbackService.saveTeacherAccount(account);
+    }
+
+    async updateTeacherAccount(id: string, updates: Partial<TeacherAccount>): Promise<void> {
+        return this.feedbackService.updateTeacherAccount(id, updates);
+    }
+
+    async deleteTeacherAccount(id: string): Promise<void> {
+        return this.feedbackService.deleteTeacherAccount(id);
+    }
+
+    async authenticateTeacher(loginInput: string, passwordInput: string): Promise<TeacherAccount | null> {
+        return this.feedbackService.authenticateTeacher(loginInput, passwordInput);
     }
 }
 

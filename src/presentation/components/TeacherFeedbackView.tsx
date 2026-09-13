@@ -1,0 +1,463 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import type { StudentFeedback, TeacherAccount, User } from '../../domain/entities/types';
+import { dataService } from '../../infrastructure/services/dataService';
+
+interface TeacherFeedbackViewProps {
+    currentUser: User;
+}
+
+export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ currentUser }) => {
+    const [feedbacks, setFeedbacks] = useState<StudentFeedback[]>([]);
+    const [teacherProfile, setTeacherProfile] = useState<TeacherAccount | null>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [selectedSemester, setSelectedSemester] = useState<string>('All');
+    const [selectedClass, setSelectedClass] = useState<string>('All');
+    
+    // Edit credentials modal
+    const [showEditModal, setShowEditModal] = useState<boolean>(false);
+    const [editForm, setEditForm] = useState({
+        username: '',
+        mobileNumber: '',
+        password: ''
+    });
+    const [editSuccess, setEditSuccess] = useState<string>('');
+    const [editError, setEditError] = useState<string>('');
+    const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
+
+    // Load teacher profile & feedback
+    const loadTeacherData = async () => {
+        setIsLoading(true);
+        try {
+            const accounts = await dataService.getAllTeacherAccounts();
+            const teacherName = currentUser.name || currentUser.username;
+            
+            // Match teacher profile by username, mobile, or name
+            const foundAccount = accounts.find(a => 
+                a.id === currentUser.id ||
+                a.username.toLowerCase() === currentUser.username.toLowerCase() ||
+                a.name.toLowerCase() === teacherName.toLowerCase()
+            );
+
+            if (foundAccount) {
+                setTeacherProfile(foundAccount);
+                setEditForm({
+                    username: foundAccount.username,
+                    mobileNumber: foundAccount.mobileNumber,
+                    password: foundAccount.password
+                });
+            }
+
+            // Fetch feedback for this teacher
+            const list = await dataService.getTeacherFeedback(foundAccount?.id || teacherName);
+            setFeedbacks(list);
+        } catch (err) {
+            console.error('Failed to load teacher feedback:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadTeacherData();
+    }, [currentUser]);
+
+    // Unique semesters & classes for filters
+    const semesterOptions = useMemo(() => {
+        const set = new Set<string>();
+        feedbacks.forEach(f => { if (f.semester) set.add(f.semester); });
+        return ['All', ...Array.from(set).sort()];
+    }, [feedbacks]);
+
+    const classOptions = useMemo(() => {
+        const set = new Set<string>();
+        feedbacks.forEach(f => { if (f.className) set.add(f.className); });
+        return ['All', ...Array.from(set).sort()];
+    }, [feedbacks]);
+
+    // Filtered feedback list
+    const filteredFeedbacks = useMemo(() => {
+        return feedbacks.filter(f => {
+            const semMatch = selectedSemester === 'All' || f.semester === selectedSemester;
+            const clsMatch = selectedClass === 'All' || f.className === selectedClass;
+            return semMatch && clsMatch;
+        });
+    }, [feedbacks, selectedSemester, selectedClass]);
+
+    // Class-wise counts breakdown
+    const classCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        feedbacks.forEach(f => {
+            if (selectedSemester === 'All' || f.semester === selectedSemester) {
+                counts[f.className] = (counts[f.className] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [feedbacks, selectedSemester]);
+
+    // Save edited teacher credentials
+    const handleSaveProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setEditError('');
+        setEditSuccess('');
+
+        if (!editForm.username.trim() || !editForm.mobileNumber.trim() || !editForm.password.trim()) {
+            setEditError('All fields (username, mobile number, password) are required.');
+            return;
+        }
+
+        setIsSavingProfile(true);
+        try {
+            if (teacherProfile) {
+                await dataService.updateTeacherAccount(teacherProfile.id, {
+                    username: editForm.username.trim(),
+                    mobileNumber: editForm.mobileNumber.trim(),
+                    password: editForm.password.trim()
+                });
+                setEditSuccess('Your login credentials (username, mobile & password) updated successfully!');
+            } else {
+                // Create profile if none exists
+                const newId = await dataService.saveTeacherAccount({
+                    name: currentUser.name || currentUser.username,
+                    username: editForm.username.trim(),
+                    mobileNumber: editForm.mobileNumber.trim(),
+                    password: editForm.password.trim(),
+                    isActive: true
+                });
+                setEditSuccess('Your profile has been saved successfully!');
+            }
+            await loadTeacherData();
+            setTimeout(() => setShowEditModal(false), 1500);
+        } catch (err) {
+            console.error('Failed to update teacher credentials:', err);
+            setEditError('Failed to save profile. Please try again.');
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
+
+    return (
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
+            {/* Header Card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/30 uppercase tracking-wider">
+                            Faculty Portal
+                        </span>
+                        <span className="text-xs text-slate-400">Authenticated Feedback Review</span>
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-black text-white">
+                        {teacherProfile?.name || currentUser.name || 'Faculty Member'}
+                    </h1>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 mt-2">
+                        <span>📱 Mobile: <strong className="text-emerald-400">{teacherProfile?.mobileNumber || 'Not Set'}</strong></span>
+                        <span>👤 Username: <strong className="text-emerald-400">{teacherProfile?.username || currentUser.username}</strong></span>
+                        <span>📊 Total Received: <strong className="text-emerald-400">{feedbacks.length}</strong></span>
+                    </div>
+                </div>
+
+                <button
+                    onClick={() => setShowEditModal(true)}
+                    className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl text-xs font-bold text-emerald-300 flex items-center gap-2 transition-all shrink-0"
+                >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Mobile & Credentials
+                </button>
+            </div>
+
+            {/* First Time Setup Alert Banner */}
+            {(!teacherProfile || !teacherProfile.mobileNumber) && (
+                <div className="bg-gradient-to-r from-amber-950/80 to-slate-900 border border-amber-500/40 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+                    <div className="flex items-start gap-3">
+                        <span className="text-2xl p-2 bg-amber-500/20 rounded-2xl border border-amber-500/30">📌</span>
+                        <div>
+                            <h4 className="text-amber-300 font-bold text-sm">First-Time Setup Required</h4>
+                            <p className="text-slate-300 text-xs mt-0.5">
+                                Set your personal <strong className="text-amber-400">Mobile Number</strong>, <strong className="text-amber-400">Username</strong>, and <strong className="text-amber-400">Password</strong> so you can log in directly anytime.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setShowEditModal(true)}
+                        className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl shadow-lg transition-all shrink-0 w-full sm:w-auto"
+                    >
+                        Configure Login Credentials Now →
+                    </button>
+                </div>
+            )}
+
+            {/* Class-wise Received Feedback Count Summary */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    Class-Wise Received Feedback Counts
+                </h3>
+                <div className="flex flex-wrap gap-3">
+                    {Object.keys(classCounts).length > 0 ? (
+                        Object.entries(classCounts).map(([cls, count]) => (
+                            <div key={cls} className="bg-slate-800 border border-slate-700/80 rounded-2xl px-4 py-2.5 flex items-center gap-3">
+                                <span className="text-xs font-bold text-slate-200">{cls}</span>
+                                <span className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-black rounded-lg">
+                                    {count} {count === 1 ? 'feedback' : 'feedbacks'}
+                                </span>
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-xs text-slate-400 italic">No feedback entries recorded yet for this selection.</p>
+                    )}
+                </div>
+            </div>
+
+            {/* Filters Bar */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Semester</label>
+                        <select
+                            value={selectedSemester}
+                            onChange={e => setSelectedSemester(e.target.value)}
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        >
+                            {semesterOptions.map(sem => (
+                                <option key={sem} value={sem}>{sem}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Class</label>
+                        <select
+                            value={selectedClass}
+                            onChange={e => setSelectedClass(e.target.value)}
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                        >
+                            {classOptions.map(cls => (
+                                <option key={cls} value={cls}>{cls}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="text-xs font-bold text-slate-400">
+                    Showing <span className="text-emerald-400">{filteredFeedbacks.length}</span> of {feedbacks.length} entries
+                </div>
+            </div>
+
+            {/* Feedback Cards List */}
+            {isLoading ? (
+                <div className="py-12 text-center text-slate-400 text-sm animate-pulse">
+                    Loading student feedback records...
+                </div>
+            ) : filteredFeedbacks.length === 0 ? (
+                <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-12 text-center space-y-3">
+                    <span className="text-4xl">📬</span>
+                    <h3 className="text-white font-bold text-base">No Feedback Entries Found</h3>
+                    <p className="text-slate-400 text-xs max-w-sm mx-auto">
+                        Student feedback for selected filters will appear here automatically once submitted.
+                    </p>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {filteredFeedbacks.map((fb, idx) => (
+                        <div key={fb.id || idx} className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 hover:border-slate-700 transition-all">
+                            {/* Feedback Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                                <div className="flex items-center gap-3">
+                                    <span className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center">
+                                        #{idx + 1}
+                                    </span>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-white text-sm">{fb.className}</span>
+                                            <span className="text-xs text-slate-400">•</span>
+                                            <span className="text-xs font-medium text-emerald-400">{fb.semester}</span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-400 mt-0.5">
+                                            {fb.isAnonymous ? (
+                                                <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                                                    🛡️ Anonymous Student (Hidden)
+                                                </span>
+                                            ) : (
+                                                <span>👤 {fb.studentName || 'Student'} {fb.studentAdNo ? `(Ad: ${fb.studentAdNo})` : ''}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+                                    <span className="text-amber-400 text-sm font-bold">★ {fb.overallRating || 5} / 5</span>
+                                    <span className="text-[10px] text-slate-400">({new Date(fb.createdAt).toLocaleDateString()})</span>
+                                </div>
+                            </div>
+
+                            {/* Open Category Reflections */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {fb.responses?.teachingLearning && (
+                                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/60">
+                                        <h5 className="text-xs font-bold text-emerald-400 mb-1">📚 Teaching & Learning</h5>
+                                        <p className="text-xs text-slate-200 leading-relaxed">{fb.responses.teachingLearning}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.spiritualMoral && (
+                                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/60">
+                                        <h5 className="text-xs font-bold text-emerald-400 mb-1">🕌 Spiritual & Moral Influence</h5>
+                                        <p className="text-xs text-slate-200 leading-relaxed">{fb.responses.spiritualMoral}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.residentialCommunity && (
+                                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/60">
+                                        <h5 className="text-xs font-bold text-emerald-400 mb-1">🏠 Residential & Community Presence</h5>
+                                        <p className="text-xs text-slate-200 leading-relaxed">{fb.responses.residentialCommunity}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.communication && (
+                                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/60">
+                                        <h5 className="text-xs font-bold text-emerald-400 mb-1">💬 Communication</h5>
+                                        <p className="text-xs text-slate-200 leading-relaxed">{fb.responses.communication}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.studentDevelopment && (
+                                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/60">
+                                        <h5 className="text-xs font-bold text-emerald-400 mb-1">🌱 Student Development</h5>
+                                        <p className="text-xs text-slate-200 leading-relaxed">{fb.responses.studentDevelopment}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.professionalConduct && (
+                                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/60">
+                                        <h5 className="text-xs font-bold text-emerald-400 mb-1">⚖️ Professional Conduct</h5>
+                                        <p className="text-xs text-slate-200 leading-relaxed">{fb.responses.professionalConduct}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Open Reflection Questions */}
+                            <div className="space-y-3 pt-2">
+                                {fb.responses?.strengths && (
+                                    <div className="bg-emerald-950/30 border border-emerald-500/30 p-4 rounded-2xl">
+                                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block mb-1">✨ Strengths & Exemplary Practices</span>
+                                        <p className="text-xs text-slate-100">{fb.responses.strengths}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.continueDoing && (
+                                    <div className="bg-slate-800/70 border border-slate-700 p-4 rounded-2xl">
+                                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block mb-1">🔄 Positive Practices to Continue</span>
+                                        <p className="text-xs text-slate-100">{fb.responses.continueDoing}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.improvements && (
+                                    <div className="bg-amber-950/30 border border-amber-500/30 p-4 rounded-2xl">
+                                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest block mb-1">🎯 Constructive Suggestions for Growth</span>
+                                        <p className="text-xs text-slate-100">{fb.responses.improvements}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.positiveExperience && (
+                                    <div className="bg-teal-950/30 border border-teal-500/30 p-4 rounded-2xl">
+                                        <span className="text-[10px] font-bold text-teal-400 uppercase tracking-widest block mb-1">❤️ Memorable Positive Experience</span>
+                                        <p className="text-xs text-slate-100">{fb.responses.positiveExperience}</p>
+                                    </div>
+                                )}
+
+                                {fb.responses?.bridgingDisconnection && (
+                                    <div className="bg-indigo-950/30 border border-indigo-500/30 p-4 rounded-2xl">
+                                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block mb-1">🤝 Bridging Connection & Extra Support</span>
+                                        <p className="text-xs text-slate-100">{fb.responses.bridgingDisconnection}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Edit Credentials Modal */}
+            {showEditModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <h3 className="text-lg font-bold text-white">Edit Mobile & Login Credentials</h3>
+                            <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+                        </div>
+
+                        {editSuccess && (
+                            <div className="p-3 bg-emerald-950 border border-emerald-500 text-emerald-300 text-xs rounded-xl">
+                                {editSuccess}
+                            </div>
+                        )}
+                        {editError && (
+                            <div className="p-3 bg-rose-950 border border-rose-500 text-rose-300 text-xs rounded-xl">
+                                {editError}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSaveProfile} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">Mobile Number</label>
+                                <input
+                                    type="text"
+                                    value={editForm.mobileNumber}
+                                    onChange={e => setEditForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
+                                    placeholder="e.g. 9876543210"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">Username</label>
+                                <input
+                                    type="text"
+                                    value={editForm.username}
+                                    onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                                    placeholder="e.g. usthad_ahmad"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">Password / PIN</label>
+                                <input
+                                    type="password"
+                                    value={editForm.password}
+                                    onChange={e => setEditForm(prev => ({ ...prev, password: e.target.value }))}
+                                    placeholder="Enter new password"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditModal(false)}
+                                    className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-700"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingProfile}
+                                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg"
+                                >
+                                    {isSavingProfile ? 'Saving...' : 'Save Credentials'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default TeacherFeedbackView;

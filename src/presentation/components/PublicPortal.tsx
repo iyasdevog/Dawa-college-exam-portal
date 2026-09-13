@@ -11,6 +11,7 @@ import ClassResults from './ClassResults';
 import ApplicationPortal from './ApplicationPortal';
 import { TermSelector } from './TermSelector';
 import CurriculumOverview from './CurriculumOverview';
+import StudentFeedbackTab from './StudentFeedbackTab';
 import { useTerm } from '../viewmodels/TermContext';
 
 import { versionService } from '../../infrastructure/services/versionService';
@@ -37,7 +38,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
     const [activeClasses, setActiveClasses] = useState<string[]>(SYSTEM_CLASSES);
 
     // Tabs state
-    const [subView, setSubView] = useState<'results' | 'attendance' | 'live' | 'hall-ticket' | 'curriculum'>('curriculum');
+    const [subView, setSubView] = useState<'results' | 'attendance' | 'live' | 'hall-ticket' | 'curriculum' | 'feedback'>('curriculum');
 
     // Hall Ticket States
     const [htAdNo, setHtAdNo] = useState('');
@@ -288,7 +289,8 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                         { id: 'live', label: 'Live Today', icon: 'fa-calendar-check' },
                         { id: 'attendance', label: 'Attendance', icon: 'fa-user-clock' },
                         { id: 'hall-ticket', label: 'Tickets', icon: 'fa-id-card-clip' },
-                        { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' }
+                        { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' },
+                        { id: 'feedback', label: 'Feedback', icon: 'fa-comments' }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -314,6 +316,7 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                     ))}
                 </div>
 
+                {subView === 'feedback' && <StudentFeedbackTab availableSubjects={subjects} activeClasses={activeClasses} />}
                 {subView === 'live' && <PublicAttendance />}
                 {subView === 'attendance' && <StudentAttendancePortal />}
                 {subView === 'curriculum' && <CurriculumOverview />}

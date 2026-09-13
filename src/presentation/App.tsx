@@ -8,6 +8,8 @@ import { User } from '../domain/entities/User';
 import { ErrorReportingService } from '../infrastructure/services/ErrorReportingService';
 import { versionService } from '../infrastructure/services/versionService';
 
+import { dataService } from '../infrastructure/services/dataService';
+
 // Lazy load components for code splitting
 const ApplicationManagement = lazy(() => import('./components/ApplicationManagement'));
 const Layout = lazy(() => import('./components/Layout'));
@@ -18,6 +20,7 @@ const StudentScorecard = lazy(() => import('./components/StudentScorecard'));
 const Management = lazy(() => import('./components/Management'));
 const AttendancePortal = lazy(() => import('./components/AttendancePortal'));
 const PublicPortal = lazy(() => import('./components/PublicPortal'));
+const TeacherFeedbackView = lazy(() => import('./components/TeacherFeedbackView'));
 
 // Loading fallback components
 const ComponentLoadingFallback: React.FC<{ componentName: string }> = ({ componentName }) => (
@@ -97,7 +100,7 @@ const App: React.FC = () => {
   }, []);
 
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const adminUserEnv = import.meta.env.VITE_ADMIN_USER || 'admin';
     const adminPassEnv = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
@@ -114,20 +117,48 @@ const App: React.FC = () => {
       setCurrentUser(adminUser);
       setIsLoggedIn(true);
       setMode('admin');
-    } else if ((username === facultyPassEnv && password === facultyPassEnv) || (username === 'faculty' && password === 'faculty') || (username === 'teacher' && password === 'teacher')) {
+      setActiveView('dashboard');
+      return;
+    }
+
+    // Authenticate teacher via DB lookup (Mobile Number or Username & Password)
+    try {
+      const matchedTeacher = await dataService.authenticateTeacher(username, password);
+      if (matchedTeacher) {
+        const teacherUser = User.create({
+          id: matchedTeacher.id,
+          username: matchedTeacher.username,
+          role: 'teacher',
+          name: matchedTeacher.name,
+          assignedClasses: matchedTeacher.assignedClasses || []
+        });
+        setCurrentUser(teacherUser);
+        setIsLoggedIn(true);
+        setMode('admin');
+        setActiveView('teacher-feedback');
+        return;
+      }
+    } catch (err) {
+      console.error('Teacher authentication error:', err);
+    }
+
+    // Fallback static teacher login
+    if ((username === facultyPassEnv && password === facultyPassEnv) || (username === 'faculty' && password === 'faculty') || (username === 'teacher' && password === 'teacher')) {
       const teacherUser = User.create({
         id: 'teacher-001',
         username: facultyPassEnv,
         role: 'teacher',
-        name: 'Faculty',
+        name: 'Faculty Member',
         assignedClasses: []
       });
       setCurrentUser(teacherUser);
       setIsLoggedIn(true);
       setMode('admin');
-    } else {
-      alert('Invalid credentials.');
+      setActiveView('teacher-feedback');
+      return;
     }
+
+    alert('Invalid login credentials. Teachers can log in with their registered Mobile Number or Username & Password.');
   };
 
   const handleLogout = () => {
@@ -211,6 +242,14 @@ const App: React.FC = () => {
           <FeatureErrorBoundary featureName="Attendance" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>
               <AttendancePortal currentUser={currentUser} />
+            </Suspense>
+          </FeatureErrorBoundary>
+        );
+      case 'teacher-feedback':
+        return (
+          <FeatureErrorBoundary featureName="Teacher Feedback" errorReporter={errorReporter}>
+            <Suspense fallback={<AdminLoadingFallback />}>
+              {currentUser ? <TeacherFeedbackView currentUser={currentUser} /> : null}
             </Suspense>
           </FeatureErrorBoundary>
         );
