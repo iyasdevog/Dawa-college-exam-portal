@@ -154,7 +154,7 @@ const App: React.FC = () => {
       setCurrentUser(teacherUser);
       setIsLoggedIn(true);
       setMode('admin');
-      setActiveView('teacher-feedback');
+      setActiveView('dashboard');
       return;
     }
 
@@ -246,6 +246,10 @@ const App: React.FC = () => {
           </FeatureErrorBoundary>
         );
       case 'teacher-feedback':
+        if (currentUser?.role !== 'admin' && (currentUser?.id === 'teacher-001' || currentUser?.name === 'Faculty Member' || currentUser?.username === 'faculty' || currentUser?.username === 'faculty123' || currentUser?.username === 'teacher')) {
+          setActiveView('dashboard');
+          return null;
+        }
         return (
           <FeatureErrorBoundary featureName="Teacher Feedback" errorReporter={errorReporter}>
             <Suspense fallback={<AdminLoadingFallback />}>

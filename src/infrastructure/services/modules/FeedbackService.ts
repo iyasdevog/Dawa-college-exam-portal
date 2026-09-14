@@ -94,8 +94,15 @@ export class FeedbackService extends BaseDataService {
     }
 
     public async getTeacherFeedback(teacherNameOrId: string, semester?: string): Promise<StudentFeedback[]> {
-        const allFeedback = await this.getAllFeedback(semester);
+        if (!teacherNameOrId || !teacherNameOrId.trim()) {
+            return [];
+        }
         const search = teacherNameOrId.trim().toLowerCase();
+        if (search === 'all' || search === 'faculty member' || search === 'faculty') {
+            // Do not leak feedback of all teachers for generic login
+            return [];
+        }
+        const allFeedback = await this.getAllFeedback(semester);
         return allFeedback.filter(f => 
             (f.teacherId && f.teacherId === teacherNameOrId) ||
             (f.teacherName && f.teacherName.trim().toLowerCase() === search)

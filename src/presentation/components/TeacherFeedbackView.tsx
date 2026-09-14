@@ -29,13 +29,19 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
         setIsLoading(true);
         try {
             const accounts = await dataService.getAllTeacherAccounts();
-            const teacherName = currentUser.name || currentUser.username;
-            
+            const activeTeacherName = currentUser.name || currentUser.username;
+
+            if (!activeTeacherName) {
+                setFeedbacks([]);
+                setTeacherProfile(null);
+                return;
+            }
+
             // Match teacher profile by username, mobile, or name
             const foundAccount = accounts.find(a => 
                 a.id === currentUser.id ||
                 a.username.toLowerCase() === currentUser.username.toLowerCase() ||
-                a.name.toLowerCase() === teacherName.toLowerCase()
+                a.name.toLowerCase() === activeTeacherName.toLowerCase()
             );
 
             if (foundAccount) {
@@ -45,10 +51,17 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                     mobileNumber: foundAccount.mobileNumber,
                     password: foundAccount.password
                 });
+            } else {
+                setTeacherProfile(null);
+                setEditForm({
+                    username: activeTeacherName.toLowerCase().replace(/\s+/g, '_'),
+                    mobileNumber: '',
+                    password: ''
+                });
             }
 
-            // Fetch feedback for this teacher
-            const list = await dataService.getTeacherFeedback(foundAccount?.id || teacherName);
+            // Fetch feedback ONLY for this authenticated teacher account
+            const list = await dataService.getTeacherFeedback(foundAccount?.id || activeTeacherName);
             setFeedbacks(list);
         } catch (err) {
             console.error('Failed to load teacher feedback:', err);
@@ -105,10 +118,17 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
             return;
         }
 
+        const activeName = currentUser.name || currentUser.username;
+        if (!activeName) {
+            setEditError('Profile name is required.');
+            return;
+        }
+
         setIsSavingProfile(true);
         try {
             if (teacherProfile) {
                 await dataService.updateTeacherAccount(teacherProfile.id, {
+                    name: activeName,
                     username: editForm.username.trim(),
                     mobileNumber: editForm.mobileNumber.trim(),
                     password: editForm.password.trim()
@@ -116,8 +136,8 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                 setEditSuccess('Your login credentials (username, mobile & password) updated successfully!');
             } else {
                 // Create profile if none exists
-                const newId = await dataService.saveTeacherAccount({
-                    name: currentUser.name || currentUser.username,
+                await dataService.saveTeacherAccount({
+                    name: activeName,
                     username: editForm.username.trim(),
                     mobileNumber: editForm.mobileNumber.trim(),
                     password: editForm.password.trim(),
@@ -249,6 +269,14 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
             {isLoading ? (
                 <div className="py-12 text-center text-slate-400 text-sm animate-pulse">
                     Loading student feedback records...
+                </div>
+            ) : isGenericLogin && !selectedFacultyName ? (
+                <div className="bg-slate-900/80 border border-emerald-500/30 rounded-3xl p-12 text-center space-y-3">
+                    <span className="text-4xl">👆</span>
+                    <h3 className="text-white font-bold text-base">Please Select Your Faculty Profile Above</h3>
+                    <p className="text-slate-300 text-xs max-w-md mx-auto">
+                        To protect privacy and show strictly your own student feedback, please pick your name from the dropdown selector at the top of this page.
+                    </p>
                 </div>
             ) : filteredFeedbacks.length === 0 ? (
                 <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-12 text-center space-y-3">

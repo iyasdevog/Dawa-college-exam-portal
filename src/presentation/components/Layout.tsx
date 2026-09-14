@@ -32,11 +32,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   }, []);
 
   const isAdmin = currentUser?.role === 'admin';
-  const isTeacher = currentUser?.role === 'teacher' || currentUser?.role === 'faculty';
+  const isGenericTeacher = currentUser?.id === 'teacher-001' || currentUser?.name === 'Faculty Member' || currentUser?.username === 'faculty' || currentUser?.username === 'faculty123' || currentUser?.username === 'teacher';
+  const isSpecificTeacher = (currentUser?.role === 'teacher' || currentUser?.role === 'faculty') && !isGenericTeacher;
 
   const navItems = [
     { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
-    ...(isTeacher ? [{ id: 'teacher-feedback', icon: 'fa-comments', label: 'My Feedback' }] : []),
+    ...(isSpecificTeacher ? [{ id: 'teacher-feedback', icon: 'fa-comments', label: 'My Feedback' }] : []),
     { id: 'attendance', icon: 'fa-clipboard-user', label: 'Attendance' },
     { id: 'entry', icon: 'fa-edit', label: 'Marks Entry' },
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },

@@ -105,6 +105,15 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
         setResponses(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleAppendClue = (field: keyof typeof responses, clueText: string) => {
+        setResponses(prev => {
+            const current = prev[field] || '';
+            if (current.includes(clueText)) return prev;
+            const updated = current ? `${current.trim()}; ${clueText}` : clueText;
+            return { ...prev, [field]: updated };
+        });
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormError('');
@@ -119,13 +128,6 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
         }
         if (!selectedTeacher) {
             setFormError('Please select the faculty / teacher you are reviewing.');
-            return;
-        }
-
-        // Validate that at least one section has feedback text
-        const hasContent = Object.values(responses).some(text => text.trim().length > 0);
-        if (!hasContent) {
-            setFormError('Please provide suggestions or feedback in at least one category field below.');
             return;
         }
 
@@ -482,91 +484,135 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                     </div>
 
                     {/* Step 2: Open-Ended Category Reflections with Persistent Clues */}
-                    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
-                        <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-                            <span className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-sm flex items-center justify-center">2</span>
-                            <div>
-                                <h2 className="text-lg font-bold text-white">Evaluation Categories & Constructive Feedback</h2>
-                                <p className="text-slate-400 text-xs">Write your open-ended thoughts under each category. Use the persistent clues below each box for guidance.</p>
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-7 shadow-xl space-y-6">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                            <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-sm flex items-center justify-center shrink-0">2</span>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-base sm:text-lg font-bold text-white">Evaluation Categories</h2>
+                                        <span className="px-2 py-0.5 bg-slate-800 text-emerald-400 text-[10px] font-bold rounded-md border border-emerald-500/30 uppercase">
+                                            Optional - Fill what you like
+                                        </span>
+                                    </div>
+                                    <p className="text-slate-400 text-xs">Write your thoughts or tap the suggestion chips below each box on mobile.</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="space-y-6">
-                            {categoriesConfig.map(cat => (
-                                <div key={cat.key} className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-slate-600 transition-all">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-xl">{cat.icon}</span>
-                                        <h3 className="text-sm font-bold text-white">{cat.title}</h3>
-                                    </div>
+                        <div className="space-y-5">
+                            {categoriesConfig.map(cat => {
+                                const hasValue = Boolean(responses[cat.key]?.trim());
+                                return (
+                                    <div key={cat.key} className={`bg-slate-800/60 border rounded-2xl p-4 sm:p-5 transition-all ${
+                                        hasValue ? 'border-emerald-500/50 bg-slate-800/90' : 'border-slate-700/80 hover:border-slate-600'
+                                    }`}>
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xl">{cat.icon}</span>
+                                                <h3 className="text-sm font-bold text-white">{cat.title}</h3>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-medium px-2 py-0.5 bg-slate-900/60 rounded-md border border-slate-700">
+                                                {hasValue ? '✓ Content Added' : 'Optional'}
+                                            </span>
+                                        </div>
 
-                                    {/* Textarea */}
-                                    <textarea
-                                        rows={3}
-                                        value={responses[cat.key]}
-                                        onChange={e => handleInputChange(cat.key, e.target.value)}
-                                        placeholder={`Type your open feedback or suggestions for ${cat.title.replace(/^\d+\.\s*/, '')}...`}
-                                        className="w-full bg-slate-900/90 border border-slate-700/90 rounded-xl p-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed transition-all"
-                                    />
+                                        {/* Textarea */}
+                                        <textarea
+                                            rows={3}
+                                            value={responses[cat.key]}
+                                            onChange={e => handleInputChange(cat.key, e.target.value)}
+                                            placeholder={`Optional: Type your feedback or tap clue chips below...`}
+                                            className="w-full bg-slate-900/90 border border-slate-700/90 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed transition-all touch-manipulation min-h-[80px]"
+                                        />
 
-                                    {/* PERSISTENT CLUES (Does NOT hide when typing) */}
-                                    <div className="mt-3 pt-3 border-t border-slate-700/50">
-                                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block mb-2">
-                                            💡 Key Areas to Consider (Persistent Guidance Clues):
-                                        </span>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {cat.clues.map((clue, idx) => (
-                                                <span
-                                                    key={idx}
-                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/80 border border-slate-700 text-slate-300 text-[11px] font-medium rounded-lg"
-                                                >
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                                    {clue}
-                                                </span>
-                                            ))}
+                                        {/* INTERACTIVE TAP-TO-INSERT CLUES */}
+                                        <div className="mt-3 pt-3 border-t border-slate-700/50">
+                                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block mb-2">
+                                                💡 Key Areas (Tap any chip to auto-insert):
+                                            </span>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {cat.clues.map((clue, idx) => {
+                                                    const isAdded = (responses[cat.key] || '').includes(clue);
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => handleAppendClue(cat.key, clue)}
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all active:scale-95 touch-manipulation ${
+                                                                isAdded
+                                                                    ? 'bg-emerald-500/30 border border-emerald-400 text-emerald-300 font-bold'
+                                                                    : 'bg-slate-900/90 border border-slate-700 text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300'
+                                                            }`}
+                                                        >
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${isAdded ? 'bg-emerald-300' : 'bg-emerald-400'}`}></span>
+                                                            <span>{clue}</span>
+                                                            <span className="text-[10px] opacity-75">{isAdded ? '✓' : '+'}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 
                     {/* Step 3: Open Reflection Questions */}
-                    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
-                        <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-                            <span className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-sm flex items-center justify-center">3</span>
-                            <div>
-                                <h2 className="text-lg font-bold text-white">Open Reflection & Suggestion Questions</h2>
-                                <p className="text-slate-400 text-xs">Answer these open suggestions to help your teacher excel and build strong rapport.</p>
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-7 shadow-xl space-y-6">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                            <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-sm flex items-center justify-center shrink-0">3</span>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-base sm:text-lg font-bold text-white">Open Reflection Questions</h2>
+                                        <span className="px-2 py-0.5 bg-slate-800 text-emerald-400 text-[10px] font-bold rounded-md border border-emerald-500/30 uppercase">
+                                            Optional
+                                        </span>
+                                    </div>
+                                    <p className="text-slate-400 text-xs">Feel free to answer any reflection questions you feel comfortable with.</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="space-y-6">
-                            {reflectionQuestionsConfig.map((q, i) => (
-                                <div key={q.key} className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5">
-                                    <div className="mb-2">
-                                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Question {i + 1}</span>
-                                        <h4 className="text-sm font-bold text-white">{q.title}</h4>
-                                        <p className="text-xs text-slate-300 mt-0.5">{q.prompt}</p>
-                                    </div>
+                        <div className="space-y-5">
+                            {reflectionQuestionsConfig.map((q, i) => {
+                                const hasVal = Boolean(responses[q.key]?.trim());
+                                return (
+                                    <div key={q.key} className={`bg-slate-800/60 border rounded-2xl p-4 sm:p-5 transition-all ${
+                                        hasVal ? 'border-emerald-500/50 bg-slate-800/90' : 'border-slate-700/80'
+                                    }`}>
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                            <div>
+                                                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Question {i + 1}</span>
+                                                <h4 className="text-sm font-bold text-white">{q.title}</h4>
+                                                <p className="text-xs text-slate-300 mt-0.5">{q.prompt}</p>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-medium px-2 py-0.5 bg-slate-900/60 rounded-md border border-slate-700 shrink-0">
+                                                {hasVal ? '✓ Answered' : 'Optional'}
+                                            </span>
+                                        </div>
 
-                                    <textarea
-                                        rows={3}
-                                        value={responses[q.key]}
-                                        onChange={e => handleInputChange(q.key, e.target.value)}
-                                        placeholder="Write your open reflection or suggestion here..."
-                                        className="w-full bg-slate-900/90 border border-slate-700/90 rounded-xl p-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed transition-all mt-2"
-                                    />
-                                </div>
-                            ))}
+                                        <textarea
+                                            rows={3}
+                                            value={responses[q.key]}
+                                            onChange={e => handleInputChange(q.key, e.target.value)}
+                                            placeholder="Optional: Write your reflection or recommendation here..."
+                                            className="w-full bg-slate-900/90 border border-slate-700/90 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed transition-all mt-2 touch-manipulation min-h-[80px]"
+                                        />
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
                     {/* Submit Actions */}
-                    <div className="flex items-center justify-end gap-4 pt-4">
+                    <div className="flex items-center justify-end gap-4 pt-4 sticky bottom-4 z-20">
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm sm:text-base rounded-2xl shadow-2xl shadow-emerald-500/30 transition-all flex items-center justify-center gap-3 disabled:opacity-50 touch-manipulation active:scale-98"
                         >
                             {isSubmitting ? (
                                 <>
