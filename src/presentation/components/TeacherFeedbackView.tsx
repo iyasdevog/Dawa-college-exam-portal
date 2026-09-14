@@ -7,17 +7,24 @@ interface TeacherFeedbackViewProps {
 }
 
 export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ currentUser }) => {
+    const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
+
     const [feedbacks, setFeedbacks] = useState<StudentFeedback[]>([]);
+    const [allFeedbacksList, setAllFeedbacksList] = useState<StudentFeedback[]>([]);
     const [teacherProfile, setTeacherProfile] = useState<TeacherAccount | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [selectedSemester, setSelectedSemester] = useState<string>('All');
     const [selectedClass, setSelectedClass] = useState<string>('All');
     
+    // Admin faculty filter
+    const [selectedTeacherFilter, setSelectedTeacherFilter] = useState<string>('All Faculty');
+    const [teacherFilterOptions, setTeacherFilterOptions] = useState<string[]>([]);
+
     // Edit credentials modal
     const [showEditModal, setShowEditModal] = useState<boolean>(false);
     const [isDefaultCredentials, setIsDefaultCredentials] = useState<boolean>(false);
     const [editForm, setEditForm] = useState({
-        username: '',
+        username: currentUser.username || '',
         mobileNumber: '',
         password: '',
         confirmPassword: ''
@@ -31,56 +38,76 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
         setIsLoading(true);
         try {
             const accounts = await dataService.getAllTeacherAccounts();
-            const activeTeacherName = currentUser.name || currentUser.username;
+            const allFb = await dataService.getAllFeedback();
+            setAllFeedbacksList(allFb);
 
-            if (!activeTeacherName) {
-                setFeedbacks([]);
-                setTeacherProfile(null);
-                return;
-            }
+            if (isAdmin) {
+                // Admin Mode: discover all unique faculty names from feedback + accounts
+                const namesSet = new Set<string>();
+                allFb.forEach(f => { if (f.teacherName && f.teacherName.trim()) namesSet.add(f.teacherName.trim()); });
+                accounts.forEach(a => { if (a.name && a.name.trim()) namesSet.add(a.name.trim()); });
+                const sortedNames = Array.from(namesSet).sort();
+                setTeacherFilterOptions(['All Faculty', ...sortedNames]);
 
-            // Match teacher profile by username, mobile, or name
-            const foundAccount = accounts.find(a => 
-                a.id === currentUser.id ||
-                a.username.toLowerCase() === currentUser.username.toLowerCase() ||
-                a.name.toLowerCase() === activeTeacherName.toLowerCase()
-            );
-
-            if (foundAccount) {
-                setTeacherProfile(foundAccount);
-                // Detect if still on default provisioned credentials
-                const hasDefaultCreds = 
-                    (foundAccount as any).isDefaultCredentials === true ||
-                    foundAccount.password === 'dawa@2025' ||
-                    foundAccount.mobileNumber === '0000000000' ||
-                    !foundAccount.mobileNumber.trim();
-                setIsDefaultCredentials(hasDefaultCreds);
-                setEditForm({
-                    username: foundAccount.username,
-                    mobileNumber: foundAccount.mobileNumber === '0000000000' ? '' : foundAccount.mobileNumber,
-                    password: '',
-                    confirmPassword: ''
-                });
-                // Auto-open the update modal if still on defaults
-                if (hasDefaultCreds) {
-                    setShowEditModal(true);
-                }
-            } else {
-                setTeacherProfile(null);
                 setIsDefaultCredentials(false);
-                setEditForm({
-                    username: activeTeacherName.toLowerCase().replace(/\s+/g, '_'),
+                setTeacherProfile({
+                    id: 'admin',
+                    name: currentUser.name || 'System Administrator',
+                    username: currentUser.username || 'admin',
                     mobileNumber: '',
                     password: '',
-                    confirmPassword: ''
+                    assignedClasses: [],
+                    isActive: true
                 });
-            }
 
-            // Fetch feedback ONLY for this authenticated teacher account
-            // IMPORTANT: always search by display name (not DB id) because feedback stores teacherName as a string
-            const searchName = foundAccount?.name || activeTeacherName;
-            const list = await dataService.getTeacherFeedback(searchName);
-            setFeedbacks(list);
+                setFeedbacks(allFb);
+            } else {
+                const activeTeacherName = currentUser.name || currentUser.username;
+                if (!activeTeacherName) {
+                    setFeedbacks([]);
+                    setTeacherProfile(null);
+                    return;
+                }
+
+                // Match teacher profile by username, mobile, or name
+                const foundAccount = accounts.find(a => 
+                    a.id === currentUser.id ||
+                    a.username.toLowerCase() === currentUser.username.toLowerCase() ||
+                    a.name.toLowerCase() === activeTeacherName.toLowerCase()
+                );
+
+                if (foundAccount) {
+                    setTeacherProfile(foundAccount);
+                    const hasDefaultCreds = 
+                        (foundAccount as any).isDefaultCredentials === true ||
+                        foundAccount.password === 'dawa@2025' ||
+                        foundAccount.mobileNumber === '0000000000' ||
+                        !foundAccount.mobileNumber.trim();
+                    setIsDefaultCredentials(hasDefaultCreds);
+                    setEditForm({
+                        username: foundAccount.username,
+                        mobileNumber: foundAccount.mobileNumber === '0000000000' ? '' : foundAccount.mobileNumber,
+                        password: '',
+                        confirmPassword: ''
+                    });
+                    if (hasDefaultCreds) {
+                        setShowEditModal(true);
+                    }
+                } else {
+                    setTeacherProfile(null);
+                    setIsDefaultCredentials(false);
+                    setEditForm({
+                        username: activeTeacherName.toLowerCase().replace(/\s+/g, '_'),
+                        mobileNumber: '',
+                        password: '',
+                        confirmPassword: ''
+                    });
+                }
+
+                const searchName = foundAccount?.name || activeTeacherName;
+                const list = await dataService.getTeacherFeedback(searchName);
+                setFeedbacks(list);
+            }
         } catch (err) {
             console.error('Failed to load teacher feedback:', err);
         } finally {
@@ -91,6 +118,19 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
     useEffect(() => {
         loadTeacherData();
     }, [currentUser]);
+
+    // Handle Admin faculty dropdown filtering
+    useEffect(() => {
+        if (!isAdmin) return;
+        if (selectedTeacherFilter === 'All Faculty') {
+            setFeedbacks(allFeedbacksList);
+        } else {
+            const filtered = allFeedbacksList.filter(f => 
+                f.teacherName && f.teacherName.trim().toLowerCase() === selectedTeacherFilter.trim().toLowerCase()
+            );
+            setFeedbacks(filtered);
+        }
+    }, [selectedTeacherFilter, allFeedbacksList, isAdmin]);
 
     // Unique semesters & classes for filters
     const semesterOptions = useMemo(() => {
@@ -164,7 +204,7 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
 
         setIsSavingProfile(true);
         try {
-            if (teacherProfile) {
+            if (teacherProfile && teacherProfile.id !== 'admin') {
                 await dataService.updateTeacherAccount(teacherProfile.id, {
                     name: activeName,
                     username: editForm.username.trim(),
@@ -172,9 +212,8 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                     password: editForm.password.trim(),
                     isDefaultCredentials: false
                 } as any);
-                setEditSuccess('✅ Credentials updated! You can now log in with your new username/mobile & password.');
+                setEditSuccess('✅ Credentials updated successfully!');
             } else {
-                // Create profile if none exists
                 await dataService.saveTeacherAccount({
                     name: activeName,
                     username: editForm.username.trim(),
@@ -182,13 +221,13 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                     password: editForm.password.trim(),
                     isActive: true
                 });
-                setEditSuccess('✅ Your profile has been created successfully!');
+                setEditSuccess('✅ Credentials saved successfully!');
             }
             setIsDefaultCredentials(false);
             await loadTeacherData();
             setTimeout(() => setShowEditModal(false), 2000);
         } catch (err) {
-            console.error('Failed to update teacher credentials:', err);
+            console.error('Failed to update credentials:', err);
             setEditError('Failed to save profile. Please try again.');
         } finally {
             setIsSavingProfile(false);
@@ -201,16 +240,22 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
-                        <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/30 uppercase tracking-wider">
-                            Faculty Portal
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full border uppercase tracking-wider ${
+                            isAdmin 
+                                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' 
+                                : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                        }`}>
+                            {isAdmin ? '🛡️ Administrator Portal' : 'Faculty Portal'}
                         </span>
-                        <span className="text-xs text-slate-400">Authenticated Feedback Review</span>
+                        <span className="text-xs text-slate-400">
+                            {isAdmin ? 'Full Institution Feedback Review' : 'Authenticated Feedback Review'}
+                        </span>
                     </div>
                     <h1 className="text-2xl sm:text-3xl font-black text-white">
-                        {teacherProfile?.name || currentUser.name || 'Faculty Member'}
+                        {isAdmin ? 'System Administrator' : (teacherProfile?.name || currentUser.name || 'Faculty Member')}
                     </h1>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 mt-2">
-                        <span>📱 Mobile: <strong className="text-emerald-400">{teacherProfile?.mobileNumber || 'Not Set'}</strong></span>
+                        <span>📱 Mobile: <strong className="text-emerald-400">{teacherProfile?.mobileNumber || 'Administrator Account'}</strong></span>
                         <span>👤 Username: <strong className="text-emerald-400">{teacherProfile?.username || currentUser.username}</strong></span>
                         <span>📊 Total Received: <strong className="text-emerald-400">{feedbacks.length}</strong></span>
                     </div>
@@ -223,12 +268,12 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
-                    Edit Mobile & Credentials
+                    Edit Credentials
                 </button>
             </div>
 
-            {/* Default Credentials Alert Banner – shown when still on provisioned defaults */}
-            {isDefaultCredentials && (
+            {/* Default Credentials Alert Banner – shown when still on provisioned defaults (teachers only) */}
+            {!isAdmin && isDefaultCredentials && (
                 <div className="bg-gradient-to-r from-rose-950/90 via-slate-900 to-slate-900 border-2 border-rose-500/60 rounded-3xl p-5 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
                     <div className="flex items-start gap-3">
                         <span className="text-2xl p-2 bg-rose-500/20 rounded-2xl border border-rose-500/40 shrink-0">🔐</span>
@@ -251,8 +296,8 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                 </div>
             )}
 
-            {/* First Time Setup Alert – when no mobile/profile exists but not default creds */}
-            {!isDefaultCredentials && (!teacherProfile || !teacherProfile.mobileNumber) && (
+            {/* First Time Setup Alert – when no mobile/profile exists but not default creds (teachers only) */}
+            {!isAdmin && !isDefaultCredentials && (!teacherProfile || !teacherProfile.mobileNumber) && (
                 <div className="bg-gradient-to-r from-amber-950/80 to-slate-900 border border-amber-500/40 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
                     <div className="flex items-start gap-3">
                         <span className="text-2xl p-2 bg-amber-500/20 rounded-2xl border border-amber-500/30">📌</span>
@@ -297,6 +342,21 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
             {/* Filters Bar */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+                    {isAdmin && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1">Faculty Member</label>
+                            <select
+                                value={selectedTeacherFilter}
+                                onChange={e => setSelectedTeacherFilter(e.target.value)}
+                                className="bg-slate-800 border border-cyan-500/50 rounded-xl px-3 py-1.5 text-xs text-cyan-300 font-bold focus:outline-none focus:border-cyan-400"
+                            >
+                                {teacherFilterOptions.map(t => (
+                                    <option key={t} value={t}>{t}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Semester</label>
                         <select
