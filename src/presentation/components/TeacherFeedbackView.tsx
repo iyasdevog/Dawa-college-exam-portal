@@ -145,6 +145,21 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
         return ['All', ...Array.from(set).sort()];
     }, [feedbacks]);
 
+    const handleDeleteFeedback = async (feedbackId: string) => {
+        if (!feedbackId) return;
+        if (!window.confirm('Are you sure you want to delete this feedback entry? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            await dataService.deleteFeedback(feedbackId);
+            await loadTeacherData();
+        } catch (err) {
+            console.error('Failed to delete feedback:', err);
+            alert('Failed to delete feedback. Please try again.');
+        }
+    };
+
     // Filtered feedback list
     const filteredFeedbacks = useMemo(() => {
         return feedbacks.filter(f => {
@@ -430,9 +445,21 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
-                                    <span className="text-amber-400 text-sm font-bold">★ {fb.overallRating || 5} / 5</span>
-                                    <span className="text-[10px] text-slate-400">({new Date(fb.createdAt).toLocaleDateString()})</span>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+                                        <span className="text-amber-400 text-sm font-bold">★ {fb.overallRating || 5} / 5</span>
+                                        <span className="text-[10px] text-slate-400">({new Date(fb.createdAt).toLocaleDateString()})</span>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteFeedback(fb.id)}
+                                        className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                                        title="Delete Feedback Entry"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Delete
+                                    </button>
                                 </div>
                             </div>
 

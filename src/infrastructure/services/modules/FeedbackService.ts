@@ -139,6 +139,17 @@ export class FeedbackService extends BaseDataService {
         );
     }
 
+    public async deleteFeedback(id: string): Promise<void> {
+        try {
+            const docRef = doc(this.db, this.studentFeedbackCollection, id);
+            await deleteDoc(docRef);
+        } catch (e) {
+            console.warn('Firestore delete error for feedback:', e);
+        }
+        this.deleteFeedbackFromLocalStorage(id);
+        this.invalidateCache();
+    }
+
     public async getClassFeedbackCounts(semester?: string): Promise<Record<string, number>> {
         const feedbackList = await this.getAllFeedback(semester);
         const counts: Record<string, number> = {};
@@ -328,6 +339,16 @@ export class FeedbackService extends BaseDataService {
             if (typeof window === 'undefined') return;
             const teachers = this.getTeachersFromLocalStorage().filter(t => t.id !== id);
             localStorage.setItem(this.LOCAL_TEACHERS_KEY, JSON.stringify(teachers));
+        } catch (e) {
+            // Ignore
+        }
+    }
+
+    private deleteFeedbackFromLocalStorage(id: string): void {
+        try {
+            if (typeof window === 'undefined') return;
+            const items = this.getFeedbackFromLocalStorage().filter(f => f.id !== id);
+            localStorage.setItem(this.LOCAL_FEEDBACK_KEY, JSON.stringify(items));
         } catch (e) {
             // Ignore
         }

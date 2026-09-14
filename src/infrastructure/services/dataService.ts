@@ -781,6 +781,10 @@ export class DataService extends BaseDataService {
         return this.feedbackService.getTeacherFeedback(teacherNameOrId, semester);
     }
 
+    async deleteFeedback(id: string): Promise<void> {
+        return this.feedbackService.deleteFeedback(id);
+    }
+
     async getClassFeedbackCounts(semester?: string): Promise<Record<string, number>> {
         return this.feedbackService.getClassFeedbackCounts(semester);
     }
