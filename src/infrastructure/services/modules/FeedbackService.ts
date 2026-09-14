@@ -30,22 +30,51 @@ export class FeedbackService extends BaseDataService {
             createdAt: timestamp
         };
 
-        let createdId: string;
-        try {
-            const docRef = await addDoc(collection(this.db, this.studentFeedbackCollection), payload);
-            createdId = docRef.id;
-        } catch (error) {
-            console.warn('Firestore write failed for student feedback, saving locally:', error);
-            createdId = `feedback_${timestamp}_${Math.random().toString(36).substr(2, 6)}`;
-        }
+        // Write to Firestore – do NOT silently swallow errors (would hide permission issues)
+        const docRef = await addDoc(collection(this.db, this.studentFeedbackCollection), payload);
+        const createdId = docRef.id;
 
         const feedbackWithId: StudentFeedback = { id: createdId, ...payload };
         
-        // Sync to local storage & update in-memory cache immediately
+        // Also cache locally for offline resilience
         this.saveFeedbackToLocalStorage(feedbackWithId);
         this.invalidateCache();
 
         return createdId;
+    }
+
+    /**
+     * Re-pushes any feedback that was saved to localStorage but never made it to Firestore.
+     * Called by AdminFeedbackManagement on mount to recover stuck submissions.
+     */
+    public async syncLocalFeedbackToFirestore(): Promise<number> {
+        const localItems = this.getFeedbackFromLocalStorage();
+        if (localItems.length === 0) return 0;
+
+        // Get current Firestore IDs to avoid duplicates
+        let firestoreIds = new Set<string>();
+        try {
+            const snap = await getDocs(collection(this.db, this.studentFeedbackCollection));
+            snap.docs.forEach(d => firestoreIds.add(d.id));
+        } catch { return 0; }
+
+        const unsynced = localItems.filter(f => !firestoreIds.has(f.id));
+        let synced = 0;
+
+        for (const feedback of unsynced) {
+            try {
+                const { id, ...payload } = feedback;
+                // Try to use the same id via setDoc
+                const { setDoc: setDocument, doc: docRef } = await import('firebase/firestore');
+                await setDocument(docRef(this.db, this.studentFeedbackCollection, id), payload);
+                synced++;
+            } catch (err) {
+                console.warn('Failed to sync local feedback to Firestore:', (err as Error).message);
+            }
+        }
+
+        if (synced > 0) this.invalidateCache();
+        return synced;
     }
 
     public async getAllFeedback(semester?: string): Promise<StudentFeedback[]> {

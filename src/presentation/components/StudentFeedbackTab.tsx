@@ -42,6 +42,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
 
     const [classCounts, setClassCounts] = useState<Record<string, number>>({});
     const [teacherList, setTeacherList] = useState<string[]>([]);
+    const [classList, setClassList] = useState<string[]>(activeClasses);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
     const [formError, setFormError] = useState<string>('');
@@ -49,77 +50,79 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
     // Convert term key (e.g. "2025-2026-Even") to display format ("2025-2026 Even")
     const termKeyToDisplay = (termKey: string): string => {
         if (!termKey) return termKey;
-        // Replace only the last hyphen (before Odd/Even/Bridge)
         return termKey.replace(/-(?=[^-]*$)/, ' ');
     };
 
     // Convert display format ("2025-2026 Even") back to term key ("2025-2026-Even")
     const displayToTermKey = (display: string): string => {
         if (!display) return display;
-        // Replace the last space before Odd/Even/Bridge with a hyphen
         return display.replace(/ (?=(Odd|Even|Bridge)$)/, '-');
     };
 
-    // Semester options – always in display format
-    const [semesterOptions, setSemesterOptions] = useState<string[]>(['2025-2026 Even', '2025-2026 Odd', '2024-2025 Even', '2024-2025 Odd', '2026-2027 Odd', '2026-2027 Even']);
+    // Load semester options from DB (real terms that have data)
+    const [semesterOptions, setSemesterOptions] = useState<string[]>([]);
+    useEffect(() => {
+        const loadTerms = async () => {
+            try {
+                const terms = await dataService.getAvailableTerms(); // returns ["2025-2026-Even", ...]
+                const displayTerms = terms.map(termKeyToDisplay).filter(Boolean);
+                // Deduplicate and sort descending
+                const unique = Array.from(new Set(displayTerms)).sort().reverse();
+                setSemesterOptions(unique);
+            } catch {
+                // Fallback to activeTerm only
+            }
+        };
+        loadTerms();
+    }, []);
 
     // Sync selectedSemester with activeTerm when activeTerm changes
     useEffect(() => {
         if (activeTerm) {
             const formatted = termKeyToDisplay(activeTerm);
-            setSemesterOptions(prev => prev.includes(formatted) ? prev : [formatted, ...prev]);
             setSelectedSemester(formatted);
         }
     }, [activeTerm]);
 
-    // Load dynamic class counts & teacher list based on selected semester
+    // Load dynamic class list, class counts & teacher list based on selected semester
     useEffect(() => {
+        if (!selectedSemester) return;
         const loadMetadata = async () => {
             try {
-                // Use the term key format for API calls
                 const termKey = displayToTermKey(selectedSemester);
 
-                // Load class counts for this semester
-                const counts = await dataService.getClassFeedbackCounts(selectedSemester);
-                setClassCounts(counts);
-
-                // Load teachers from subjects of this specific semester + registered accounts
-                const [subs, accounts] = await Promise.all([
+                // Load classes, counts and teachers in parallel
+                const [termClasses, counts, subs, accounts] = await Promise.all([
+                    dataService.getClassesByTerm(termKey),
+                    dataService.getClassFeedbackCounts(selectedSemester),
                     dataService.getAllSubjects(termKey),
                     dataService.getAllTeacherAccounts()
                 ]);
 
+                // Classes for this specific semester
+                const resolvedClasses = termClasses.length > 0 ? termClasses : activeClasses;
+                setClassList(resolvedClasses);
+                setClassCounts(counts);
+
+                // Reset class if no longer valid for this semester
+                setSelectedClass(prev => resolvedClasses.includes(prev) ? prev : '');
+
+                // Teachers from subjects of this semester
                 const namesSet = new Set<string>();
-                // Teachers who actually teach in this semester's subjects
                 subs.forEach(s => {
-                    if (s.facultyName && s.facultyName.trim()) {
-                        namesSet.add(s.facultyName.trim());
-                    }
+                    if (s.facultyName && s.facultyName.trim()) namesSet.add(s.facultyName.trim());
                 });
-                // Also include subjects passed as props (current term context)
-                if (termKey === displayToTermKey(termKeyToDisplay(activeTerm))) {
-                    availableSubjects.forEach(s => {
-                        if (s.facultyName && s.facultyName.trim()) {
-                            namesSet.add(s.facultyName.trim());
-                        }
-                    });
-                }
-                // Merge registered teacher accounts
+                // Merge registered teacher accounts as fallback
                 accounts.forEach(t => {
-                    if (t.name && t.name.trim()) {
-                        namesSet.add(t.name.trim());
-                    }
+                    if (t.name && t.name.trim()) namesSet.add(t.name.trim());
                 });
 
-                const sortedTeachers = Array.from(namesSet).sort();
-                setTeacherList(sortedTeachers);
-                // Reset teacher selection when semester changes
+                setTeacherList(Array.from(namesSet).sort());
                 setSelectedTeacher('');
             } catch (err) {
                 console.error('Failed to load feedback metadata:', err);
             }
         };
-
         loadMetadata();
     }, [selectedSemester]);
 
@@ -297,7 +300,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                     </div>
                 </div>
 
-                {/* Class-wise Received Feedback Counts */}
+                {/* Class-wise Received Feedback Counts – uses dynamic classList */}
                 <div className="mt-6 pt-6 border-t border-slate-800">
                     <div className="flex items-center gap-2 mb-3">
                         <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -306,7 +309,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                         <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Class-Wise Received Feedback Counts</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        {activeClasses.map(cls => {
+                        {classList.map(cls => {
                             const count = classCounts[cls] || 0;
                             return (
                                 <div key={cls} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs">
@@ -446,7 +449,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-emerald-500"
                                 >
                                     <option value="">-- Choose Class --</option>
-                                    {activeClasses.map(cls => (
+                                    {classList.map(cls => (
                                         <option key={cls} value={cls}>{cls}</option>
                                     ))}
                                 </select>

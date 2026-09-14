@@ -769,6 +769,10 @@ export class DataService extends BaseDataService {
         return this.feedbackService.submitFeedback(feedbackData);
     }
 
+    async syncLocalFeedbackToFirestore(): Promise<number> {
+        return this.feedbackService.syncLocalFeedbackToFirestore();
+    }
+
     async getAllFeedback(semester?: string): Promise<StudentFeedback[]> {
         return this.feedbackService.getAllFeedback(semester);
     }

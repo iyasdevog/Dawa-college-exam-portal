@@ -32,6 +32,7 @@ export const AdminFeedbackManagement: React.FC = () => {
     const loadData = async () => {
         setIsLoading(true);
         try {
+            await dataService.syncLocalFeedbackToFirestore().catch(() => {});
             const [fbList, teacherList] = await Promise.all([
                 dataService.getAllFeedback(),
                 dataService.getAllTeacherAccounts()

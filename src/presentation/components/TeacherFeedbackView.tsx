@@ -77,7 +77,9 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
             }
 
             // Fetch feedback ONLY for this authenticated teacher account
-            const list = await dataService.getTeacherFeedback(foundAccount?.id || activeTeacherName);
+            // IMPORTANT: always search by display name (not DB id) because feedback stores teacherName as a string
+            const searchName = foundAccount?.name || activeTeacherName;
+            const list = await dataService.getTeacherFeedback(searchName);
             setFeedbacks(list);
         } catch (err) {
             console.error('Failed to load teacher feedback:', err);
