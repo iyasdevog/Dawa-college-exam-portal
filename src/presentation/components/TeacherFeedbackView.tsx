@@ -15,10 +15,12 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
     
     // Edit credentials modal
     const [showEditModal, setShowEditModal] = useState<boolean>(false);
+    const [isDefaultCredentials, setIsDefaultCredentials] = useState<boolean>(false);
     const [editForm, setEditForm] = useState({
         username: '',
         mobileNumber: '',
-        password: ''
+        password: '',
+        confirmPassword: ''
     });
     const [editSuccess, setEditSuccess] = useState<string>('');
     const [editError, setEditError] = useState<string>('');
@@ -46,17 +48,31 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
 
             if (foundAccount) {
                 setTeacherProfile(foundAccount);
+                // Detect if still on default provisioned credentials
+                const hasDefaultCreds = 
+                    (foundAccount as any).isDefaultCredentials === true ||
+                    foundAccount.password === 'dawa@2025' ||
+                    foundAccount.mobileNumber === '0000000000' ||
+                    !foundAccount.mobileNumber.trim();
+                setIsDefaultCredentials(hasDefaultCreds);
                 setEditForm({
                     username: foundAccount.username,
-                    mobileNumber: foundAccount.mobileNumber,
-                    password: foundAccount.password
+                    mobileNumber: foundAccount.mobileNumber === '0000000000' ? '' : foundAccount.mobileNumber,
+                    password: '',
+                    confirmPassword: ''
                 });
+                // Auto-open the update modal if still on defaults
+                if (hasDefaultCreds) {
+                    setShowEditModal(true);
+                }
             } else {
                 setTeacherProfile(null);
+                setIsDefaultCredentials(false);
                 setEditForm({
                     username: activeTeacherName.toLowerCase().replace(/\s+/g, '_'),
                     mobileNumber: '',
-                    password: ''
+                    password: '',
+                    confirmPassword: ''
                 });
             }
 
@@ -113,8 +129,28 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
         setEditError('');
         setEditSuccess('');
 
-        if (!editForm.username.trim() || !editForm.mobileNumber.trim() || !editForm.password.trim()) {
-            setEditError('All fields (username, mobile number, password) are required.');
+        if (!editForm.username.trim()) {
+            setEditError('Username is required.');
+            return;
+        }
+        if (!editForm.mobileNumber.trim()) {
+            setEditError('Mobile number is required.');
+            return;
+        }
+        if (!editForm.password.trim()) {
+            setEditError('Please enter a new password.');
+            return;
+        }
+        if (isDefaultCredentials && editForm.password.trim() === 'dawa@2025') {
+            setEditError('Please choose a new personal password — the default password cannot be kept.');
+            return;
+        }
+        if (editForm.confirmPassword !== editForm.password) {
+            setEditError('Passwords do not match. Please re-enter.');
+            return;
+        }
+        if (editForm.password.trim().length < 6) {
+            setEditError('Password must be at least 6 characters long.');
             return;
         }
 
@@ -131,9 +167,10 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                     name: activeName,
                     username: editForm.username.trim(),
                     mobileNumber: editForm.mobileNumber.trim(),
-                    password: editForm.password.trim()
-                });
-                setEditSuccess('Your login credentials (username, mobile & password) updated successfully!');
+                    password: editForm.password.trim(),
+                    isDefaultCredentials: false
+                } as any);
+                setEditSuccess('✅ Credentials updated! You can now log in with your new username/mobile & password.');
             } else {
                 // Create profile if none exists
                 await dataService.saveTeacherAccount({
@@ -143,10 +180,11 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                     password: editForm.password.trim(),
                     isActive: true
                 });
-                setEditSuccess('Your profile has been saved successfully!');
+                setEditSuccess('✅ Your profile has been created successfully!');
             }
+            setIsDefaultCredentials(false);
             await loadTeacherData();
-            setTimeout(() => setShowEditModal(false), 1500);
+            setTimeout(() => setShowEditModal(false), 2000);
         } catch (err) {
             console.error('Failed to update teacher credentials:', err);
             setEditError('Failed to save profile. Please try again.');
@@ -187,8 +225,32 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                 </button>
             </div>
 
-            {/* First Time Setup Alert Banner */}
-            {(!teacherProfile || !teacherProfile.mobileNumber) && (
+            {/* Default Credentials Alert Banner – shown when still on provisioned defaults */}
+            {isDefaultCredentials && (
+                <div className="bg-gradient-to-r from-rose-950/90 via-slate-900 to-slate-900 border-2 border-rose-500/60 rounded-3xl p-5 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+                    <div className="flex items-start gap-3">
+                        <span className="text-2xl p-2 bg-rose-500/20 rounded-2xl border border-rose-500/40 shrink-0">🔐</span>
+                        <div>
+                            <h4 className="text-rose-300 font-black text-sm flex items-center gap-2">
+                                ⚠️ Default Password Active — Action Required
+                            </h4>
+                            <p className="text-slate-300 text-xs mt-1 leading-relaxed">
+                                Your account was provisioned with the shared default password <code className="px-1.5 py-0.5 bg-rose-900/60 text-rose-300 rounded font-mono text-[11px]">dawa@2025</code>.
+                                Set your own <strong className="text-rose-300">Mobile Number</strong>, <strong className="text-rose-300">Username</strong>, and <strong className="text-rose-300">Password</strong> now to secure your account.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setShowEditModal(true)}
+                        className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-2xl shadow-lg transition-all shrink-0 w-full sm:w-auto animate-pulse"
+                    >
+                        🔒 Set Personal Credentials Now
+                    </button>
+                </div>
+            )}
+
+            {/* First Time Setup Alert – when no mobile/profile exists but not default creds */}
+            {!isDefaultCredentials && (!teacherProfile || !teacherProfile.mobileNumber) && (
                 <div className="bg-gradient-to-r from-amber-950/80 to-slate-900 border border-amber-500/40 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
                     <div className="flex items-start gap-3">
                         <span className="text-2xl p-2 bg-amber-500/20 rounded-2xl border border-amber-500/30">📌</span>
@@ -269,14 +331,6 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
             {isLoading ? (
                 <div className="py-12 text-center text-slate-400 text-sm animate-pulse">
                     Loading student feedback records...
-                </div>
-            ) : isGenericLogin && !selectedFacultyName ? (
-                <div className="bg-slate-900/80 border border-emerald-500/30 rounded-3xl p-12 text-center space-y-3">
-                    <span className="text-4xl">👆</span>
-                    <h3 className="text-white font-bold text-base">Please Select Your Faculty Profile Above</h3>
-                    <p className="text-slate-300 text-xs max-w-md mx-auto">
-                        To protect privacy and show strictly your own student feedback, please pick your name from the dropdown selector at the top of this page.
-                    </p>
                 </div>
             ) : filteredFeedbacks.length === 0 ? (
                 <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-12 text-center space-y-3">
@@ -410,11 +464,31 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
             {/* Edit Credentials Modal */}
             {showEditModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                            <h3 className="text-lg font-bold text-white">Edit Mobile & Login Credentials</h3>
-                            <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+                            <div>
+                                <h3 className="text-lg font-bold text-white">
+                                    {isDefaultCredentials ? '🔐 Set Your Personal Credentials' : 'Edit Mobile & Login Credentials'}
+                                </h3>
+                                {isDefaultCredentials && (
+                                    <p className="text-rose-400 text-xs mt-0.5 font-medium">Required — default password must be changed</p>
+                                )}
+                            </div>
+                            {/* Only allow closing if NOT on default credentials */}
+                            {!isDefaultCredentials && (
+                                <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+                            )}
                         </div>
+
+                        {/* Default credentials warning inside modal */}
+                        {isDefaultCredentials && (
+                            <div className="p-4 bg-rose-950/60 border border-rose-500/40 rounded-2xl">
+                                <p className="text-rose-300 text-xs leading-relaxed">
+                                    🔑 You are logged in with the provisioned default password <code className="font-mono bg-rose-900/60 px-1 rounded">dawa@2025</code>.
+                                    Please set your own credentials below. You cannot skip this step.
+                                </p>
+                            </div>
+                        )}
 
                         {editSuccess && (
                             <div className="p-3 bg-emerald-950 border border-emerald-500 text-emerald-300 text-xs rounded-xl">
@@ -429,55 +503,84 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
 
                         <form onSubmit={handleSaveProfile} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-1">Mobile Number</label>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">Mobile Number <span className="text-rose-400">*</span></label>
                                 <input
                                     type="text"
                                     value={editForm.mobileNumber}
                                     onChange={e => setEditForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
                                     placeholder="e.g. 9876543210"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-1">Username</label>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">Username <span className="text-rose-400">*</span></label>
                                 <input
                                     type="text"
                                     value={editForm.username}
                                     onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))}
                                     placeholder="e.g. usthad_ahmad"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                                    required
+                                />
+                                <p className="text-[11px] text-slate-500 mt-1">Used to log in. Lowercase, underscores allowed.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">
+                                    {isDefaultCredentials ? 'New Password' : 'Password / PIN'} <span className="text-rose-400">*</span>
+                                </label>
+                                <input
+                                    type="password"
+                                    value={editForm.password}
+                                    onChange={e => setEditForm(prev => ({ ...prev, password: e.target.value }))}
+                                    placeholder={isDefaultCredentials ? 'Choose a personal password (min. 6 chars)' : 'Enter new password'}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-1">Password / PIN</label>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">Confirm Password <span className="text-rose-400">*</span></label>
                                 <input
                                     type="password"
-                                    value={editForm.password}
-                                    onChange={e => setEditForm(prev => ({ ...prev, password: e.target.value }))}
-                                    placeholder="Enter new password"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                                    value={editForm.confirmPassword}
+                                    onChange={e => setEditForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                                    placeholder="Re-enter your password"
+                                    className={`w-full bg-slate-800 border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 ${
+                                        editForm.confirmPassword && editForm.confirmPassword !== editForm.password
+                                            ? 'border-rose-500'
+                                            : editForm.confirmPassword && editForm.confirmPassword === editForm.password
+                                            ? 'border-emerald-500'
+                                            : 'border-slate-700'
+                                    }`}
                                     required
                                 />
+                                {editForm.confirmPassword && editForm.confirmPassword !== editForm.password && (
+                                    <p className="text-rose-400 text-[11px] mt-1">⚠️ Passwords do not match</p>
+                                )}
+                                {editForm.confirmPassword && editForm.confirmPassword === editForm.password && (
+                                    <p className="text-emerald-400 text-[11px] mt-1">✓ Passwords match</p>
+                                )}
                             </div>
 
                             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowEditModal(false)}
-                                    className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-700"
-                                >
-                                    Cancel
-                                </button>
+                                {!isDefaultCredentials && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowEditModal(false)}
+                                        className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-700"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
                                 <button
                                     type="submit"
-                                    disabled={isSavingProfile}
-                                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg"
+                                    disabled={isSavingProfile || (Boolean(editForm.confirmPassword) && editForm.confirmPassword !== editForm.password)}
+                                    className="flex-1 sm:flex-none px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg transition-all"
                                 >
-                                    {isSavingProfile ? 'Saving...' : 'Save Credentials'}
+                                    {isSavingProfile ? 'Saving...' : isDefaultCredentials ? '🔒 Save & Secure My Account' : 'Save Credentials'}
                                 </button>
                             </div>
                         </form>
