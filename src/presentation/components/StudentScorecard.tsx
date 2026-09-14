@@ -5,7 +5,7 @@ import { SYSTEM_CLASSES } from '../../domain/entities/constants';
 import { useMemo } from 'react';
 import { dataService } from '../../infrastructure/services/dataService';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
-import { getSubjectMaxMarks, getMarkForSubject } from '../../domain/utils/subjectUtils';
+import { getSubjectMaxMarks, getMarkForSubject, normalizeSubjectName } from '../../domain/utils/subjectUtils';
 import { useTerm } from '../viewmodels/TermContext';
 import AggregatedScorecard from './AggregatedScorecard';
 
@@ -221,7 +221,17 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                     });
                 return isYearMatch && isSemMatch && isClassMatch;
             });
-            setClassSubjects(filteredSubjects);
+
+            // De-duplicate subjects by normalized name
+            const seenNames = new Set<string>();
+            const deduplicatedSubjects = filteredSubjects.filter(s => {
+                const norm = normalizeSubjectName(s.name || s.id);
+                if (seenNames.has(norm)) return false;
+                seenNames.add(norm);
+                return true;
+            });
+
+            setClassSubjects(deduplicatedSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);
         } finally {
@@ -624,17 +634,24 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
 
     // Only show subjects that have marks recorded (exclude un-assessed subjects)
     const sortedSubjects = useMemo(() => {
-        return classSubjects
-            .filter(subj => getMarkForSubject(marks, subj, termRecord?.subjectMetadata) != null)
-            .sort((a, b) => {
-                const markA = getMarkForSubject(marks, a, termRecord?.subjectMetadata);
-                const markB = getMarkForSubject(marks, b, termRecord?.subjectMetadata);
-                const aFailed = markA?.status === 'Failed';
-                const bFailed = markB?.status === 'Failed';
-                if (aFailed && !bFailed) return 1;
-                if (!aFailed && bFailed) return -1;
-                return 0;
-            });
+        const matched = classSubjects.filter(subj => getMarkForSubject(marks, subj, termRecord?.subjectMetadata) != null);
+        const seen = new Set<string>();
+        const deduplicated = matched.filter(subj => {
+            const norm = normalizeSubjectName(subj.name || subj.id);
+            if (seen.has(norm)) return false;
+            seen.add(norm);
+            return true;
+        });
+
+        return deduplicated.sort((a, b) => {
+            const markA = getMarkForSubject(marks, a, termRecord?.subjectMetadata);
+            const markB = getMarkForSubject(marks, b, termRecord?.subjectMetadata);
+            const aFailed = markA?.status === 'Failed';
+            const bFailed = markB?.status === 'Failed';
+            if (aFailed && !bFailed) return 1;
+            if (!aFailed && bFailed) return -1;
+            return 0;
+        });
     }, [classSubjects, marks, termRecord]);
 
     // Computed max for percentage bar
