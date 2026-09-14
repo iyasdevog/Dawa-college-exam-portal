@@ -228,37 +228,73 @@ export class AdministrativeService extends BaseDataService {
         try {
             const settings = await this.getDocData<GlobalSettings>(this.settingsCollection, 'global_admin_settings');
             const currentTermKey = settings ? `${settings.currentAcademicYear}-${settings.currentSemester}` : null;
-            const requestedTermKey = termKey || currentTermKey || '2025-2026-Odd';
+            const requestedTermKey = termKey || currentTermKey || '2026-2027-Odd';
             const disabled = settings?.disabledClasses || [];
             const custom = settings?.customClasses || [];
 
-            // Baseline: always include SYSTEM_CLASSES and custom classes that are not disabled
-            SYSTEM_CLASSES.forEach(c => {
-                if (!disabled.includes(c)) activeClassesSet.add(c);
-            });
-            custom.forEach(c => {
-                if (!disabled.includes(c)) activeClassesSet.add(c);
-            });
+            const activeClassesSet = new Set<string>();
 
-            // Discover additional classes from Student Academic History & currentClass
+            // Parse year and semester from requestedTermKey (e.g. "2025-2026-Even" -> year="2025-2026", sem="Even")
+            const parts = requestedTermKey.split('-');
+            const targetSem = parts.pop() || '';
+            const targetYear = parts.join('-');
+
+            // 1. Discover from Student Academic History & currentClass for requestedTermKey
             const studentsSnap = await getDocs(collection(this.db, this.studentsCollection));
             studentsSnap.docs.forEach(docSnap => {
                 const s = docSnap.data() as StudentRecord;
                 if (!s || s.isDeleted) return;
 
-                if (s.currentClass && !disabled.includes(s.currentClass.trim())) {
-                    activeClassesSet.add(s.currentClass.trim());
-                }
-                if (s.academicHistory) {
-                    Object.values(s.academicHistory).forEach(h => {
-                        if (h?.className && !disabled.includes(h.className.trim())) {
-                            activeClassesSet.add(h.className.trim());
+                if (requestedTermKey === 'All') {
+                    if (s.currentClass) activeClassesSet.add(s.currentClass.trim());
+                    if (s.academicHistory) {
+                        Object.values(s.academicHistory).forEach(h => {
+                            if (h?.className) activeClassesSet.add(h.className.trim());
+                        });
+                    }
+                } else {
+                    if (s.academicHistory) {
+                        const matchingKey = Object.keys(s.academicHistory).find(tk =>
+                            tk === requestedTermKey ||
+                            tk.replace(/^2025-/, '2025-2026-') === requestedTermKey.replace(/^2025-/, '2025-2026-')
+                        );
+                        if (matchingKey && s.academicHistory[matchingKey]?.className) {
+                            activeClassesSet.add(s.academicHistory[matchingKey].className.trim());
                         }
+                    }
+                    if (requestedTermKey === currentTermKey && s.currentClass) {
+                        activeClassesSet.add(s.currentClass.trim());
+                    }
+                }
+            });
+
+            // 2. Discover from Subjects matching targetYear & targetSem
+            const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
+            subjectsSnap.docs.forEach(docSnap => {
+                const s = docSnap.data() as SubjectConfig;
+                if (!s || s.isDeleted || !s.targetClasses) return;
+                const sYear = s.academicYear || '';
+                const isYearMatch = requestedTermKey === 'All' || !targetYear || !sYear || sYear === 'All' || sYear === targetYear;
+                const isSemMatch = requestedTermKey === 'All' || !s.activeSemester || s.activeSemester === 'Both' || s.activeSemester === targetSem;
+
+                if (isYearMatch && isSemMatch) {
+                    s.targetClasses.forEach(cls => {
+                        if (cls && cls !== '-') activeClassesSet.add(cls.trim());
                     });
                 }
             });
 
-            // Filter out invalid/disabled entries and sort with standard system class order
+            // 3. Fallback: if no specific term classes discovered, or for current term, add SYSTEM_CLASSES & custom
+            if (activeClassesSet.size === 0 || requestedTermKey === currentTermKey || requestedTermKey === '2026-2027-Odd') {
+                SYSTEM_CLASSES.forEach(c => {
+                    if (!disabled.includes(c)) activeClassesSet.add(c);
+                });
+                custom.forEach(c => {
+                    if (!disabled.includes(c)) activeClassesSet.add(c);
+                });
+            }
+
+            // Filter out disabled & invalid classes and sort
             const result = Array.from(activeClassesSet)
                 .filter(c => c && c !== '-' && !disabled.includes(c))
                 .sort((a, b) => {

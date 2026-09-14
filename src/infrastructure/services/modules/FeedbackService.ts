@@ -25,10 +25,12 @@ export class FeedbackService extends BaseDataService {
 
     public async submitFeedback(feedbackData: Omit<StudentFeedback, 'id' | 'createdAt'>): Promise<string> {
         const timestamp = Date.now();
-        const payload = {
+        const rawPayload = {
             ...feedbackData,
             createdAt: timestamp
         };
+        // Sanitize out undefined properties so Firestore addDoc does not reject payload
+        const payload = JSON.parse(JSON.stringify(rawPayload));
 
         // Write to Firestore – do NOT silently swallow errors (would hide permission issues)
         const docRef = await addDoc(collection(this.db, this.studentFeedbackCollection), payload);
@@ -64,9 +66,8 @@ export class FeedbackService extends BaseDataService {
         for (const feedback of unsynced) {
             try {
                 const { id, ...payload } = feedback;
-                // Try to use the same id via setDoc
-                const { setDoc: setDocument, doc: docRef } = await import('firebase/firestore');
-                await setDocument(docRef(this.db, this.studentFeedbackCollection, id), payload);
+                const cleanPayload = JSON.parse(JSON.stringify(payload));
+                await setDoc(doc(this.db, this.studentFeedbackCollection, id), cleanPayload);
                 synced++;
             } catch (err) {
                 console.warn('Failed to sync local feedback to Firestore:', (err as Error).message);
