@@ -13,8 +13,6 @@ import CurriculumManagement from './management/CurriculumManagement';
 import RecycleBinManagement from './management/RecycleBinManagement';
 import { useTerm } from '../viewmodels/TermContext';
 
-const AdminFeedbackManagement = lazy(() => import('./management/AdminFeedbackManagement'));
-
 const Management: React.FC = () => {
   const { isMobile } = useMobile();
   const { activeTerm, systemTerm, isHistoricalTerm } = useTerm();
@@ -36,7 +34,6 @@ const Management: React.FC = () => {
     { id: 'students', label: 'Students', icon: 'fa-users' },
     { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
     { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' },
-    { id: 'student-feedback', label: 'Student Feedback', icon: 'fa-comments' },
     { id: 'supplementary', label: 'Supplementary', icon: 'fa-redo' },
     { id: 'classes', label: 'Classes', icon: 'fa-chalkboard' },
     { id: 'settings', label: 'Settings', icon: 'fa-cog' },
@@ -231,12 +228,6 @@ const Management: React.FC = () => {
               onRefresh={handleRefresh}
               onNavigate={setActiveTab}
             />
-          )}
-
-          {activeTab === 'student-feedback' && (
-            <Suspense fallback={<div className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading Feedback Management...</div>}>
-              <AdminFeedbackManagement />
-            </Suspense>
           )}
 
           {activeTab === 'recycle-bin' && (
