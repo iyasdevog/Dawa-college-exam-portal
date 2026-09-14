@@ -7,6 +7,7 @@ import { dataService } from '../../infrastructure/services/dataService';
 import { shortenSubjectName } from '../../infrastructure/services/formatUtils';
 import { getSubjectMaxMarks, getMarkForSubject } from '../../domain/utils/subjectUtils';
 import { useTerm } from '../viewmodels/TermContext';
+import AggregatedScorecard from './AggregatedScorecard';
 
 interface StudentScorecardProps {
     currentUser?: User | null;
@@ -153,14 +154,13 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     const [subjects, setSubjects] = useState<SubjectConfig[]>([]);
     const [classSubjects, setClassSubjects] = useState<SubjectConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [showAggregatedView, setShowAggregatedView] = useState(false);
     const { activeTerm, currentSemester, currentAcademicYear } = useTerm();
 
     // ── Bulk print state ──────────────────────────────────────────────────────
     const [bulkPrintStatus, setBulkPrintStatus] = useState<'idle' | 'preparing' | 'printing'>('idle');
     // Stable seed so Document IDs don't change on each re-render
     const printSeedRef = useRef(Date.now());
-
-
 
     const [isClassLoading, setIsClassLoading] = useState(false);
 
@@ -204,14 +204,23 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             const enriched = enrichStudentsWithSupps(cs, supps, activeTerm);
             setClassStudents(enriched);
             if (selectedStudent && !enriched.find(s => s.id === selectedStudent)) setSelectedStudent('');
-            const filteredSubjects = subsToUse.filter(s =>
-                s.targetClasses.includes(cls) ||
-                (s.subjectType === 'elective' && s.enrolledStudents?.some(id => enriched.some(c => c.id === id))) ||
-                enriched.some(csItem => {
-                    const termData = csItem.academicHistory?.[activeTerm];
-                    return getMarkForSubject(termData?.marks, s, termData?.subjectMetadata) !== undefined;
-                })
-            );
+
+            const lastHyphenIndex = activeTerm.lastIndexOf('-');
+            const targetYear = lastHyphenIndex !== -1 ? activeTerm.substring(0, lastHyphenIndex) : activeTerm;
+            const targetSem = lastHyphenIndex !== -1 ? activeTerm.substring(lastHyphenIndex + 1) : '';
+
+            const filteredSubjects = subsToUse.filter(s => {
+                const sYear = s.academicYear || '';
+                const isYearMatch = !targetYear || !sYear || sYear === 'All' || sYear === targetYear;
+                const isSemMatch = !targetSem || !s.activeSemester || s.activeSemester === 'Both' || s.activeSemester === targetSem;
+                const isClassMatch = s.targetClasses?.includes(cls) ||
+                    (s.subjectType === 'elective' && s.enrolledStudents?.some(id => enriched.some(c => c.id === id))) ||
+                    enriched.some(csItem => {
+                        const termData = csItem.academicHistory?.[activeTerm];
+                        return getMarkForSubject(termData?.marks, s, termData?.subjectMetadata) !== undefined;
+                    });
+                return isYearMatch && isSemMatch && isClassMatch;
+            });
             setClassSubjects(filteredSubjects);
         } catch (error) {
             console.error('Error loading class data:', error);
@@ -389,9 +398,34 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                         <h1 className="text-3xl font-black text-slate-900 tracking-tight">Student Scorecard</h1>
                         <p className="text-slate-500 mt-1 text-sm">Individual performance analysis &amp; official transcript</p>
                     </div>
-                    <div className="flex gap-3 flex-wrap">
+
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {/* Scorecard Mode Toggle */}
+                        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+                            <button
+                                onClick={() => setShowAggregatedView(false)}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                    !showAggregatedView
+                                        ? 'bg-white text-emerald-700 shadow-md font-black border border-slate-200'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                📄 Current Semester ({activeTerm})
+                            </button>
+                            <button
+                                onClick={() => setShowAggregatedView(true)}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                    showAggregatedView
+                                        ? 'bg-white text-emerald-700 shadow-md font-black border border-slate-200'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                📊 Aggregate (All Semesters)
+                            </button>
+                        </div>
+
                         {/* Bulk Print Button */}
-                        {classStudents.length > 0 && (
+                        {classStudents.length > 0 && !showAggregatedView && (
                             <button
                                 onClick={handlePrintAll}
                                 disabled={isBulkActive}
@@ -431,76 +465,86 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                     </div>
                 </div>
 
-                {/* Selection Controls */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 print:hidden">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
-                            <select
-                                value={selectedClass}
-                                onChange={e => handleClassChange(e.target.value)}
-                                className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 font-medium text-slate-800"
-                                aria-label="Select class"
-                            >
-                                {allowedClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Select Student</label>
-                            <select
-                                value={selectedStudent}
-                                onChange={e => setSelectedStudent(e.target.value)}
-                                className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 font-medium text-slate-800"
-                                aria-label="Select student"
-                                disabled={isClassLoading}
-                            >
-                                <option value="">Choose a student</option>
-                                {classStudents.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name} (Adm: {s.adNo})</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                    {isClassLoading ? (
-                        <div className="mt-4 p-4 text-center">
-                            <div className="loader-ring mx-auto mb-2"></div>
-                            <p className="text-xs text-slate-500">Loading {selectedClass} students...</p>
-                        </div>
-                    ) : classStudents.length === 0 && (
-                        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700">
-                            <i className="fa-solid fa-triangle-exclamation"></i>
-                            <span className="font-medium">No students found in class {selectedClass}</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* Scorecard or placeholder */}
-                {isClassLoading ? (
-                    <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
-                        <div className="loader-ring mx-auto mb-3"></div>
-                        <p className="text-slate-600 font-medium">Loading {selectedClass} scorecard data...</p>
-                    </div>
-                ) : selectedStudentData ? (
-                    <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 print:animate-none">
-                        <ScorecardPrintable
-                            student={selectedStudentData}
-                            activeTerm={activeTerm}
-                            classSubjects={classSubjects}
-                            branding={branding}
-                            currentAcademicYear={currentAcademicYear}
-                            currentSemester={currentSemester}
-                            calculatedRank={displayRank}
-                            seed={printSeedRef.current}
-                        />
-                    </div>
+                {showAggregatedView && selectedStudentData ? (
+                    <AggregatedScorecard
+                        student={selectedStudentData}
+                        allSubjects={subjects}
+                        onClose={() => setShowAggregatedView(false)}
+                    />
                 ) : (
-                    <div className="bg-white rounded-3xl p-16 shadow-sm border border-slate-200 text-center">
-                        <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                            <i className="fa-solid fa-user-graduate text-3xl text-slate-400"></i>
+                    <>
+                        {/* Selection Controls */}
+                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 print:hidden">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">Select Class</label>
+                                    <select
+                                        value={selectedClass}
+                                        onChange={e => handleClassChange(e.target.value)}
+                                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 font-medium text-slate-800"
+                                        aria-label="Select class"
+                                    >
+                                        {allowedClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">Select Student</label>
+                                    <select
+                                        value={selectedStudent}
+                                        onChange={e => setSelectedStudent(e.target.value)}
+                                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-50 font-medium text-slate-800"
+                                        aria-label="Select student"
+                                        disabled={isClassLoading}
+                                    >
+                                        <option value="">Choose a student</option>
+                                        {classStudents.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name} (Adm: {s.adNo})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            {isClassLoading ? (
+                                <div className="mt-4 p-4 text-center">
+                                    <div className="loader-ring mx-auto mb-2"></div>
+                                    <p className="text-xs text-slate-500">Loading {selectedClass} students...</p>
+                                </div>
+                            ) : classStudents.length === 0 && (
+                                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700">
+                                    <i className="fa-solid fa-triangle-exclamation"></i>
+                                    <span className="font-medium">No students found in class {selectedClass}</span>
+                                </div>
+                            )}
                         </div>
-                        <h3 className="text-xl font-black text-slate-900 mb-2">Select a Student</h3>
-                        <p className="text-slate-500 text-sm">Choose a class and student above to view their official scorecard</p>
-                    </div>
+
+                        {/* Scorecard or placeholder */}
+                        {isClassLoading ? (
+                            <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
+                                <div className="loader-ring mx-auto mb-3"></div>
+                                <p className="text-slate-600 font-medium">Loading {selectedClass} scorecard data...</p>
+                            </div>
+                        ) : selectedStudentData ? (
+                            <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 print:animate-none">
+                                <ScorecardPrintable
+                                    student={selectedStudentData}
+                                    activeTerm={activeTerm}
+                                    classSubjects={classSubjects}
+                                    branding={branding}
+                                    currentAcademicYear={currentAcademicYear}
+                                    currentSemester={currentSemester}
+                                    calculatedRank={displayRank}
+                                    seed={printSeedRef.current}
+                                />
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-3xl p-16 shadow-sm border border-slate-200 text-center">
+                                <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <i className="fa-solid fa-user-graduate text-3xl text-slate-400"></i>
+                                </div>
+                                <h3 className="text-xl font-black text-slate-900 mb-2">Select a Student</h3>
+                                <p className="text-slate-500 text-sm">Choose a class and student above to view their official scorecard</p>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

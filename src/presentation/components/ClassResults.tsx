@@ -666,7 +666,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                     <span className="text-[10px] text-indigo-500 uppercase font-bold">Elective</span>
                                                                 </div>
                                                                 {electiveMark ? (
-                                                                    <span className={`text-sm font-black ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-indigo-900'}`}>{electiveMark.total}</span>
+                                                                    <div className="text-right">
+                                                                        <span className={`text-sm font-black ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-indigo-900'}`}>{electiveMark.total}</span>
+                                                                        <div className="text-[10px] text-slate-400 font-medium">
+                                                                            {(electiveMark.ext === 'A' ? 'A' : (electiveMark.ext ?? '-'))}+{(electiveMark.int === 'A' ? 'A' : (electiveMark.int ?? '-'))}
+                                                                        </div>
+                                                                    </div>
                                                                 ) : <span className="text-xs text-slate-400">-</span>}
                                                             </div>
                                                         )}
@@ -739,7 +744,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                     {electiveMark ? (
                                                                         <div>
                                                                             <div className={`font-bold ${isMobile ? 'text-sm' : 'text-base'} print:text-[10px] ${electiveMark.status === 'Failed' ? 'text-red-600' : 'text-slate-900'}`}>{electiveMark.total}</div>
-                                                                            <div className="text-[10px] text-indigo-600 font-bold truncate max-w-[120px] mx-auto" title={electiveName}>
+                                                                            {!isMobile && (
+                                                                                <div className="text-[10px] text-slate-400 print:hidden font-medium">
+                                                                                    {(electiveMark.ext === 'A' ? 'A' : (electiveMark.ext ?? '-'))}+{(electiveMark.int === 'A' ? 'A' : (electiveMark.int ?? '-'))}
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="text-[10px] text-indigo-600 font-bold truncate max-w-[120px] mx-auto mt-0.5" title={electiveName}>
                                                                                 {shortenSubjectName(electiveName)}
                                                                             </div>
                                                                         </div>
