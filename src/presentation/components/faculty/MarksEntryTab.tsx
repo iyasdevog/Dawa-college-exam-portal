@@ -246,7 +246,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
         <>
             {/* Historical Term Banner - Locked */}
             {isHistoricalTerm && !isMarksEntryAllowed && (
-                <div className="flex items-start gap-4 bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0">
+                <div className="flex items-start gap-4 bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0 print:hidden">
                     <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mt-0.5">
                         <i className="fa-solid fa-clock-rotate-left text-amber-600 text-lg"></i>
                     </div>
@@ -261,7 +261,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 
             {/* Historical Term Banner - Unlocked */}
             {isHistoricalTerm && isMarksEntryAllowed && (
-                <div className="flex items-start gap-4 bg-emerald-50 border border-emerald-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0">
+                <div className="flex items-start gap-4 bg-emerald-50 border border-emerald-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0 print:hidden">
                     <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center mt-0.5">
                         <i className="fa-solid fa-lock-open text-emerald-600 text-lg"></i>
                     </div>
@@ -276,7 +276,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 
             {/* Upcoming / Inactive Term Banner */}
             {!isHistoricalTerm && !isMarksEntryAllowed && (
-                <div className="flex items-start gap-4 bg-blue-50 border border-blue-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0">
+                <div className="flex items-start gap-4 bg-blue-50 border border-blue-300 rounded-2xl px-5 py-4 shadow-sm mb-6 mx-6 md:mx-0 print:hidden">
                     <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mt-0.5">
                         <i className="fa-solid fa-calendar-minus text-blue-600 text-lg"></i>
                     </div>
@@ -344,7 +344,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                     </div>
                 </div>
 
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3 print:hidden">
                     <i className="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
                     <div className="text-sm text-blue-800">
                         <p className="font-bold mb-1 underline">Marks Entry Tip:</p>
@@ -636,15 +636,15 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
 
             {/* Printable Mark Entry Sheet (Visible only during browser window.print()) */}
             {selectedSubjectData && students.length > 0 && (
-                <div className="hidden print:block p-6 bg-white text-black font-sans text-xs">
+                <div className="hidden print:block p-0 m-0 w-full bg-white text-black font-sans text-xs">
                     {/* Header Banner */}
-                    <div className="text-center border-b-2 border-black pb-4 mb-4">
-                        <h1 className="text-2xl font-black uppercase tracking-wider text-black">AIC DA'WA COLLEGE EXAM PORTAL</h1>
-                        <h2 className="text-sm font-bold uppercase tracking-widest text-black mt-1">OFFICIAL MARK ENTRY SHEET / REGISTER</h2>
+                    <div className="text-center border-b-2 border-black pb-3 mb-3 print:break-inside-avoid">
+                        <h1 className="text-xl font-black uppercase tracking-wider text-black">AIC DA'WA COLLEGE EXAM PORTAL</h1>
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-black mt-0.5">OFFICIAL MARK ENTRY SHEET / REGISTER</h2>
                     </div>
 
                     {/* Info / Metadata Grid */}
-                    <div className="grid grid-cols-3 gap-2 border border-black p-3 mb-4 text-xs bg-white">
+                    <div className="grid grid-cols-3 gap-y-1.5 gap-x-4 border border-black p-2.5 mb-3 text-[11px] bg-white print:break-inside-avoid">
                         <div><strong>Class:</strong> {selectedClass}</div>
                         <div><strong>Subject:</strong> {selectedSubjectData.name} {selectedSubjectData.arabicName ? `(${selectedSubjectData.arabicName})` : ''}</div>
                         <div><strong>Term:</strong> {activeTerm}</div>
@@ -653,21 +653,21 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                         <div><strong>Max INT:</strong> {selectedSubjectData.maxINT} (Min: {Math.ceil(selectedSubjectData.maxINT * 0.5)})</div>
                         <div><strong>Total Students:</strong> {students.length}</div>
                         <div><strong>Passing Rule:</strong> INT &ge; 50% &amp; EXT &ge; 40%</div>
-                        <div><strong>Date Generated:</strong> {new Date().toLocaleDateString()}</div>
+                        <div><strong>Date Generated:</strong> {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                     </div>
 
                     {/* Student Marks Table - Preserves exact list and order as in Mark Entry */}
-                    <table className="w-full border-collapse border border-black text-xs">
-                        <thead>
-                            <tr className="border-b-2 border-black font-bold text-center bg-white">
-                                <th className="border border-black p-1.5 w-10">Sl No</th>
-                                <th className="border border-black p-1.5 w-24">Adm No</th>
-                                <th className="border border-black p-1.5 text-left">Student Name</th>
-                                <th className="border border-black p-1.5 w-20">EXT ({selectedSubjectData.maxEXT})</th>
-                                <th className="border border-black p-1.5 w-20">INT ({selectedSubjectData.maxINT})</th>
-                                <th className="border border-black p-1.5 w-16">Total</th>
-                                <th className="border border-black p-1.5 w-20">Status</th>
-                                <th className="border border-black p-1.5 w-28">Signature</th>
+                    <table className="w-full border-collapse border border-black text-xs print:text-[10px]">
+                        <thead className="print:table-header-group">
+                            <tr className="border-b-2 border-black font-bold text-center bg-slate-100 print:bg-white text-[11px] print:break-inside-avoid">
+                                <th className="border border-black p-1 w-10 text-center">Sl No</th>
+                                <th className="border border-black p-1 w-20 text-center">Adm No</th>
+                                <th className="border border-black p-1 text-left">Student Name</th>
+                                <th className="border border-black p-1 w-20 text-center">EXT ({selectedSubjectData.maxEXT})</th>
+                                <th className="border border-black p-1 w-20 text-center">INT ({selectedSubjectData.maxINT})</th>
+                                <th className="border border-black p-1 w-16 text-center">Total</th>
+                                <th className="border border-black p-1 w-20 text-center">Status</th>
+                                <th className="border border-black p-1 w-28 text-center">Signature</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -677,7 +677,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                                 const status = validationHelpers?.getStatus(studentMarks.int, studentMarks.ext) || 'Pending';
 
                                 return (
-                                    <tr key={student.id} className="border-b border-black text-center">
+                                    <tr key={student.id} className="border-b border-black text-center print:break-inside-avoid">
                                         <td className="border border-black p-1 font-mono">{idx + 1}</td>
                                         <td className="border border-black p-1 font-mono font-semibold">{student.adNo}</td>
                                         <td className="border border-black p-1 text-left font-medium">{student.name}</td>
@@ -693,7 +693,7 @@ const MarksEntryTab: React.FC<MarksEntryTabProps> = ({
                     </table>
 
                     {/* Footer Signatures */}
-                    <div className="mt-12 flex justify-between items-end text-xs pt-6">
+                    <div className="mt-8 flex justify-between items-end text-xs pt-4 print:break-inside-avoid">
                         <div className="text-center w-48 border-t border-black pt-1">
                             <p className="font-bold">Faculty Signature</p>
                             <p className="text-[10px]">({selectedSubjectData.facultyName || 'Subject Teacher'})</p>

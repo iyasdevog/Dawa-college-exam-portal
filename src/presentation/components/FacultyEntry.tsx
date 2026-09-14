@@ -212,8 +212,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-20">
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 shadow-sm">
+        <div className="min-h-screen bg-slate-50 pb-20 print:min-h-0 print:bg-white print:p-0 print:pb-0 print:m-0">
+            <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 shadow-sm print:hidden">
                 <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
                     <div className="flex items-center gap-3 sm:gap-4">
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-600 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 shrink-0">
@@ -230,8 +230,8 @@ const FacultyEntry: React.FC<FacultyEntryProps> = ({ currentUser }) => {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto mt-4 sm:mt-8 px-4 sm:px-6">
-                <nav className="flex items-center gap-1 sm:gap-2 mb-6 sm:mb-8 bg-white p-1.5 sm:p-2 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto no-scrollbar">
+            <main className="max-w-7xl mx-auto mt-4 sm:mt-8 px-4 sm:px-6 print:m-0 print:mt-0 print:p-0 print:max-w-none print:w-full">
+                <nav className="flex items-center gap-1 sm:gap-2 mb-6 sm:mb-8 bg-white p-1.5 sm:p-2 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto no-scrollbar print:hidden">
                     <button
                         onClick={() => setActiveTab('marks-entry')}
                         className={`shrink-0 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center ${activeTab === 'marks-entry' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-600 hover:bg-slate-50'}`}
