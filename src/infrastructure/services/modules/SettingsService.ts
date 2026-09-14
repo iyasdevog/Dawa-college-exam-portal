@@ -107,41 +107,39 @@ export class SettingsService extends BaseDataService {
             const settings = await this.getGlobalSettings();
             BaseDataService.updateStaticSettings(settings);
 
-            const terms = new Set<string>();
-            
-            // Standard years: always include 2025-2026 and 2026-2027 by default
-            terms.add('2025-2026');
-            terms.add('2026-2027');
-            
+            const years = new Set<string>();
+            years.add('2025-2026');
+            years.add('2026-2027');
+
             if (settings.currentAcademicYear) {
-                terms.add(settings.currentAcademicYear);
+                years.add(settings.currentAcademicYear);
             }
             if (settings.availableYears) {
-                settings.availableYears.forEach(y => terms.add(y));
+                settings.availableYears.forEach(y => years.add(y));
             }
+
+            const fullTerms = new Set<string>();
+            years.forEach(y => {
+                fullTerms.add(`${y}-Odd`);
+                fullTerms.add(`${y}-Even`);
+            });
 
             // Discover from student academic history
             const students = await this.studentService.getAllStudents('All');
             students.forEach(s => {
                 if (s.academicHistory) {
                     Object.keys(s.academicHistory).forEach(tk => {
-                        const lastHyphenIndex = tk.lastIndexOf('-');
-                        if (tk.endsWith('-Odd') || tk.endsWith('-Even') || tk.endsWith('-Bridge')) {
-                            const year = tk.substring(0, lastHyphenIndex);
-                            if (year.match(/^\d{4}(?:-\d{4})?$/)) {
-                                terms.add(year);
-                            }
-                        } else if (tk.match(/^\d{4}(?:-\d{4})?$/)) {
-                            terms.add(tk);
+                        if (tk && tk.trim()) {
+                            fullTerms.add(tk.trim());
                         }
                     });
                 }
             });
 
-            return Array.from(terms).sort((a, b) => b.localeCompare(a));
+            return Array.from(fullTerms).sort((a, b) => b.localeCompare(a));
         } catch (error) {
             console.error('Error getting available terms:', error);
-            return ['2026-2027', '2025-2026'];
+            return ['2026-2027-Even', '2026-2027-Odd', '2025-2026-Even', '2025-2026-Odd'];
         }
     }
 

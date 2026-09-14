@@ -5,7 +5,6 @@ import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { normalizeName, shortenSubjectName } from '../../../infrastructure/services/formatUtils';
 import { SubjectDetailsModal } from './SubjectDetailsModal';
-import type { SubjectDetails } from '../../../domain/entities/types';
 
 interface SubjectManagementProps {
     subjects: SubjectConfig[];

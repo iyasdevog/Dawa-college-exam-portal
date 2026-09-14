@@ -232,82 +232,43 @@ export class AdministrativeService extends BaseDataService {
             const disabled = settings?.disabledClasses || [];
             const custom = settings?.customClasses || [];
 
-            const activeClassesSet = new Set<string>();
+            // Baseline: always include SYSTEM_CLASSES and custom classes that are not disabled
+            SYSTEM_CLASSES.forEach(c => {
+                if (!disabled.includes(c)) activeClassesSet.add(c);
+            });
+            custom.forEach(c => {
+                if (!disabled.includes(c)) activeClassesSet.add(c);
+            });
 
-            // 1. Discover from Student Academic History (primary source of truth)
+            // Discover additional classes from Student Academic History & currentClass
             const studentsSnap = await getDocs(collection(this.db, this.studentsCollection));
             studentsSnap.docs.forEach(docSnap => {
                 const s = docSnap.data() as StudentRecord;
                 if (!s || s.isDeleted) return;
 
-                if (requestedTermKey === 'All') {
-                    if (s.currentClass) activeClassesSet.add(s.currentClass.trim());
-                    if (s.academicHistory) {
-                        Object.values(s.academicHistory).forEach(h => {
-                            if (h?.className) activeClassesSet.add(h.className.trim());
-                        });
-                    }
-                } else {
-                    // Check history for any matching term key variant
-                    let termClass: string | undefined;
-                    if (s.academicHistory) {
-                        const matchingKey = Object.keys(s.academicHistory).find(tk =>
-                            tk === requestedTermKey ||
-                            tk.replace(/^2025-/, '2025-2026-') === requestedTermKey.replace(/^2025-/, '2025-2026-')
-                        );
-                        termClass = matchingKey ? s.academicHistory[matchingKey]?.className : undefined;
-                    }
-
-                    if (termClass) {
-                        activeClassesSet.add(termClass.trim());
-                    } else if (requestedTermKey === currentTermKey && s.isActive !== false) {
-                        const cls = s.currentClass || s.className;
-                        if (cls) activeClassesSet.add(cls.trim());
-                    }
+                if (s.currentClass && !disabled.includes(s.currentClass.trim())) {
+                    activeClassesSet.add(s.currentClass.trim());
+                }
+                if (s.academicHistory) {
+                    Object.values(s.academicHistory).forEach(h => {
+                        if (h?.className && !disabled.includes(h.className.trim())) {
+                            activeClassesSet.add(h.className.trim());
+                        }
+                    });
                 }
             });
 
-            // 2. Only use subject-based class discovery if student history yielded NO classes.
-            // IMPORTANT: Subjects use academicYear='All' and contain targetClasses from ALL semesters
-            // (e.g. both 'S1','P1' old names and 'FS1','HS1' new names). Using subject targetClasses
-            // when student history exists contaminates the class list with wrong-semester class names.
-            if (activeClassesSet.size === 0) {
-                const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
-                const parts = requestedTermKey.split('-');
-                const targetSem = parts.pop();
-                const targetYear = parts.join('-');
-
-                subjectsSnap.docs.forEach(docSnap => {
-                    const s = docSnap.data() as SubjectConfig;
-                    if (!s || s.isDeleted || !s.targetClasses) return;
-                    const sYear = s.academicYear || '';
-                    const isYearMatch = requestedTermKey === 'All' || !targetYear || !sYear || sYear === 'All' || sYear === targetYear;
-                    const isSemMatch = requestedTermKey === 'All' || !s.activeSemester || s.activeSemester === 'Both' || s.activeSemester === targetSem;
-                    
-                    if (isYearMatch && isSemMatch) {
-                        s.targetClasses.forEach(cls => { 
-                            if (cls && cls !== '-') {
-                                activeClassesSet.add(cls.trim());
-                            } 
-                        });
-                    }
-                });
-            }
-
-            // 3. Seed baseline system/custom classes ONLY if still no classes were discovered
-            if (activeClassesSet.size === 0) {
-                SYSTEM_CLASSES.forEach(c => {
-                    if (!disabled.includes(c)) activeClassesSet.add(c);
-                });
-                custom.forEach(c => {
-                    if (!disabled.includes(c)) activeClassesSet.add(c);
-                });
-            }
-
-            // 4. Filter empty/invalid entries and sort
+            // Filter out invalid/disabled entries and sort with standard system class order
             const result = Array.from(activeClassesSet)
-                .filter(c => c && c !== '-' && (requestedTermKey !== currentTermKey || !disabled.includes(c)))
-                .sort();
+                .filter(c => c && c !== '-' && !disabled.includes(c))
+                .sort((a, b) => {
+                    const idxA = SYSTEM_CLASSES.indexOf(a);
+                    const idxB = SYSTEM_CLASSES.indexOf(b);
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return a.localeCompare(b);
+                });
 
             return result.length > 0 ? result : SYSTEM_CLASSES.filter(c => !disabled.includes(c));
         } catch (error) {
