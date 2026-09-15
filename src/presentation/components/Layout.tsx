@@ -6,6 +6,7 @@ import type { User } from '../../domain/entities/User';
 import { useMobile, useMobileNavigation } from '../hooks/useMobile';
 import { TermSelector } from './TermSelector';
 import BottomNavigationBar from './BottomNavigationBar';
+import { useTerm } from '../viewmodels/TermContext';
 
 import { versionService } from '../../infrastructure/services/versionService';
 
@@ -21,6 +22,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout, isCloudActive = true, currentUser }) => {
   const { isMobile, isTablet } = useMobile();
   const { isMobileMenuOpen } = useMobileNavigation();
+  const { globalSettings } = useTerm();
   const [branding, setBranding] = React.useState<any>(null);
 
   React.useEffect(() => {
@@ -34,6 +36,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
   const isAdmin = currentUser?.role === 'admin';
   const isGenericTeacher = currentUser?.id === 'teacher-001' || currentUser?.name === 'Faculty Member' || currentUser?.username === 'faculty' || currentUser?.username === 'faculty123' || currentUser?.username === 'teacher';
   const isSpecificTeacher = (currentUser?.role === 'teacher' || currentUser?.role === 'faculty') && !isGenericTeacher;
+  const hideFeedbackTab = globalSettings?.hideFeedbackTab ?? true;
 
   const navItems = [
     { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
@@ -43,7 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onLogout
     { id: 'class-report', icon: 'fa-table', label: 'Class Report' },
     { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards' },
     ...(isAdmin ? [
-      { id: 'teacher-feedback', icon: 'fa-comments', label: 'Feedback Review' },
+      ...(!hideFeedbackTab ? [{ id: 'teacher-feedback', icon: 'fa-comments', label: 'Feedback Review' }] : []),
       { id: 'applications', icon: 'fa-file-signature', label: 'Applications' },
       { id: 'management', icon: 'fa-sliders', label: 'Management' }
     ] : []),

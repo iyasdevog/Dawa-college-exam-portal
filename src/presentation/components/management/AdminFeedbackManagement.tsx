@@ -15,6 +15,7 @@ export const AdminFeedbackManagement: React.FC = () => {
     const [filterTeacher, setFilterTeacher] = useState<string>('All');
     const [filterAnonymity, setFilterAnonymity] = useState<'All' | 'Anonymous' | 'Named'>('All');
     const [searchKeyword, setSearchKeyword] = useState<string>('');
+    const [isClassCountsExpanded, setIsClassCountsExpanded] = useState<boolean>(false);
 
     // Teacher account modal / form
     const [showTeacherModal, setShowTeacherModal] = useState<boolean>(false);
@@ -226,28 +227,45 @@ export const AdminFeedbackManagement: React.FC = () => {
             {/* TAB 1: FEEDBACK REPORTS */}
             {activeTab === 'feedback' && (
                 <div className="space-y-6">
-                    {/* Class-wise Received Feedback Counts Summary */}
+                    {/* Class-wise Received Feedback Counts Summary – Collapsible & Compact */}
                     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsClassCountsExpanded(!isClassCountsExpanded)}
+                            className="w-full flex items-center justify-between text-left focus:outline-none group"
+                        >
+                            <div className="flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                Class-Wise Received Feedback Counts
-                            </span>
-                            <span className="text-xs text-emerald-400 font-bold">Total: {feedbacks.length} Entries</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2.5">
-                            {SYSTEM_CLASSES.map(cls => {
-                                const count = classCounts[cls] || 0;
-                                return (
-                                    <div key={cls} className="bg-slate-800/90 border border-slate-700/80 rounded-2xl px-3.5 py-2 flex items-center gap-2">
-                                        <span className="text-xs font-bold text-slate-300">{cls}:</span>
-                                        <span className={`px-2 py-0.5 text-xs font-black rounded-lg ${count > 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-500'}`}>
-                                            {count}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">
+                                    Class-Wise Received Feedback Counts
+                                </span>
+                                <span className="px-2.5 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-black rounded-full">
+                                    Total: {feedbacks.length} Entries
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">
+                                <span>{isClassCountsExpanded ? 'Hide' : 'Show'} ({SYSTEM_CLASSES.length})</span>
+                                <svg className={`w-3.5 h-3.5 transform transition-transform duration-200 ${isClassCountsExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </button>
+
+                        {isClassCountsExpanded && (
+                            <div className="mt-3 flex flex-wrap gap-2 animate-fadeIn">
+                                {SYSTEM_CLASSES.map(cls => {
+                                    const count = classCounts[cls] || 0;
+                                    return (
+                                        <div key={cls} className="bg-slate-800/90 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs">
+                                            <span className="font-bold text-slate-300">{cls}:</span>
+                                            <span className={`px-2 py-0.5 text-xs font-black rounded-md ${count > 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-500'}`}>
+                                                {count}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
 
                     {/* Filters Bar */}

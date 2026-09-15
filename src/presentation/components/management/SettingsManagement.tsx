@@ -91,6 +91,7 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
     const [allowedAttendanceTerms, setAllowedAttendanceTerms] = useState<string[]>([]);
     const [allowedMarksTerms, setAllowedMarksTerms] = useState<string[]>([]);
     const [customUpcomingTermInput, setCustomUpcomingTermInput] = useState<string>('');
+    const [hideFeedbackTab, setHideFeedbackTab] = useState<boolean>(true);
 
     const termList = React.useMemo(() => {
         const years = availableYears.length > 0 ? availableYears : [editableYear || '2026-2027'];
@@ -188,6 +189,8 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
             setAllowedMarksTerms(settings.allowedMarksTerms && settings.allowedMarksTerms.length > 0 
                 ? settings.allowedMarksTerms 
                 : [marksTerm]);
+
+            setHideFeedbackTab(settings.hideFeedbackTab ?? true);
         };
 
         const loadSummaries = async () => {
@@ -290,6 +293,25 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
         } catch (error) {
             console.error('Error saving attendance settings:', error);
             alert('Failed to save settings');
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
+    const handleToggleFeedbackTab = async () => {
+        try {
+            setIsOperating(true);
+            const nextValue = !hideFeedbackTab;
+            await dataService.updateGlobalSettings({ hideFeedbackTab: nextValue });
+            setHideFeedbackTab(nextValue);
+            setCurrentSettings((prev: any) => ({ ...prev, hideFeedbackTab: nextValue }));
+            dataService.invalidateCache();
+            await refreshTerms();
+            if (onRefresh) await onRefresh();
+            alert(`✅ Feedback Review tab is now ${nextValue ? 'HIDDEN' : 'VISIBLE'} for Admin portal.`);
+        } catch (error) {
+            console.error('Error toggling feedback tab:', error);
+            alert('Failed to update feedback tab visibility setting.');
         } finally {
             setIsOperating(false);
         }
@@ -844,6 +866,41 @@ const SettingsManagement: React.FC<SettingsManagementProps> = ({ onRefresh, onNa
                         >
                             <i className="fa-solid fa-save mr-2"></i>
                             Save Branding & Settings
+                        </button>
+                    </div>
+                </div>
+
+                {/* Feedback Review Visibility Toggle Card */}
+                <div className="bg-white p-6 rounded-xl border-2 border-indigo-100 shadow-sm md:col-span-2">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-start sm:items-center gap-3">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${hideFeedbackTab ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                <i className={`fa-solid ${hideFeedbackTab ? 'fa-eye-slash' : 'fa-comments'} text-xl`}></i>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-lg text-slate-800 leading-tight">Admin Feedback Review Tab</h3>
+                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${hideFeedbackTab ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
+                                        {hideFeedbackTab ? 'Currently Hidden' : 'Currently Visible'}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                    Toggle whether the "Feedback Review" tab is visible to system administrators in the main portal navigation menu.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleToggleFeedbackTab}
+                            disabled={isOperating}
+                            className={`px-5 py-3.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 shadow-md ${
+                                hideFeedbackTab
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'
+                                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200'
+                            }`}
+                        >
+                            <i className={`fa-solid ${hideFeedbackTab ? 'fa-eye' : 'fa-eye-slash'}`}></i>
+                            <span>{hideFeedbackTab ? 'Unhide Feedback Review Tab' : 'Hide Feedback Review Tab'}</span>
                         </button>
                     </div>
                 </div>

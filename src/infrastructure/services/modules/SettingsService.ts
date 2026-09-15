@@ -66,7 +66,8 @@ export class SettingsService extends BaseDataService {
                         activeAttendanceTerm: data.activeAttendanceTerm,
                         allowedAttendanceTerms: data.allowedAttendanceTerms,
                         activeMarksTerm: data.activeMarksTerm,
-                        allowedMarksTerms: data.allowedMarksTerms
+                        allowedMarksTerms: data.allowedMarksTerms,
+                        hideFeedbackTab: data.hideFeedbackTab !== undefined ? data.hideFeedbackTab : true
                     };
                     this.setStorageCachedData('global_settings', BaseDataService.currentGlobalSettings);
                     return BaseDataService.currentGlobalSettings;
@@ -74,7 +75,8 @@ export class SettingsService extends BaseDataService {
                 const defaultSettings: GlobalSettings = {
                     currentAcademicYear: this.DEFAULT_ACADEMIC_YEAR,
                     currentSemester: this.DEFAULT_SEMESTER,
-                    availableYears: ['2025-2026']
+                    availableYears: ['2025-2026'],
+                    hideFeedbackTab: true
                 };
                 BaseDataService.currentGlobalSettings = defaultSettings;
                 return defaultSettings;

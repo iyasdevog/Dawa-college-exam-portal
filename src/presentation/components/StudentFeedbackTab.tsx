@@ -46,6 +46,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
     const [formError, setFormError] = useState<string>('');
+    const [isClassCountsExpanded, setIsClassCountsExpanded] = useState<boolean>(false);
 
     // Convert term key (e.g. "2025-2026-Even") to display format ("2025-2026 Even")
     const termKeyToDisplay = (termKey: string): string => {
@@ -300,27 +301,45 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                     </div>
                 </div>
 
-                {/* Class-wise Received Feedback Counts – uses dynamic classList */}
+                {/* Class-wise Received Feedback Counts – Collapsible & Compact */}
                 <div className="mt-6 pt-6 border-t border-slate-800">
-                    <div className="flex items-center gap-2 mb-3">
-                        <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                        <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Class-Wise Received Feedback Counts</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {classList.map(cls => {
-                            const count = classCounts[cls] || 0;
-                            return (
-                                <div key={cls} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs">
-                                    <span className="font-semibold text-slate-300">{cls}:</span>
-                                    <span className={`font-black px-2 py-0.5 rounded-md ${count > 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'}`}>
-                                        {count} {count === 1 ? 'response' : 'responses'}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsClassCountsExpanded(!isClassCountsExpanded)}
+                        className="w-full flex items-center justify-between text-left focus:outline-none group"
+                    >
+                        <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Class-Wise Feedback Counts</span>
+                            <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-black rounded-full">
+                                {Object.values(classCounts).reduce((a, b) => a + b, 0)} total
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">
+                            <span>{isClassCountsExpanded ? 'Hide' : 'Show'} ({classList.length})</span>
+                            <svg className={`w-3.5 h-3.5 transform transition-transform duration-200 ${isClassCountsExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </button>
+
+                    {isClassCountsExpanded && (
+                        <div className="mt-3 flex flex-wrap gap-1.5 animate-fadeIn">
+                            {classList.map(cls => {
+                                const count = classCounts[cls] || 0;
+                                return (
+                                    <div key={cls} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-lg text-[11px]">
+                                        <span className="font-semibold text-slate-300">{cls}:</span>
+                                        <span className={`font-black px-1.5 py-0.2 rounded ${count > 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700/60 text-slate-400'}`}>
+                                            {count}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 

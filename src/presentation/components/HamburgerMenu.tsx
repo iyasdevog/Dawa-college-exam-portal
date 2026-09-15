@@ -5,6 +5,7 @@ import type { User } from '../../domain/entities/User';
 import { useMobileNavigation, useTouchInteraction } from '../hooks/useMobile';
 import { keyboardNavigation, screenReaderAnnouncer, ariaHelpers } from '../utils/accessibility';
 import { versionService } from '../../infrastructure/services/versionService';
+import { useTerm } from '../viewmodels/TermContext';
 
 interface HamburgerMenuProps {
     activeView: ViewType;
@@ -35,6 +36,8 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         shouldShowMobileMenu
     } = useMobileNavigation();
 
+    const { globalSettings } = useTerm();
+    const hideFeedbackTab = globalSettings?.hideFeedbackTab ?? true;
     const { getTouchProps } = useTouchInteraction();
 
     const navItems: NavigationItem[] = [
@@ -44,6 +47,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         { id: 'class-report', icon: 'fa-table', label: 'Class Report', description: 'Generate class performance reports' },
         { id: 'student-card', icon: 'fa-id-card', label: 'Score Cards', description: 'View individual student scorecards' },
         ...(currentUser?.role === 'admin' ? [
+            ...(!hideFeedbackTab ? [{ id: 'teacher-feedback', icon: 'fa-comments', label: 'Feedback Review', description: 'Review student feedback for faculty' } as NavigationItem] : []),
             { id: 'applications', icon: 'fa-file-signature', label: 'Applications', description: 'Process student revaluation and supplementary requests' } as NavigationItem,
             { id: 'management', icon: 'fa-sliders', label: 'Management', description: 'System administration and settings' } as NavigationItem
         ] : []),

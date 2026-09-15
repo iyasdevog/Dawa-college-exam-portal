@@ -145,6 +145,7 @@ export interface GlobalSettings {
   allowedAttendanceTerms?: string[]; // Allowed term keys for attendance entry
   activeMarksTerm?: string; // Active term key allowed for marks entry (e.g. "2026-2027-Odd")
   allowedMarksTerms?: string[]; // Allowed term keys for marks entry
+  hideFeedbackTab?: boolean; // Controls whether Feedback Review tab is hidden for Admin
 }
 
 export interface CourseOutcome {
