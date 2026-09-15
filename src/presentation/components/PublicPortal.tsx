@@ -655,19 +655,21 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
                 )}
             </main>
 
-            {/* Application System Floating Button */}
-            <button 
-                onClick={() => setShowAppPortal(true)}
-                className="fixed bottom-8 right-8 z-[2000] bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black shadow-2xl shadow-emerald-600/40 hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 group"
-            >
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center group-hover:bg-white/30 transition-all">
-                    <i className="fa-solid fa-file-signature text-xl"></i>
-                </div>
-                <div className="text-left">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-70 leading-none mb-1">Apply for</p>
-                    <p className="text-sm leading-none">Revaluation & Supp</p>
-                </div>
-            </button>
+            {/* Application System Floating Button - Hidden when in Feedback tab */}
+            {subView !== 'feedback' && (
+                <button 
+                    onClick={() => setShowAppPortal(true)}
+                    className="fixed bottom-8 right-8 z-[2000] bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black shadow-2xl shadow-emerald-600/40 hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 group"
+                >
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center group-hover:bg-white/30 transition-all">
+                        <i className="fa-solid fa-file-signature text-xl"></i>
+                    </div>
+                    <div className="text-left">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-70 leading-none mb-1">Apply for</p>
+                        <p className="text-sm leading-none">Revaluation & Supp</p>
+                    </div>
+                </button>
+            )}
 
             {/* Application Portal Modal */}
             {showAppPortal && (
