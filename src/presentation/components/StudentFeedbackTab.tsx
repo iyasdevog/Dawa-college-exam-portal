@@ -128,7 +128,8 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
         setResponses(prev => {
             const current = prev[field] || '';
             if (current.includes(clueText)) return prev;
-            const updated = current ? `${current.trim()}; ${clueText}` : clueText;
+            const topicPrefix = `${clueText}: `;
+            const updated = current ? `${current.trim()}\n${topicPrefix}` : topicPrefix;
             return { ...prev, [field]: updated };
         });
     };
@@ -192,43 +193,43 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
         }
     };
 
-    // Evaluation categories with quick-tap suggestion chips
+    // Evaluation categories with neutral topic/aspect hints
     const evalCategories = [
         {
             key: 'teachingLearning' as const,
             title: 'Teaching & Explanation',
             icon: '📚',
-            chips: ['Clear explanations', 'Excellent subject knowledge', 'Good pace', 'Interactive classes', 'Encourages questions']
+            chips: ['Explanation clarity', 'Teaching pace & speed', 'Doubt clarification', 'Subject knowledge depth', 'Classroom interaction', 'Use of examples']
         },
         {
             key: 'spiritualMoral' as const,
             title: 'Spiritual & Moral Guidance',
             icon: '🕌',
-            chips: ['Inspires good character', 'Connects lessons to Islamic values', 'Moral role model', 'Spiritual encouragement']
+            chips: ['Moral guidance', 'Spiritual advice', 'Value integration', 'Role modeling & ethics']
         },
         {
             key: 'communication' as const,
             title: 'Communication & Approachability',
             icon: '💬',
-            chips: ['Speaks respectfully', 'Gives helpful feedback', 'Easy to approach', 'Explains expectations clearly']
+            chips: ['Tone & speech', 'Approachability', 'Feedback on performance', 'Listening to students']
         },
         {
             key: 'professionalConduct' as const,
             title: 'Punctuality & Fairness',
             icon: '⚖️',
-            chips: ['Punctual & regular', 'Fair to all students', 'Maintains discipline', 'Professional conduct']
+            chips: ['Punctuality & timing', 'Fairness & impartiality', 'Classroom discipline', 'Class regularity']
         },
         {
             key: 'studentDevelopment' as const,
             title: 'Student Support & Growth',
             icon: '🌱',
-            chips: ['Builds confidence', 'Encourages leadership', 'Supports struggling students', 'Motivates learning']
+            chips: ['Support for struggling students', 'Student motivation', 'Doubt encouragement', 'Individual guidance']
         },
         {
             key: 'residentialCommunity' as const,
             title: 'Campus & Hostel Interaction',
             icon: '🏠',
-            chips: ['Friendly outside class', 'Accessible in hostel', 'Cares for student well-being', 'Positive presence']
+            chips: ['Hostel availability', 'Campus interaction', 'Outside-class guidance', 'Student welfare care']
         }
     ];
 
@@ -471,15 +472,28 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                         </div>
                     </div>
 
-                    {/* Step 2: Key Evaluation Areas (Quick Tap Chips + Text) */}
+                    {/* Step 2: Key Evaluation Areas (Neutral Topics + Language Prompt) */}
                     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
                         <div className="border-b border-slate-800 pb-3">
                             <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                                <span>⭐</span> Evaluation Areas & Quick Feedback
+                                <span>⭐</span> Evaluation Areas & Detailed Feedback
                             </h2>
                             <p className="text-slate-400 text-xs mt-0.5">
-                                Tap any quick suggestion tag below or write your own observations.
+                                Tap topic hints to add structured headings or write your honest observations below.
                             </p>
+                        </div>
+
+                        {/* Malayalam Language Guidance Prompt */}
+                        <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-4 flex items-start gap-3">
+                            <span className="text-xl shrink-0">🗣️</span>
+                            <div className="text-xs space-y-1">
+                                <p className="font-bold text-emerald-300 text-sm">
+                                    അഭിപ്രായങ്ങൾ മലയാളത്തിലോ ഇംഗ്ലീഷിലോ എഴുതാവുന്നതാണ് (Write in Malayalam or English)
+                                </p>
+                                <p className="text-slate-300 leading-relaxed">
+                                    റെഡിമേഡ് positive ക്ലിക്കുകൾക്ക് പകരം നിങ്ങളുടെ സ്വന്തം അഭിപ്രായങ്ങൾ മലയാളത്തിലോ (Malayalam/Manglish) ഇംഗ്ലീഷിലോ ടൈപ്പ് ചെയ്യുക. ചർച്ചാവിഷയം തെരഞ്ഞെടുക്കാൻ താഴെയുള്ള Topic Hints (+) ടാപ്പ് ചെയ്യാവുന്നതാണ്.
+                                </p>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -508,29 +522,32 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                                             rows={2}
                                             value={responses[cat.key]}
                                             onChange={e => handleInputChange(cat.key, e.target.value)}
-                                            placeholder="Write feedback or tap quick tags below..."
+                                            placeholder="അഭിപ്രായം ഇവിടെ എഴുതുക (മലയാളത്തിലോ ഇംഗ്ലീഷിലോ)... Write feedback in Malayalam or English..."
                                             className="w-full bg-slate-900/90 border border-slate-700/90 rounded-xl p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed transition-all"
                                         />
 
-                                        {/* Quick Tap Chips */}
-                                        <div className="mt-2.5 flex flex-wrap gap-1">
-                                            {cat.chips.map((chip, idx) => {
-                                                const isAdded = (responses[cat.key] || '').includes(chip);
-                                                return (
-                                                    <button
-                                                        key={idx}
-                                                        type="button"
-                                                        onClick={() => handleAppendClue(cat.key, chip)}
-                                                        className={`px-2 py-1 text-[11px] rounded-lg transition-all active:scale-95 ${
-                                                            isAdded
-                                                                ? 'bg-emerald-500/30 border border-emerald-400 text-emerald-300 font-bold'
-                                                                : 'bg-slate-900 border border-slate-700/80 text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300'
-                                                        }`}
-                                                    >
-                                                        {chip} {isAdded ? '✓' : '+'}
-                                                    </button>
-                                                );
-                                            })}
+                                        {/* Neutral Topic Hints */}
+                                        <div className="mt-2.5 space-y-1">
+                                            <span className="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider">Tap topic to add heading:</span>
+                                            <div className="flex flex-wrap gap-1">
+                                                {cat.chips.map((chip, idx) => {
+                                                    const isAdded = (responses[cat.key] || '').includes(chip);
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => handleAppendClue(cat.key, chip)}
+                                                            className={`px-2 py-1 text-[11px] rounded-lg transition-all active:scale-95 ${
+                                                                isAdded
+                                                                    ? 'bg-emerald-500/30 border border-emerald-400 text-emerald-300 font-bold'
+                                                                    : 'bg-slate-900 border border-slate-700/80 text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300'
+                                                            }`}
+                                                        >
+                                                            {chip} {isAdded ? '✓' : '+'}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -544,7 +561,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                             <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                                 <span>📝</span> General Remarks & Recommendations <span className="text-xs text-slate-400 font-normal">(Optional)</span>
                             </h2>
-                            <p className="text-slate-400 text-xs mt-0.5">Share specific positive highlights or constructive suggestions for growth.</p>
+                            <p className="text-slate-400 text-xs mt-0.5">Share specific observations or constructive recommendations for growth (in Malayalam or English).</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -556,7 +573,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                                     rows={3}
                                     value={responses.strengths}
                                     onChange={e => handleInputChange('strengths', e.target.value)}
-                                    placeholder="What does this teacher do best? Describe strengths or positive experiences..."
+                                    placeholder="അധ്യാപകന്റെ പ്രധാന നേട്ടങ്ങളും നല്ല വശങ്ങളും (മലയാളത്തിലോ ഇംഗ്ലീഷിലോ)... Write strengths in Malayalam or English..."
                                     className="w-full bg-slate-900/90 border border-slate-700/90 rounded-xl p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed"
                                 />
                             </div>
@@ -569,7 +586,7 @@ export const StudentFeedbackTab: React.FC<StudentFeedbackTabProps> = ({
                                     rows={3}
                                     value={responses.improvements}
                                     onChange={e => handleInputChange('improvements', e.target.value)}
-                                    placeholder="What recommendations or improvements could help this teacher enhance learning?"
+                                    placeholder="മെച്ചപ്പെടുത്തേണ്ട കാര്യങ്ങളും നിർദേശങ്ങളും (മലയാളത്തിലോ ഇംഗ്ലീഷിലോ)... Write recommendations in Malayalam or English..."
                                     className="w-full bg-slate-900/90 border border-slate-700/90 rounded-xl p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed"
                                 />
                             </div>
