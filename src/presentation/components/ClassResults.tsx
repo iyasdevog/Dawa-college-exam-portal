@@ -257,29 +257,44 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         const markEntries = Object.values(marksObj) as any[];
         let totalSum = termRec.grandTotal || 0;
         let avgVal = termRec.average || 0;
-        let perfLevel = termRec.performanceLevel || 'Not Assessed';
 
-        if (markEntries.length > 0) {
-            let calculatedSum = 0;
-            let failCount = 0;
-            let validSubjectCount = 0;
+        let failCount = 0;
+        let withheldCount = 0;
+        let passCount = 0;
+        let validSubjectCount = 0;
+        let calculatedSum = 0;
 
-            markEntries.forEach(m => {
-                const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
-                calculatedSum += subTotal;
-                if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validSubjectCount++;
-                if (m.status === 'Failed') failCount++;
-            });
+        markEntries.forEach(m => {
+            const isAbsentOrZero = m.int === 'A' || m.ext === 'A' || m.int === 0 || m.ext === 0 || m.total === 0 || m.int === '0' || m.ext === '0';
+            const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
+            calculatedSum += subTotal;
+            if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validSubjectCount++;
+            
+            if (m.status === 'Withheld' || (isAbsentOrZero && m.status !== 'Passed')) {
+                withheldCount++;
+            } else if (m.status === 'Failed') {
+                failCount++;
+            } else if (m.status === 'Passed') {
+                passCount++;
+            }
+        });
 
-            if (totalSum === 0 && calculatedSum > 0) {
-                totalSum = calculatedSum;
-            }
-            if (avgVal === 0 && validSubjectCount > 0 && calculatedSum > 0) {
-                avgVal = Math.round((calculatedSum / validSubjectCount) * 10) / 10;
-            }
-            if ((perfLevel === 'Not Assessed' || perfLevel === 'Pending') && calculatedSum > 0) {
-                perfLevel = failCount > 0 ? 'Failed' : 'Passed';
-            }
+        if (totalSum === 0 && calculatedSum > 0) {
+            totalSum = calculatedSum;
+        }
+        if (avgVal === 0 && validSubjectCount > 0 && calculatedSum > 0) {
+            avgVal = Math.round((calculatedSum / validSubjectCount) * 10) / 10;
+        }
+
+        let perfLevel = 'Not Assessed';
+        if (withheldCount > 0) {
+            perfLevel = 'Withheld';
+        } else if (failCount > 0) {
+            perfLevel = 'Failed';
+        } else if (passCount > 0 || validSubjectCount > 0) {
+            perfLevel = 'Passed';
+        } else if (termRec.performanceLevel && termRec.performanceLevel !== 'Not Assessed') {
+            perfLevel = termRec.performanceLevel.includes('Failed') ? 'Failed' : termRec.performanceLevel;
         }
 
         return {
@@ -762,16 +777,19 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                             <td className={`text-center border-b border-slate-100 ${isMobile ? 'px-1 py-1.5' : 'px-2 py-2'} print:px-1 print:py-0.5`}>
                                                                 {(() => {
                                                                     const perf = (student as any).displayPerformance || '';
-                                                                    const isPassed = perf === 'PASSED' || perf.includes('Passed') || perf.includes('Outstanding') || perf.includes('Excellent') || perf.includes('Very Good') || perf.includes('Good');
-                                                                    const isNotAssessed = perf === 'NOT ASSESSED';
-                                                                    const badgeStyle = isNotAssessed 
-                                                                        ? 'bg-slate-100 text-slate-600 border border-slate-200' 
-                                                                        : isPassed 
-                                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-black' 
-                                                                            : 'bg-red-50 text-red-700 border border-red-200 font-bold';
+                                                                    const isWithheld = perf === 'Withheld' || perf === 'WITHHELD' || perf.includes('Withheld');
+                                                                    const isPassed = !isWithheld && (perf === 'Passed' || perf === 'PASSED' || perf.includes('Passed') || perf.includes('Outstanding') || perf.includes('Excellent') || perf.includes('Very Good') || perf.includes('Good'));
+                                                                    const isNotAssessed = perf === 'NOT ASSESSED' || perf === 'Not Assessed' || perf === 'Pending';
+                                                                    const badgeStyle = isWithheld
+                                                                        ? 'bg-amber-100 text-amber-800 border border-amber-300 font-bold'
+                                                                        : isNotAssessed 
+                                                                            ? 'bg-slate-100 text-slate-600 border border-slate-200' 
+                                                                            : isPassed 
+                                                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-black' 
+                                                                                : 'bg-red-50 text-red-700 border border-red-200 font-bold';
                                                                     return (
-                                                                        <span className={`inline-block px-2 py-0.5 rounded-full uppercase tracking-wider ${isMobile ? 'text-[8px]' : 'text-[10px]'} print:text-[8px] print:px-0 ${badgeStyle}`}>
-                                                                            {isMobile ? ((student as any).displayPerformance === 'Needs Improvement' ? 'N.I.' : (student as any).displayPerformance) : (student as any).displayPerformance}
+                                                                        <span className={`inline-block px-2.5 py-1 rounded-full uppercase tracking-wider ${isMobile ? 'text-[8px]' : 'text-[10px]'} print:text-[8px] print:px-0 ${badgeStyle}`}>
+                                                                            {isWithheld ? 'WITHHELD' : isPassed ? 'PASSED' : isNotAssessed ? 'PENDING' : 'FAILED'}
                                                                         </span>
                                                                     );
                                                                 })()}

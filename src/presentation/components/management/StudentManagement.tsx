@@ -494,6 +494,39 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
                 </div>
             </div>
 
+            {/* Search Bar */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="relative w-full sm:w-96">
+                    <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input
+                        type="text"
+                        value={mobileAdminState.filterBy}
+                        onChange={(e) => setMobileAdminState(prev => ({ ...prev, filterBy: e.target.value }))}
+                        placeholder="Search by name, admission no, or class..."
+                        className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
+                    />
+                    {mobileAdminState.filterBy && (
+                        <button
+                            onClick={() => setMobileAdminState(prev => ({ ...prev, filterBy: '' }))}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                        >
+                            <i className="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    )}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-slate-500 w-full sm:w-auto justify-between sm:justify-end">
+                    <span>Showing <strong className="text-slate-800">{filteredStudents.length}</strong> of {students.length} students</span>
+                    {mobileAdminState.filterBy && (
+                        <button
+                            onClick={() => setMobileAdminState(prev => ({ ...prev, filterBy: '' }))}
+                            className="text-emerald-600 font-bold hover:underline"
+                        >
+                            Clear search
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* Mobile Controls */}
             {isMobile && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4">
