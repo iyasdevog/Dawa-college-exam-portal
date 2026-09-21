@@ -287,17 +287,19 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         const markEntries = evaluatedMarkEntries.length > 0 ? evaluatedMarkEntries : Object.values(marksObj);
 
         markEntries.forEach(m => {
-            const isAbsentOrZero = m.int === 'A' || m.ext === 'A' || m.int === 0 || m.ext === 0 || m.total === 0 || m.int === '0' || m.ext === '0';
+            // Only treat explicit absent markers ('A') or status='Withheld' as withheld.
+            // A numeric 0 score is a legitimate (failed) mark, not an absence.
+            const isAbsent = m.int === 'A' || m.ext === 'A' || m.int === 'a' || m.ext === 'a';
             const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
             calculatedSum += subTotal;
             if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validSubjectCount++;
-            
-            if (m.status === 'Passed') {
+
+            if (m.status === 'Withheld' || isAbsent) {
+                withheldCount++;
+            } else if (m.status === 'Passed') {
                 passCount++;
             } else if (m.status === 'Failed') {
                 failCount++;
-            } else if (m.status === 'Withheld' || (isAbsentOrZero && m.status !== 'Passed')) {
-                withheldCount++;
             }
         });
 
@@ -309,14 +311,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         }
 
         let perfLevel = 'Not Assessed';
-        if (failCount > 0) {
-            perfLevel = 'Failed';
-        } else if (passCount > 0 && passCount >= (markEntries.length - withheldCount)) {
-            // All evaluated enrolled subjects passed
-            perfLevel = 'Passed';
-        } else if (withheldCount > 0) {
+        if (withheldCount > 0) {
+            // Any absent or explicitly withheld subject → Withheld (takes priority over pass/fail)
             perfLevel = 'Withheld';
-        } else if (passCount > 0 || validSubjectCount > 0) {
+        } else if (failCount > 0) {
+            perfLevel = 'Failed';
+        } else if (passCount > 0) {
             perfLevel = 'Passed';
         } else if (termRec.performanceLevel && termRec.performanceLevel !== 'Not Assessed') {
             perfLevel = termRec.performanceLevel.includes('Failed') ? 'Failed' : termRec.performanceLevel;

@@ -321,13 +321,16 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
         if (markEntries.length > 0) {
             let calculatedSum = 0;
             let failCount = 0;
+            let withheldCount = 0;
             let validSubjectCount = 0;
 
             markEntries.forEach(m => {
                 const subTotal = typeof m.total === 'number' ? m.total : ((Number(m.int) || 0) + (Number(m.ext) || 0));
                 calculatedSum += subTotal;
                 if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validSubjectCount++;
-                if (m.status === 'Failed') failCount++;
+                const isAbsent = m.int === 'A' || m.ext === 'A' || m.int === 'a' || m.ext === 'a';
+                if (m.status === 'Withheld' || isAbsent) withheldCount++;
+                else if (m.status === 'Failed') failCount++;
             });
 
             if (totalSum === 0 && calculatedSum > 0) {
@@ -337,7 +340,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
                 avgVal = Math.round((calculatedSum / validSubjectCount) * 10) / 10;
             }
             if ((perfLevel === 'Not Assessed' || perfLevel === 'Pending') && calculatedSum > 0) {
-                perfLevel = failCount > 0 ? 'Failed' : 'Passed';
+                perfLevel = withheldCount > 0 ? 'Withheld' : failCount > 0 ? 'Failed' : 'Passed';
             }
         }
 
