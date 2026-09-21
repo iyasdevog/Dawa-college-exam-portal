@@ -617,6 +617,8 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
         subjectMetadata: (student as any).subjectMetadata
     } : undefined);
 
+    const marks = termRecord?.marks || {};
+
     const getEffectiveStatus = (m: any): 'Passed' | 'Withheld' | 'Failed' | 'Pending' => {
         if (!m) return 'Pending';
         if (m.status === 'Withheld') return 'Withheld';

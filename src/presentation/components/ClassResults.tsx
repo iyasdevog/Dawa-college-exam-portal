@@ -254,7 +254,6 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         }
 
         const marksObj = termRec.marks || {};
-        const markEntries = Object.values(marksObj) as any[];
         let totalSum = termRec.grandTotal || 0;
         let avgVal = termRec.average || 0;
 
@@ -263,6 +262,25 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         let passCount = 0;
         let validSubjectCount = 0;
         let calculatedSum = 0;
+
+        // Evaluate ONLY active deduplicated curriculum subjects, ignoring orphan/legacy duplicate database keys
+        const evaluatedMarkEntries: any[] = [];
+        if (subjects && subjects.length > 0) {
+            const seenMarkKeys = new Set<string>();
+            subjects.forEach(subj => {
+                if (subj.subjectType === 'school_subject') return;
+                const m = getMarkForSubject(marksObj, subj, termRec.subjectMetadata);
+                if (m) {
+                    const markKey = Object.keys(marksObj).find(k => marksObj[k] === m) || subj.id;
+                    if (!seenMarkKeys.has(markKey)) {
+                        seenMarkKeys.add(markKey);
+                        evaluatedMarkEntries.push(m);
+                    }
+                }
+            });
+        }
+
+        const markEntries = evaluatedMarkEntries.length > 0 ? evaluatedMarkEntries : Object.values(marksObj);
 
         markEntries.forEach(m => {
             const isAbsentOrZero = m.int === 'A' || m.ext === 'A' || m.int === 0 || m.ext === 0 || m.total === 0 || m.int === '0' || m.ext === '0';
