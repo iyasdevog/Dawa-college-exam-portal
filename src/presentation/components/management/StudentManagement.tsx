@@ -5,6 +5,7 @@ import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile, useTouchInteraction } from '../../hooks/useMobile';
 import { mobileStorage } from '../../../infrastructure/services/mobileUtils';
 import AggregatedScorecard from '../AggregatedScorecard';
+import { useTerm } from '../../viewmodels/TermContext';
 
 interface StudentManagementProps {
     students: StudentRecord[];
@@ -69,6 +70,30 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
         progress: 0
     });
 
+    const { termOptions } = useTerm();
+
+    // Helper to format full academic term options (e.g. 2025-2026 - Odd Semester)
+    const fullTermOptions = useMemo(() => {
+        const years = Array.from(new Set(termOptions.map(t => {
+            const idx = t.lastIndexOf('-');
+            if (t.endsWith('-Odd') || t.endsWith('-Even') || t.endsWith('-Bridge')) {
+                return t.substring(0, idx);
+            }
+            return t;
+        })));
+        const opts: { key: string; label: string }[] = [];
+        years.forEach(yr => {
+            opts.push({ key: `${yr}-Odd`, label: `${yr} - Odd Semester` });
+            opts.push({ key: `${yr}-Even`, label: `${yr} - Even Semester` });
+        });
+        if (activeTerm && !opts.some(o => o.key === activeTerm)) {
+            const parts = activeTerm.split('-');
+            const sem = parts.pop();
+            opts.unshift({ key: activeTerm, label: `${parts.join('-')} - ${sem} Semester` });
+        }
+        return opts;
+    }, [termOptions, activeTerm]);
+
     // Form state
     const [showStudentForm, setShowStudentForm] = useState(false);
     const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
@@ -76,6 +101,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
         adNo: '',
         name: '',
         className: 'S1',
+        termKey: activeTerm || '2025-2026-Odd',
         semester: 'Odd' as 'Odd' | 'Even'
     });
 
@@ -176,18 +202,21 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
             adNo: '',
             name: '',
             className: availableClasses[0] || 'S1',
-            semester: activeTerm.endsWith('-Even') ? 'Even' : 'Odd'
+            termKey: activeTerm || '2025-2026-Odd',
+            semester: (activeTerm || '').endsWith('-Even') ? 'Even' : 'Odd'
         });
         setShowStudentForm(true);
     };
 
     const handleEditStudent = (student: StudentRecord) => {
         setEditingStudent(student);
+        const currentTermKey = (student as any).termKey || activeTerm;
         setStudentForm({
             adNo: student.adNo,
             name: student.name,
             className: student.className,
-            semester: student.semester
+            termKey: currentTermKey,
+            semester: student.semester || (currentTermKey.endsWith('-Even') ? 'Even' : 'Odd')
         });
         setShowStudentForm(true);
     };
@@ -198,25 +227,39 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
 
         try {
             setIsOperating(true);
+            const targetTerm = studentForm.termKey || activeTerm;
+            const sem = targetTerm.endsWith('-Even') ? 'Even' : 'Odd';
+
             if (editingStudent) {
                 await dataService.updateStudent(editingStudent.id, {
                     adNo: studentForm.adNo.trim(),
                     name: studentForm.name.trim(),
                     className: studentForm.className,
-                    semester: studentForm.semester
-                }, activeTerm);
+                    semester: sem
+                }, targetTerm);
             } else {
                 const newStudent: Omit<StudentRecord, 'id'> = {
                     adNo: studentForm.adNo.trim(),
                     name: studentForm.name.trim(),
                     className: studentForm.className,
                     currentClass: studentForm.className,
-                    semester: studentForm.semester,
+                    semester: sem,
                     marks: {},
                     grandTotal: 0,
                     average: 0,
                     rank: 0,
-                    performanceLevel: 'Needs Improvement'
+                    performanceLevel: 'Needs Improvement',
+                    academicHistory: {
+                        [targetTerm]: {
+                            className: studentForm.className,
+                            semester: sem,
+                            marks: {},
+                            grandTotal: 0,
+                            average: 0,
+                            rank: 0,
+                            performanceLevel: 'Not Assessed'
+                        }
+                    }
                 };
                 await dataService.addStudent(newStudent);
             }
@@ -633,6 +676,22 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, activeT
                                     className="w-full p-3 border rounded-xl"
                                 >
                                     {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-1">Academic Term / Semester</label>
+                                <select
+                                    value={studentForm.termKey}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        const sem = val.endsWith('-Even') ? 'Even' : 'Odd';
+                                        setStudentForm(prev => ({ ...prev, termKey: val, semester: sem }));
+                                    }}
+                                    className="w-full p-3 border rounded-xl font-medium text-slate-800"
+                                >
+                                    {fullTermOptions.map(opt => (
+                                        <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="flex gap-3 pt-4">

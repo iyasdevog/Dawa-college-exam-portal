@@ -269,6 +269,10 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             const seenMarkKeys = new Set<string>();
             subjects.forEach(subj => {
                 if (subj.subjectType === 'school_subject') return;
+                // Skip electives the student is not enrolled in
+                if (subj.subjectType === 'elective' && subj.enrolledStudents && Array.isArray(subj.enrolledStudents) && !subj.enrolledStudents.includes(student.id)) {
+                    return;
+                }
                 const m = getMarkForSubject(marksObj, subj, termRec.subjectMetadata);
                 if (m) {
                     const markKey = Object.keys(marksObj).find(k => marksObj[k] === m) || subj.id;
@@ -288,12 +292,12 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             calculatedSum += subTotal;
             if (subTotal > 0 || m.int !== undefined || m.ext !== undefined) validSubjectCount++;
             
-            if (m.status === 'Withheld' || (isAbsentOrZero && m.status !== 'Passed')) {
-                withheldCount++;
+            if (m.status === 'Passed') {
+                passCount++;
             } else if (m.status === 'Failed') {
                 failCount++;
-            } else if (m.status === 'Passed') {
-                passCount++;
+            } else if (m.status === 'Withheld' || (isAbsentOrZero && m.status !== 'Passed')) {
+                withheldCount++;
             }
         });
 
@@ -305,10 +309,13 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         }
 
         let perfLevel = 'Not Assessed';
-        if (withheldCount > 0) {
-            perfLevel = 'Withheld';
-        } else if (failCount > 0) {
+        if (failCount > 0) {
             perfLevel = 'Failed';
+        } else if (passCount > 0 && passCount >= (markEntries.length - withheldCount)) {
+            // All evaluated enrolled subjects passed
+            perfLevel = 'Passed';
+        } else if (withheldCount > 0) {
+            perfLevel = 'Withheld';
         } else if (passCount > 0 || validSubjectCount > 0) {
             perfLevel = 'Passed';
         } else if (termRec.performanceLevel && termRec.performanceLevel !== 'Not Assessed') {

@@ -5,6 +5,7 @@ import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
 import { normalizeName, shortenSubjectName } from '../../../infrastructure/services/formatUtils';
 import { SubjectDetailsModal } from './SubjectDetailsModal';
+import { useTerm } from '../../viewmodels/TermContext';
 
 interface SubjectManagementProps {
     subjects: SubjectConfig[];
@@ -127,6 +128,30 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
     const { isMobile } = useMobile();
     const [isOperating, setIsOperating] = useState(false);
 
+    const { termOptions } = useTerm();
+
+    // Helper to format full academic term options (e.g. 2025-2026 - Odd Semester)
+    const fullTermOptions = useMemo(() => {
+        const years = Array.from(new Set(termOptions.map(t => {
+            const idx = t.lastIndexOf('-');
+            if (t.endsWith('-Odd') || t.endsWith('-Even') || t.endsWith('-Bridge')) {
+                return t.substring(0, idx);
+            }
+            return t;
+        })));
+        const opts: { key: string; label: string }[] = [];
+        years.forEach(yr => {
+            opts.push({ key: `${yr}-Odd`, label: `${yr} - Odd Semester` });
+            opts.push({ key: `${yr}-Even`, label: `${yr} - Even Semester` });
+        });
+        if (activeTerm && !opts.some(o => o.key === activeTerm)) {
+            const parts = activeTerm.split('-');
+            const sem = parts.pop();
+            opts.unshift({ key: activeTerm, label: `${parts.join('-')} - ${sem} Semester` });
+        }
+        return opts;
+    }, [termOptions, activeTerm]);
+
     // Subject form state
     const [showSubjectForm, setShowSubjectForm] = useState(false);
     const [editingSubject, setEditingSubject] = useState<SubjectConfig | null>(null);
@@ -143,7 +168,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
         enrolledStudents: [] as string[],
         activeSemester: 'Both' as 'Odd' | 'Even' | 'Both',
         electiveType: 'intra-class' as 'intra-class' | 'cross-class',
-        academicYear: ''
+        academicYear: '',
+        termKey: activeTerm || '2025-2026-Odd'
     });
 
     // Subject Details state
@@ -236,7 +262,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             electiveType: 'intra-class',
             activeSemester: 'Both',
             enrolledStudents: [],
-            academicYear: currentYear
+            academicYear: currentYear,
+            termKey: activeTerm || '2025-2026-Odd'
         });
         setIsCreatingNewSubject(false);
         setIsCreatingNewFaculty(false);
@@ -256,7 +283,8 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             electiveType: subject.electiveType || 'intra-class',
             activeSemester: (subject as any).activeSemester || 'Both',
             enrolledStudents: subject.enrolledStudents || [],
-            academicYear: (subject as any).academicYear || ''
+            academicYear: (subject as any).academicYear || '',
+            termKey: (subject as any).termKey || activeTerm || '2025-2026-Odd'
         });
         setIsCreatingNewSubject(false);
         setIsCreatingNewFaculty(false);
@@ -344,7 +372,7 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
             if (editingSubject) {
                 await dataService.updateSubject(editingSubject.id, subjectData);
             } else {
-                await dataService.addSubject(subjectData, activeTerm);
+                await dataService.addSubject(subjectData, subjectForm.termKey || activeTerm);
             }
             
             try {
@@ -1249,6 +1277,25 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({
                                             <option value="Both">Both</option>
                                             <option value="Odd">Odd Only</option>
                                             <option value="Even">Even Only</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Academic Term / Semester</label>
+                                        <select 
+                                            value={subjectForm.termKey} 
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                setSubjectForm(prev => ({ 
+                                                    ...prev, 
+                                                    termKey: val, 
+                                                    academicYear: val.split('-').slice(0, 2).join('-') 
+                                                }));
+                                            }} 
+                                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 transition-all outline-none"
+                                        >
+                                            {fullTermOptions.map(opt => (
+                                                <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>

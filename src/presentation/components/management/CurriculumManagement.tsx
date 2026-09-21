@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { CurriculumEntry, CurriculumStage } from '../../../domain/entities/types';
 import { dataService } from '../../../infrastructure/services/dataService';
 import { useMobile } from '../../hooks/useMobile';
+import { useTerm } from '../../viewmodels/TermContext';
 
 interface CurriculumManagementProps {
     curriculum: CurriculumEntry[];
@@ -12,6 +13,29 @@ interface CurriculumManagementProps {
 
 export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curriculum, activeTerm, onRefresh, isLoading }) => {
     const { isMobile } = useMobile();
+    const { termOptions } = useTerm();
+
+    const fullTermOptions = useMemo(() => {
+        const years = Array.from(new Set(termOptions.map(t => {
+            const idx = t.lastIndexOf('-');
+            if (t.endsWith('-Odd') || t.endsWith('-Even') || t.endsWith('-Bridge')) {
+                return t.substring(0, idx);
+            }
+            return t;
+        })));
+        const opts: { key: string; label: string }[] = [];
+        years.forEach(yr => {
+            opts.push({ key: `${yr}-Odd`, label: `${yr} - Odd Semester` });
+            opts.push({ key: `${yr}-Even`, label: `${yr} - Even Semester` });
+        });
+        if (activeTerm && !opts.some(o => o.key === activeTerm)) {
+            const parts = activeTerm.split('-');
+            const sem = parts.pop();
+            opts.unshift({ key: activeTerm, label: `${parts.join('-')} - ${sem} Semester` });
+        }
+        return opts;
+    }, [termOptions, activeTerm]);
+
     const [isOperating, setIsOperating] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingEntry, setEditingEntry] = useState<CurriculumEntry | null>(null);
@@ -42,8 +66,8 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
             subjectType: 'general',
             learningPeriod: '',
             portions: '',
-            termKey: activeTerm || undefined,
-            academicYear: activeTerm ? activeTerm.split('-').slice(0, -1).join('-') : undefined
+            termKey: activeTerm || '2025-2026-Odd',
+            academicYear: activeTerm ? activeTerm.split('-').slice(0, 2).join('-') : '2025-2026'
         });
         setShowForm(true);
     };
@@ -58,7 +82,9 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
             subjectName: entry.subjectName,
             subjectType: entry.subjectType || 'general',
             learningPeriod: entry.learningPeriod,
-            portions: entry.portions
+            portions: entry.portions,
+            termKey: entry.termKey || activeTerm || '2025-2026-Odd',
+            academicYear: entry.academicYear || (activeTerm ? activeTerm.split('-').slice(0, 2).join('-') : '2025-2026')
         });
         setShowForm(true);
     };
@@ -231,17 +257,38 @@ export const CurriculumManagement: React.FC<CurriculumManagementProps> = ({ curr
                                             )}
                                         </select>
                                     </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Semester (1 to 10)</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            required
-                                            value={form.semester}
-                                            onChange={e => setForm({ ...form, semester: parseInt(e.target.value) || 1 })}
-                                            className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
-                                        />
+                                    <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Academic Term / Semester</label>
+                                            <select
+                                                value={form.termKey || activeTerm || '2025-2026-Odd'}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    setForm({ 
+                                                        ...form, 
+                                                        termKey: val,
+                                                        academicYear: val.split('-').slice(0, 2).join('-')
+                                                    });
+                                                }}
+                                                className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
+                                            >
+                                                {fullTermOptions.map(opt => (
+                                                    <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Semester (1 to 10)</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                required
+                                                value={form.semester}
+                                                onChange={e => setForm({ ...form, semester: parseInt(e.target.value) || 1 })}
+                                                className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-emerald-500 outline-none"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">

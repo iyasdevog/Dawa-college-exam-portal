@@ -11,7 +11,29 @@ interface SupplementaryManagementProps {
 }
 
 const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ supplementaryExams, students, subjects, onRefresh }) => {
-    const { activeTerm } = useTerm();
+    const { activeTerm, termOptions } = useTerm();
+
+    const fullTermOptions = useMemo(() => {
+        const years = Array.from(new Set(termOptions.map(t => {
+            const idx = t.lastIndexOf('-');
+            if (t.endsWith('-Odd') || t.endsWith('-Even') || t.endsWith('-Bridge')) {
+                return t.substring(0, idx);
+            }
+            return t;
+        })));
+        const opts: { key: string; label: string }[] = [];
+        years.forEach(yr => {
+            opts.push({ key: `${yr}-Odd`, label: `${yr} - Odd Semester` });
+            opts.push({ key: `${yr}-Even`, label: `${yr} - Even Semester` });
+        });
+        if (activeTerm && !opts.some(o => o.key === activeTerm)) {
+            const parts = activeTerm.split('-');
+            const sem = parts.pop();
+            opts.unshift({ key: activeTerm, label: `${parts.join('-')} - ${sem} Semester` });
+        }
+        return opts;
+    }, [termOptions, activeTerm]);
+
     // Searchable dropdown state
     const [studentSearchTerm, setStudentSearchTerm] = useState('');
     const [showStudentDropdown, setShowStudentDropdown] = useState(false);
@@ -66,9 +88,10 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
         subjectId: '',
         examType: 'CurrentSemester' as SupplementaryExamType,
         applicationType: 'external-supp' as string,
-        originalSemester: 'Odd' as 'Odd' | 'Even',
+        originalSemester: (activeTerm || '').endsWith('-Even') ? 'Even' as 'Odd' | 'Even' : 'Odd' as 'Odd' | 'Even',
         originalYear: new Date().getFullYear() - 1,
-        supplementaryYear: new Date().getFullYear()
+        supplementaryYear: new Date().getFullYear(),
+        termKey: activeTerm || '2025-2026-Odd'
     });
     
     // Filtering state
@@ -299,7 +322,7 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                 originalYear: supplementaryForm.originalYear,
                 supplementaryYear: supplementaryForm.supplementaryYear,
                 status: 'Pending',
-                examTerm: activeTerm,
+                examTerm: supplementaryForm.termKey || activeTerm,
                 ...(fetchedPreviousMarks ? { previousMarks: { int: fetchedPreviousMarks.int, ext: fetchedPreviousMarks.ext } } : {})
             };
 
@@ -1027,6 +1050,23 @@ const SupplementaryManagement: React.FC<SupplementaryManagementProps> = ({ suppl
                                         )}
                                     </div>
                                 )}
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-1">Academic Term / Semester</label>
+                                    <select
+                                        value={supplementaryForm.termKey}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const sem = val.endsWith('-Even') ? 'Even' : 'Odd';
+                                            setSupplementaryForm(prev => ({ ...prev, termKey: val, originalSemester: sem }));
+                                        }}
+                                        className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-orange-500 outline-none transition-all font-medium text-slate-800"
+                                    >
+                                        {fullTermOptions.map(opt => (
+                                            <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>

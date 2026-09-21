@@ -13,7 +13,30 @@ interface ClassManagementProps {
 }
 
 const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabledClasses, onUpdateCustomClasses, students, subjects, onRefresh }) => {
-    const { activeTerm } = useTerm();
+    const { activeTerm, termOptions } = useTerm();
+    const [selectedClassTermKey, setSelectedClassTermKey] = useState(activeTerm || '2025-2026-Odd');
+
+    const fullTermOptions = useMemo(() => {
+        const years = Array.from(new Set(termOptions.map(t => {
+            const idx = t.lastIndexOf('-');
+            if (t.endsWith('-Odd') || t.endsWith('-Even') || t.endsWith('-Bridge')) {
+                return t.substring(0, idx);
+            }
+            return t;
+        })));
+        const opts: { key: string; label: string }[] = [];
+        years.forEach(yr => {
+            opts.push({ key: `${yr}-Odd`, label: `${yr} - Odd Semester` });
+            opts.push({ key: `${yr}-Even`, label: `${yr} - Even Semester` });
+        });
+        if (activeTerm && !opts.some(o => o.key === activeTerm)) {
+            const parts = activeTerm.split('-');
+            const sem = parts.pop();
+            opts.unshift({ key: activeTerm, label: `${parts.join('-')} - ${sem} Semester` });
+        }
+        return opts;
+    }, [termOptions, activeTerm]);
+
     const [showClassForm, setShowClassForm] = useState(false);
     const [showPromoteForm, setShowPromoteForm] = useState(false);
     const [sourceClass, setSourceClass] = useState('');
@@ -448,6 +471,18 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
                                     className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 transition-all outline-none"
                                     autoFocus
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Academic Term / Semester</label>
+                                <select
+                                    value={selectedClassTermKey}
+                                    onChange={(e) => setSelectedClassTermKey(e.target.value)}
+                                    className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-900 font-bold focus:border-emerald-500 transition-all outline-none"
+                                >
+                                    {fullTermOptions.map(opt => (
+                                        <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="flex gap-4 pt-2">
                                 <button
