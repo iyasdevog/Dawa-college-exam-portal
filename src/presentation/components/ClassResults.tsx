@@ -523,18 +523,30 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
         const displayMarks = (student as any).displayMarks || {};
         const displayMeta = (student as any).displayMarksMetadata || {};
 
+        let bestElective: { mark: any; name: string } | null = null;
+
         for (const [subId, m] of Object.entries(displayMarks)) {
             if ((m as any)?.isSupplementary) continue;
-            // O(1) lookup via memoized map
             const liveSub = subjectById.get(subId);
             const meta = displayMeta[subId];
             const isElective = (liveSub?.subjectType === 'elective') || (meta?.subjectType === 'elective');
-            if (isElective) {
-                const name = meta?.displayName || meta?.name || liveSub?.name || 'Elective';
-                return { mark: m, name };
+            if (isElective && m) {
+                const name = meta?.displayName || meta?.name || liveSub?.name || subjects.find(s => s.id === subId)?.name || 'Elective';
+                if (!bestElective) {
+                    bestElective = { mark: m, name };
+                } else {
+                    const currentPassed = bestElective.mark.status === 'Passed';
+                    const candidatePassed = (m as any).status === 'Passed';
+                    const currentTotal = Number(bestElective.mark.total) || 0;
+                    const candidateTotal = Number((m as any).total) || 0;
+
+                    if ((!currentPassed && candidatePassed) || (candidatePassed === currentPassed && candidateTotal > currentTotal)) {
+                        bestElective = { mark: m, name };
+                    }
+                }
             }
         }
-        return null;
+        return bestElective;
     };
 
     if (isLoading) {
@@ -863,7 +875,11 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                     .map(student => {
                                         const failedSubjects = Object.entries((student as any).displayMarks || {})
                                             .filter(([_, m]: [string, any]) => m.status === 'Failed')
-                                            .map(([subjId, _]) => classSubjects.find(cs => cs.id === subjId)?.name || subjId);
+                                            .map(([subjId, _]) => {
+                                                const meta = (student as any).displayMarksMetadata?.[subjId];
+                                                const liveSub = classSubjects.find(cs => cs.id === subjId) || subjects.find(s => s.id === subjId);
+                                                return liveSub?.name || meta?.displayName || meta?.name || (subjId.length > 15 ? 'Subject' : subjId);
+                                            });
                                         return { ...student, failedSubjects, failureCount: failedSubjects.length };
                                     })
                                     .filter(s => s.failureCount > 0)
@@ -919,7 +935,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                 {classSubjects
                                     .map(subject => {
                                         const failureCount = students.filter(s => {
-                                            const mark = (s as any).displayMarks[subject.id];
+                                            const mark = getMarkForSubject((s as any).displayMarks, subject, (s as any).displayMarksMetadata);
                                             return mark && mark.status === 'Failed';
                                         }).length;
                                         return { ...subject, failureCount };

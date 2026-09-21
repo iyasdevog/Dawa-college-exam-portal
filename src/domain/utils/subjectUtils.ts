@@ -63,22 +63,14 @@ export const getSubjectMaxMarks = (subject: any, snap?: any) => {
 
 export const getMarkForSubject = (marksObj: Record<string, any> | undefined, subject: any, metadataObj?: Record<string, any>) => {
     if (!marksObj || !subject) return undefined;
-    
-    // 1. Direct ID lookup
-    if (marksObj[subject.id] !== undefined) return marksObj[subject.id];
 
-    // 2. Case-insensitive / trimmed ID lookup
     const sId = (subject.id || '').toLowerCase().trim();
-    if (sId) {
-        const idKey = Object.keys(marksObj).find(k => k.toLowerCase().trim() === sId);
-        if (idKey) return marksObj[idKey];
-    }
-
-    // 3. Name or Arabic Name lookup
     const sNameNorm = normalizeSubjectName(subject.name || '');
     const sArabicNorm = normalizeSubjectName(subject.arabicName || '');
 
-    const foundKey = Object.keys(marksObj).find(k => {
+    const matchingKeys = Object.keys(marksObj).filter(k => {
+        if (sId && k.toLowerCase().trim() === sId) return true;
+
         const kNorm = normalizeSubjectName(k);
         if (sNameNorm && kNorm === sNameNorm) return true;
         if (sArabicNorm && kNorm === sArabicNorm) return true;
@@ -94,6 +86,33 @@ export const getMarkForSubject = (marksObj: Record<string, any> | undefined, sub
         return false;
     });
 
-    if (foundKey) return marksObj[foundKey];
-    return undefined;
+    if (matchingKeys.length === 0) return undefined;
+    if (matchingKeys.length === 1) return marksObj[matchingKeys[0]];
+
+    let bestKey = matchingKeys[0];
+    for (let i = 1; i < matchingKeys.length; i++) {
+        const currentBest = marksObj[bestKey];
+        const candidate = marksObj[matchingKeys[i]];
+
+        const currentPassed = currentBest?.status === 'Passed';
+        const candidatePassed = candidate?.status === 'Passed';
+
+        if (!currentPassed && candidatePassed) {
+            bestKey = matchingKeys[i];
+        } else if (currentPassed === candidatePassed) {
+            const currentTotal = Number(currentBest?.total) || 0;
+            const candidateTotal = Number(candidate?.total) || 0;
+            if (candidateTotal > currentTotal) {
+                bestKey = matchingKeys[i];
+            } else if (candidateTotal === currentTotal) {
+                const currentUpdated = Number(currentBest?.updatedAt) || 0;
+                const candidateUpdated = Number(candidate?.updatedAt) || 0;
+                if (candidateUpdated > currentUpdated) {
+                    bestKey = matchingKeys[i];
+                }
+            }
+        }
+    }
+
+    return marksObj[bestKey];
 };
