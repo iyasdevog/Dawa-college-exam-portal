@@ -139,9 +139,12 @@ export const useFacultyEntry = ({
                 if (!int && !ext) return 'Pending';
                 const iVal = int === 'A' ? 0 : (parseInt(int, 10) || 0);
                 const eVal = ext === 'A' ? 0 : (parseInt(ext, 10) || 0);
+                const isAbsentOrZero = int === 'A' || ext === 'A' || int === '0' || ext === '0' || (int !== '' && iVal === 0) || (ext !== '' && eVal === 0);
                 const passedINT = int === 'A' ? false : iVal >= minINT;
                 const passedEXT = ext === 'A' ? false : eVal >= minEXT;
-                return (passedINT && passedEXT) ? 'Passed' : 'Failed';
+                if (passedINT && passedEXT) return 'Passed';
+                if (isAbsentOrZero) return 'Withheld';
+                return 'Failed';
             }
         };
     }, [currentSubject]);

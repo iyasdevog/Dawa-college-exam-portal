@@ -71,14 +71,15 @@ const AggregatedScorecard: React.FC<AggregatedScorecardProps> = ({
             marksEntries.forEach(([subjectId, marks]) => {
                 const sId = subjectId.toLowerCase().trim();
                 const subject = allSubjects.find(s => s.id.toLowerCase().trim() === sId);
-                if (subject) {
+                if (subject && subject.subjectType !== 'school_subject') {
                     totalSubjectsCount++;
                     const { maxTotal } = getSubjectMaxMarks(subject);
                     totalMaxMarks += maxTotal;
                     totalMarksObtained += marks.total || 0;
 
                     if (marks.status === 'Passed') passedSubjects++;
-                    if (marks.status === 'Failed') failedSubjects++;
+                    if (marks.status === 'Withheld') {}
+                    else if (marks.status === 'Failed') failedSubjects++;
                 }
             });
         });

@@ -355,7 +355,7 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
 
         // Filter out subjects with no real marks (and ignore elective marks from matching general subject columns)
         const filteredSubjects = potentialSubjects.filter(s => {
-            if (s.subjectType === 'supplementary' || s.subjectType === 'elective') return false;
+            if (s.subjectType === 'supplementary' || s.subjectType === 'elective' || s.subjectType === 'school_subject') return false;
             return classStudents.some(cs => {
                 const termData = termDataMap.get(cs.id);
                 const m = getMarkForSubject(termData?.marks, s, termData?.subjectMetadata);

@@ -15,6 +15,7 @@ interface StudentScorecardProps {
 
 // ─── Grade helpers ──────────────────────────────────────────────────────────
 function getGradeColor(performance: string): string {
+    if (performance.includes('Withheld')) return 'from-amber-500 to-amber-600';
     if (performance.includes('O (Outstanding)')) return 'from-emerald-500 to-teal-400';
     if (performance.includes('A+ (Excellent)')) return 'from-emerald-400 to-green-400';
     if (performance.includes('A (Very Good)')) return 'from-blue-500 to-indigo-400';
@@ -26,6 +27,7 @@ function getGradeColor(performance: string): string {
 }
 
 function getGradeTextColor(performance: string): string {
+    if (performance.includes('Withheld')) return 'text-amber-600';
     if (performance === 'F (Failed)') return 'text-red-500';
     if (performance.includes('O (Outstanding)')) return 'text-emerald-600';
     if (performance.includes('A+ (Excellent)')) return 'text-emerald-500';
@@ -37,6 +39,7 @@ function getGradeTextColor(performance: string): string {
 }
 
 function getPrintGradeClass(performance: string): string {
+    if (performance.includes('Withheld')) return 'print:performance-withheld';
     if (performance === 'F (Failed)') return 'print:performance-failed';
     if (performance.includes('O (Outstanding)') || performance.includes('A+ (Excellent)')) return 'print:performance-excellent';
     if (performance.includes('A (Very Good)') || performance.includes('B+ (Good)') || performance.includes('B (Good)')) return 'print:performance-good';
@@ -210,6 +213,7 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             const targetSem = lastHyphenIndex !== -1 ? activeTerm.substring(lastHyphenIndex + 1) : '';
 
             const filteredSubjects = subsToUse.filter(s => {
+                if (s.subjectType === 'school_subject') return false;
                 const sYear = s.academicYear || '';
                 const isYearMatch = !targetYear || !sYear || sYear === 'All' || sYear === targetYear;
                 const isSemMatch = !targetSem || !s.activeSemester || s.activeSemester === 'Both' || s.activeSemester === targetSem;
@@ -613,28 +617,32 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
         subjectMetadata: (student as any).subjectMetadata
     } : undefined);
 
-    const marks = termRecord?.marks || {};
-    const total = termRecord?.grandTotal || 0;
-    const average = termRecord?.average || 0;
-    const performance = termRecord?.performanceLevel || 'Not Assessed';
-    const sClass = (termRecord?.className && termRecord.className !== 'Unknown') ? termRecord.className : (student.currentClass || student.className || '');
+    const getEffectiveStatus = (m: any): 'Passed' | 'Withheld' | 'Failed' | 'Pending' => {
+        if (!m) return 'Pending';
+        if (m.status === 'Withheld') return 'Withheld';
+        const isAbsentOrZero = m.int === 'A' || m.ext === 'A' || m.int === 0 || m.ext === 0 || m.total === 0 || m.int === '0' || m.ext === '0';
+        if (isAbsentOrZero && m.status !== 'Passed') {
+            return 'Withheld';
+        }
+        return m.status || 'Passed';
+    };
 
-    const markVals = Object.values(marks) as any[];
-    const passedCount = markVals.filter(m => m.status === 'Passed').length;
-    const failedCount = markVals.filter(m => m.status === 'Failed').length;
-    const highestScore = markVals.length > 0 ? Math.max(...markVals.map(m => m.total)) : 0;
-    const lowestScore = markVals.length > 0 ? Math.min(...markVals.map(m => m.total)) : 0;
+    const sClass = (termRecord?.className && termRecord.className !== 'Unknown') ? termRecord.className : (student.currentClass || student.className || '');
 
     // Calculate how many subjects this specific student is expected to take
     const expectedSubjectsCount = useMemo(() => {
         return classSubjects.filter(subj => 
-            subj.subjectType !== 'elective' || (subj.enrolledStudents && subj.enrolledStudents.includes(student.id))
+            subj.subjectType !== 'school_subject' &&
+            (subj.subjectType !== 'elective' || (subj.enrolledStudents && subj.enrolledStudents.includes(student.id)))
         ).length;
     }, [classSubjects, student.id]);
 
-    // Only show subjects that have marks recorded (exclude un-assessed subjects)
+    // Only show non-school subjects that have marks recorded (exclude un-assessed subjects)
     const sortedSubjects = useMemo(() => {
-        const matched = classSubjects.filter(subj => getMarkForSubject(marks, subj, termRecord?.subjectMetadata) != null);
+        const matched = classSubjects.filter(subj => 
+            subj.subjectType !== 'school_subject' && 
+            getMarkForSubject(marks, subj, termRecord?.subjectMetadata) != null
+        );
         const seen = new Set<string>();
         const deduplicated = matched.filter(subj => {
             const norm = normalizeSubjectName(subj.name || subj.id);
@@ -646,13 +654,54 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
         return deduplicated.sort((a, b) => {
             const markA = getMarkForSubject(marks, a, termRecord?.subjectMetadata);
             const markB = getMarkForSubject(marks, b, termRecord?.subjectMetadata);
-            const aFailed = markA?.status === 'Failed';
-            const bFailed = markB?.status === 'Failed';
-            if (aFailed && !bFailed) return 1;
-            if (!aFailed && bFailed) return -1;
+            const statusA = getEffectiveStatus(markA);
+            const statusB = getEffectiveStatus(markB);
+            if (statusA === 'Withheld' && statusB !== 'Withheld') return 1;
+            if (statusA === 'Failed' && statusB !== 'Failed') return 1;
             return 0;
         });
     }, [classSubjects, marks, termRecord]);
+
+    const { passedCount, failedCount, withheldCount, computedTotal, performance } = useMemo(() => {
+        let pCount = 0;
+        let fCount = 0;
+        let wCount = 0;
+        let sumTotal = 0;
+
+        sortedSubjects.forEach(subj => {
+            const m = getMarkForSubject(marks, subj, termRecord?.subjectMetadata);
+            if (m) {
+                const st = getEffectiveStatus(m);
+                if (st === 'Passed') pCount++;
+                else if (st === 'Withheld') wCount++;
+                else if (st === 'Failed') fCount++;
+                sumTotal += typeof m.total === 'number' ? m.total : 0;
+            }
+        });
+
+        let perf = termRecord?.performanceLevel || 'Not Assessed';
+        if (wCount > 0 && fCount === 0) {
+            perf = 'Withheld';
+        } else if (wCount > 0 && fCount > 0) {
+            perf = 'Withheld';
+        } else if (fCount > 0) {
+            perf = 'F (Failed)';
+        }
+
+        return {
+            passedCount: pCount,
+            failedCount: fCount,
+            withheldCount: wCount,
+            computedTotal: sumTotal > 0 ? sumTotal : (termRecord?.grandTotal || 0),
+            performance: perf
+        };
+    }, [sortedSubjects, marks, termRecord]);
+
+    const markVals = Object.values(marks) as any[];
+    const highestScore = markVals.length > 0 ? Math.max(...markVals.map(m => typeof m.total === 'number' ? m.total : 0)) : 0;
+    const lowestScore = markVals.length > 0 ? Math.min(...markVals.map(m => typeof m.total === 'number' ? m.total : 0)) : 0;
+    const total = computedTotal;
+    const average = sortedSubjects.length > 0 ? Math.round((total / sortedSubjects.length) * 10) / 10 : (termRecord?.average || 0);
 
     // Computed max for percentage bar
     const totalMaxMarks = useMemo(() => {
@@ -755,11 +804,17 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
 
                 {/* ── Grade badge (screen only) ───────────────────────────── */}
                 <div className="px-10 py-6 flex items-center justify-between print:hidden border-b border-slate-100">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                         <span className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-white text-sm font-black bg-gradient-to-r ${getGradeColor(performance)} shadow-lg`}>
-                            <i className="fa-solid fa-certificate text-white/80"></i>
+                            <i className={`fa-solid ${performance.includes('Withheld') ? 'fa-circle-pause' : 'fa-certificate'} text-white/80`}></i>
                             {performance}
                         </span>
+                        {withheldCount > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
+                                <i className="fa-solid fa-circle-pause"></i>
+                                {withheldCount} subject{withheldCount > 1 ? 's' : ''} withheld
+                            </span>
+                        )}
                         {failedCount > 0 && (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
                                 <i className="fa-solid fa-triangle-exclamation"></i>
@@ -872,16 +927,23 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
                                                     {maxTotal}
                                                 </td>
                                                 <td className="px-8 py-4 text-center print:px-1 print:py-1">
-                                                    {subjectMark ? (
-                                                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold
-                                                            print:px-0 print:py-0 print:rounded-none print:text-[10px]
-                                                            ${isFailed
-                                                                ? 'bg-red-100 text-red-700 print:status-failed'
-                                                                : 'bg-emerald-100 text-emerald-700 print:status-passed'}`}>
-                                                            <i className={`fa-solid ${isFailed ? 'fa-circle-xmark' : 'fa-circle-check'} print:hidden`}></i>
-                                                            {isFailed ? 'Failed' : 'Passed'}
-                                                        </span>
-                                                    ) : (
+                                                    {subjectMark ? (() => {
+                                                        const effStatus = getEffectiveStatus(subjectMark);
+                                                        const isFailed = effStatus === 'Failed';
+                                                        const isWithheld = effStatus === 'Withheld';
+                                                        return (
+                                                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold
+                                                                print:px-0 print:py-0 print:rounded-none print:text-[10px]
+                                                                ${isWithheld
+                                                                    ? 'bg-amber-100 text-amber-800 print:status-withheld'
+                                                                    : isFailed
+                                                                    ? 'bg-red-100 text-red-700 print:status-failed'
+                                                                    : 'bg-emerald-100 text-emerald-700 print:status-passed'}`}>
+                                                                <i className={`fa-solid ${isWithheld ? 'fa-circle-pause' : isFailed ? 'fa-circle-xmark' : 'fa-circle-check'} print:hidden`}></i>
+                                                                {isWithheld ? 'Withheld' : isFailed ? 'Failed' : 'Passed'}
+                                                            </span>
+                                                        );
+                                                    })() : (
                                                         <span className="text-slate-300 text-xs print:text-black print:text-[10px]">—</span>
                                                     )}
                                                 </td>

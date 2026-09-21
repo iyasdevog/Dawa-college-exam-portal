@@ -1,5 +1,5 @@
 import type { SubjectConfig } from './types';
-export type PerformanceLevel = 'O (Outstanding)' | 'A+ (Excellent)' | 'A (Very Good)' | 'B+ (Good)' | 'B (Good)' | 'C (Average)' | 'F (Failed)';
+export type PerformanceLevel = 'O (Outstanding)' | 'A+ (Excellent)' | 'A (Very Good)' | 'B+ (Good)' | 'B (Good)' | 'C (Average)' | 'F (Failed)' | 'Withheld';
 
 export interface SubjectMarks {
     int: number | 'A';
@@ -7,7 +7,7 @@ export interface SubjectMarks {
     ta?: number | 'A';
     ce?: number | 'A';
     total: number;
-    status: 'Passed' | 'Failed' | 'Pending';
+    status: 'Passed' | 'Failed' | 'Pending' | 'Withheld';
     isSupplementary?: boolean;
     supplementaryYear?: number;
 }

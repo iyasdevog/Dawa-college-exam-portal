@@ -26,7 +26,7 @@ export interface SubjectMarks {
   int: number | 'A';
   ext: number | 'A';
   total: number;
-  status: 'Passed' | 'Failed' | 'Pending';
+  status: 'Passed' | 'Failed' | 'Pending' | 'Withheld';
   isSupplementary?: boolean; // Indicates if this is a supplementary exam
   applicationType?: 'revaluation' | 'improvement' | 'external-supp' | 'internal-supp' | 'special-supp';
   supplementaryYear?: number; // Year of the supplementary exam

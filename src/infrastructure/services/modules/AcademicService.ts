@@ -43,9 +43,10 @@ export class AcademicService extends BaseDataService {
         let hasMarks = false;
         let minPercentage = 100;
         let hasFailedSubject = false;
+        let hasWithheldSubject = false;
 
         for (const [subjectId, mark] of marksEntries) {
-            const subject = subjects.find(s => s.id === subjectId);
+            const subject = subjects.find(s => s.id === subjectId || (s.name && s.name.trim().toLowerCase() === subjectId.trim().toLowerCase()));
             if (!subject) continue;
 
             const totalMax = (subject.maxINT || 0) + (subject.maxEXT || 0);
@@ -53,7 +54,11 @@ export class AcademicService extends BaseDataService {
 
             hasMarks = true;
             
-            if (mark.status === 'Failed') {
+            const isAbsentOrZero = mark.int === 'A' || mark.ext === 'A' || mark.int === 0 || mark.ext === 0 || mark.total === 0 || (mark as any).int === '0' || (mark as any).ext === '0';
+
+            if (mark.status === 'Withheld' || (isAbsentOrZero && mark.status !== 'Passed')) {
+                hasWithheldSubject = true;
+            } else if (mark.status === 'Failed') {
                 hasFailedSubject = true;
             }
 
@@ -63,6 +68,7 @@ export class AcademicService extends BaseDataService {
             }
         }
 
+        if (hasWithheldSubject) return 'Withheld' as PerformanceLevel;
         if (hasFailedSubject || minPercentage < 40) return 'F (Failed)';
         if (!hasMarks) return 'C (Average)';
 

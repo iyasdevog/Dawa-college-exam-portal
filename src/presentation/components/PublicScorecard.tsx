@@ -86,6 +86,7 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({
         const hasOriginalMark = originalMarkIds.has(sId);
         const isSupplementarySubject = completedSuppIds.has(sId);
         
+        if (s.subjectType === 'school_subject') return false;
         if (!isTargetClass && !hasOriginalMark && !isSupplementarySubject) return false;
 
         // For elective subjects, only show if student is explicitly enrolled

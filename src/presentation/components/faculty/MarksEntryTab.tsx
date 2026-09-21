@@ -135,7 +135,7 @@ const StudentRow = React.memo(({
             </td>
             <td className="p-4 text-center font-bold">{marks.int && marks.ext ? total : '-'}</td>
             <td className="p-4 text-center">
-                <span className={`px-2 py-1 rounded-full text-xs ${status === 'Passed' ? 'bg-emerald-100 text-emerald-700' : status === 'Failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100'}`}>
+                <span className={`px-2 py-1 rounded-full text-xs ${status === 'Passed' ? 'bg-emerald-100 text-emerald-700' : status === 'Withheld' ? 'bg-amber-100 text-amber-700 font-bold' : status === 'Failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100'}`}>
                     {status}
                 </span>
             </td>
