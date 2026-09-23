@@ -93,7 +93,13 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
     const [showTeacherModal, setShowTeacherModal] = useState(false);
     const [editingTeacher, setEditingTeacher] = useState<TeacherAccount | null>(null);
     const [isProvisioning, setIsProvisioning] = useState(false);
-    const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+    // Reset Credentials Modal State
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [resettingTeacher, setResettingTeacher] = useState<TeacherAccount | null>(null);
+    const [resetUsername, setResetUsername] = useState('');
+    const [resetPassword, setResetPassword] = useState('');
+    const [resetSuccessDetails, setResetSuccessDetails] = useState<{ username: string; password: string } | null>(null);
+    const [isResetting, setIsResetting] = useState(false);
     const [teacherForm, setTeacherForm] = useState({
         name: '',
         username: '',
@@ -189,7 +195,7 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
                 name: teacher.name,
                 username: teacher.username,
                 mobileNumber: teacher.mobileNumber,
-                password: teacher.password,
+                password: '', // Kept empty for confidentiality; optional on edit
                 assignedClasses: teacher.assignedClasses || [],
                 isActive: teacher.isActive
             });
@@ -212,18 +218,24 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
         e.preventDefault();
         setActionStatus(null);
 
-        if (!teacherForm.name.trim() || !teacherForm.username.trim() || !teacherForm.mobileNumber.trim() || !teacherForm.password.trim()) {
-            setActionStatus({ type: 'error', msg: 'Name, Username, Mobile Number, and Password are all required.' });
+        if (!teacherForm.name.trim() || !teacherForm.username.trim() || !teacherForm.mobileNumber.trim()) {
+            setActionStatus({ type: 'error', msg: 'Name, Username, and Mobile Number are required.' });
+            return;
+        }
+
+        if (!editingTeacher && !teacherForm.password.trim()) {
+            setActionStatus({ type: 'error', msg: 'Password is required when creating a new teacher account.' });
             return;
         }
 
         try {
             if (editingTeacher) {
+                const updatedPassword = teacherForm.password.trim() ? teacherForm.password.trim() : editingTeacher.password;
                 await dataService.updateTeacherAccount(editingTeacher.id, {
                     name: teacherForm.name.trim(),
-                    username: teacherForm.username.trim(),
+                    username: teacherForm.username.trim().replace(/^@/, ''),
                     mobileNumber: teacherForm.mobileNumber.trim(),
-                    password: teacherForm.password.trim(),
+                    password: updatedPassword,
                     assignedClasses: teacherForm.assignedClasses,
                     isActive: teacherForm.isActive
                 });
@@ -231,7 +243,7 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
             } else {
                 await dataService.saveTeacherAccount({
                     name: teacherForm.name.trim(),
-                    username: teacherForm.username.trim(),
+                    username: teacherForm.username.trim().replace(/^@/, ''),
                     mobileNumber: teacherForm.mobileNumber.trim(),
                     password: teacherForm.password.trim(),
                     assignedClasses: teacherForm.assignedClasses,
@@ -279,29 +291,57 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
     const handleCopyCredentialSheet = () => {
         if (teachers.length === 0) return;
         let text = `====================================================\n`;
-        text += `       AIC DAWA COLLEGE - FACULTY LOGIN CREDENTIALS  \n`;
+        text += `       AIC DAWA COLLEGE - FACULTY ROSTER (CONFIDENTIAL) \n`;
         text += `====================================================\n\n`;
         teachers.forEach(t => {
             text += `Faculty Name : ${t.name}\n`;
-            text += `Username     : ${t.username}\n`;
+            text += `Username     : [CONFIDENTIAL]\n`;
             text += `Mobile No.   : ${t.mobileNumber}\n`;
-            text += `Password     : ${t.password}\n`;
+            text += `Password     : [CONFIDENTIAL]\n`;
             text += `Status       : ${t.isActive ? 'Active' : 'Inactive'}\n`;
             text += `----------------------------------------------------\n`;
         });
         navigator.clipboard.writeText(text);
-        alert('📋 Credential Sheet copied to clipboard!');
+        alert('📋 Confidential Faculty Roster copied to clipboard!');
     };
 
-    const handleResetPassword = async (teacher: TeacherAccount) => {
-        if (!window.confirm(`Reset password for "${teacher.name}" back to default: dawa@2025?\n\nThe teacher will be able to log in with "dawa@2025".`)) return;
+    const handleOpenResetModal = (teacher: TeacherAccount) => {
+        setResettingTeacher(teacher);
+        const cleanName = teacher.name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
+        setResetUsername(teacher.username || cleanName);
+        setResetPassword('dawa@2025');
+        setResetSuccessDetails(null);
+        setShowResetModal(true);
+    };
+
+    const handleExecuteReset = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!resettingTeacher) return;
+
+        const cleanUser = resetUsername.trim().replace(/^@/, '');
+        const cleanPass = resetPassword.trim();
+
+        if (!cleanUser || !cleanPass) {
+            alert('Both username and password are required for resetting credentials.');
+            return;
+        }
+
+        setIsResetting(true);
         try {
-            await dataService.resetTeacherPassword(teacher.id, 'dawa@2025');
-            alert(`✅ Password for "${teacher.name}" has been reset to default: dawa@2025`);
+            await dataService.updateTeacherAccount(resettingTeacher.id, {
+                username: cleanUser,
+                password: cleanPass
+            });
+            setResetSuccessDetails({
+                username: cleanUser,
+                password: cleanPass
+            });
             await loadTeachers();
         } catch (err) {
-            console.error('Reset password failed:', err);
-            alert('Failed to reset password.');
+            console.error('Reset credentials failed:', err);
+            alert('Failed to reset credentials.');
+        } finally {
+            setIsResetting(false);
         }
     };
 
@@ -336,10 +376,6 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
             console.error('Purge unlinked accounts failed:', err);
             alert('Failed to purge unlinked old faculties.');
         }
-    };
-
-    const togglePasswordVisibility = (id: string) => {
-        setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
     const toggleClassAssignment = (cls: string) => {
@@ -708,9 +744,9 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
                                 onClick={handleCopyCredentialSheet}
                                 disabled={teachers.length === 0}
                                 className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all disabled:opacity-40"
-                                title="Copy all teacher credentials to clipboard"
+                                title="Copy confidential teacher roster to clipboard"
                             >
-                                <i className="fa-solid fa-copy"></i> Copy Credentials
+                                <i className="fa-solid fa-copy"></i> Copy Roster
                             </button>
                             <button
                                 onClick={handleAutoProvisionTeachers}
@@ -756,77 +792,76 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {filteredTeachers.map(teacher => {
-                                const showPass = visiblePasswords[teacher.id];
                                 return (
-                                    <div key={teacher.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 hover:border-slate-300 transition-all">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black text-sm flex-shrink-0">
-                                                    {teacher.name.charAt(0).toUpperCase()}
+                                    <div key={teacher.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 hover:border-slate-300 transition-all flex flex-col justify-between">
+                                        <div className="space-y-4">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black text-sm flex-shrink-0">
+                                                        {teacher.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-black text-slate-900">{teacher.name}</h4>
+                                                        <span className={`inline-block px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md mt-0.5 ${teacher.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                            {teacher.isActive ? 'Active' : 'Inactive'}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <h4 className="text-sm font-black text-slate-900">{teacher.name}</h4>
-                                                    <span className={`inline-block px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md mt-0.5 ${teacher.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                                        {teacher.isActive ? 'Active' : 'Inactive'}
-                                                    </span>
-                                                </div>
-                                            </div>
 
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    onClick={() => handleResetPassword(teacher)}
-                                                    className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-slate-50 transition-colors"
-                                                    title="Reset Password to Default (dawa@2025)"
-                                                >
-                                                    <i className="fa-solid fa-key text-xs"></i>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleOpenTeacherModal(teacher)}
-                                                    className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-50 transition-colors"
-                                                    title="Edit Account"
-                                                >
-                                                    <i className="fa-solid fa-pen-to-square text-xs"></i>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteTeacher(teacher.id)}
-                                                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-50 transition-colors"
-                                                    title="Delete Account"
-                                                >
-                                                    <i className="fa-solid fa-trash text-xs"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-slate-50 rounded-xl p-3 space-y-2 border border-slate-100 text-xs">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-slate-400 font-medium">Username:</span>
-                                                <span className="font-mono font-bold text-slate-800">@{teacher.username}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-slate-400 font-medium">Mobile:</span>
-                                                <span className="font-mono font-bold text-slate-800">{teacher.mobileNumber}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-slate-400 font-medium">Password:</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono font-bold text-slate-800">
-                                                        {showPass ? teacher.password : '••••••••'}
-                                                    </span>
+                                                <div className="flex items-center gap-1">
                                                     <button
-                                                        onClick={() => togglePasswordVisibility(teacher.id)}
-                                                        className="text-slate-400 hover:text-slate-600 text-xs"
+                                                        onClick={() => handleOpenTeacherModal(teacher)}
+                                                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-50 transition-colors"
+                                                        title="Edit Account Profile"
                                                     >
-                                                        <i className={`fa-solid ${showPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                                        <i className="fa-solid fa-pen-to-square text-xs"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteTeacher(teacher.id)}
+                                                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-50 transition-colors"
+                                                        title="Delete Account"
+                                                    >
+                                                        <i className="fa-solid fa-trash text-xs"></i>
                                                     </button>
                                                 </div>
                                             </div>
+
+                                            <div className="bg-slate-50 rounded-xl p-3 space-y-2.5 border border-slate-100 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-slate-400 font-medium">Username:</span>
+                                                    <span className="font-mono text-slate-500 flex items-center gap-1 bg-slate-200/60 px-2 py-0.5 rounded text-[11px] font-bold">
+                                                        <i className="fa-solid fa-lock text-[10px] text-slate-400"></i> Confidential
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-slate-400 font-medium">Mobile:</span>
+                                                    <span className="font-mono font-bold text-slate-800">{teacher.mobileNumber}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-slate-400 font-medium">Password:</span>
+                                                    <span className="font-mono text-slate-500 flex items-center gap-1 bg-slate-200/60 px-2 py-0.5 rounded text-[11px] font-bold">
+                                                        <i className="fa-solid fa-lock text-[10px] text-slate-400"></i> Confidential
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-xs text-slate-500">
+                                                <span className="font-bold text-slate-700">Assigned Classes: </span>
+                                                {teacher.assignedClasses && teacher.assignedClasses.length > 0
+                                                    ? teacher.assignedClasses.join(', ')
+                                                    : <span className="text-slate-400 italic">All Classes</span>}
+                                            </div>
                                         </div>
 
-                                        <div className="text-xs text-slate-500">
-                                            <span className="font-bold text-slate-700">Assigned Classes: </span>
-                                            {teacher.assignedClasses && teacher.assignedClasses.length > 0
-                                                ? teacher.assignedClasses.join(', ')
-                                                : <span className="text-slate-400 italic">All Classes</span>}
+                                        <div className="pt-2 border-t border-slate-100">
+                                            <button
+                                                onClick={() => handleOpenResetModal(teacher)}
+                                                className="w-full py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-amber-800 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm"
+                                                title="Reset Username & Password for this faculty member"
+                                            >
+                                                <i className="fa-solid fa-key text-xs text-amber-600"></i>
+                                                Reset Credentials
+                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -946,14 +981,16 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    Password {editingTeacher && <span className="text-slate-400 font-normal">(Optional - leave blank to keep confidential password)</span>}
+                                </label>
                                 <input
-                                    type="text"
+                                    type="password"
                                     value={teacherForm.password}
                                     onChange={e => setTeacherForm(prev => ({ ...prev, password: e.target.value }))}
-                                    placeholder="Enter login password"
+                                    placeholder={editingTeacher ? "Leave blank to keep existing confidential password" : "Enter initial login password"}
                                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    required
+                                    required={!editingTeacher}
                                 />
                             </div>
 
@@ -1003,6 +1040,148 @@ const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab 
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {/* RESET CREDENTIALS MODAL                                           */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {showResetModal && resettingTeacher && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 bg-amber-50 border border-amber-200 text-amber-600 rounded-xl flex items-center justify-center font-bold">
+                                    <i className="fa-solid fa-key text-sm"></i>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-900">Reset Faculty Credentials</h3>
+                                    <p className="text-[11px] text-slate-500 font-medium">{resettingTeacher.name}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowResetModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                        </div>
+
+                        {resetSuccessDetails ? (
+                            <div className="space-y-4">
+                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
+                                    <div className="flex items-center gap-2 text-emerald-800 font-black text-xs">
+                                        <i className="fa-solid fa-circle-check text-emerald-600 text-base"></i>
+                                        Credentials Reset Successfully!
+                                    </div>
+                                    <p className="text-xs text-emerald-700 leading-relaxed">
+                                        Share these new login credentials with <strong>{resettingTeacher.name}</strong>:
+                                    </p>
+                                    <div className="bg-white p-3 rounded-xl border border-emerald-100 space-y-1.5 font-mono text-xs">
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">New Username:</span>
+                                            <span className="font-bold text-slate-900">@{resetSuccessDetails.username}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">New Password:</span>
+                                            <span className="font-bold text-slate-900">{resetSuccessDetails.password}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const text = `Faculty Login Credentials:\nName: ${resettingTeacher.name}\nUsername: @${resetSuccessDetails.username}\nPassword: ${resetSuccessDetails.password}`;
+                                            navigator.clipboard.writeText(text);
+                                            alert('📋 Reset details copied to clipboard!');
+                                        }}
+                                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md"
+                                    >
+                                        <i className="fa-solid fa-copy"></i> Copy Details
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowResetModal(false)}
+                                        className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleExecuteReset} className="space-y-4">
+                                <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl text-xs text-slate-600 space-y-1">
+                                    <p className="font-bold text-slate-800">🔒 Confidential Recovery</p>
+                                    <p className="text-[11px] text-slate-500 leading-normal">
+                                        Set a new username and password for this faculty member if they forgot their credentials.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-bold text-slate-700">New Username</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const cleanName = resettingTeacher.name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
+                                                setResetUsername(cleanName || 'faculty_user');
+                                            }}
+                                            className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold"
+                                        >
+                                            Auto-Format Name
+                                        </button>
+                                    </div>
+                                    <div className="relative flex items-center">
+                                        <span className="absolute left-3 text-slate-400 font-bold text-xs">@</span>
+                                        <input
+                                            type="text"
+                                            value={resetUsername}
+                                            onChange={e => setResetUsername(e.target.value.replace(/^@/, ''))}
+                                            placeholder="enter_username"
+                                            className="w-full border border-slate-200 rounded-xl pl-7 pr-3 py-2 text-xs text-slate-800 font-mono font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-bold text-slate-700">New Password</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setResetPassword('dawa@2025')}
+                                            className="text-[10px] text-amber-600 hover:text-amber-800 font-bold"
+                                        >
+                                            Use Default (dawa@2025)
+                                        </button>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={resetPassword}
+                                        onChange={e => setResetPassword(e.target.value)}
+                                        placeholder="Enter new password"
+                                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-mono font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowResetModal(false)}
+                                        className="px-4 py-2 bg-slate-100 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-200"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isResetting}
+                                        className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                                    >
+                                        <i className="fa-solid fa-rotate-right"></i>
+                                        {isResetting ? 'Resetting...' : 'Confirm Reset Credentials'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

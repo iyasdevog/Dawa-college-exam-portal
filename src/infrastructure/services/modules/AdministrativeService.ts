@@ -26,7 +26,7 @@ import type {
 } from '../../../domain/entities/types';
 import { SupplementaryService } from './SupplementaryService';
 import { StudentService } from './StudentService';
-import { SYSTEM_CLASSES } from '../../../domain/entities/constants';
+import { SYSTEM_CLASSES, normalizeTermKey, getExpectedClassesForTerm } from '../../../domain/entities/constants';
 import type { GlobalSettings } from '../../../domain/entities/types';
 
 export class AdministrativeService extends BaseDataService {
@@ -227,89 +227,65 @@ export class AdministrativeService extends BaseDataService {
     public async getClassesByTerm(termKey?: string): Promise<string[]> {
         try {
             const settings = await this.getDocData<GlobalSettings>(this.settingsCollection, 'global_admin_settings');
-            const currentTermKey = settings ? `${settings.currentAcademicYear}-${settings.currentSemester}` : null;
-            const requestedTermKey = termKey || currentTermKey || '2026-2027-Odd';
+            const currentTermKey = settings ? `${settings.currentAcademicYear}-${settings.currentSemester}` : '2026-2027-Odd';
+            const requestedTermKey = termKey || currentTermKey;
             const disabled = settings?.disabledClasses || [];
-            const custom = settings?.customClasses || [];
 
-            const activeClassesSet = new Set<string>();
+            const normTermKey = normalizeTermKey(requestedTermKey);
+            const expectedClasses = getExpectedClassesForTerm(normTermKey);
 
-            // Parse year and semester from requestedTermKey (e.g. "2025-2026-Even" -> year="2025-2026", sem="Even")
-            const parts = requestedTermKey.split('-');
-            const targetSem = parts.pop() || '';
-            const targetYear = parts.join('-');
-
-            // 1. Discover from Student Academic History & currentClass for requestedTermKey
+            // Discover student counts per class for requestedTermKey
             const studentsSnap = await getDocs(collection(this.db, this.studentsCollection));
+            const studentCounts: Record<string, number> = {};
+
             studentsSnap.docs.forEach(docSnap => {
                 const s = docSnap.data() as StudentRecord;
                 if (!s || s.isDeleted) return;
 
-                if (requestedTermKey === 'All') {
-                    if (s.currentClass) activeClassesSet.add(s.currentClass.trim());
+                if (normTermKey === 'All') {
+                    if (s.currentClass) {
+                        const c = s.currentClass.trim();
+                        studentCounts[c] = (studentCounts[c] || 0) + 1;
+                    }
                     if (s.academicHistory) {
                         Object.values(s.academicHistory).forEach(h => {
-                            if (h?.className) activeClassesSet.add(h.className.trim());
+                            if (h?.className) {
+                                const c = h.className.trim();
+                                studentCounts[c] = (studentCounts[c] || 0) + 1;
+                            }
                         });
                     }
                 } else {
+                    let clsInTerm: string | null = null;
                     if (s.academicHistory) {
                         const matchingKey = Object.keys(s.academicHistory).find(tk =>
-                            tk === requestedTermKey ||
-                            tk.replace(/^2025-/, '2025-2026-') === requestedTermKey.replace(/^2025-/, '2025-2026-')
+                            normalizeTermKey(tk) === normTermKey
                         );
                         if (matchingKey && s.academicHistory[matchingKey]?.className) {
-                            activeClassesSet.add(s.academicHistory[matchingKey].className.trim());
+                            clsInTerm = s.academicHistory[matchingKey].className.trim();
                         }
                     }
-                    if (requestedTermKey === currentTermKey && s.currentClass) {
-                        activeClassesSet.add(s.currentClass.trim());
+                    if (!clsInTerm && normalizeTermKey(currentTermKey) === normTermKey && s.currentClass) {
+                        clsInTerm = s.currentClass.trim();
+                    }
+                    if (clsInTerm) {
+                        if (clsInTerm === 'PGF') clsInTerm = 'PG-F';
+                        studentCounts[clsInTerm] = (studentCounts[clsInTerm] || 0) + 1;
                     }
                 }
             });
 
-            // 2. Discover from Subjects matching targetYear & targetSem
-            const subjectsSnap = await getDocs(collection(this.db, this.subjectsCollection));
-            subjectsSnap.docs.forEach(docSnap => {
-                const s = docSnap.data() as SubjectConfig;
-                if (!s || s.isDeleted || !s.targetClasses) return;
-                const sYear = s.academicYear || '';
-                const isYearMatch = requestedTermKey === 'All' || !targetYear || !sYear || sYear === 'All' || sYear === targetYear;
-                const isSemMatch = requestedTermKey === 'All' || !s.activeSemester || s.activeSemester === 'Both' || s.activeSemester === targetSem;
-
-                if (isYearMatch && isSemMatch) {
-                    s.targetClasses.forEach(cls => {
-                        if (cls && cls !== '-') activeClassesSet.add(cls.trim());
-                    });
-                }
+            // Filter expectedClasses to exclude classes with 0 students & disabled classes
+            const result = expectedClasses.filter(cls => {
+                if (disabled.includes(cls)) return false;
+                const count = (studentCounts[cls] || 0) + (cls === 'PG-F' ? (studentCounts['PGF'] || 0) : 0);
+                return count > 0;
             });
 
-            // 3. Fallback: if no specific term classes discovered, or for current term, add SYSTEM_CLASSES & custom
-            if (activeClassesSet.size === 0 || requestedTermKey === currentTermKey || requestedTermKey === '2026-2027-Odd') {
-                SYSTEM_CLASSES.forEach(c => {
-                    if (!disabled.includes(c)) activeClassesSet.add(c);
-                });
-                custom.forEach(c => {
-                    if (!disabled.includes(c)) activeClassesSet.add(c);
-                });
-            }
-
-            // Filter out disabled & invalid classes and sort
-            const result = Array.from(activeClassesSet)
-                .filter(c => c && c !== '-' && !disabled.includes(c))
-                .sort((a, b) => {
-                    const idxA = SYSTEM_CLASSES.indexOf(a);
-                    const idxB = SYSTEM_CLASSES.indexOf(b);
-                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                    if (idxA !== -1) return -1;
-                    if (idxB !== -1) return 1;
-                    return a.localeCompare(b);
-                });
-
-            return result.length > 0 ? result : SYSTEM_CLASSES.filter(c => !disabled.includes(c));
+            return result;
         } catch (error) {
             console.error('Error fetching classes by term:', error);
-            return SYSTEM_CLASSES;
+            return getExpectedClassesForTerm(termKey || '2026-2027-Odd');
         }
     }
 

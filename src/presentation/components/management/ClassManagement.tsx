@@ -57,15 +57,16 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
         const loadSettings = async () => {
             const { dataService } = await import('../../../infrastructure/services/dataService');
             
-            // Load discovered classes for the active term
-            const classes = await dataService.getClassesByTerm(activeTerm);
+            const targetTerm = selectedClassTermKey || activeTerm;
+            // Load discovered classes for the target term
+            const classes = await dataService.getClassesByTerm(targetTerm);
             setDiscoveredClasses(classes);
 
-            // Build alias mapping for active term
+            // Build alias mapping for target term
             const map: Record<string, string> = {};
             CLASSES.forEach(c => {
-                const hist = dataService.getHistoricalClassName(activeTerm, c);
-                const dbCls = dataService.getDatabaseClassName(activeTerm, c);
+                const hist = dataService.getHistoricalClassName(targetTerm, c);
+                const dbCls = dataService.getDatabaseClassName(targetTerm, c);
                 map[c] = hist;
                 map[hist] = c;
                 map[dbCls] = hist;
@@ -73,7 +74,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ customClasses, disabl
             setHistoricalClassMap(map);
         };
         loadSettings();
-    }, [students, activeTerm]);
+    }, [students, activeTerm, selectedClassTermKey]);
 
     const getAllClasses = () => {
         if (discoveredClasses && discoveredClasses.length > 0) {
