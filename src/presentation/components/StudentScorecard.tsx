@@ -339,8 +339,17 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
             if (avgVal === 0 && validSubjectCount > 0 && calculatedSum > 0) {
                 avgVal = Math.round((calculatedSum / validSubjectCount) * 10) / 10;
             }
-            if ((perfLevel === 'Not Assessed' || perfLevel === 'Pending') && calculatedSum > 0) {
-                perfLevel = withheldCount > 0 ? 'Withheld' : failCount > 0 ? 'Failed' : 'Passed';
+            if ((perfLevel === 'Not Assessed' || perfLevel === 'Pending' || perfLevel === 'Passed') && calculatedSum > 0) {
+                if (withheldCount > 0) {
+                    perfLevel = 'Withheld';
+                } else if (failCount > 0) {
+                    perfLevel = 'F (Failed)';
+                } else if (classSubjects && classSubjects.length > 0 && Object.keys(marksObj).length > 0) {
+                    const metrics = dataService.calculateTermMetrics(marksObj, classSubjects);
+                    perfLevel = metrics.performanceLevel;
+                } else {
+                    perfLevel = 'Passed';
+                }
             }
         }
 
@@ -684,7 +693,7 @@ const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
             }
         });
 
-        let perf = termRecord?.performanceLevel || 'Not Assessed';
+        let perf: string = termRecord?.performanceLevel || 'Not Assessed';
         if (wCount > 0 && fCount === 0) {
             perf = 'Withheld';
         } else if (wCount > 0 && fCount > 0) {

@@ -315,11 +315,16 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
             // Any absent or explicitly withheld subject → Withheld (takes priority over pass/fail)
             perfLevel = 'Withheld';
         } else if (failCount > 0) {
-            perfLevel = 'Failed';
-        } else if (passCount > 0) {
-            perfLevel = 'Passed';
-        } else if (termRec.performanceLevel && termRec.performanceLevel !== 'Not Assessed') {
-            perfLevel = termRec.performanceLevel.includes('Failed') ? 'Failed' : termRec.performanceLevel;
+            perfLevel = 'F (Failed)';
+        } else if (passCount > 0 || validSubjectCount > 0) {
+            if (termRec.performanceLevel && termRec.performanceLevel !== 'Not Assessed' && termRec.performanceLevel !== 'Passed' && termRec.performanceLevel !== 'PASSED' && termRec.performanceLevel !== 'Pending') {
+                perfLevel = termRec.performanceLevel.includes('Failed') ? 'F (Failed)' : termRec.performanceLevel;
+            } else if (subjects && subjects.length > 0 && Object.keys(marksObj).length > 0) {
+                const metrics = dataService.calculateTermMetrics(marksObj, subjects);
+                perfLevel = metrics.performanceLevel;
+            } else {
+                perfLevel = 'Passed';
+            }
         }
 
         return {
@@ -680,7 +685,16 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                             <p className="text-xs text-slate-500">Adm: {student.adNo}</p>
                                                         </div>
                                                     </div>
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                        displayPerf.includes('Withheld') ? 'bg-amber-100 text-amber-800' :
+                                                        displayPerf.includes('Failed') ? 'bg-red-100 text-red-700' :
+                                                        displayPerf.includes('Outstanding') ? 'bg-emerald-100 text-emerald-800' :
+                                                        displayPerf.includes('Excellent') ? 'bg-emerald-100 text-emerald-700' :
+                                                        displayPerf.includes('Very Good') ? 'bg-blue-100 text-blue-800' :
+                                                        displayPerf.includes('Good') ? 'bg-teal-100 text-teal-800' :
+                                                        displayPerf.includes('Average') ? 'bg-amber-100 text-amber-700' :
+                                                        'bg-emerald-100 text-emerald-700'
+                                                    }`}>
                                                         {displayPerf}
                                                     </span>
                                                 </div>
@@ -815,18 +829,33 @@ const ClassResults: React.FC<ClassResultsProps> = ({ forcedClass, hideSelector, 
                                                                 {(() => {
                                                                     const perf = (student as any).displayPerformance || '';
                                                                     const isWithheld = perf === 'Withheld' || perf === 'WITHHELD' || perf.includes('Withheld');
-                                                                    const isPassed = !isWithheld && (perf === 'Passed' || perf === 'PASSED' || perf.includes('Passed') || perf.includes('Outstanding') || perf.includes('Excellent') || perf.includes('Very Good') || perf.includes('Good'));
                                                                     const isNotAssessed = perf === 'NOT ASSESSED' || perf === 'Not Assessed' || perf === 'Pending';
-                                                                    const badgeStyle = isWithheld
-                                                                        ? 'bg-amber-100 text-amber-800 border border-amber-300 font-bold'
-                                                                        : isNotAssessed 
-                                                                            ? 'bg-slate-100 text-slate-600 border border-slate-200' 
-                                                                            : isPassed 
-                                                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-black' 
-                                                                                : 'bg-red-50 text-red-700 border border-red-200 font-bold';
+                                                                    const isFailed = perf === 'Failed' || perf === 'FAILED' || perf.includes('Failed') || perf.includes('F (Failed)');
+
+                                                                    let badgeStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-black';
+                                                                    if (isWithheld) {
+                                                                        badgeStyle = 'bg-amber-100 text-amber-800 border border-amber-300 font-bold';
+                                                                    } else if (isNotAssessed) {
+                                                                        badgeStyle = 'bg-slate-100 text-slate-600 border border-slate-200';
+                                                                    } else if (isFailed) {
+                                                                        badgeStyle = 'bg-red-50 text-red-700 border border-red-200 font-bold';
+                                                                    } else if (perf.includes('O (Outstanding)') || perf.includes('Outstanding')) {
+                                                                        badgeStyle = 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-black';
+                                                                    } else if (perf.includes('A+ (Excellent)') || perf.includes('Excellent')) {
+                                                                        badgeStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-black';
+                                                                    } else if (perf.includes('A (Very Good)') || perf.includes('Very Good')) {
+                                                                        badgeStyle = 'bg-blue-50 text-blue-700 border border-blue-200 font-bold';
+                                                                    } else if (perf.includes('B+ (Good)') || perf.includes('B (Good)') || perf.includes('Good')) {
+                                                                        badgeStyle = 'bg-teal-50 text-teal-700 border border-teal-200 font-bold';
+                                                                    } else if (perf.includes('C (Average)') || perf.includes('Average')) {
+                                                                        badgeStyle = 'bg-amber-50 text-amber-700 border border-amber-200 font-bold';
+                                                                    }
+
+                                                                    const labelText = isWithheld ? 'WITHHELD' : isNotAssessed ? 'PENDING' : (perf || 'PASSED');
+
                                                                     return (
                                                                         <span className={`inline-block px-2.5 py-1 rounded-full uppercase tracking-wider ${isMobile ? 'text-[8px]' : 'text-[10px]'} print:text-[8px] print:px-0 ${badgeStyle}`}>
-                                                                            {isWithheld ? 'WITHHELD' : isPassed ? 'PASSED' : isNotAssessed ? 'PENDING' : 'FAILED'}
+                                                                            {labelText}
                                                                         </span>
                                                                     );
                                                                 })()}
