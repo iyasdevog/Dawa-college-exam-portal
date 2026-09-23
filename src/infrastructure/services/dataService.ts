@@ -813,6 +813,19 @@ export class DataService extends BaseDataService {
         const subjects = await this.getAllSubjects('All');
         return this.feedbackService.provisionMissingTeacherAccounts(subjects);
     }
+
+    async resetTeacherPassword(id: string, defaultPassword = 'dawa@2025'): Promise<void> {
+        return this.feedbackService.resetTeacherPassword(id, defaultPassword);
+    }
+
+    async purgeInactiveTeachers(): Promise<number> {
+        return this.feedbackService.purgeInactiveTeachers();
+    }
+
+    async purgeUnlinkedTeachers(): Promise<{ deleted: number; names: string[] }> {
+        const subjects = await this.getAllSubjects('All');
+        return this.feedbackService.purgeUnlinkedTeachers(subjects);
+    }
 }
 
 // Lazy singleton: only instantiated on first access, preventing TDZ (Temporal Dead Zone)

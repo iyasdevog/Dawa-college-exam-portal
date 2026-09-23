@@ -283,6 +283,51 @@ const LoginAuditManagement: React.FC = () => {
         alert('📋 Credential Sheet copied to clipboard!');
     };
 
+    const handleResetPassword = async (teacher: TeacherAccount) => {
+        if (!window.confirm(`Reset password for "${teacher.name}" back to default: dawa@2025?\n\nThe teacher will be able to log in with "dawa@2025".`)) return;
+        try {
+            await dataService.resetTeacherPassword(teacher.id, 'dawa@2025');
+            alert(`✅ Password for "${teacher.name}" has been reset to default: dawa@2025`);
+            await loadTeachers();
+        } catch (err) {
+            console.error('Reset password failed:', err);
+            alert('Failed to reset password.');
+        }
+    };
+
+    const handlePurgeInactive = async () => {
+        const inactiveCount = teachers.filter(t => !t.isActive).length;
+        if (inactiveCount === 0) {
+            alert('ℹ️ No inactive teacher accounts found.');
+            return;
+        }
+        if (!window.confirm(`Are you sure you want to permanently delete all ${inactiveCount} inactive teacher account(s)?`)) return;
+        try {
+            const n = await dataService.purgeInactiveTeachers();
+            alert(`✅ Successfully purged ${n} inactive teacher account(s).`);
+            await loadTeachers();
+        } catch (err) {
+            console.error('Purge inactive accounts failed:', err);
+            alert('Failed to purge inactive accounts.');
+        }
+    };
+
+    const handlePurgeUnlinked = async () => {
+        if (!window.confirm('This will scan all subjects in the system across all terms and permanently delete any faculty accounts that are no longer assigned to any subject.\n\nProceed with deleting old faculties?')) return;
+        try {
+            const res = await dataService.purgeUnlinkedTeachers();
+            if (res.deleted > 0) {
+                alert(`✅ Successfully purged ${res.deleted} old/unlinked faculty account(s):\n\n${res.names.join(', ')}`);
+                await loadTeachers();
+            } else {
+                alert('ℹ️ All teacher accounts are currently assigned to active subjects in the database.');
+            }
+        } catch (err) {
+            console.error('Purge unlinked accounts failed:', err);
+            alert('Failed to purge unlinked old faculties.');
+        }
+    };
+
     const togglePasswordVisibility = (id: string) => {
         setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
     };
@@ -652,17 +697,33 @@ const LoginAuditManagement: React.FC = () => {
                             <button
                                 onClick={handleCopyCredentialSheet}
                                 disabled={teachers.length === 0}
-                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all disabled:opacity-40"
+                                title="Copy all teacher credentials to clipboard"
                             >
-                                <i className="fa-solid fa-copy"></i> Copy Credential Sheet
+                                <i className="fa-solid fa-copy"></i> Copy Credentials
                             </button>
                             <button
                                 onClick={handleAutoProvisionTeachers}
                                 disabled={isProvisioning}
-                                className="flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl transition-all border border-purple-200 disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl transition-all border border-purple-200 disabled:opacity-40"
+                                title="Auto-create accounts for all subject teachers without accounts"
                             >
                                 <i className="fa-solid fa-wand-magic-sparkles"></i>
-                                {isProvisioning ? 'Provisioning...' : 'Auto-Provision Faculty'}
+                                {isProvisioning ? 'Provisioning...' : 'Auto-Provision'}
+                            </button>
+                            <button
+                                onClick={handlePurgeUnlinked}
+                                className="flex items-center gap-2 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold rounded-xl transition-all border border-amber-200"
+                                title="Delete old teacher accounts no longer assigned to any subject"
+                            >
+                                <i className="fa-solid fa-user-minus"></i> Purge Old Faculties
+                            </button>
+                            <button
+                                onClick={handlePurgeInactive}
+                                className="flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition-all border border-rose-200"
+                                title="Delete all inactive teacher accounts"
+                            >
+                                <i className="fa-solid fa-user-slash"></i> Purge Inactive
                             </button>
                             <button
                                 onClick={() => handleOpenTeacherModal()}
@@ -680,7 +741,7 @@ const LoginAuditManagement: React.FC = () => {
                         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400">
                             <i className="fa-solid fa-chalkboard-user text-4xl mb-3 opacity-30"></i>
                             <p className="font-bold text-base text-slate-700">No teacher accounts found</p>
-                            <p className="text-xs text-slate-400 mt-1">Click "Auto-Provision Faculty" to automatically create accounts for all subject teachers, or click "Create Teacher Account".</p>
+                            <p className="text-xs text-slate-400 mt-1">Click "Auto-Provision" to automatically create accounts for all subject teachers, or click "Create Teacher Account".</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -702,6 +763,13 @@ const LoginAuditManagement: React.FC = () => {
                                             </div>
 
                                             <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => handleResetPassword(teacher)}
+                                                    className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-slate-50 transition-colors"
+                                                    title="Reset Password to Default (dawa@2025)"
+                                                >
+                                                    <i className="fa-solid fa-key text-xs"></i>
+                                                </button>
                                                 <button
                                                     onClick={() => handleOpenTeacherModal(teacher)}
                                                     className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-50 transition-colors"

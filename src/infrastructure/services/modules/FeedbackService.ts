@@ -316,6 +316,42 @@ export class FeedbackService extends BaseDataService {
         return { provisioned: count, teacherNames: provisionedNames };
     }
 
+    public async resetTeacherPassword(id: string, newPassword = 'dawa@2025'): Promise<void> {
+        await this.updateTeacherAccount(id, {
+            password: newPassword,
+            isDefaultCredentials: true
+        });
+    }
+
+    public async purgeInactiveTeachers(): Promise<number> {
+        const teachers = await this.getAllTeacherAccounts();
+        const inactive = teachers.filter(t => !t.isActive);
+        for (const t of inactive) {
+            await this.deleteTeacherAccount(t.id);
+        }
+        return inactive.length;
+    }
+
+    public async purgeUnlinkedTeachers(subjects: SubjectConfig[]): Promise<{ deleted: number; names: string[] }> {
+        const activeFacultyNames = new Set<string>();
+        subjects.forEach(s => {
+            if (s.facultyName && s.facultyName.trim()) {
+                activeFacultyNames.add(s.facultyName.trim().toLowerCase());
+            }
+        });
+
+        const teachers = await this.getAllTeacherAccounts();
+        const unlinked = teachers.filter(t => !activeFacultyNames.has(t.name.trim().toLowerCase()));
+        const deletedNames: string[] = [];
+
+        for (const t of unlinked) {
+            await this.deleteTeacherAccount(t.id);
+            deletedNames.push(t.name);
+        }
+
+        return { deleted: unlinked.length, names: deletedNames };
+    }
+
     // --- Helper Local Storage Sync Methods ---
 
     private getFeedbackFromLocalStorage(): StudentFeedback[] {
