@@ -808,6 +808,11 @@ export class DataService extends BaseDataService {
     async authenticateTeacher(loginInput: string, passwordInput: string): Promise<TeacherAccount | null> {
         return this.feedbackService.authenticateTeacher(loginInput, passwordInput);
     }
+
+    async provisionMissingTeacherAccounts(): Promise<{ provisioned: number; teacherNames: string[] }> {
+        const subjects = await this.getAllSubjects('All');
+        return this.feedbackService.provisionMissingTeacherAccounts(subjects);
+    }
 }
 
 // Lazy singleton: only instantiated on first access, preventing TDZ (Temporal Dead Zone)

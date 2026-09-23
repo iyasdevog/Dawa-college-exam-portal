@@ -58,7 +58,9 @@ export const TeacherFeedbackView: React.FC<TeacherFeedbackViewProps> = ({ curren
                     mobileNumber: '',
                     password: '',
                     assignedClasses: [],
-                    isActive: true
+                    isActive: true,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
                 });
 
                 setFeedbacks(allFb);

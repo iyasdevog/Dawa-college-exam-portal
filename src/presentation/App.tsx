@@ -9,6 +9,7 @@ import { ErrorReportingService } from '../infrastructure/services/ErrorReporting
 import { versionService } from '../infrastructure/services/versionService';
 
 import { dataService } from '../infrastructure/services/dataService';
+import { loginAuditService } from '../infrastructure/services/loginAuditService';
 
 // Lazy load components for code splitting
 const ApplicationManagement = lazy(() => import('./components/ApplicationManagement'));
@@ -124,6 +125,13 @@ const App: React.FC = () => {
       setIsLoggedIn(true);
       setMode('admin');
       setActiveView('dashboard');
+      // Record successful admin login (non-blocking)
+      loginAuditService.recordLogin({
+        role: 'admin',
+        username: cleanUser,
+        name: 'System Administrator',
+        success: true,
+      });
       return;
     }
 
@@ -142,6 +150,13 @@ const App: React.FC = () => {
         setIsLoggedIn(true);
         setMode('admin');
         setActiveView('teacher-feedback');
+        // Record successful teacher login (non-blocking)
+        loginAuditService.recordLogin({
+          role: 'teacher',
+          username: matchedTeacher.username,
+          name: matchedTeacher.name,
+          success: true,
+        });
         return;
       }
     } catch (err) {
@@ -161,8 +176,23 @@ const App: React.FC = () => {
       setIsLoggedIn(true);
       setMode('admin');
       setActiveView('dashboard');
+      loginAuditService.recordLogin({
+        role: 'teacher',
+        username: cleanUser,
+        name: 'Faculty Member',
+        success: true,
+      });
       return;
     }
+
+    // Record failed login attempt (non-blocking)
+    loginAuditService.recordLogin({
+      role: (cleanUser === 'admin' || cleanUser === (import.meta.env.VITE_ADMIN_USER || 'admin').toLowerCase()) ? 'admin' : 'teacher',
+      username: cleanUser || '(empty)',
+      name: 'Unknown',
+      success: false,
+      failReason: 'Invalid credentials',
+    });
 
     alert('Invalid login credentials. Teachers can log in with their registered Mobile Number or Username & Password.');
   };

@@ -132,9 +132,16 @@ const PublicPortal: React.FC<PublicPortalProps> = ({ onLoginClick }) => {
             const student = await dataService.getStudentByAdNo(searchAdNo.trim(), activeTerm);
 
             if (student) {
-                // Ensure searchClass matches student's class in the activeTerm context
-                // If student was found but in a different class, we might want to allow it or strict check
-                if (student.className !== searchClass) {
+                // STRICT class validation: check against currentClass, className, AND academic history for this term.
+                // This prevents students from being found under empty/wrong class names (marks leak fix).
+                const historyClassName = student.academicHistory?.[activeTerm]?.className;
+                const studentClasses = new Set([
+                    student.currentClass,
+                    student.className,
+                    historyClassName,
+                ].filter(Boolean));
+
+                if (!studentClasses.has(searchClass)) {
                     setResult(null);
                     setHasSearched(true);
                     alert(`No student found in ${searchClass} with this Admission Number.`);

@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, setDoc } from 'firebase/firestore';
 import { BaseDataService } from './BaseDataService';
-import type { StudentFeedback, TeacherAccount } from '../../../domain/entities/types';
+import type { StudentFeedback, TeacherAccount, SubjectConfig } from '../../../domain/entities/types';
 
 export class FeedbackService extends BaseDataService {
     protected readonly studentFeedbackCollection = 'studentFeedback';
@@ -269,6 +269,51 @@ export class FeedbackService extends BaseDataService {
         );
 
         return match || null;
+    }
+
+    public async provisionMissingTeacherAccounts(subjects: SubjectConfig[]): Promise<{ provisioned: number; teacherNames: string[] }> {
+        const allFacultyNames = new Set<string>();
+        subjects.forEach(s => {
+            const name = (s.facultyName || '').trim();
+            if (name && name.length > 1) {
+                allFacultyNames.add(name);
+            }
+        });
+
+        const existingTeachers = await this.getAllTeacherAccounts();
+        const existingNames = new Set(existingTeachers.map(t => t.name.trim().toLowerCase()));
+        const usedUsernames = new Set(existingTeachers.map(t => t.username.trim().toLowerCase()));
+
+        const DEFAULT_PASSWORD = 'dawa@2025';
+        const DEFAULT_MOBILE = '0000000000';
+        let count = 0;
+        const provisionedNames: string[] = [];
+
+        for (const facultyName of Array.from(allFacultyNames)) {
+            if (!existingNames.has(facultyName.toLowerCase())) {
+                let baseUser = facultyName.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_');
+                if (!baseUser) baseUser = 'teacher';
+                let username = baseUser;
+                let counter = 2;
+                while (usedUsernames.has(username)) {
+                    username = `${baseUser}_${counter++}`;
+                }
+                usedUsernames.add(username);
+
+                await this.saveTeacherAccount({
+                    name: facultyName,
+                    username,
+                    mobileNumber: DEFAULT_MOBILE,
+                    password: DEFAULT_PASSWORD,
+                    assignedClasses: [],
+                    isActive: true
+                });
+                count++;
+                provisionedNames.push(facultyName);
+            }
+        }
+
+        return { provisioned: count, teacherNames: provisionedNames };
     }
 
     // --- Helper Local Storage Sync Methods ---
