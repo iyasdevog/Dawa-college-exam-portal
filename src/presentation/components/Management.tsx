@@ -34,6 +34,7 @@ const Management: React.FC = () => {
   const tabs = [
     { id: 'students', label: 'Students', icon: 'fa-users' },
     { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
+    { id: 'teachers', label: 'Teacher Management', icon: 'fa-user-gear' },
     { id: 'curriculum', label: 'Curriculum', icon: 'fa-sitemap' },
     { id: 'supplementary', label: 'Supplementary', icon: 'fa-redo' },
     { id: 'classes', label: 'Classes', icon: 'fa-chalkboard' },
@@ -236,8 +237,12 @@ const Management: React.FC = () => {
             <RecycleBinManagement />
           )}
 
+          {activeTab === 'teachers' && (
+            <LoginAuditManagement initialTab="teachers" />
+          )}
+
           {activeTab === 'login-audit' && (
-            <LoginAuditManagement />
+            <LoginAuditManagement initialTab="audit" />
           )}
         </div>
       </div>

@@ -63,8 +63,18 @@ function exportToCSV(logs: LoginAuditEntry[]) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-const LoginAuditManagement: React.FC = () => {
-    const [subTab, setSubTab] = useState<'audit' | 'teachers' | 'policy'>('audit');
+interface LoginAuditManagementProps {
+    initialTab?: 'audit' | 'teachers' | 'policy';
+}
+
+const LoginAuditManagement: React.FC<LoginAuditManagementProps> = ({ initialTab = 'audit' }) => {
+    const [subTab, setSubTab] = useState<'audit' | 'teachers' | 'policy'>(initialTab);
+
+    useEffect(() => {
+        if (initialTab) {
+            setSubTab(initialTab);
+        }
+    }, [initialTab]);
 
     // Audit State
     const [logs, setLogs] = useState<LoginAuditEntry[]>([]);
