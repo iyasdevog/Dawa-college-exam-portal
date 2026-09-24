@@ -73,8 +73,23 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({
     const displayClass = activeTermRecord?.className || result?.currentClass || result?.className || '';
     const displaySemester = activeTermRecord?.semester || result?.semester || (displayTerm.endsWith('-Odd') ? 'Odd' : 'Even');
 
-    // Merged marks mapping
-    const suppExams = result?.supplementaryExams || [];
+    // Merged marks mapping: Filter supplementary exams to strictly match displayTerm
+    const rawSuppExams = result?.supplementaryExams || [];
+    const suppExams = rawSuppExams.filter(su => {
+        const matchesOriginal = su.originalTerm && (
+            su.originalTerm.toLowerCase().trim() === displayTerm.toLowerCase().trim() ||
+            su.originalTerm.replace(/^2025-/, '2025-2026-') === displayTerm.replace(/^2025-/, '2025-2026-')
+        );
+        const matchesExam = su.examTerm && (
+            su.examTerm.toLowerCase().trim() === displayTerm.toLowerCase().trim() ||
+            su.examTerm.replace(/^2025-/, '2025-2026-') === displayTerm.replace(/^2025-/, '2025-2026-')
+        );
+        const isLegacyOddFallback = (!su.originalTerm && !su.examTerm) && (
+            displayTerm.includes('2025-2026-Odd') || displayTerm === '2025-Odd'
+        );
+        return matchesOriginal || matchesExam || isLegacyOddFallback;
+    });
+
     const completedSuppIds = new Set(suppExams
         .filter(su => su.status === 'Completed' || su.status === 'Passed' || su.status === 'Failed')
         .map(su => su.subjectId.toLowerCase().trim())

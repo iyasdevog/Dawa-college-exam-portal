@@ -28,9 +28,23 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
     const { isMobile } = useMobile();
-    const { termOptions, activeTerm } = useTerm();
+    const { activeTerm } = useTerm();
     const [selectedTermKey, setSelectedTermKey] = useState(activeTerm);
     const [releaseSettings, setReleaseSettings] = useState<ClassReleaseSettings>({});
+    const [availableSemesters, setAvailableSemesters] = useState<string[]>([]);
+
+    // Load available semesters dynamically from database
+    useEffect(() => {
+        dataService.getAvailableTerms().then(terms => {
+            if (terms && terms.length > 0) {
+                setAvailableSemesters(terms);
+            } else {
+                setAvailableSemesters(['2025-2026-Even', '2025-2026-Odd']);
+            }
+        }).catch(() => {
+            setAvailableSemesters(['2025-2026-Even', '2025-2026-Odd']);
+        });
+    }, []);
 
     // Load release settings once to check application window
     useEffect(() => {
@@ -432,12 +446,17 @@ const ApplicationPortal: React.FC<ApplicationPortalProps> = ({ onClose }) => {
                                                 onChange={e => setSelectedTermKey(e.target.value)}
                                                 className="w-full px-4 py-3 rounded-xl border-2 border-emerald-100 bg-emerald-50/30 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold transition-all"
                                             >
-                                                {termOptions.map(term => {
-                                                    const parts = term.split('-');
-                                                    const year = `${parts[0]}-${parts[1]}`;
-                                                    const sem = parts[2];
+                                                {availableSemesters.map(termKey => {
+                                                    const isOdd = termKey.toLowerCase().includes('odd');
+                                                    const isEven = termKey.toLowerCase().includes('even');
+                                                    const sem = isOdd ? 'Odd' : isEven ? 'Even' : (termKey.split('-').pop() || '');
+                                                    let year = termKey.replace(/-(Odd|Even|Bridge)$/i, '').trim();
+                                                    if (year.match(/^20\d{2}$/)) {
+                                                        const startYr = parseInt(year, 10);
+                                                        year = `${startYr}-${startYr + 1}`;
+                                                    }
                                                     return (
-                                                        <option key={term} value={term}>
+                                                        <option key={termKey} value={termKey}>
                                                             {year} - {sem} Semester
                                                         </option>
                                                     );
