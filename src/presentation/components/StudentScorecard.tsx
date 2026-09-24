@@ -281,15 +281,26 @@ const StudentScorecard: React.FC<StudentScorecardProps> = ({ currentUser }) => {
     }, []);
 
     const getStudentTermData = (student: StudentRecord, targetTerm: string, targetClass: string) => {
-        let termRec: any = student.academicHistory?.[targetTerm];
+        const historyKeys = student.academicHistory ? Object.keys(student.academicHistory) : [];
+        const matchingKey = historyKeys.find(tk => 
+            tk === targetTerm || 
+            (tk.replace(/^2025-/, '2025-2026-') === targetTerm.replace(/^2025-/, '2025-2026-'))
+        );
+        const historyEntry = matchingKey ? student.academicHistory?.[matchingKey] : undefined;
+        const hasHistoryMarks = historyEntry?.marks && Object.keys(historyEntry.marks).length > 0;
+
+        let termRec: any = hasHistoryMarks ? historyEntry : undefined;
 
         // Fall back to top-level marks ONLY if this student's legacy term matches targetTerm
         if (!termRec) {
-            const isLegacyTermMatch = (student as any).termKey === targetTerm || (!(student as any).termKey && targetTerm === '2025-2026-Odd');
+            const isLegacyTermMatch = (student as any).termKey 
+                ? ((student as any).termKey === targetTerm || ((student as any).termKey.replace(/^2025-/, '2025-2026-') === targetTerm.replace(/^2025-/, '2025-2026-')))
+                : (targetTerm === '2025-2026-Odd' || targetTerm === '2025-Odd');
+
             if (isLegacyTermMatch && student.marks && Object.keys(student.marks).length > 0) {
                 termRec = {
-                    className: student.currentClass || student.className || targetClass,
-                    semester: student.semester || (targetTerm.includes('Odd') ? 'Odd' : 'Even'),
+                    className: historyEntry?.className || student.currentClass || student.className || targetClass,
+                    semester: historyEntry?.semester || student.semester || (targetTerm.includes('Odd') ? 'Odd' : 'Even'),
                     marks: student.marks,
                     grandTotal: student.grandTotal || 0,
                     average: student.average || 0,
@@ -618,16 +629,30 @@ interface ScorecardPrintableProps {
 const ScorecardPrintable: React.FC<ScorecardPrintableProps> = React.memo(({
     student, activeTerm, classSubjects, branding, currentAcademicYear, currentSemester, calculatedRank, seed
 }) => {
-    // Search history for matching term or legacy student marks
-    const termRecord = student.academicHistory?.[activeTerm] || (student.marks ? {
-        className: student.currentClass || student.className,
-        semester: student.semester || 'Odd',
-        marks: student.marks,
-        grandTotal: student.grandTotal || 0,
-        average: student.average || 0,
-        performanceLevel: student.performanceLevel || 'Not Assessed',
-        subjectMetadata: (student as any).subjectMetadata
-    } : undefined);
+    // Search history for matching term or legacy student marks strictly for activeTerm
+    const historyKeys = student?.academicHistory ? Object.keys(student.academicHistory) : [];
+    const matchingKey = historyKeys.find(tk => 
+        tk === activeTerm || 
+        (tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-'))
+    );
+    const historyRecord = matchingKey ? student.academicHistory?.[matchingKey] : undefined;
+    const hasHistoryMarks = historyRecord?.marks && Object.keys(historyRecord.marks).length > 0;
+
+    const isLegacyTermMatch = (student as any)?.termKey 
+        ? ((student as any).termKey === activeTerm || ((student as any).termKey.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')))
+        : (activeTerm.includes('2025-2026-Odd') || activeTerm === '2025-Odd');
+
+    const termRecord = hasHistoryMarks ? historyRecord : (
+        isLegacyTermMatch && student.marks && Object.keys(student.marks).length > 0 ? {
+            className: historyRecord?.className || student.currentClass || student.className,
+            semester: historyRecord?.semester || student.semester || 'Odd',
+            marks: student.marks,
+            grandTotal: student.grandTotal || 0,
+            average: student.average || 0,
+            performanceLevel: student.performanceLevel || 'Not Assessed',
+            subjectMetadata: (student as any).subjectMetadata
+        } : historyRecord
+    );
 
     const marks = termRecord?.marks || {};
 

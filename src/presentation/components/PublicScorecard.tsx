@@ -41,28 +41,35 @@ const PublicScorecard: React.FC<PublicScorecardProps> = ({
         window.print();
     };
 
-    // Get the specified term record
-    let displayTerm = activeTerm;
-    let activeTermRecord = result?.academicHistory?.[activeTerm];
-    
-    // Determine if we should fallback: only if no marks AND no subjects for this term
-    const hasSubjectsForTerm = subjects.some(s => s.targetClasses?.includes(result?.currentClass || result?.className || ''));
-    
-    if (!activeTermRecord && !hasSubjectsForTerm && result?.academicHistory && Object.keys(result.academicHistory).length > 0) {
-        // Fallback to latest available term only if current has no subjects assigned
-        const terms = Object.keys(result.academicHistory).sort().reverse();
-        displayTerm = terms[0];
-        activeTermRecord = result.academicHistory[displayTerm];
-    }
+    // Get the specified term record strictly for activeTerm (matching exact key or equivalent term format e.g. 2025-Even vs 2025-2026-Even)
+    const displayTerm = activeTerm;
+    const historyKeys = result?.academicHistory ? Object.keys(result.academicHistory) : [];
+    const matchingKey = historyKeys.find(tk => 
+        tk === activeTerm || 
+        (tk.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-'))
+    );
+    const activeTermRecord = matchingKey ? result?.academicHistory?.[matchingKey] : undefined;
 
-    const displayMarks = activeTermRecord?.marks || result?.marks || {};
-    const displayRank = activeTermRecord?.rank || result?.rank || '-';
+    // Check if the history record actually has marks recorded
+    const hasRecordMarks = activeTermRecord?.marks && Object.keys(activeTermRecord.marks).length > 0;
+
+    // Check if top-level result.marks belongs to activeTerm
+    const isLegacyTermMatch = (result as any)?.termKey 
+        ? ( (result as any).termKey === activeTerm || ((result as any).termKey.replace(/^2025-/, '2025-2026-') === activeTerm.replace(/^2025-/, '2025-2026-')) )
+        : (activeTerm.includes('2025-2026-Odd') || activeTerm === '2025-Odd');
+
+    const displayMarks = hasRecordMarks 
+        ? activeTermRecord!.marks 
+        : (isLegacyTermMatch && result?.marks && Object.keys(result.marks).length > 0 ? result.marks : {});
+
+    const displayRank = (hasRecordMarks ? activeTermRecord?.rank : undefined) ?? (isLegacyTermMatch ? result?.rank : undefined) ?? '-';
+    
     // If only supp is released, totals/average might not make sense, maybe we should hide them or recalculate?
     // Let's just use the active term's totals for now or show N/A
     const isOnlySupp = !isResultsReleased && isSuppReleased;
-    const displayTotal = isOnlySupp ? '-' : (activeTermRecord?.grandTotal ?? result?.grandTotal ?? 0);
-    const displayAverage = isOnlySupp ? '-' : (activeTermRecord?.average ?? result?.average ?? 0);
-    const displayPerformance = isOnlySupp ? 'Supplementary Phase' : (activeTermRecord?.performanceLevel || result?.performanceLevel || 'Not Assessed');
+    const displayTotal = isOnlySupp ? '-' : ((hasRecordMarks ? activeTermRecord?.grandTotal : undefined) ?? (isLegacyTermMatch ? result?.grandTotal : undefined) ?? 0);
+    const displayAverage = isOnlySupp ? '-' : ((hasRecordMarks ? activeTermRecord?.average : undefined) ?? (isLegacyTermMatch ? result?.average : undefined) ?? 0);
+    const displayPerformance = isOnlySupp ? 'Supplementary Phase' : ((hasRecordMarks ? activeTermRecord?.performanceLevel : undefined) ?? (isLegacyTermMatch ? result?.performanceLevel : undefined) ?? 'Not Assessed');
     const displayClass = activeTermRecord?.className || result?.currentClass || result?.className || '';
     const displaySemester = activeTermRecord?.semester || result?.semester || (displayTerm.endsWith('-Odd') ? 'Odd' : 'Even');
 
