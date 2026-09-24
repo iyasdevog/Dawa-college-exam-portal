@@ -127,41 +127,42 @@ export class SupplementaryService extends BaseDataService {
             }
 
             const activeTerm = this.getCurrentTermKey();
-            const targetExamTerm = examTerm || activeTerm;
+            const appliedTermKey = application.termKey || (application.appliedYear && application.appliedSemester ? `${application.appliedYear}-${application.appliedSemester}` : undefined);
+            const targetExamTerm = examTerm || appliedTermKey || activeTerm;
             
-            let failureTerm = (originalYear && originalSemester) ? `${originalYear}-${originalSemester}` : undefined;
+            let failureTerm = appliedTermKey || ((originalYear && originalSemester) ? `${originalYear}-${originalSemester}` : undefined);
             let failureMarks = undefined;
 
             if (existingStudent && existingStudent.academicHistory) {
                 const historyEntries = Object.entries(existingStudent.academicHistory);
-                // Pre-fetch subjects for robust name matching
                 const allSubs = await this.academicService.getRawAllSubjects();
                 const subNameMap = new Map(allSubs.map(s => [s.id, (s.name || '').toLowerCase().trim()]));
 
-                for (const [termKey, termRecord] of historyEntries) {
-                    let subMark = termRecord.marks[application.subjectId];
-                    
-                    // Fallback to name-based matching if ID fails (common in legacy data sync)
-                    if (!subMark && application.subjectName) {
-                        const targetName = application.subjectName.toLowerCase().trim();
-                        const matchingId = Object.keys(termRecord.marks).find(mid => 
-                            subNameMap.get(mid) === targetName
-                        );
-                        if (matchingId) subMark = termRecord.marks[matchingId];
-                    }
-
-                    if (subMark) {
-                        // Use any historical mark; if they are applying for supp/revaluation, we want to show their current status
-                        if (!failureTerm) failureTerm = termKey;
-                        failureMarks = { int: subMark.int || 0, ext: subMark.ext || 0 };
-                        // Found a match for this subject in history, stop searching
-                        break; 
+                const targetHistory = appliedTermKey ? existingStudent.academicHistory[appliedTermKey] : undefined;
+                if (targetHistory?.marks?.[application.subjectId]) {
+                    const subMark = targetHistory.marks[application.subjectId];
+                    failureMarks = { int: subMark.int || 0, ext: subMark.ext || 0 };
+                } else {
+                    for (const [termKey, termRecord] of historyEntries) {
+                        let subMark = termRecord.marks[application.subjectId];
+                        if (!subMark && application.subjectName) {
+                            const targetName = application.subjectName.toLowerCase().trim();
+                            const matchingId = Object.keys(termRecord.marks).find(mid => 
+                                subNameMap.get(mid) === targetName
+                            );
+                            if (matchingId) subMark = termRecord.marks[matchingId];
+                        }
+                        if (subMark) {
+                            if (!failureTerm) failureTerm = termKey;
+                            failureMarks = { int: subMark.int || 0, ext: subMark.ext || 0 };
+                            break; 
+                        }
                     }
                 }
             }
 
             if (!failureTerm) {
-                failureTerm = `${application.appliedYear}-${application.appliedSemester}`;
+                failureTerm = appliedTermKey || `${application.appliedYear}-${application.appliedSemester}`;
             }
 
             const q = query(collection(this.db, this.supplementaryExamsCollection), where('applicationId', '==', application.id));
